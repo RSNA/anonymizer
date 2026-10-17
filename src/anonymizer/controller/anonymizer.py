@@ -14,13 +14,11 @@ The AnonymizerController class performs the following tasks:
 For more information, refer to the legacy anonymizer documentation: https://mircwiki.rsna.org/index.php?title=The_CTP_DICOM_Anonymizer
 """
 
-import hashlib
 import logging
 import os
 import re
 import threading
 import time
-from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
 from queue import Queue
@@ -32,9 +30,17 @@ from pydicom.errors import InvalidDicomError
 from pydicom.tag import Tag
 
 from anonymizer.controller.anonymizer_script import always_literal_text, incrementdate_days, rebasedate_origin
+from anonymizer.controller.dates import (
+    DEFAULT_ANON_DATE,
+    apply_day_delta,
+    hash_date,
+    rebase_days,
+    stamp_dates_modified,
+    stamp_rebase_registration,
+)
 from anonymizer.model.anonymizer import AnonymizerModel
-from anonymizer.model.project import DICOMNode, ProjectModel
-from anonymizer.utils.storage import DICOM_FILE_SUFFIX
+from anonymizer.model.project import AnonymizationPolicy, DICOMNode, ProjectModel
+from anonymizer.utils.storage.dicom_tree import DICOM_FILE_SUFFIX
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
@@ -51,7 +57,7 @@ class QuarantineDirectories(Enum):
 
 
 class LookupTableMissError(Exception):
-    """Raised when a required CTP lookup patient id is not in lookup_patient."""
+    """Raised when a required CTP lookup patient id is not in PHI (lookup not committed)."""
 
     def __init__(self, patient_id: str):
         self.patient_id = patient_id
@@ -79,7 +85,7 @@ class AnonymizerController:
         ("113108", "Retain Patient Characteristics Option"),
     ]
     PRIVATE_BLOCK_NAME = "RSNA"
-    DEFAULT_ANON_DATE = "20000101"  # if source date is invalid or before 19000101
+    DEFAULT_ANON_DATE = DEFAULT_ANON_DATE  # from controller.dates
 
     NUMBER_OF_DATASET_WORKER_THREADS = 1
     WORKER_THREAD_SLEEP_SECS = 0.075  # for UX responsiveness
@@ -257,74 +263,6 @@ class AnonymizerController:
 
         return error_msg
 
-    def valid_date(self, date_str: str) -> bool:
-        """
-        Check if a date string is valid.
-        Date must be YYYYMMDD format and a valid date after 19000101:
-
-        Args:
-            date_str (str): The date string to be validated.
-
-        Returns:
-            bool: True if the date string is valid, False otherwise.
-        """
-        try:
-            date_obj = datetime.strptime(date_str, "%Y%m%d")
-            return not (date_obj < datetime(1900, 1, 1))
-        except ValueError:
-            return False
-
-    def _hash_date(self, date: str, patient_id: str) -> tuple[int, str]:
-        """
-        Hashes the given date based on the patient ID.
-        Increment date by a number of days determined by MD5 hash of PatientID mod 10 years
-
-        Args:
-            date (str): The date to be hashed in the format "YYYYMMDD".
-            patient_id (str): The patient ID used for hashing.
-
-        Returns:
-            tuple[int, str]: A tuple containing the number of days incremented and the formatted hashed date.
-            If invalid date or empty PatientID, returns (0, DEFAULT_ANON_DATE)
-        """
-        if not self.valid_date(date) or not len(patient_id):
-            return 0, self.DEFAULT_ANON_DATE
-
-        # Calculate MD5 hash of PatientID
-        md5_hash = hashlib.md5(patient_id.encode()).hexdigest()
-        # Convert MD5 hash to an integer
-        hash_integer = int(md5_hash, 16)
-        # Calculate number of days to increment (modulus 10 years in days)
-        days_to_increment = hash_integer % 3652
-        # Parse the input date as a datetime object
-        input_date = datetime.strptime(date, "%Y%m%d")
-        # Increment the date by the calculated number of days
-        incremented_date = input_date + timedelta(days=days_to_increment)
-        # Format the incremented date as "YYYYMMDD"
-        formatted_date = incremented_date.strftime("%Y%m%d")
-
-        return days_to_increment, formatted_date
-
-    def _apply_date_offset(self, value: str, offset_days: int) -> str:
-        """Shift a DICOM date or datetime string by a fixed day offset from CTP lookup."""
-        if not value or not str(value).strip():
-            return value
-        text = str(value).strip()
-        if len(text) >= 14:
-            date_fmt = "%Y%m%d%H%M%S"
-            length = 14
-        elif len(text) >= 8:
-            date_fmt = "%Y%m%d"
-            length = 8
-        else:
-            return value
-        try:
-            dt = datetime.strptime(text[:length], date_fmt)
-            shifted = dt + timedelta(days=offset_days)
-            return shifted.strftime(date_fmt) + text[length:]
-        except ValueError:
-            return value
-
     def extract_first_digit(self, s: str) -> str | None:
         """
         Extracts the first digit from a given string.
@@ -361,45 +299,47 @@ class AnonymizerController:
         return result
 
     def _anonymize_element(
-        self, dataset: Dataset, data_element: DataElement, phi_ptid: str, anon_ptid: str, anon_acc_no: str | None, date_offset: int,
+        self,
+        dataset: Dataset,
+        data_element: DataElement,
+        phi_ptid: str,
+        anon_ptid: str,
+        anon_acc_no: str | None,
+        days_from_lookup: int,
+        base_date: str | None,
     ) -> None:
         """
-        Anonymizes a data element in the dataset based on the specified operations.
+        Apply script keep/remove/transform rules to one data element.
 
         Args:
-            dataset (dict): The dataset containing the data elements.
-            data_element (DataElement): The data element to be anonymized.
-            phi_ptid (str): The PHI patient ID.
-            anon_ptid (str): The anonymized patient ID.
-            anon_acc_no (str | None): The anonymized account number.
-            date_offset (int): The date offset.
+            dataset: Dataset containing the element (mutated).
+            data_element: Element to anonymize.
+            phi_ptid: PHI PatientID.
+            anon_ptid: Anonymized PatientID.
+            anon_acc_no: Anonymized accession number, or None.
+            days_from_lookup: Lookup dateoffset days for this patient.
+            base_date: Lookup base_date YYYYMMDD for this patient, or None.
 
         Returns:
-            None
-
+            None.
         """
-        # removes parentheses, spaces, and commas from tag
         tag = str(data_element.tag).translate(self._clean_tag_translate_table).upper()
-        # Clinical profile — skip private (Embedded PHI owns them).
         if data_element.tag.is_private:
             return
-        # Remove data_element if not in _tag_keep (exact or GGGGXXEE pattern):
         operation = self.model.resolve_tag_keep(tag)
         if operation is None:
             del dataset[tag]
             return
+        if "@keep" in operation or "@safe" in operation:
+            return
+
         value = data_element.value
-        # Keep data_element if no operation / @keep / @safe (retain; NER policy elsewhere):
-        if operation in ("", "@keep", "@safe", "@safe()"):
-            return
-        if str(operation).startswith("@safe"):
-            return
-        # Anonymize operations:
+        raw = str(value) if value is not None else ""
+
         if "@empty" in operation:
             dataset[tag].value = ""
         elif "@uid" in operation:
-            anon_uid = self.model.get_or_create_anon_uid(value)
-            dataset[tag].value = anon_uid
+            dataset[tag].value = self.model.get_or_create_anon_uid(value)
         elif "@ptid" in operation:
             dataset[tag].value = anon_ptid
         elif "@acc" in operation:
@@ -412,41 +352,26 @@ class AnonymizerController:
             if days is None:
                 logger.error("Invalid incrementdate operation: %s", operation)
                 return
-            raw = str(value) if value is not None else ""
-            # AcquisitionDateTime empty but AcquisitionDate present: PseudoPHI gold
-            # (and MIDI) fill AcqDT from the (already shifted) AcquisitionDate.
-            # Walk order hits (0008,0022) before (0008,002A), so do not shift again.
-            if not raw.strip() and tag == "0008002A":
-                acq_date = str(getattr(dataset, "AcquisitionDate", "") or "").strip()
-                if acq_date:
-                    dataset[tag].value = acq_date
-                    self._dates_shifted_this_dataset = True
-                    return
-            dataset[tag].value = self._apply_date_offset(raw, days)
-            self._dates_shifted_this_dataset = True
-        elif "@rebasedate" in str(operation or "").lower():
+            dataset[tag].value = apply_day_delta(raw, days)
+        elif "@rebasedate" in operation.lower():
             origin = rebasedate_origin(operation)
-            offset = self._rebase_offset_days_for_patient(phi_ptid, origin=origin)
-            if offset is None:
-                logger.error("@rebasedate used but no basedate/ORIGIN offset available for patient %s", phi_ptid)
+            days = rebase_days(base_date, origin)
+            if days is None:
+                logger.error(
+                    "@rebasedate used but no base_date/ORIGIN offset available for patient %s",
+                    phi_ptid,
+                )
                 return
-            dataset[tag].value = self._apply_date_offset(
-                str(value) if value is not None else "", int(offset)
-            )
-            self._dates_shifted_this_dataset = True
+            dataset[tag].value = apply_day_delta(raw, days)
         elif "@hashdate" in operation:
-            _, anon_date = self._hash_date(value, phi_ptid)
+            _, anon_date = hash_date(raw, phi_ptid)
             dataset[tag].value = anon_date
-            self._dates_shifted_this_dataset = True
+        elif "dateoffset" in operation:
+            dataset[tag].value = apply_day_delta(raw, days_from_lookup)
         elif "@lookup" in operation:
-            if "dateoffset" in operation:
-                dataset[tag].value = self._apply_date_offset(str(value) if value is not None else "", date_offset)
-                self._dates_shifted_this_dataset = True
-            else:
-                dataset[tag].value = anon_ptid
+            dataset[tag].value = anon_ptid
         elif "@round" in operation:
             # TODO: operand is named round but it is age format specific, should be renamed round_age
-            # create separate operand for round that can be used for other numeric values
             if value is None:
                 return
             parameter = self.extract_first_digit(operation.replace("@round", ""))
@@ -454,68 +379,33 @@ class AnonymizerController:
                 logger.error(f"Invalid round operation: {operation}, ignoring operation, return unmodified value")
                 dataset[tag].value = value
                 return
-            else:
-                width = int(parameter)
+            width = int(parameter)
             logger.debug(f"round_age: Age:{value} Width:{width}")
             dataset[tag].value = self._round_age(value, width)
             logger.debug(f"round_age: Result:{dataset[tag].value}")
         else:
-            # CTP fixed value: bare literal (YES) or @always()YES
-
             literal = always_literal_text(operation)
             if literal is not None:
                 dataset[tag].value = literal
 
-    def _rebase_offset_days_for_patient(
-        self, phi_ptid: str, *, origin: str | None = None
-    ) -> int | None:
-        """Days to add for @rebasedate: ORIGIN − basedate (TCIA epoch rebase)."""
-        lookup = self.model.get_lookup_patient(phi_ptid)
-        basedate = getattr(lookup, "basedate", None) if lookup is not None else None
-        if not basedate:
-            return None
-        origin_da = (origin or "").strip()
-        if len(origin_da) != 8 or not origin_da.isdigit():
-            # Fall back only if a bare @rebasedate (no origin) was used.
-            origin_da = rebasedate_origin("@rebasedate") or "19600101"
-        try:
-            base_dt = datetime.strptime(str(basedate), "%Y%m%d")
-            origin_dt = datetime.strptime(origin_da, "%Y%m%d")
-        except ValueError:
-            return None
-        return (origin_dt - base_dt).days
-
-    def _apply_longitudinal_provenance(
-        self,
-        ds: Dataset,
-        *,
-        phi_study_date: str | None,
-        phi_ptid: str,
-        dates_shifted: bool,
-    ) -> None:
-        """Write TCIA longitudinal markers when dates were shifted / rebase basedate present."""
-        if dates_shifted:
-            ds.LongitudinalTemporalInformationModified = "MODIFIED"
-        lookup = self.model.get_lookup_patient(phi_ptid)
-        basedate = getattr(lookup, "basedate", None) if lookup is not None else None
-        if not basedate or not phi_study_date:
-            return
-        study = str(phi_study_date).strip()[:8]
-        base = str(basedate).strip()[:8]
-        if len(study) != 8 or not study.isdigit() or len(base) != 8 or not base.isdigit():
-            return
-        try:
-            study_dt = datetime.strptime(study, "%Y%m%d")
-            base_dt = datetime.strptime(base, "%Y%m%d")
-        except ValueError:
-            return
-        ds.LongitudinalTemporalOffsetFromEvent = float((study_dt - base_dt).days)
-        ds.LongitudinalTemporalEventType = "REGISTRATION"
-        # Rebase implies dates were modified even if no @rebasedate tag was walked.
-        ds.LongitudinalTemporalInformationModified = "MODIFIED"
-
     def _insert_always_missing_elements(self, ds: Dataset) -> None:
-        """Create missing non-SQ elements whose script uses ``@always()…`` (CTP create-if-missing)."""
+        """
+        Create absent DICOM elements that the script marks with ``@always()…``.
+
+        ``ds.walk`` only visits existing tags. CTP ``@always()LITERAL`` also
+        requires creating the element when the source dataset omits it (for
+        example fixed de-identification stamps). For each ``_tag_keep`` entry
+        whose operation is ``@always()…``, if the tag is missing, add it with
+        the dictionary VR (or LO) and the literal text.
+
+        Sequences (VR SQ) are skipped; nested creation is not supported here.
+
+        Args:
+            ds: Anonymized dataset after the script walk (mutated in place).
+
+        Returns:
+            None.
+        """
 
         for tag_hex, operation in self.model._tag_keep.items():
             op = str(operation or "").strip()
@@ -578,7 +468,11 @@ class AnonymizerController:
                 logger.error(f"Error storing source file: {str(e)}")
 
         # Calculate date offset from hash of study date and patient ID
-        date_offset_from_hash, _ = self._hash_date(ds.StudyDate, ds.PatientID) if hasattr(ds, "StudyDate") and hasattr(ds, "PatientID") else (0, None)
+        date_offset_from_hash, _ = (
+            hash_date(ds.StudyDate, ds.PatientID)
+            if hasattr(ds, "StudyDate") and hasattr(ds, "PatientID")
+            else (0, None)
+        )
 
         # Verify valid DICOM format then CAPTURE PHI and source into DATABASE:
         try:
@@ -597,19 +491,11 @@ class AnonymizerController:
             # To minimize memory/computation overhead DO NOT MAKE COPY of source dataset
             # Anonymize dataset (overwrite phi dataset) (prevents dataset copy)
             phi_study_date = str(getattr(ds, "StudyDate", "") or "").strip() or None
-            self._dates_shifted_this_dataset = False
+            phi_record = self.model.get_phi_by_phi_patient_id(phi_ptid)
+            base_date = phi_record.base_date if phi_record is not None else None
 
-            from anonymizer.model.project import AnonymizationPolicy
-
-            raw = getattr(self.project_model, "anonymization_policy", AnonymizationPolicy.STRICT)
-            try:
-                policy = AnonymizationPolicy(str(raw).strip().lower())
-            except ValueError:
-                policy = AnonymizationPolicy.STRICT
-
-            # Strict: wipe private before walk (fast). Clinical: keep + skip in walk.
-            self._preserve_private_tags = policy is AnonymizationPolicy.CLINICAL
-            if not self._preserve_private_tags:
+            # Do not remove private tags for Clinical anonymization policy
+            if self.project_model.anonymization_policy is not AnonymizationPolicy.CLINICAL:
                 ds.remove_private_tags()
 
             # if ds.PatientID not present, set to '' so that anonymization script can process the element:
@@ -623,17 +509,19 @@ class AnonymizerController:
                     phi_ptid,
                     anon_ptid,
                     None if anon_acc_no is None else str(anon_acc_no),
-                    date_offset
+                    date_offset,
+                    base_date,
                 )
 
             ds.walk(pydicom_callback)  # recursive by default, recurses into embedded dataset sequences
+
+            # Create missing non-SQ elements whose script uses ``@always()…`` (CTP create-if-missing).
             self._insert_always_missing_elements(ds)
-            self._apply_longitudinal_provenance(
-                ds,
-                phi_study_date=phi_study_date,
-                phi_ptid=phi_ptid,
-                dates_shifted=bool(self._dates_shifted_this_dataset),
-            )
+
+            if self.model.date_operands_present:
+                stamp_dates_modified(ds)
+            if base_date:
+                stamp_rebase_registration(ds, phi_study_date, base_date)
 
             # All elements now anonymized according to script, now handle Anonymization specific Tags:
             ds.PatientIdentityRemoved = "YES"  # CS: (0012, 0062)

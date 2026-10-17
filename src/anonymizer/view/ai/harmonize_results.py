@@ -13,6 +13,12 @@ from tkinter import ttk
 import customtkinter as ctk
 from pydicom import Dataset
 
+from anonymizer.controller.ai.blur_face.pipeline import (
+    CachedRegionSignal,
+    MetadataSignal,
+    cached_region_signal,
+    metadata_signal,
+)
 from anonymizer.controller.ai.feature_availability import brain_structures_allowed
 from anonymizer.controller.ai.harmonize import (
     HarmonizedResult,
@@ -35,15 +41,24 @@ from anonymizer.controller.ai.harmonize.playbook import (
     playbook_series_type_row_values,
     playbook_slice_thickness_row_values,
 )
+from anonymizer.controller.ai.harmonize.playbook_planar import planar_harmonize_analysis_rows
+from anonymizer.controller.ai.tseg.config import segmentation_mode_for_modality
+from anonymizer.controller.ai.tseg.model_cache import tseg_batch_session
 from anonymizer.controller.runner import Algorithm
 from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import StudyPhiHeader
-from anonymizer.utils.modalities import is_mr_modality
+from anonymizer.utils.modalities import Modality
 from anonymizer.utils.translate import _
+from anonymizer.view.ai.harmonize_run_options_dialog import show_harmonize_run_options_dialog
 from anonymizer.view.common.app_window import AppToplevel, position_toplevel_near_parent
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import AppFonts
 from anonymizer.view.common.job_poller import STAGE_POLL_MS, start_background_job
+from anonymizer.view.project.description_mapping_store import (
+    load_study_loinc_overrides,
+    lookup_series_override,
+    remember_series_override,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +115,7 @@ def brain_structures_option_available_for_series(ds: Dataset | None) -> bool:
     if ds is None:
         return False
     modality = getattr(ds, "Modality", None)
-    if is_mr_modality(modality):
+    if Modality.from_code(modality) is Modality.MR:
         return False
     return str(modality or "").strip().upper() == "CT"
 
@@ -114,12 +129,6 @@ def series_is_ct_head_candidate(series_path: Path, ds: Dataset | None) -> bool:
     """
     if not brain_structures_option_available_for_series(ds):
         return False
-    from anonymizer.controller.ai.blur_face.pipeline import (
-        CachedRegionSignal,
-        MetadataSignal,
-        cached_region_signal,
-        metadata_signal,
-    )
 
     region_signal = cached_region_signal(series_path)
     if region_signal == CachedRegionSignal.HEAD:
@@ -243,6 +252,7 @@ class HarmonizeResultsView(AppToplevel):
         items: Sequence[HarmonizeSeriesItem],
         fonts: AppFonts | None = None,
         anon_model=None,
+        mappings_dir: Path | None = None,
         on_series_description_updated: Callable[[], None] | None = None,
         on_closed: Callable[[HarmonizeBatchOutcome], None] | None = None,
         include_brain_structures: bool = False,
@@ -257,6 +267,7 @@ class HarmonizeResultsView(AppToplevel):
         self._outcomes: list[HarmonizeSeriesOutcome] = []
         self.cancelled = False
         self._anon_model = anon_model
+        self._mappings_dir = Path(mappings_dir) if mappings_dir is not None else None
         self._on_series_description_updated = on_series_description_updated
         self._on_closed = on_closed
         self._series_key = _series_key_for_items(self._items)
@@ -757,7 +768,7 @@ class HarmonizeResultsView(AppToplevel):
             except ValueError:
                 logger.debug("Playbook body part not yet mappable for %s", self._series_path)
 
-        if is_mr_modality(getattr(self._ds, "Modality", None)):
+        if Modality.from_code(getattr(self._ds, "Modality", None)) is Modality.MR:
             self._upsert_playbook_row(
                 PLAYBOOK_TREE_IIDS[2],
                 playbook_iv_contrast_row_values(ds=self._ds),
@@ -775,7 +786,6 @@ class HarmonizeResultsView(AppToplevel):
 
     def _populate_playbook_from_result(self, result: HarmonizedResult) -> None:
         if result.planar is not None:
-            from anonymizer.controller.ai.harmonize.playbook_planar import planar_harmonize_analysis_rows
 
             for index, values in enumerate(planar_harmonize_analysis_rows(result.planar)):
                 self._upsert_playbook_row(f"planar_{index}", values)
@@ -796,23 +806,17 @@ class HarmonizeResultsView(AppToplevel):
 
     def _prompt_harmonize_run_options(self):
         """Combined mapping/brain pre-run prompt; never stacks two dialogs."""
-        from anonymizer.view.ai.harmonize_run_options_dialog import show_harmonize_run_options_dialog
 
         mapping = None
-        if self._anon_model is not None:
+        if self._mappings_dir is not None and self._anon_model is not None:
             series_uid = str(getattr(self._ds, "SeriesInstanceUID", "") or "").strip()
-            modality = str(getattr(self._ds, "Modality", "") or "").strip().upper()
             original = ""
             if series_uid:
                 original = (self._anon_model.get_series_description(series_uid) or "").strip()
             if not original:
                 original = str(getattr(self._ds, "SeriesDescription", "") or "").strip()
             if original:
-                mapping = self._anon_model.lookup_description_mapping(
-                    kind="series",
-                    original=original,
-                    modality=modality,
-                )
+                mapping = lookup_series_override(self._mappings_dir, original)
         offer_brain = should_prompt_brain_structures_for_series(self._series_path, self._ds)
         return show_harmonize_run_options_dialog(
             self,
@@ -822,9 +826,8 @@ class HarmonizeResultsView(AppToplevel):
 
     def _apply_mapping_without_model(self, mapping) -> None:
         """Apply a saved mapping and finish the current Harmonize item without TS/ML."""
-        from anonymizer.controller.ai.harmonize import apply_harmonized_description
 
-        description = (mapping.harmonized_description or "").strip()
+        description = (mapping.harmonized or "").strip()
         if not description:
             self._show_error(_("Empty mapped description"))
             return
@@ -843,7 +846,6 @@ class HarmonizeResultsView(AppToplevel):
         self._configure_ok_button()
 
     def _user_harmonize_status(self, progress: HarmonizeProgress) -> str:
-        from anonymizer.controller.ai.tseg.config import segmentation_mode_for_modality
 
         return format_harmonize_progress_message(
             progress,
@@ -996,7 +998,6 @@ class HarmonizeResultsView(AppToplevel):
         """Record series harmonized_description in the project DB (must run on UI thread)."""
         if self._anon_model is None:
             return True
-        from anonymizer.controller.ai.harmonize.mapping_origin import series_mapping_origin
 
         series_uid = str(self._ds.SeriesInstanceUID)
         text = description.strip()
@@ -1008,18 +1009,14 @@ class HarmonizeResultsView(AppToplevel):
                 description,
             )
             return False
-        # Blank sticky original → no series mapping (nothing to remember).
-        modality = str(getattr(self._ds, "Modality", "") or "").strip().upper()
-        self._anon_model.remember_series_description_mapping(
-            series_uid=series_uid,
-            modality=modality,
-            harmonized=text,
-            origin=series_mapping_origin(
-                self.result,
-                modality=modality,
-                include_brain_structures=self._include_brain_structures_for_current_run,
-            ),
-        )
+        if self._mappings_dir is not None:
+            original = (self._anon_model.get_series_description(series_uid) or "").strip()
+            if original:
+                remember_series_override(
+                    self._mappings_dir,
+                    original=original,
+                    harmonized=text,
+                )
         return True
 
     def _maybe_auto_apply_study_description(self) -> None:
@@ -1028,10 +1025,14 @@ class HarmonizeResultsView(AppToplevel):
             return
         anon_study_uid = str(self._ds.StudyInstanceUID)
         images_dir = Path(self._series_path).resolve().parent.parent.parent
+        study_overrides = (
+            load_study_loinc_overrides(self._mappings_dir) if self._mappings_dir is not None else {}
+        )
         applied = auto_apply_best_study_descriptions(
             images_dir=images_dir,
             anon_model=self._anon_model,
             anon_study_uids=(anon_study_uid,),
+            study_loinc_overrides=study_overrides,
         )
         if not applied:
             return
@@ -1154,7 +1155,6 @@ class HarmonizeResultsView(AppToplevel):
             )
 
         try:
-            from anonymizer.controller.ai.tseg.model_cache import tseg_batch_session
 
             with tseg_batch_session(preload=True):
                 results = harmonize_series(
@@ -1326,6 +1326,7 @@ def show_harmonize_results_view(
     current_description: str | None = None,
     fonts: AppFonts | None = None,
     anon_model=None,
+    mappings_dir: Path | None = None,
     on_series_description_updated: Callable[[], None] | None = None,
     on_closed: Callable[[HarmonizeBatchOutcome], None] | None = None,
     include_brain_structures: bool = False,
@@ -1368,6 +1369,7 @@ def show_harmonize_results_view(
         items=items,
         fonts=fonts,
         anon_model=anon_model,
+        mappings_dir=mappings_dir,
         on_series_description_updated=on_series_description_updated,
         on_closed=on_closed,
         include_brain_structures=include_brain_structures,

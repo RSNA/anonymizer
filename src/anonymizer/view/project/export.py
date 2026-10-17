@@ -12,13 +12,12 @@ from tkinter import messagebox, ttk
 import customtkinter as ctk
 
 from anonymizer.controller.annotations import count_patient_exportable_segment_labels
-from anonymizer.controller.project import (
-    ExportPatientsRequest,
-    ExportPatientsResponse,
-    ProjectController,
-)
+from anonymizer.controller.project import ExportPatientsRequest, ExportPatientsResponse, ProjectController
 from anonymizer.model.project import ProjectModel
-from anonymizer.utils.storage import DICOM_FILE_SUFFIX, count_studies_series_images
+from anonymizer.utils.storage.dicom_tree import (
+    count_studies_series_images,
+    DICOM_FILE_SUFFIX,
+)
 from anonymizer.utils.translate import _
 from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel

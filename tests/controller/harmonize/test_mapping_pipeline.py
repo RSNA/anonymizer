@@ -79,6 +79,8 @@ def _capture_study(model: AnonymizerModel, *, study_uid: str, series_uid: str, s
 
 
 def test_auto_apply_prefers_stored_study_mapping(anon_model: AnonymizerModel, tmp_path: Path) -> None:
+    from anonymizer.controller.ai.harmonize.loinc_study import long_common_name_for_loinc
+
     study_uid = "1.2.3.study.map.1"
     anon_study_uid = _capture_study(
         anon_model,
@@ -87,13 +89,9 @@ def test_auto_apply_prefers_stored_study_mapping(anon_model: AnonymizerModel, tm
         sop="1.2.3.sop.map.1",
         desc="Chest XR Original",
     )
-    assert anon_model.upsert_description_mapping(
-        kind="study",
-        original="Chest XR Original",
-        harmonized="XR Chest AP",
-        modality="XR",
-        loinc="36572-6",
-    )
+    loinc = "36572-6"
+    expected_name = long_common_name_for_loinc(loinc)
+    assert expected_name
     patient_id = anon_model.get_anon_patient_id_for_study(anon_study_uid)
     assert patient_id
     study_root = tmp_path / "images" / patient_id / anon_study_uid
@@ -104,26 +102,18 @@ def test_auto_apply_prefers_stored_study_mapping(anon_model: AnonymizerModel, tm
         anon_model=anon_model,
         anon_study_uids=(anon_study_uid,),
         prefer_description_mappings=True,
+        study_loinc_overrides={"Chest XR Original": loinc},
     )
-    hit = anon_model.lookup_description_mapping(
-        kind="study",
-        original="Chest XR Original",
-        modality="XR",
-    )
-    assert hit is not None
-    assert hit.harmonized_description == "XR Chest AP"
-    assert hit.loinc == "36572-6"
     assert isinstance(results, list)
     assert results, "expected mapping prefer-path to apply"
-    assert anon_model.get_study_harmonized_description(anon_study_uid) == "XR Chest AP"
+    assert anon_model.get_study_harmonized_description(anon_study_uid) == expected_name
 
 
-def test_apply_study_offer_records_loinc_rank_origin(
+def test_apply_study_offer_does_not_write_mappings(
     anon_model: AnonymizerModel, tmp_path: Path
 ) -> None:
-    """LOINC auto-apply stores Origin=LOINC rank for non-blank study originals."""
+    """Controller auto-apply updates the study only; mapping CSVs are view-owned."""
     from anonymizer.controller.ai.harmonize.loinc_study import LoincStudyMatch, StudyDescriptionOffer
-    from anonymizer.controller.ai.harmonize.mapping_origin import DESCRIPTION_MAPPING_ORIGIN_LOINC_RANK
     from anonymizer.controller.ai.harmonize.pipeline import apply_study_description_offer
 
     anon_study_uid = _capture_study(
@@ -160,12 +150,7 @@ def test_apply_study_offer_records_loinc_rank_origin(
         loinc_number="24725-4",
     )
     assert updated == [anon_study_uid]
-    rows = anon_model.list_description_mappings(kind="study")
-    assert len(rows) == 1
-    assert rows[0].origin == DESCRIPTION_MAPPING_ORIGIN_LOINC_RANK
-    assert rows[0].original_display == "TC ANGIOTOMO CEREBRAL"
-    assert rows[0].harmonized_description == "CT Brain WO and W contrast IV"
-    assert rows[0].loinc == "24725-4"
+    assert anon_model.get_study_harmonized_description(anon_study_uid) == "CT Brain WO and W contrast IV"
 
 
 def test_find_similar_study_uids_from_candidates(anon_model: AnonymizerModel) -> None:

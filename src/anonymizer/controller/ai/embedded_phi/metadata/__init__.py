@@ -7,6 +7,7 @@ do not pull the anonymizer/script import graph.
 
 from __future__ import annotations
 
+from importlib import import_module
 from typing import Any
 
 __all__ = [
@@ -91,7 +92,6 @@ def __getattr__(name: str) -> Any:
     if spec is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     mod_name, attr = spec
-    from importlib import import_module
 
     mod = import_module(mod_name, __name__)
     value = getattr(mod, attr)

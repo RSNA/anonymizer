@@ -119,5 +119,5 @@ def test_model_cache_task_id_helpers() -> None:
         assert study_description_group_choices(model, []) == []
         assert study_ready_for_description_edit(model, "missing") is False
         # malformed composition path
-        model.study_composition_for_harmonize = lambda uid: "bad"  # type: ignore[method-assign]
+        model.study_harmonize_composition = lambda uid: "bad"  # type: ignore[method-assign]
         assert study_ready_for_description_edit(model, "x") is False

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 
+import uvicorn
 from fastmcp import FastMCP
 
 from anonymizer.mcp import __version__
@@ -27,7 +28,6 @@ MCP_HTTP_PATH = "/mcp"
 
 def _preserve_logging_across_uvicorn() -> None:
     """Keep ``init_logging`` handlers when FastMCP starts uvicorn."""
-    import uvicorn
 
     if getattr(uvicorn.Config.__init__, "_anonymizer_mcp_log_patch", False):
         return

@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from anonymizer.controller.ai.embedded_phi.classify_series import SeriesKind, classify_series
+from anonymizer.controller.ai.embedded_phi.ner.cache import (
+    MODEL_DIR,
+    NerModelOptions,
+    resolve_model_id,
+)
 from anonymizer.controller.ai.embedded_phi.ner.engine import (
     SCORED_LABELS,
     SEGMENT_SEP,
@@ -17,6 +23,14 @@ from anonymizer.controller.ai.embedded_phi.ner.engine import (
     detect_locale_supported,
     replace_entities,
 )
+
+
+def test_ner_model_options_override_resolve() -> None:
+    opts = NerModelOptions(model_id="org/custom-deid", cache_dir=Path("/tmp/ner-cache"))
+    assert resolve_model_id(options=opts) == "org/custom-deid"
+    default_id = resolve_model_id()
+    assert default_id == "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1" or Path(default_id).is_dir()
+    assert MODEL_DIR.name == "model"
 
 
 def test_scored_labels_include_email() -> None:

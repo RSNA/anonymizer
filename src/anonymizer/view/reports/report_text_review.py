@@ -22,11 +22,8 @@ from anonymizer.controller.ai.embedded_phi.report.process_report_text import (
     remove_phi,
     write_report_text,
 )
-from anonymizer.controller.ai.feature_availability import (
-    harmonize_allowed_for_modality,
-    report_text_phi_ready,
-)
-from anonymizer.utils.storage import get_dcm_files
+from anonymizer.controller.ai.feature_availability import harmonize_allowed_for_modality, report_text_phi_ready
+from anonymizer.utils.storage.dicom_tree import get_dcm_files
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.harmonize_description import (
     harmonize_button_visible,
@@ -43,6 +40,8 @@ from anonymizer.view.reports.report_canvas import ReportCanvas
 if TYPE_CHECKING:
     from anonymizer.controller.project import ProjectController
     from anonymizer.view.common.fonts import AppFonts
+from anonymizer.controller.ai.embedded_phi.report.process_report_text import _SLOT_SEP
+from anonymizer.view.common.ux_fields import truncate_series_description
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +60,6 @@ def replace_mode_labels() -> dict[str, ReplaceMode]:
 
 def _display_report_text(text: str) -> str:
     """Show slot separator as newlines when extract used ``\\x1e`` (embedded newlines)."""
-    from anonymizer.controller.ai.embedded_phi.report.process_report_text import _SLOT_SEP
 
     body = str(text or "")
     if _SLOT_SEP in body and _SLOT_SEP != "\n":
@@ -194,7 +192,6 @@ class ReportTextReview(AppCTkToplevel):
             self.pdf_view._suspend_configure_refit = False
 
     def _update_title(self) -> None:
-        from anonymizer.view.common.ux_fields import truncate_series_description
 
         title = _("Report Text Review")
         try:
@@ -440,6 +437,7 @@ class ReportTextReview(AppCTkToplevel):
             ds=self._ds,
             anon_model=self._controller.anonymizer.model,
             fonts=self._fonts,
+            mappings_dir=self._controller.model.mappings_dir(),
             existing_view=self._harmonize_view,
             on_series_description_updated=self._on_series_description_updated,
             on_closed=self._on_harmonize_closed,

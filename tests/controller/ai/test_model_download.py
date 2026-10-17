@@ -1,4 +1,4 @@
-"""Tests for AI model download progress tracking in utils.storage."""
+"""Tests for AI model download progress tracking."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from anonymizer.utils.storage import (
+from anonymizer.controller.ai.model_download import (
     DownloadProgress,
     begin_model_download,
     end_model_download,

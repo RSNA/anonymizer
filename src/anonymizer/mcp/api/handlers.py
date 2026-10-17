@@ -25,17 +25,9 @@ from anonymizer.mcp.api.schemas import (
     SeriesSelectorsArgs,
     UpdateProjectSettingsArgs,
 )
-from anonymizer.mcp.ops import (
-    HeadlessOpsError,
-    PacsMoveLevel,
-    RemoteScpRole,
-)
+from anonymizer.mcp.ops import HeadlessOpsError, PacsMoveLevel, RemoteScpRole
 from anonymizer.mcp.session import SESSION, ProjectSessionError
-from anonymizer.mcp.snapshots import (
-    public_inventory_payload,
-    public_project_info,
-    strip_path_fields,
-)
+from anonymizer.mcp.snapshots import public_inventory_payload, public_project_info, strip_path_fields
 
 
 def _ok(payload: dict[str, Any]) -> dict[str, Any]:

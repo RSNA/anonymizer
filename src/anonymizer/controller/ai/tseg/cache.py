@@ -7,7 +7,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from anonymizer.controller.ai.tseg.config import TSEG_CACHE_DIRNAME
+from anonymizer.controller.ai.tseg.config import ANNOTATIONS_DIRNAME, TSEG_CACHE_DIRNAME
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,6 @@ def clear_tseg_series_cache(
 
     Does not modify DICOM images or series metadata. Returns True when anything was removed.
     """
-    from anonymizer.controller.annotations.store import ANNOTATIONS_DIRNAME
 
     cache_dir = resolve_series_cache_dir(series_directory)
     if not cache_dir.is_dir():

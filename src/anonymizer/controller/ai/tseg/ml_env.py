@@ -8,7 +8,56 @@ import threading
 from contextlib import contextmanager, suppress
 from typing import Iterator
 
+import torch
+from tqdm import tqdm as orig_tqdm
+
+try:
+    import totalsegmentator.libs as ts_libs_module
+except ImportError:
+    ts_libs_module = None
+
 logger = logging.getLogger(__name__)
+
+# Batch harmonize session: predictors stay resident while depth > 0 (see ``tseg_batch_session``).
+SESSION_LOCK = threading.Lock()
+_session_depth = 0
+
+
+def session_active() -> bool:
+    """Return True while a harmonize batch session keeps TS predictors resident."""
+    return _session_depth > 0
+
+
+def preserve_accelerator_memory() -> bool:
+    """When True, skip torch cache clears so loaded TS weights stay resident."""
+    return session_active()
+
+
+def enter_session() -> bool:
+    """Increment session depth; return True when this call started the outermost session."""
+    global _session_depth
+    with SESSION_LOCK:
+        _session_depth += 1
+        return _session_depth == 1
+
+
+def exit_session() -> bool:
+    """Decrement session depth; return True when the outermost session just ended."""
+    global _session_depth
+    with SESSION_LOCK:
+        _session_depth -= 1
+        return _session_depth == 0
+
+
+def resolve_device(device: str | None) -> str:
+    if device:
+        return device
+    if torch.backends.mps.is_available():
+        return "mps"
+    if torch.cuda.is_available():
+        return "gpu"
+    return "cpu"
+
 
 # Serialize TotalSegmentator / nnUNet / XGBoost stages across the process.
 # Concurrent entry (e.g. two Harmonize dialogs) previously caused hard crashes (SIGSEGV).
@@ -75,25 +124,18 @@ def sequential_ml_context(stage: str) -> Iterator[None]:
         os.environ[_NNUNET_DEF_N_PROC] = "1"
 
         prior_intra = prior_inter = None
-        try:
-            import torch
-
-            prior_intra = torch.get_num_threads()
-            prior_inter = torch.get_num_interop_threads()
-            torch.set_num_threads(1)
-            with suppress(RuntimeError):
-                torch.set_num_interop_threads(1)
-        except ImportError:
-            torch = None
+        prior_intra = torch.get_num_threads()
+        prior_inter = torch.get_num_interop_threads()
+        torch.set_num_threads(1)
+        with suppress(RuntimeError):
+            torch.set_num_interop_threads(1)
 
         logger.debug("Sequential ML context start: %s", stage)
         log_active_threads(stage)
 
-        ts_libs = None
+        ts_libs = ts_libs_module
         original_tqdm = None
-        with suppress(ImportError):
-            import totalsegmentator.libs as ts_libs
-            from tqdm import tqdm as orig_tqdm
+        if ts_libs is not None:
 
             class _NoMonitorTqdm(orig_tqdm):
                 monitor_interval = 0
@@ -106,7 +148,7 @@ def sequential_ml_context(stage: str) -> Iterator[None]:
         finally:
             if ts_libs is not None and original_tqdm is not None:
                 ts_libs.tqdm = original_tqdm
-            if torch is not None and prior_intra is not None:
+            if prior_intra is not None:
                 torch.set_num_threads(prior_intra)
                 with suppress(RuntimeError):
                     if prior_inter is not None:

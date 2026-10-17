@@ -11,12 +11,17 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from anonymizer.controller.process_ctp_lookup import private_anonymizer_script_path
+from anonymizer.controller.anonymizer_script_paths import private_anonymizer_script_path
 from anonymizer.model.project import AnonymizationPolicy
 
 if TYPE_CHECKING:
     from anonymizer.controller.project import ProjectController
     from anonymizer.model.project import ProjectModel
+try:
+    from pydicom._version import __dicom_version__
+except Exception:
+    __dicom_version__ = None  # type: ignore[assignment,misc]
+from pydicom.datadict import DicomDictionary, keyword_dict
 
 logger = logging.getLogger(__name__)
 
@@ -309,7 +314,6 @@ class TagDictionaryMeta:
 
 def tag_dictionary_meta(tag: str) -> TagDictionaryMeta | None:
     """Look up Part 6 Name/VR/VM/retired/keyword for ``tag``, or None if unknown."""
-    from pydicom.datadict import DicomDictionary
 
     hex_tag = _normalize_tag_hex(tag)
     if hex_tag is None:
@@ -343,10 +347,6 @@ def format_tag_description_line(meta: TagDictionaryMeta, *, retired_label: str =
 
 def dicom_standard_version() -> str:
     """DICOM Standard dated issue used for pydicom's public dictionary (e.g. ``2024c``)."""
-    try:
-        from pydicom._version import __dicom_version__
-    except Exception:
-        return ""
     return str(__dicom_version__ or "").strip()
 
 
@@ -927,7 +927,6 @@ def search_dicom_dictionary(
     Empty ``query`` lists the first ``limit`` tags (after exclusions) for browse UIs.
     Non-empty queries shorter than 2 characters return no hits.
     """
-    from pydicom.datadict import DicomDictionary, keyword_dict
 
     needle = str(query or "").strip().lower()
     if needle and len(needle) < 2:

@@ -28,6 +28,7 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
     ensure_series_geometry,
     load_geometry_cache,
 )
+from anonymizer.controller.create_projections import invalidate_projection_cache
 from anonymizer.controller.runner import Algorithm
 from anonymizer.controller.series_io import load_series_frames, save_series_frames
 from anonymizer.controller.series_overlay import LayerType
@@ -618,7 +619,6 @@ class FaceBlurReviewDialog(AppCTkToplevel):
             )
             return
 
-        from anonymizer.controller.create_projections import invalidate_projection_cache
 
         invalidate_projection_cache(self._series_path)
 

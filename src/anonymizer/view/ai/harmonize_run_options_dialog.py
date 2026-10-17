@@ -8,11 +8,11 @@ from dataclasses import dataclass
 
 import customtkinter as ctk
 
-from anonymizer.model.anonymizer import DescriptionMappingRecord
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.features.catalog import AiFeatureId, feature_description
 from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
+from anonymizer.view.project.description_mapping_store import SeriesDescriptionOverride
 
 
 @dataclass(frozen=True)
@@ -33,7 +33,7 @@ class HarmonizeRunOptionsDialog(AppToplevel):
         self,
         parent: tk.Misc,
         *,
-        mapping: DescriptionMappingRecord | None,
+        mapping: SeriesDescriptionOverride | None,
         offer_brain: bool,
         brain_description: str = "",
     ) -> None:
@@ -70,7 +70,7 @@ class HarmonizeRunOptionsDialog(AppToplevel):
             row += 1
             ctk.CTkLabel(
                 body,
-                text=f'"{mapping.original_display}" → "{mapping.harmonized_description}"',
+                text=f'"{mapping.original}" → "{mapping.harmonized}"',
                 anchor="w",
                 justify="left",
                 wraplength=wrap,
@@ -213,7 +213,7 @@ class HarmonizeRunOptionsDialog(AppToplevel):
 def show_harmonize_run_options_dialog(
     parent: tk.Misc,
     *,
-    mapping: DescriptionMappingRecord | None,
+    mapping: SeriesDescriptionOverride | None,
     offer_brain: bool,
 ) -> HarmonizeRunOptionsResult:
     """Show combined options when mapping and/or brain apply; otherwise return run-model defaults."""

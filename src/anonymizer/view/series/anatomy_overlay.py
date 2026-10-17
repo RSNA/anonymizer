@@ -17,10 +17,12 @@ from anonymizer.controller.ai.tseg.config import (
 )
 from anonymizer.controller.ai.tseg.seg_retention import (
     primary_segment_has_masks,
+    primary_segment_mask_stems_on_disk,
     read_mask_geometry,
     read_primary_segment_voxels,
     resolve_primary_segment_files,
     sitk_image_from_mask_geometry,
+    write_primary_segment_voxels,
 )
 from anonymizer.controller.series_overlay import PolygonPoint, Segmentation
 
@@ -120,10 +122,6 @@ def collect_primary_segment_voxels(
     mid-Harmonize), infer presence from on-disk ``*.nii.gz`` names only — never decode
     NIfTI volumes on the UI thread.
     """
-    from anonymizer.controller.ai.tseg.seg_retention import (
-        primary_segment_mask_stems_on_disk,
-        write_primary_segment_voxels,
-    )
 
     seg_dir = Path(seg_dir)
     cache_dir = seg_dir.parent

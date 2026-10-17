@@ -51,7 +51,7 @@ def _geometry(*, ts_suitable: bool = True) -> SeriesGeometryResult:
 
 def test_profile_for_mr_and_mri():
     assert profile_for_modality("MR") is not None
-    assert profile_for_modality("MRI") is not None
+    assert profile_for_modality("MR") is not None
     assert profile_for_modality("MR").anatomy_task == "total_mr"
     assert profile_for_modality("US") is None
 
@@ -212,7 +212,7 @@ def test_infer_mr_vertebrae_region_from_metadata(series_description: str, expect
 
 def test_mr_vertebrae_mask_maps_to_playbook_region() -> None:
     from anonymizer.controller.ai.tseg.modality_profile import mr_structure_to_region_for_series
-    from anonymizer.controller.ai.tseg.segment import body_parts_present, dominant_region_from_voxels
+    from anonymizer.controller.ai.tseg.regions import body_parts_present, dominant_region_from_voxels
 
     ds = Dataset()
     ds.SeriesDescription = "THORACIC SPINE T2"

@@ -5,9 +5,10 @@ from __future__ import annotations
 import logging
 import re
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from pydicom import Dataset, dcmread
@@ -79,9 +80,97 @@ from anonymizer.utils.translate import _
 if TYPE_CHECKING:
     from anonymizer.model.anonymizer import AnonymizerModel
 
-from anonymizer.controller.ai.harmonize.loinc_study import StudyDescriptionOffer
+from pydicom.errors import InvalidDicomError
+
+from anonymizer.controller.ai.harmonize.description_components import (
+    PlaybookComponentSelection,
+    format_playbook_series_description,
+)
+from anonymizer.controller.ai.harmonize.loinc_study import (
+    LoincStudyMatch,
+    StudyDescriptionOffer,
+    build_study_description_ranking,
+    count_planar_study_images,
+    fingerprint_for_harmonized_study,
+    fingerprint_for_planar_harmonized_study,
+    infer_loinc_anatomy_from_text,
+    load_loinc_study_descriptions_for_prefix,
+    long_common_name_for_loinc,
+    parse_playbook_series_description,
+    rank_loinc_study_descriptions_from_hint,
+    rank_planar_loinc_study_descriptions,
+)
+from anonymizer.controller.ai.harmonize.profile_2d import (
+    is_2d_harmonize_modality,
+    normalize_2d_modality_label,
+    profile_2d_for_modality,
+    profile_2d_from_dataset,
+)
+from anonymizer.controller.ai.harmonize.playbook import BODY_PART_PLAYBOOK_CODES, playbook_iv_contrast_row_values
+from anonymizer.controller.ai.harmonize.playbook_planar import (
+    build_planar_harmonized_series_description,
+    build_planar_playbook_attributes,
+    planar_loinc_prefix_for_series_descriptions,
+)
+from anonymizer.controller.ai.harmonize.xp_bodypart import predict_body_part, xp_bodypart_ready
+from anonymizer.controller.ai.harmonize.xr_chest_view import cxp_view_ready, predict_cxp_view
+from anonymizer.controller.ai.tseg.config import (
+    segmentation_mode_display,
+    segmentation_mode_for_modality,
+)
+from anonymizer.controller.ai.tseg.contrast import (
+    format_dominant_organ_hu_summary,
+    load_contrast_stats_hn,
+)
+from anonymizer.controller.ai.tseg.modality_profile import profile_for_modality
+from anonymizer.controller.ai.tseg.seg_retention import evict_tseg_volume
+from anonymizer.controller.create_projections import invalidate_projection_cache
+from anonymizer.controller.series_io import apply_series_description, apply_study_description
+from anonymizer.utils.modalities import (
+    ContentClass,
+    Modality,
+    StudyImagingComposition,
+    get_modality_catalog,
+)
 
 logger = logging.getLogger(__name__)
+
+_TSEG_EXEC_MODALITIES = frozenset({Modality.CT, Modality.MR})
+
+
+class HarmonizeProgressStage(StrEnum):
+    """Progress stage tokens emitted by the Harmonize worker."""
+
+    DONE = "done"
+    FAILED = "failed"
+    GEOMETRY = "geometry"
+    PREPARE = "prepare"
+    SEGMENT = "segment"
+    REGIONS = "regions"
+    TSEG = "tseg"
+    CONTRAST = "contrast"
+    CONTRAST_STATS = "contrast_stats"
+    CONTRAST_STATS_CACHED = "contrast_stats_cached"
+    CONTRAST_STATS_HN = "contrast_stats_hn"
+    CONTRAST_STATS_HN_CACHED = "contrast_stats_hn_cached"
+    CONTRAST_STATS_HN_SKIP = "contrast_stats_hn_skip"
+    CONTRAST_XGBOOST = "contrast_xgboost"
+    CONTRAST_PHASE_CACHE = "contrast_phase_cache"
+    MERGE = "merge"
+
+
+def _modality_executes_tseg(value: object | None) -> bool:
+    """True when TotalSegmentator / geometry Harmonize runs for this modality."""
+    modality = value if isinstance(value, Modality) else Modality.from_code(value if isinstance(value, str) else None)
+    return modality in _TSEG_EXEC_MODALITIES
+
+
+def _2d_cohort_label(value: object | None) -> str | None:
+    """Return XR / US / MG cohort label for a 2D playbook modality."""
+    if profile_2d_for_modality(value) is None:
+        return None
+    label = normalize_2d_modality_label(value)
+    return label or None
 
 
 @dataclass(frozen=True)
@@ -445,9 +534,8 @@ def series_description_is_harmonized(series_directory: Path, ds: Dataset) -> boo
 
 def harmonize_context_hint(series_directory: Path, ds: Dataset | None) -> str | None:
     """Optional Series View geometry-line suffix when harmonization is already up to date."""
-    from anonymizer.utils.modalities import is_tseg_modality
 
-    if ds is None or not is_tseg_modality(getattr(ds, "Modality", None)):
+    if ds is None or not _modality_executes_tseg(getattr(ds, "Modality", None)):
         return None
     if series_description_is_harmonized(series_directory, ds) is not True:
         return None
@@ -494,7 +582,6 @@ def format_harmonize_progress_message(
     segmentation_mode: object | None = None,
 ) -> str:
     """Translate harmonize pipeline stages to clinician-friendly status text."""
-    from anonymizer.controller.ai.tseg.config import segmentation_mode_display
 
     message = (progress.message or "").strip()
     stage = progress.stage
@@ -516,21 +603,21 @@ def format_harmonize_progress_message(
             return base
         return f"{base} · {resolution}"
 
-    if stage == "done":
+    if stage == HarmonizeProgressStage.DONE:
         return _("Harmonize analysis complete")
 
-    if stage == "failed":
+    if stage == HarmonizeProgressStage.FAILED:
         detail = message.strip()
         if detail:
             return _("Harmonize analysis failed") + f": {detail}"
         return _("Harmonize analysis failed")
 
-    if stage == "geometry" and message.startswith(geometry_prefix):
+    if stage == HarmonizeProgressStage.GEOMETRY and message.startswith(geometry_prefix):
         summary = message[len(geometry_prefix) :].strip()
         if summary:
             return summary + pct
         return _("Scan geometry analyzed") + pct
-    if stage == "tseg" and message.startswith(geometry_prefix):
+    if stage == HarmonizeProgressStage.TSEG and message.startswith(geometry_prefix):
         return _("Anatomy analysis not available for this series") + pct
 
     known_messages = {
@@ -567,7 +654,7 @@ def format_harmonize_progress_message(
     )
     if stage in detail_message_stages and message:
         return known_messages.get(message, _(message)) + pct
-    if stage == "segment" and "cached" in message.lower():
+    if stage == HarmonizeProgressStage.SEGMENT and "cached" in message.lower():
         return known_messages.get(message, _(message)) + pct
 
     stage_labels: dict[str, str] = {
@@ -643,7 +730,6 @@ def format_harmonize_batch_progress_text(
     ds: Dataset | None = None,
 ) -> str:
     """Full batch progress line: series position, context, and friendly stage."""
-    from anonymizer.controller.ai.tseg.config import segmentation_mode_for_modality
 
     series_label = format_harmonize_batch_series_label(series_path, ds)
     stage_text = format_harmonize_progress_message(
@@ -673,7 +759,6 @@ def _iter_study_series_dirs(
 
 def _load_ct_series_dataset(series_path: Path) -> Dataset | None:
     """Load series dataset only when modality is CT (CT-only callers)."""
-    from pydicom.errors import InvalidDicomError
 
     try:
         ds = _load_series_dataset(series_path)
@@ -686,9 +771,7 @@ def _load_ct_series_dataset(series_path: Path) -> Dataset | None:
 
 def _load_tseg_series_dataset(series_path: Path) -> Dataset | None:
     """Load series dataset when modality has a TSEG profile (CT or MR)."""
-    from pydicom.errors import InvalidDicomError
 
-    from anonymizer.controller.ai.tseg.modality_profile import profile_for_modality
 
     try:
         ds = _load_series_dataset(series_path)
@@ -701,9 +784,7 @@ def _load_tseg_series_dataset(series_path: Path) -> Dataset | None:
 
 def _load_planar_series_dataset(series_path: Path) -> Dataset | None:
     """Load series dataset when modality is XR (CR/DX), US, or MG — never CT/MR."""
-    from pydicom.errors import InvalidDicomError
 
-    from anonymizer.utils.modalities import is_planar_harmonize_modality, is_tseg_modality
 
     try:
         ds = _load_series_dataset(series_path)
@@ -711,24 +792,23 @@ def _load_planar_series_dataset(series_path: Path) -> Dataset | None:
         return None
     modality = getattr(ds, "Modality", None)
     # Isolation: never treat CT/MR as planar even if tags look radiographic.
-    if is_tseg_modality(modality):
+    if _modality_executes_tseg(modality):
         return None
-    if not is_planar_harmonize_modality(modality):
+    if not is_2d_harmonize_modality(modality):
         return None
     return ds
 
 
 def _load_report_series_dataset(series_path: Path) -> Dataset | None:
     """Load series dataset when modality is SR / DOC / PDF (Report View Harmonize)."""
-    from pydicom.errors import InvalidDicomError
 
-    from anonymizer.utils.modalities import is_report_harmonize_modality
 
     try:
         ds = _load_series_dataset(series_path)
     except (ValueError, OSError, InvalidDicomError):
         return None
-    if not is_report_harmonize_modality(getattr(ds, "Modality", None)):
+    report_mod = Modality.from_code(getattr(ds, "Modality", None))
+    if report_mod is None or get_modality_catalog()[report_mod].content_class is not ContentClass.TEXT:
         return None
     return ds
 
@@ -868,11 +948,11 @@ def study_harmonize_status(
     anon_study_uid: str,
 ) -> bool:
     """
-    Return True when every eligible CT|MR series in the study is harmonized.
+    Return True when every tseg ∪ planar Harmonize series in the study is done.
 
     Uses ORM ``Series.harmonized_description`` metadata (no filesystem or TS cache reads).
     """
-    return anon_model.study_is_harmonized(anon_study_uid)
+    return anon_model.study_all_series_harmonized(anon_study_uid)
 
 
 def apply_harmonized_description(
@@ -881,7 +961,6 @@ def apply_harmonized_description(
     anon_model: AnonymizerModel | None,
 ) -> bool:
     """Apply harmonized SeriesDescription to DICOM when needed and update the project database."""
-    from anonymizer.controller.series_io import apply_series_description
 
     description = description.strip()
     if not description:
@@ -897,7 +976,6 @@ def apply_harmonized_description(
         return False
 
     if current != description:
-        from anonymizer.controller.create_projections import invalidate_projection_cache
 
         invalidate_projection_cache(series_path)
 
@@ -916,7 +994,6 @@ def study_series_description_fingerprint(
     anon_study_uid: str,
 ) -> tuple[str, ...]:
     """Sorted multiset fingerprint of CT Playbook series descriptions for a study."""
-    from anonymizer.controller.ai.harmonize.loinc_study import fingerprint_for_harmonized_study
 
     return fingerprint_for_harmonized_study(anon_model, anon_study_uid)
 
@@ -938,7 +1015,6 @@ def apply_harmonized_study_description(
     loinc_number: str | None = None,
 ) -> bool:
     """Write StudyDescription (+ optional LOINC ProcedureCodeSequence) and update ORM."""
-    from anonymizer.controller.series_io import apply_study_description
 
     description = description.strip()
     if not description:
@@ -986,22 +1062,22 @@ def planar_series_paths_for_study(images_dir: Path, anon_patient_id: str, anon_s
     ]
 
 
-def _study_composition_flags(anon_model: AnonymizerModel, anon_study_uid: str) -> tuple[bool, bool]:
+def _study_harmonize_composition(
+    anon_model: AnonymizerModel, anon_study_uid: str
+) -> StudyImagingComposition:
     """
-    Unpack ``study_composition_for_harmonize`` as ``(has_tseg, has_planar)``.
+    Study Harmonize makeup for LOINC path selection.
 
-    Missing API defaults to CT|MR-only gate for backward compatibility.
     Report-only studies are anomalies (dose SR usually rides a parent imaging study)
     and do not get a separate study-LOINC offer path.
     """
-    composition = getattr(anon_model, "study_composition_for_harmonize", None)
+    composition = getattr(anon_model, "study_harmonize_composition", None)
     if not callable(composition):
-        return True, False
+        return StudyImagingComposition.D3
     raw = composition(anon_study_uid)
-    try:
-        return bool(raw[0]), bool(raw[1])
-    except (TypeError, IndexError, ValueError):
-        return True, False
+    if isinstance(raw, StudyImagingComposition):
+        return raw
+    return StudyImagingComposition.NONE
 
 
 def maybe_offer_study_description_harmonize(
@@ -1014,31 +1090,22 @@ def maybe_offer_study_description_harmonize(
     """
     Build a Study Description offer when the study just became fully Harmonized.
 
-    CT|MR studies: unchanged TSEG gate + CT/MR LOINC ranking.
-    Pure XR/US/MG studies: planar gate + XR/US/MG LOINC ranking.
-    Mixed CT|MR + planar: only the CT|MR path (planar series must not block CT LOINC).
+    Gate: every tseg ∪ planar series has a harmonized description.
+    Path: ``tseg`` / ``mixed`` → CT/MR LOINC ranking; ``planar`` → planar ranking.
     Report-only studies are skipped (dose/report SRs normally share a parent imaging study).
     """
-    from anonymizer.controller.ai.harmonize.loinc_study import (
-        build_study_description_ranking,
-        count_planar_study_images,
-        fingerprint_for_harmonized_study,
-        fingerprint_for_planar_harmonized_study,
-        rank_planar_loinc_study_descriptions,
-    )
-    from anonymizer.utils.modalities import planar_harmonize_cohort
 
     if anon_model.get_study_harmonized_description(anon_study_uid):
         return None
 
-    has_tseg, has_planar = _study_composition_flags(anon_model, anon_study_uid)
+    if not anon_model.study_all_series_harmonized(anon_study_uid):
+        return None
 
-    # --- CT/MR path (behavioral freeze) ---
-    if has_tseg:
-        if not anon_model.study_is_harmonized(anon_study_uid):
-            return None
+    composition = _study_harmonize_composition(anon_model, anon_study_uid)
 
-        descriptions = anon_model.get_ct_series_harmonized_descriptions(anon_study_uid)
+    # --- CT/MR path (also used when mixed with planar siblings) ---
+    if composition in {StudyImagingComposition.D3, StudyImagingComposition.MIXED}:
+        descriptions = anon_model.get_3d_series_harmonized_descriptions(anon_study_uid)
         fingerprint = fingerprint_for_harmonized_study(anon_model, anon_study_uid)
         if not fingerprint:
             return None
@@ -1049,7 +1116,6 @@ def maybe_offer_study_description_harmonize(
             patient_id = anon_model.get_anon_patient_id_for_study(anon_study_uid)
             if patient_id:
                 series_paths = tseg_series_paths_for_study(Path(images_dir), patient_id, anon_study_uid)
-                from anonymizer.controller.ai.tseg.modality_profile import resolve_profile_for_series
 
                 profiles = [resolve_profile_for_series(p) for p in series_paths]
                 if profiles and all(p is not None and p.modality == "MR" for p in profiles):
@@ -1078,16 +1144,13 @@ def maybe_offer_study_description_harmonize(
         )
 
     # --- Pure planar path (no CT/MR siblings) ---
-    if has_planar:
-        if not anon_model.study_is_planar_harmonized(anon_study_uid):
-            return None
-
-        descriptions = anon_model.get_planar_series_harmonized_descriptions(anon_study_uid)
+    if composition is StudyImagingComposition.D2:
+        descriptions = anon_model.get_2d_series_harmonized_descriptions(anon_study_uid)
         if not descriptions:
             return None
 
-        modalities = anon_model.get_planar_series_modalities(anon_study_uid)
-        cohorts = {planar_harmonize_cohort(m) for m in modalities}
+        modalities = anon_model.get_2d_series_modalities(anon_study_uid)
+        cohorts = {_2d_cohort_label(m) for m in modalities}
         cohorts.discard(None)
         if len(cohorts) != 1:
             # Mixed XR+US etc.: skip auto LOINC for v1
@@ -1108,7 +1171,6 @@ def maybe_offer_study_description_harmonize(
         if not fingerprint:
             return None
 
-        from anonymizer.controller.ai.harmonize.playbook_planar import planar_loinc_prefix_for_series_descriptions
 
         loinc_prefix = planar_loinc_prefix_for_series_descriptions(cohort, descriptions)
         matches = rank_planar_loinc_study_descriptions(
@@ -1123,7 +1185,7 @@ def maybe_offer_study_description_harmonize(
 
         peers = [
             uid
-            for uid in anon_model.find_studies_with_planar_series_fingerprint(fingerprint)
+            for uid in anon_model.find_studies_with_2d_series_fingerprint(fingerprint)
             if uid != anon_study_uid and not anon_model.get_study_harmonized_description(uid)
         ]
         return StudyDescriptionOffer(
@@ -1155,18 +1217,10 @@ def study_description_edit_offer(
     counts — never opens DICOM or walks ``images_dir``. When CT|MR series are not
     yet Harmonized, ranks LOINC from the study description text when present.
     """
-    from anonymizer.controller.ai.harmonize.loinc_study import (
-        LoincStudyMatch,
-        build_study_description_ranking,
-        fingerprint_for_harmonized_study,
-        fingerprint_for_planar_harmonized_study,
-        rank_loinc_study_descriptions_from_hint,
-        rank_planar_loinc_study_descriptions,
-    )
-    from anonymizer.controller.ai.harmonize.playbook_planar import planar_loinc_prefix_for_series_descriptions
-    from anonymizer.utils.modalities import is_mr_modality, planar_harmonize_cohort
 
-    has_tseg, has_planar = _study_composition_flags(anon_model, anon_study_uid)
+    composition = _study_harmonize_composition(anon_model, anon_study_uid)
+    has_tseg = composition in {StudyImagingComposition.D3, StudyImagingComposition.MIXED}
+    has_planar = composition in {StudyImagingComposition.D2, StudyImagingComposition.MIXED}
 
     current = (anon_model.get_study_harmonized_description(anon_study_uid) or "").strip()
 
@@ -1190,14 +1244,12 @@ def study_description_edit_offer(
         )
 
     if has_tseg:
-        descriptions = anon_model.get_ct_series_harmonized_descriptions(anon_study_uid)
+        descriptions = anon_model.get_3d_series_harmonized_descriptions(anon_study_uid)
         fingerprint = fingerprint_for_harmonized_study(anon_model, anon_study_uid)
         loinc_prefix = "CT "
-        get_mods = getattr(anon_model, "get_tseg_series_modalities", None)
-        if callable(get_mods):
-            modalities = get_mods(anon_study_uid)
-            if modalities and all(is_mr_modality(m) for m in modalities):
-                loinc_prefix = "MR "
+        modalities = anon_model.get_3d_series_modalities(anon_study_uid)
+        if modalities and all(Modality.from_code(m) is Modality.MR for m in modalities):
+            loinc_prefix = "MR "
 
         if not descriptions and not current:
             return None
@@ -1225,15 +1277,15 @@ def study_description_edit_offer(
         )
 
     if has_planar:
-        descriptions = anon_model.get_planar_series_harmonized_descriptions(anon_study_uid)
+        descriptions = anon_model.get_2d_series_harmonized_descriptions(anon_study_uid)
         fingerprint = fingerprint_for_planar_harmonized_study(anon_model, anon_study_uid)
         if not descriptions and not current:
             return None
         if not descriptions:
             return _with_current([], fingerprint or ((current,) if current else ()))
 
-        modalities = anon_model.get_planar_series_modalities(anon_study_uid)
-        cohorts = {planar_harmonize_cohort(m) for m in modalities}
+        modalities = anon_model.get_2d_series_modalities(anon_study_uid)
+        cohorts = {_2d_cohort_label(m) for m in modalities}
         cohorts.discard(None)
         if len(cohorts) != 1:
             return _with_current([], fingerprint or tuple(sorted(descriptions)))
@@ -1243,11 +1295,9 @@ def study_description_edit_offer(
         loinc_prefix = planar_loinc_prefix_for_series_descriptions(cohort, descriptions)
 
         image_count: int | None = None
-        get_count = getattr(anon_model, "get_planar_series_instance_count", None)
-        if callable(get_count):
-            counted = int(get_count(anon_study_uid) or 0)
-            if counted > 0:
-                image_count = counted
+        counted = int(anon_model.get_2d_series_instance_count(anon_study_uid) or 0)
+        if counted > 0:
+            image_count = counted
 
         matches = rank_planar_loinc_study_descriptions(
             descriptions,
@@ -1332,10 +1382,6 @@ def _format_tseg_playbook_description(
     series_type: str,
     series_type_modifier: str,
 ) -> str:
-    from anonymizer.controller.ai.harmonize.description_components import (
-        PlaybookComponentSelection,
-        format_playbook_series_description,
-    )
 
     return format_playbook_series_description(
         PlaybookComponentSelection(
@@ -1351,7 +1397,6 @@ def _format_tseg_playbook_description(
 
 def _playbook_body_parts_from_anatomy_hint(anatomy_hint: str) -> list[str]:
     """Map free-text study/series PHI anatomy into Playbook body-part codes."""
-    from anonymizer.controller.ai.harmonize.loinc_study import infer_loinc_anatomy_from_text
 
     codes: list[str] = []
     seen: set[str] = set()
@@ -1374,8 +1419,6 @@ def _tseg_radlex_series_edit_choices(
     full_catalog: bool = False,
     anatomy_hint: str = "",
 ) -> list[str]:
-    from anonymizer.controller.ai.harmonize.loinc_study import parse_playbook_series_description
-    from anonymizer.controller.ai.harmonize.playbook import BODY_PART_PLAYBOOK_CODES
 
     parsed = parse_playbook_series_description(current)
     parsed_body_parts = list(parsed.get("body_parts") or [])
@@ -1537,7 +1580,6 @@ _EDIT_PLANAR_ANATOMY_LABELS: frozenset[str] = frozenset(
 
 def _planar_recognized_anatomy(tokens: Sequence[str]) -> str | None:
     """Return a known Playbook anatomy label from tokens, or None for raw PHI text."""
-    import re
 
     if not tokens:
         return None
@@ -1558,9 +1600,8 @@ def _planar_radlex_series_edit_choices(
     minimum: int,
     full_catalog: bool = False,
 ) -> list[str]:
-    from anonymizer.utils.modalities import planar_harmonize_cohort
 
-    cohort = planar_harmonize_cohort(modality) or "XR"
+    cohort = _2d_cohort_label(modality) or "XR"
     tokens = [tok for tok in current.split() if tok]
     anatomy = _planar_recognized_anatomy(tokens) or "Chest"
 
@@ -1653,11 +1694,10 @@ def series_description_edit_choices(
     modality-relevant Playbook catalog (filterable scroll dialog). ``anatomy_hint``
     (usually the parent study description) prioritizes matching body parts.
     """
-    from anonymizer.utils.modalities import series_is_planar_harmonize_eligible, series_is_tseg_eligible
 
     current = (current_description or "").strip()
     hint = (anatomy_hint or "").strip()
-    if series_is_tseg_eligible(modality):
+    if _modality_executes_tseg(modality):
         if current:
             seed = current
         else:
@@ -1669,10 +1709,9 @@ def series_description_edit_choices(
             full_catalog=full_catalog,
             anatomy_hint=hint or current,
         )
-    if series_is_planar_harmonize_eligible(modality):
-        from anonymizer.utils.modalities import planar_harmonize_cohort
+    if is_2d_harmonize_modality(modality):
 
-        cohort = planar_harmonize_cohort(modality) or "XR"
+        cohort = _2d_cohort_label(modality) or "XR"
         if current:
             seed = current
         elif cohort == "US":
@@ -1690,25 +1729,20 @@ def series_description_edit_choices(
     return [current] if current else []
 
 
-
 def study_loinc_prefix_for_edit(anon_model: AnonymizerModel, anon_study_uid: str) -> str | None:
     """Return LOINC LongCommonName prefix for a study, or None when unknown/mixed."""
-    from anonymizer.controller.ai.harmonize.playbook_planar import planar_loinc_prefix_for_series_descriptions
-    from anonymizer.utils.modalities import is_mr_modality, planar_harmonize_cohort
 
-    has_tseg, has_planar = _study_composition_flags(anon_model, anon_study_uid)
+    composition = _study_harmonize_composition(anon_model, anon_study_uid)
 
-    if has_tseg:
-        get_mods = getattr(anon_model, "get_tseg_series_modalities", None)
-        if callable(get_mods):
-            modalities = get_mods(anon_study_uid)
-            if modalities and all(is_mr_modality(m) for m in modalities):
-                return "MR "
+    if composition in {StudyImagingComposition.D3, StudyImagingComposition.MIXED}:
+        modalities = anon_model.get_3d_series_modalities(anon_study_uid)
+        if modalities and all(Modality.from_code(m) is Modality.MR for m in modalities):
+            return "MR "
         return "CT "
-    if has_planar:
-        descriptions = anon_model.get_planar_series_harmonized_descriptions(anon_study_uid)
-        modalities = anon_model.get_planar_series_modalities(anon_study_uid)
-        cohorts = {planar_harmonize_cohort(m) for m in modalities}
+    if composition is StudyImagingComposition.D2:
+        descriptions = anon_model.get_2d_series_harmonized_descriptions(anon_study_uid)
+        modalities = anon_model.get_2d_series_modalities(anon_study_uid)
+        cohorts = {_2d_cohort_label(m) for m in modalities}
         cohorts.discard(None)
         if len(cohorts) != 1:
             return None
@@ -1737,10 +1771,6 @@ def study_description_edit_choices(
     hint-ranked rows first (filterable scroll dialog). ``nearest_only`` skips
     the unharmonized auto-expand (multi-select opens closest, then Expand).
     """
-    from anonymizer.controller.ai.harmonize.loinc_study import (
-        load_loinc_study_descriptions_for_prefix,
-        rank_loinc_study_descriptions_from_hint,
-    )
 
     results: list[tuple[str, str | None]] = []
     seen: set[str] = set()
@@ -1814,20 +1844,20 @@ class DescriptionEditSelection:
 
 
 def series_description_cohort_key(modality: object | None) -> str | None:
-    """Return cohort key for series group edit (``tseg`` / ``XR`` / ``US`` / ``MG`` / ``report``)."""
-    from anonymizer.utils.modalities import (
-        planar_harmonize_cohort,
-        series_is_planar_harmonize_eligible,
-        series_is_report_harmonize_eligible,
-        series_is_tseg_eligible,
-    )
+    """Return cohort key for series group edit (``3D`` / ``XR`` / ``US`` / ``MG`` / ``TEXT``)."""
 
-    if series_is_tseg_eligible(modality):
-        return "tseg"
-    if series_is_planar_harmonize_eligible(modality):
-        return planar_harmonize_cohort(modality)
-    if series_is_report_harmonize_eligible(modality):
-        return "report"
+    resolved = (
+        modality if isinstance(modality, Modality) else Modality.from_code(modality if isinstance(modality, str) else None)
+    )
+    if resolved is None:
+        return None
+    cls = get_modality_catalog()[resolved].content_class
+    if cls is ContentClass.D3 and _modality_executes_tseg(modality):
+        return ContentClass.D3.value
+    if cls is ContentClass.TEXT:
+        return ContentClass.TEXT.value
+    if is_2d_harmonize_modality(modality):
+        return _2d_cohort_label(modality)
     return None
 
 
@@ -1835,23 +1865,11 @@ def study_ready_for_description_edit(anon_model: AnonymizerModel, anon_study_uid
     """
     True when Dataset may open Set description for a study.
 
-    Requires every Harmonize-eligible child series (CT/MR and/or planar) to already
-    be marked harmonized — same readiness as ``maybe_offer_study_description_harmonize``.
+    Requires every tseg ∪ planar Harmonize child series to already be marked
+    harmonized — same readiness as ``maybe_offer_study_description_harmonize``.
     Report-only studies are not study-LOINC editable (anomaly / parent imaging study).
     """
-    has_tseg, has_planar = _study_composition_flags(anon_model, anon_study_uid)
-    if not has_tseg and not has_planar:
-        return False
-    if has_tseg and not anon_model.study_is_harmonized(anon_study_uid):
-        return False
-    if has_planar and not has_tseg and not anon_model.study_is_planar_harmonized(anon_study_uid):
-        return False
-    if has_tseg and has_planar:
-        # Mixed: CT/MR gate is sufficient for LOINC offer; planar siblings must not block.
-        # For manual Set description, require both cohorts fully harmonized.
-        if not anon_model.study_is_planar_harmonized(anon_study_uid):
-            return False
-    return True
+    return anon_model.study_all_series_harmonized(anon_study_uid)
 
 
 def classify_description_edit_selection(
@@ -1981,15 +1999,13 @@ def study_description_group_choices(
 
 def _series_description_looks_playbook(*, modality: object | None, description: str) -> bool:
     """True when ``description`` already looks like a RadLex Playbook series string."""
-    from anonymizer.controller.ai.harmonize.loinc_study import parse_playbook_series_description
-    from anonymizer.utils.modalities import series_is_planar_harmonize_eligible, series_is_tseg_eligible
 
     text = (description or "").strip()
     if not text:
         return False
-    if series_is_tseg_eligible(modality):
+    if _modality_executes_tseg(modality):
         return bool(parse_playbook_series_description(text).get("body_parts"))
-    if series_is_planar_harmonize_eligible(modality):
+    if is_2d_harmonize_modality(modality):
         return _planar_recognized_anatomy(text.split()) is not None
     return False
 
@@ -2001,7 +2017,6 @@ def apply_series_descriptions(
     anon_model: AnonymizerModel,
 ) -> list[Path]:
     """Apply one RadLex series description to each series directory; return successes."""
-    from anonymizer.model.anonymizer import DESCRIPTION_MAPPING_ORIGIN_MANUAL
 
     text = (description or "").strip()
     if not text:
@@ -2009,23 +2024,8 @@ def apply_series_descriptions(
     updated: list[Path] = []
     for series_dir in series_dirs:
         path = Path(series_dir)
-        series_uid = ""
-        modality = ""
-        try:
-            ds = _load_series_dataset(path)
-            series_uid = str(getattr(ds, "SeriesInstanceUID", "") or "").strip()
-            modality = str(getattr(ds, "Modality", "") or "").strip().upper()
-        except ValueError:
-            pass
         if apply_harmonized_description(path, text, anon_model):
             updated.append(path)
-            if series_uid:
-                anon_model.remember_series_description_mapping(
-                    series_uid=series_uid,
-                    modality=modality,
-                    harmonized=text,
-                    origin=DESCRIPTION_MAPPING_ORIGIN_MANUAL,
-                )
         else:
             logger.error("Failed to apply series description for %s", path)
     return updated
@@ -2040,14 +2040,13 @@ def apply_study_descriptions(
     loinc_number: str | None = None,
 ) -> list[str]:
     """Apply one LOINC study description to each study; return updated UIDs."""
-    from anonymizer.model.anonymizer import DESCRIPTION_MAPPING_ORIGIN_MANUAL
 
     text = (description or "").strip()
     loinc_code = (loinc_number or "").strip() or None
     if not text:
         return []
     if not loinc_code:
-        logger.error("Study description apply requires a LOINC code for mapping memory")
+        logger.error("Study description apply requires a LOINC code")
         return []
     updated: list[str] = []
     for anon_study_uid in anon_study_uids:
@@ -2070,15 +2069,6 @@ def apply_study_descriptions(
             loinc_number=loinc_code,
         ):
             updated.append(anon_study_uid)
-            prefix = study_loinc_prefix_for_edit(anon_model, anon_study_uid) or ""
-            modality = prefix.strip()
-            anon_model.remember_study_description_mapping(
-                anon_study_uid=anon_study_uid,
-                modality=modality,
-                harmonized=text,
-                loinc=loinc_code,
-                origin=DESCRIPTION_MAPPING_ORIGIN_MANUAL,
-            )
         else:
             logger.error("Failed to apply study description for %s", anon_study_uid)
     return updated
@@ -2098,28 +2088,24 @@ def find_similar_study_uids(
     same non-empty study description and LOINC prefix — so Dataset Select similar
     works before every series is harmonized (mirrors series description matching).
     """
-    from anonymizer.controller.ai.harmonize.loinc_study import (
-        fingerprint_for_harmonized_study,
-        fingerprint_for_planar_harmonized_study,
-    )
 
     def _text(value: object) -> str:
         return value.strip() if isinstance(value, str) else ""
 
     peers: set[str] = set()
 
-    has_tseg, has_planar = _study_composition_flags(anon_model, anon_study_uid)
+    composition = _study_harmonize_composition(anon_model, anon_study_uid)
 
-    if has_tseg:
+    if composition in {StudyImagingComposition.D3, StudyImagingComposition.MIXED}:
         fingerprint = fingerprint_for_harmonized_study(anon_model, anon_study_uid)
         if fingerprint:
             peers.update(uid for uid in find_studies_with_fingerprint(anon_model, fingerprint) if uid != anon_study_uid)
-    elif has_planar:
+    elif composition is StudyImagingComposition.D2:
         fingerprint = fingerprint_for_planar_harmonized_study(anon_model, anon_study_uid)
         if fingerprint:
             peers.update(
                 uid
-                for uid in anon_model.find_studies_with_planar_series_fingerprint(fingerprint)
+                for uid in anon_model.find_studies_with_2d_series_fingerprint(fingerprint)
                 if uid != anon_study_uid
             )
 
@@ -2178,7 +2164,6 @@ def find_similar_series_uids(
     return peers
 
 
-
 def apply_study_description_offer(
     *,
     images_dir: Path,
@@ -2192,9 +2177,7 @@ def apply_study_description_offer(
     Apply a chosen LOINC LongCommonName (and code) to the offer study and optionally peers.
 
     Returns the list of anon_study_uid values successfully updated.
-    Records an Origin description mapping (e.g. ``LOINC rank``) when a LOINC code is present.
     """
-    from anonymizer.controller.ai.harmonize.mapping_origin import DESCRIPTION_MAPPING_ORIGIN_LOINC_RANK
 
     targets = [offer.anon_study_uid]
     if apply_to_peers:
@@ -2219,15 +2202,6 @@ def apply_study_description_offer(
             loinc_number=loinc_code,
         ):
             updated.append(anon_study_uid)
-            if loinc_code:
-                prefix = study_loinc_prefix_for_edit(anon_model, anon_study_uid) or ""
-                anon_model.remember_study_description_mapping(
-                    anon_study_uid=anon_study_uid,
-                    modality=prefix.strip(),
-                    harmonized=text,
-                    loinc=loinc_code,
-                    origin=DESCRIPTION_MAPPING_ORIGIN_LOINC_RANK,
-                )
         else:
             logger.error("Failed to apply study description for %s", anon_study_uid)
     return updated
@@ -2283,6 +2257,7 @@ def auto_apply_best_study_descriptions(
     anon_model: AnonymizerModel,
     anon_study_uids: Sequence[str],
     prefer_description_mappings: bool = True,
+    study_loinc_overrides: Mapping[str, str] | None = None,
 ) -> list[tuple[StudyDescriptionOffer, list[str]]]:
     """
     Best-guess LOINC Study Description for Harmonize (Series View and AI Batch).
@@ -2292,57 +2267,56 @@ def auto_apply_best_study_descriptions(
     study-level description. Always takes the top-ranked match (no confirmation UI);
     users can change the choice later from Dataset.
 
-    When ``prefer_description_mappings`` is True, apply a stored study mapping (with
-    required LOINC) before ranking.
+    When ``prefer_description_mappings`` is True and ``study_loinc_overrides`` maps the
+    sticky original StudyDescription to a LOINC number, apply that before ranking.
 
-    Returns a list of ``(offer, updated_uids)`` for groups that were written.
+    Args:
+        images_dir: Project images root.
+        anon_model: Anonymizer model.
+        anon_study_uids: Studies to consider.
+        prefer_description_mappings: Whether to consult ``study_loinc_overrides``.
+        study_loinc_overrides: Sticky original → LOINC number (from view CSV store).
+
+    Returns:
+        List of ``(offer, updated_uids)`` for groups that were written.
     """
+    overrides = study_loinc_overrides or {}
     results: list[tuple[StudyDescriptionOffer, list[str]]] = []
     remaining: list[str] = []
     for anon_study_uid in anon_study_uids:
         if anon_model.get_study_harmonized_description(anon_study_uid):
             continue
-        if prefer_description_mappings:
+        if prefer_description_mappings and overrides:
             original = anon_model.get_study_description(anon_study_uid)
             original_text = original.strip() if isinstance(original, str) else ""
-            prefix = study_loinc_prefix_for_edit(anon_model, anon_study_uid) or ""
-            modality = prefix.strip() if isinstance(prefix, str) else ""
-            if original_text:
-                mapping = anon_model.lookup_description_mapping(
-                    kind="study",
-                    original=original_text,
-                    modality=modality,
-                )
-                mapped = getattr(mapping, "harmonized_description", None) if mapping is not None else None
-                loinc = getattr(mapping, "loinc", None) if mapping is not None else None
-                if isinstance(mapped, str) and mapped.strip() and isinstance(loinc, str) and loinc.strip():
-                    patient_id = anon_model.get_anon_patient_id_for_study(anon_study_uid)
-                    if patient_id:
-                        study_root = Path(images_dir) / patient_id / anon_study_uid
-                        if apply_harmonized_study_description(
-                            study_root,
-                            mapped.strip(),
-                            anon_model,
-                            anon_study_uid,
-                            loinc_number=loinc.strip(),
-                        ):
-                            from anonymizer.controller.ai.harmonize.loinc_study import LoincStudyMatch
-
-                            offer = StudyDescriptionOffer(
-                                anon_study_uid=anon_study_uid,
-                                fingerprint=(),
-                                matches=(
-                                    LoincStudyMatch(
-                                        loinc_number=loinc.strip(),
-                                        long_common_name=mapped.strip(),
-                                        score=1.0,
-                                    ),
+            loinc = overrides.get(original_text, "").strip() if original_text else ""
+            mapped = long_common_name_for_loinc(loinc) if loinc else None
+            if loinc and mapped:
+                patient_id = anon_model.get_anon_patient_id_for_study(anon_study_uid)
+                if patient_id:
+                    study_root = Path(images_dir) / patient_id / anon_study_uid
+                    if apply_harmonized_study_description(
+                        study_root,
+                        mapped,
+                        anon_model,
+                        anon_study_uid,
+                        loinc_number=loinc,
+                    ):
+                        offer = StudyDescriptionOffer(
+                            anon_study_uid=anon_study_uid,
+                            fingerprint=(),
+                            matches=(
+                                LoincStudyMatch(
+                                    loinc_number=loinc,
+                                    long_common_name=mapped,
+                                    score=1.0,
                                 ),
-                                peer_study_uids=(),
-                                ambiguous=False,
-                            )
-                            results.append((offer, [anon_study_uid]))
-                            continue
+                            ),
+                            peer_study_uids=(),
+                            ambiguous=False,
+                        )
+                        results.append((offer, [anon_study_uid]))
+                        continue
         remaining.append(anon_study_uid)
 
     offers: list[StudyDescriptionOffer] = []
@@ -2377,12 +2351,21 @@ def harmonize_and_apply_series(
     progress: HarmonizeProgressCallback | None = None,
     include_brain_structures: bool = False,
     prefer_description_mappings: bool = False,
+    series_description_overrides: Mapping[str, str] | None = None,
 ) -> HarmonizeApplyOutcome:
     """Run harmonize for one CT|MR|XR|US|MG series and auto-apply the merged description.
 
-    When ``prefer_description_mappings`` is True and a mapping matches the sticky
-    original, apply the mapped text without running the anatomy model.
+    When ``prefer_description_mappings`` is True and ``series_description_overrides``
+    matches the sticky original, apply the mapped text without running the anatomy model.
     Interactive Series View does not pass this flag — the pre-run prompt owns that choice.
+
+    Args:
+        series_path: Series directory.
+        anon_model: Optional anonymizer model.
+        progress: Optional progress callback.
+        include_brain_structures: Whether to include brain structures.
+        prefer_description_mappings: Whether to consult override dicts.
+        series_description_overrides: Sticky original → RadLex (from view CSV store).
     """
     series_path = Path(series_path)
     ds = _load_harmonize_series_dataset(series_path)
@@ -2405,31 +2388,25 @@ def harmonize_and_apply_series(
     if anon_model is None and series_description_is_harmonized(series_path, ds) is True:
         return HarmonizeApplyOutcome(series_path, "skipped", _("Already harmonized"))
 
-    if prefer_description_mappings and anon_model is not None:
-        modality = str(getattr(ds, "Modality", "") or "").strip().upper()
+    overrides = series_description_overrides or {}
+    if prefer_description_mappings and overrides and anon_model is not None:
         original_raw = anon_model.get_series_description(series_uid)
         original = original_raw.strip() if isinstance(original_raw, str) else ""
         if not original:
             original = str(ds.get("SeriesDescription", "") or "").strip()
-        if original:
-            mapping = anon_model.lookup_description_mapping(
-                kind="series",
-                original=original,
-                modality=modality,
-            )
-            mapped = getattr(mapping, "harmonized_description", None) if mapping is not None else None
-            if isinstance(mapped, str) and mapped.strip():
-                if apply_harmonized_description(series_path, mapped.strip(), anon_model):
-                    return HarmonizeApplyOutcome(
-                        series_path,
-                        "ok",
-                        _("Applied from description mapping"),
-                    )
+        mapped = overrides.get(original, "").strip() if original else ""
+        if mapped:
+            if apply_harmonized_description(series_path, mapped, anon_model):
                 return HarmonizeApplyOutcome(
                     series_path,
-                    "failed",
-                    _("Failed to apply mapped description"),
+                    "ok",
+                    _("Applied from description mapping"),
                 )
+            return HarmonizeApplyOutcome(
+                series_path,
+                "failed",
+                _("Failed to apply mapped description"),
+            )
 
     results = harmonize_series(
         [series_path],
@@ -2451,37 +2428,11 @@ def harmonize_and_apply_series(
     if not apply_harmonized_description(series_path, description, anon_model):
         return HarmonizeApplyOutcome(series_path, "failed", _("Failed to apply description"))
 
-    if anon_model is not None:
-        from anonymizer.controller.ai.harmonize.mapping_origin import series_mapping_origin
-
-        modality = str(getattr(ds, "Modality", "") or "").strip().upper()
-        anon_model.remember_series_description_mapping(
-            series_uid=series_uid,
-            modality=modality,
-            harmonized=description,
-            origin=series_mapping_origin(
-                merged,
-                modality=modality,
-                include_brain_structures=include_brain_structures,
-            ),
-        )
-
     return HarmonizeApplyOutcome(series_path, "ok", description, harmonized=merged)
 
 
 def format_harmonize_batch_contrast_log_lines(result: HarmonizedResult) -> list[str]:
     """IV contrast row (and CT organ HU) for the AI Batch workflow log."""
-    from anonymizer.controller.ai.harmonize.playbook import playbook_iv_contrast_row_values
-    from anonymizer.controller.ai.tseg.config import (
-        CONTRAST_STATS_FILENAME,
-        CONTRAST_STATS_HN_FILENAME,
-    )
-    from anonymizer.controller.ai.tseg.contrast import (
-        format_dominant_organ_hu_summary,
-        load_contrast_statistics,
-        load_contrast_stats_hn,
-    )
-    from anonymizer.controller.ai.tseg.modality_profile import resolve_profile_for_series
 
     tseg = result.tseg
     if tseg is None:
@@ -2667,7 +2618,6 @@ def _scaled_progress(
     return wrapped
 
 
-
 def _harmonize_one_planar_series(
     series_dir: Path,
     *,
@@ -2677,9 +2627,6 @@ def _harmonize_one_planar_series(
     timing_collector: HarmonizeTimingCollector | None,
 ) -> HarmonizedResult | None:
     """Planar Harmonize for XR/US/MG. XR may use optional pixel body-part model."""
-    from anonymizer.controller.ai.harmonize.planar_profile import planar_profile_from_dataset
-    from anonymizer.controller.ai.harmonize.playbook_planar import build_planar_harmonized_series_description
-    from anonymizer.controller.ai.tseg.dicom_geometry import sorted_dicom_paths
 
     series_dir = Path(series_dir)
     timing = HarmonizeStageTimings(series_directory=str(series_dir))
@@ -2720,10 +2667,8 @@ def _harmonize_one_planar_series(
 
     pixel_pred = None
     pixel_view_pred = None
-    profile = planar_profile_from_dataset(ds)
-    if profile is not None and profile.cohort == "XR":
-        from anonymizer.controller.ai.harmonize.xp_bodypart import predict_body_part, xp_bodypart_ready
-        from anonymizer.controller.ai.harmonize.xr_chest_view import cxp_view_ready, predict_cxp_view
+    profile = profile_2d_from_dataset(ds)
+    if profile is not None and _2d_cohort_label(getattr(ds, "Modality", None)) == "XR":
 
         need_body = xp_bodypart_ready()
         need_view = cxp_view_ready()
@@ -2747,7 +2692,6 @@ def _harmonize_one_planar_series(
 
         # Resolve anatomy first so CXR view runs only for Chest.
         try:
-            from anonymizer.controller.ai.harmonize.playbook_planar import build_planar_playbook_attributes
 
             prelim = build_planar_playbook_attributes(ds, pixel_pred=pixel_pred)
             anatomy_is_chest = prelim.body_part_label == "Chest"
@@ -2808,11 +2752,6 @@ def harmonize_series(
     - SR|DOC|PDF → report metadata SeriesDescription (Report View).
     - Other modalities (SC/OT/…) → error result.
     """
-    from anonymizer.utils.modalities import (
-        is_planar_harmonize_modality,
-        is_report_harmonize_modality,
-        is_tseg_modality,
-    )
 
     if not series_directories:
         return []
@@ -2829,11 +2768,11 @@ def harmonize_series(
             other_dirs.append(series_dir)
             continue
         modality = getattr(ds, "Modality", None)
-        if is_tseg_modality(modality):
+        if _modality_executes_tseg(modality):
             tseg_dirs.append(series_dir)
-        elif is_planar_harmonize_modality(modality):
+        elif is_2d_harmonize_modality(modality):
             planar_dirs.append(series_dir)
-        elif is_report_harmonize_modality(modality):
+        elif (report_mod := Modality.from_code(modality)) is not None and get_modality_catalog()[report_mod].content_class is ContentClass.TEXT:
             report_dirs.append(series_dir)
         else:
             other_dirs.append(series_dir)
@@ -3158,7 +3097,6 @@ def _harmonize_series_tseg(
             logger.info("Harmonize: cancelled before merge for %s", series_dir)
             break
 
-        from anonymizer.controller.ai.tseg.seg_retention import evict_tseg_volume
 
         evict_tseg_volume(series_dir, anon_model=anon_model)
 

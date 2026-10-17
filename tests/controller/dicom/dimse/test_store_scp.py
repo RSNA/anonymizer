@@ -9,6 +9,7 @@ from pydicom.dataset import Dataset
 from pynetdicom.presentation import build_context
 
 from anonymizer.controller.create_projections import PROJECTION_FILENAME, create_projection_from_series
+from anonymizer.controller.dates import hash_date
 from anonymizer.controller.phi_io import build_phi_index
 from anonymizer.controller.project import ProjectController
 from anonymizer.model.anonymizer import AnonymizerModel
@@ -91,7 +92,7 @@ def test_send_cr1(temp_dir: str, controller):
     assert len(phi.studies[0].series) == 1
     assert study.study_uid == ds.StudyInstanceUID
     assert study.study_date == ds.get("StudyDate")
-    date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
+    date_delta, _ = hash_date(phi.studies[0].study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
     assert study.description == ds.get("StudyDescription")
     assert study.accession_number == ds.get("AccessionNumber")
@@ -134,7 +135,7 @@ def test_send_ct_small(temp_dir: str, controller):
     assert len(phi.studies[0].series) == 1
     assert study.study_uid == ds.StudyInstanceUID
     assert study.study_date == ds.get("StudyDate")
-    date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
+    date_delta, _ = hash_date(phi.studies[0].study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
     assert study.description == ds.get("StudyDescription")
     assert study.accession_number == ds.get("AccessionNumber")
@@ -177,7 +178,7 @@ def test_send_mr_small(temp_dir: str, controller):
     assert len(phi.studies[0].series) == 1
     assert study.study_uid == ds.StudyInstanceUID
     assert study.study_date == ds.get("StudyDate")
-    date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
+    date_delta, _ = hash_date(phi.studies[0].study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
     assert study.description is None  # No StudyDescription in MR Small
     assert study.accession_number == ds.get("AccessionNumber")
@@ -221,7 +222,7 @@ def test_send_ct_small_AND_mr_small(temp_dir: str, controller):
     assert len(phi.studies[0].series) == 1
     assert study.study_uid == ds.StudyInstanceUID
     assert study.study_date == ds.get("StudyDate")
-    date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
+    date_delta, _ = hash_date(phi.studies[0].study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
     assert study.description == ds.get("StudyDescription") if hasattr(ds, "StudyDescription") else None
     assert study.accession_number == ds.get("AccessionNumber")
@@ -261,7 +262,7 @@ def test_send_ct_small_AND_mr_small(temp_dir: str, controller):
     assert len(phi.studies[0].series) == 1
     assert study.study_uid == ds.StudyInstanceUID
     assert study.study_date == ds.get("StudyDate")
-    date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
+    date_delta, _ = hash_date(phi.studies[0].study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
     assert study.description is None  # No StudyDescription in MR Small
     assert study.accession_number == ds.get("AccessionNumber")
@@ -304,7 +305,7 @@ def test_send_ct_Archibald_Doe_PHI_stored(temp_dir: str, controller):
     assert len(phi.studies[0].series) == 1
     assert study.study_uid == ds.StudyInstanceUID
     assert study.study_date == ds.get("StudyDate")
-    date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
+    date_delta, _ = hash_date(phi.studies[0].study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
     assert study.description == ds.get("StudyDescription")
     assert study.accession_number == ds.get("AccessionNumber")
@@ -382,7 +383,7 @@ def test_send_cr_and_ct_Archibald_Doe(temp_dir: str, controller):
     study = phi.studies[0]
     assert study.study_uid == ds.StudyInstanceUID
     assert study.study_date == ds.get("StudyDate")
-    date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
+    date_delta, _ = hash_date(phi.studies[0].study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
     assert study.description == ds.get("StudyDescription")
     assert study.accession_number == ds.get("AccessionNumber")
@@ -422,7 +423,7 @@ def test_send_cr_and_ct_Archibald_Doe(temp_dir: str, controller):
     assert len(study.series) == 1
     assert study.study_uid == ds.StudyInstanceUID
     assert study.study_date == ds.get("StudyDate")
-    date_delta, _ = controller.anonymizer._hash_date(study.study_date, phi.patient_id)
+    date_delta, _ = hash_date(study.study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
     assert study.description == ds.get("StudyDescription")
     assert study.accession_number == ds.get("AccessionNumber")
@@ -465,7 +466,7 @@ def test_send_ct_small_then_delete_study(temp_dir: str, controller):
     assert len(phi.studies[0].series) == 1
     assert study.study_uid == ds.StudyInstanceUID
     assert study.study_date == ds.get("StudyDate")
-    date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
+    date_delta, _ = hash_date(phi.studies[0].study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
     assert study.description == ds.get("StudyDescription")
     assert study.accession_number == ds.get("AccessionNumber")
@@ -742,7 +743,7 @@ def test_send_JPEG_Baseline(temp_dir: str, controller: ProjectController):
     assert len(study.series) == 1
     assert study.study_uid == ds.StudyInstanceUID
     assert study.study_date == ds.get("StudyDate")
-    date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
+    date_delta, _ = hash_date(phi.studies[0].study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
     assert study.description == ds.get("StudyDescription")
     assert study.accession_number == ds.get("AccessionNumber")
@@ -826,7 +827,7 @@ def test_send_JPEG_Extended(temp_dir: str, controller: ProjectController):
     assert len(study.series) == 1
     assert study.study_uid == ds.StudyInstanceUID
     assert study.study_date == ds.get("StudyDate")
-    date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
+    date_delta, _ = hash_date(phi.studies[0].study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
     assert study.description == ds.get("StudyDescription")
     assert study.accession_number == ds.get("AccessionNumber")
@@ -909,7 +910,7 @@ def test_send_JPEG_Lossless_P14_FOP(temp_dir: str, controller: ProjectController
     assert len(study.series) == 1
     assert study.study_uid == ds.StudyInstanceUID
     assert study.study_date == ds.get("StudyDate")
-    date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
+    date_delta, _ = hash_date(phi.studies[0].study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
     assert study.description == ds.get("StudyDescription")
     assert study.accession_number == ds.get("AccessionNumber")
@@ -991,7 +992,7 @@ def test_send_JPEG_LS_Lossless(temp_dir: str, controller: ProjectController):
     assert len(study.series) == 1
     assert study.study_uid == ds.StudyInstanceUID
     assert study.study_date == ds.get("StudyDate")
-    date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
+    date_delta, _ = hash_date(phi.studies[0].study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
     assert study.description == ds.get("StudyDescription")
     assert study.accession_number == ds.get("AccessionNumber")
@@ -1082,7 +1083,7 @@ def test_send_JPEG_LS_Lossy(temp_dir: str, controller: ProjectController):
     assert len(study.series) == 1
     assert study.study_uid == ds.StudyInstanceUID
     assert study.study_date == ds.get("StudyDate")
-    date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
+    date_delta, _ = hash_date(phi.studies[0].study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
     assert study.description == ds.get("StudyDescription")
     assert study.accession_number == ds.get("AccessionNumber")
@@ -1164,7 +1165,7 @@ def test_send_JPEG_2000_Lossless(temp_dir: str, controller: ProjectController):
     assert len(study.series) == 1
     assert study.study_uid == ds.StudyInstanceUID
     assert study.study_date == ds.get("StudyDate")
-    date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
+    date_delta, _ = hash_date(phi.studies[0].study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
     assert study.description == ds.get("StudyDescription")
     assert study.accession_number == ds.get("AccessionNumber")
@@ -1247,7 +1248,7 @@ def test_send_JPEG_2000(temp_dir: str, controller: ProjectController):
     assert len(study.series) == 1
     assert study.study_uid == ds.StudyInstanceUID
     assert study.study_date == ds.get("StudyDate")
-    date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
+    date_delta, _ = hash_date(phi.studies[0].study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
     assert study.description == ds.get("StudyDescription")
     assert study.accession_number == ds.get("AccessionNumber")

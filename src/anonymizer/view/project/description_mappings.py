@@ -1,7 +1,7 @@
-"""Dataset toolbar dialog to inspect/delete per-project description mappings.
+"""Dataset toolbar dialog to inspect/delete per-project description mapping CSVs.
 
 Series mappings remember RadLex Playbook series descriptions.
-Study mappings remember LOINC study descriptions (with LOINC code).
+Study mappings remember LOINC numbers (names resolved from the LOINC catalog).
 
 Row management mirrors View Dataset: Select All, Clear Selection, Delete.
 """
@@ -10,18 +10,26 @@ from __future__ import annotations
 
 import logging
 import tkinter as tk
+from pathlib import Path
 from tkinter import messagebox, ttk
 
 import customtkinter as ctk
 
-from anonymizer.model.anonymizer import AnonymizerModel, DescriptionMappingRecord
+from anonymizer.controller.ai.harmonize.loinc_study import long_common_name_for_loinc
 from anonymizer.utils.translate import _
 from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
+from anonymizer.view.project.description_mapping_store import (
+    SeriesDescriptionOverride,
+    StudyDescriptionOverride,
+    delete_series_override,
+    delete_study_override,
+    list_series_overrides,
+    list_study_overrides,
+)
 
 logger = logging.getLogger(__name__)
 
-# Segmented-button labels — keep stable for gettext and tab→kind mapping.
 _TAB_SERIES = "Series (RadLex)"
 _TAB_STUDY = "Study (LOINC)"
 
@@ -33,13 +41,12 @@ class DescriptionMappingsDialog(AppToplevel):
     DIALOG_HEIGHT = 480
     MIN_WIDTH = 720
     MIN_HEIGHT = 360
-    # Original and harmonized description columns share the same default width.
     _DESC_COL_WIDTH = 220
 
-    def __init__(self, parent: tk.Misc, *, anon_model: AnonymizerModel) -> None:
+    def __init__(self, parent: tk.Misc, *, mappings_dir: Path) -> None:
         super().__init__(parent)
         self.title(_("Description Mappings"))
-        self._anon_model = anon_model
+        self._mappings_dir = Path(mappings_dir)
         self.geometry(f"{self.DIALOG_WIDTH}x{self.DIALOG_HEIGHT}")
         self.minsize(self.MIN_WIDTH, self.MIN_HEIGHT)
         self.resizable(True, True)
@@ -76,8 +83,8 @@ class DescriptionMappingsDialog(AppToplevel):
         tree_frame.grid_columnconfigure(0, weight=1)
         tree_frame.grid_rowconfigure(0, weight=1)
 
-        self._columns_series = ("original", "harmonized", "modality", "origin", "updated")
-        self._columns_study = ("original", "harmonized", "modality", "origin", "loinc", "updated")
+        self._columns_series = ("original", "harmonized")
+        self._columns_study = ("original", "loinc_number", "loinc_name")
         self._tree = ttk.Treeview(
             tree_frame,
             columns=self._columns_series,
@@ -97,7 +104,6 @@ class DescriptionMappingsDialog(AppToplevel):
         )
         self._empty_label.grid(row=3, column=0, padx=pad, pady=(0, pad), sticky="w")
 
-        # Same management strip as View Dataset (Select All / Clear Selection / Delete).
         button_row = ctk.CTkFrame(self, fg_color="transparent")
         button_row.grid(row=4, column=0, padx=pad, pady=(0, pad), sticky="ew")
         button_row.grid_columnconfigure(0, weight=1)
@@ -134,7 +140,8 @@ class DescriptionMappingsDialog(AppToplevel):
         )
         self._close_button.grid(row=0, column=4, padx=(pad, 0), sticky="e")
 
-        self._rows_by_iid: dict[str, DescriptionMappingRecord] = {}
+        self._series_by_iid: dict[str, SeriesDescriptionOverride] = {}
+        self._study_by_iid: dict[str, StudyDescriptionOverride] = {}
         self._configure_columns_for_kind(self._kind_for_tab())
         self._refresh()
 
@@ -146,49 +153,41 @@ class DescriptionMappingsDialog(AppToplevel):
         self._refresh()
 
     def _configure_columns_for_kind(self, kind: str) -> None:
-        """Series = RadLex (no LOINC col); Study = LOINC (show code)."""
         columns = self._columns_study if kind == "study" else self._columns_series
         self._tree.configure(columns=columns)
         headings = {
             "original": _("Original"),
-            "harmonized": _("RadLex") if kind == "series" else _("LOINC name"),
-            "modality": _("Modality"),
-            "origin": _("Origin"),
-            "loinc": _("LOINC"),
-            "updated": _("Updated"),
+            "harmonized": _("RadLex"),
+            "loinc_number": _("LOINC"),
+            "loinc_name": _("LOINC name"),
         }
-        # Equal description widths; no stretch on them (stretch snap-back squashes
-        # earlier cols). Only ``updated`` stretches to fill leftover view width.
-        desc_cols = {"original", "harmonized"}
         widths = {
             "original": self._DESC_COL_WIDTH,
             "harmonized": self._DESC_COL_WIDTH,
-            "modality": 80,
-            "origin": 100,
-            "loinc": 90,
-            "updated": 140,
+            "loinc_number": 100,
+            "loinc_name": self._DESC_COL_WIDTH,
         }
         for col in columns:
             self._tree.heading(col, text=headings[col])
             self._tree.column(
                 col,
                 width=widths[col],
-                minwidth=60 if col in desc_cols else 40,
-                stretch=(col == "updated"),
+                minwidth=60,
+                stretch=(col in {"harmonized", "loinc_name"}),
                 anchor="w",
             )
         if kind == "series":
             self._hint.configure(
                 text=_(
                     "Series mappings: original series description → RadLex Playbook name "
-                    "(saved when you set a series description)."
+                    "(saved when you set a series description). Stored in mappings/series.csv."
                 )
             )
         else:
             self._hint.configure(
                 text=_(
-                    "Study mappings: original study description → LOINC study name "
-                    "(saved when you set a study description; LOINC code required)."
+                    "Study mappings: original study description → LOINC number "
+                    "(saved when you set a study description). Stored in mappings/study.csv."
                 )
             )
 
@@ -204,35 +203,38 @@ class DescriptionMappingsDialog(AppToplevel):
     def _refresh(self) -> None:
         for iid in self._tree.get_children():
             self._tree.delete(iid)
-        self._rows_by_iid.clear()
+        self._series_by_iid.clear()
+        self._study_by_iid.clear()
         kind = self._kind_for_tab()
-        rows = self._anon_model.list_description_mappings(kind=kind)
+        if kind == "series":
+            rows = list_series_overrides(self._mappings_dir)
+            if not rows:
+                self._empty_label.configure(text=self._empty_message(kind))
+                self._empty_label.grid()
+                return
+            self._empty_label.grid_remove()
+            for row in rows:
+                iid = row.original
+                self._series_by_iid[iid] = row
+                self._tree.insert("", "end", iid=iid, values=(row.original, row.harmonized))
+            return
+
+        rows = list_study_overrides(self._mappings_dir)
         if not rows:
             self._empty_label.configure(text=self._empty_message(kind))
             self._empty_label.grid()
             return
         self._empty_label.grid_remove()
         for row in rows:
-            iid = str(row.mapping_pk)
-            self._rows_by_iid[iid] = row
-            if kind == "study":
-                values = (
-                    row.original_display,
-                    row.harmonized_description,
-                    row.modality,
-                    row.origin,
-                    row.loinc or "",
-                    row.updated_at,
-                )
-            else:
-                values = (
-                    row.original_display,
-                    row.harmonized_description,
-                    row.modality,
-                    row.origin,
-                    row.updated_at,
-                )
-            self._tree.insert("", "end", iid=iid, values=values)
+            iid = row.original
+            self._study_by_iid[iid] = row
+            name = long_common_name_for_loinc(row.loinc_number) or ""
+            self._tree.insert(
+                "",
+                "end",
+                iid=iid,
+                values=(row.original, row.loinc_number, name),
+            )
 
     def _select_all_button_pressed(self) -> None:
         children = self._tree.get_children("")
@@ -253,10 +255,8 @@ class DescriptionMappingsDialog(AppToplevel):
                 parent=self,
             )
             return
-        rows = [self._rows_by_iid[iid] for iid in selected if iid in self._rows_by_iid]
-        if not rows:
-            return
-        n = len(rows)
+        kind = self._kind_for_tab()
+        n = len(selected)
         message = (
             _("Delete this description mapping?")
             if n == 1
@@ -265,8 +265,13 @@ class DescriptionMappingsDialog(AppToplevel):
         if not messagebox.askyesno(title=_("Delete mapping"), message=message, parent=self):
             return
         failed = 0
-        for row in rows:
-            if not self._anon_model.delete_description_mapping(row.mapping_pk):
+        for original in selected:
+            ok = (
+                delete_series_override(self._mappings_dir, original)
+                if kind == "series"
+                else delete_study_override(self._mappings_dir, original)
+            )
+            if not ok:
                 failed += 1
         if failed:
             messagebox.showerror(
@@ -280,5 +285,6 @@ class DescriptionMappingsDialog(AppToplevel):
         teardown_ctk_toplevel(self)
 
 
-def show_description_mappings_dialog(parent: tk.Misc, *, anon_model: AnonymizerModel) -> None:
-    DescriptionMappingsDialog(parent, anon_model=anon_model)
+def show_description_mappings_dialog(parent: tk.Misc, *, mappings_dir: Path) -> None:
+    """Open the description mappings inspector for ``mappings_dir``."""
+    DescriptionMappingsDialog(parent, mappings_dir=mappings_dir)

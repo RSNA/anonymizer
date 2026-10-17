@@ -14,20 +14,22 @@ _MODEL_ROOT = _REPO_ROOT / "src" / "anonymizer" / "model"
 _FORBIDDEN_MODALITY_PROFILE_NAMES = frozenset(
     {
         "is_tseg_modality",
-        "series_is_tseg_eligible",
         "is_ct_modality",
         "is_mr_modality",
         "default_ct_profile",
     }
 )
 
+# ``parse_modality`` was removed from ``anonymizer.utils.modalities``; do not reintroduce it on
+# ``modality_profile`` either (see ``test_modalities.test_removed_modality_helpers_not_exported``).
 _FORBIDDEN_PREDICATE_IMPORTS = frozenset(
     {
         "is_tseg_modality",
-        "series_is_tseg_eligible",
         "is_ct_modality",
         "is_mr_modality",
         "normalize_modality",
+        "parse_modality",
+        "content_class",
     }
 )
 

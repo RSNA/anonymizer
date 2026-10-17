@@ -10,6 +10,15 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+try:
+    from tkinterdnd2 import DND_FILES, TkinterDnD
+except Exception as _tkdnd_exc:  # noqa: BLE001 — soft-fail optional DnD
+    DND_FILES = None  # type: ignore[assignment,misc]
+    TkinterDnD = None  # type: ignore[assignment,misc]
+    _TKDND_IMPORT_ERROR: BaseException | None = _tkdnd_exc
+else:
+    _TKDND_IMPORT_ERROR = None
+
 logger = logging.getLogger(__name__)
 
 _dnd_required_roots: set[int] = set()
@@ -20,12 +29,12 @@ def enable_filesystem_drops(
     on_paths: Callable[[list[str]], None],
 ) -> bool:
     """Register ``DND_FILES`` on ``widget``. Returns False if DnD is unavailable."""
-    try:
-        from tkinterdnd2 import DND_FILES, TkinterDnD
-    except Exception as exc:
-        logger.warning("File drop unavailable (tkinterdnd2 import failed): %s", exc)
+    if TkinterDnD is None or DND_FILES is None:
+        logger.warning(
+            "File drop unavailable (tkinterdnd2 import failed): %s",
+            _TKDND_IMPORT_ERROR,
+        )
         return False
-
     try:
         root = widget.winfo_toplevel()
         root_id = id(root)

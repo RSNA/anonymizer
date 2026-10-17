@@ -12,12 +12,8 @@ from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence as DicomSequence
 from pydicom.tag import BaseTag, Tag
 
-from anonymizer.controller.ai.embedded_phi.metadata.tcia_kb import match_tcia_private
-from anonymizer.controller.anonymizer_script import (
-    display_tag_vr,
-    format_dicom_tag,
-    is_date_shift_operation,
-)
+from anonymizer.controller.ai.embedded_phi.metadata.tcia_kb import match_tcia_private, private_creator_string
+from anonymizer.controller.anonymizer_script import display_tag_vr, format_dicom_tag, is_date_shift_operation
 
 logger = logging.getLogger(__name__)
 
@@ -420,7 +416,6 @@ def _is_generic_private_name(name: str) -> bool:
 
 def _private_creator(ds: Dataset, tag: BaseTag) -> str:
     """Return private creator string for ``tag``'s block, if present on ``ds``."""
-    from anonymizer.controller.ai.embedded_phi.metadata.tcia_kb import private_creator_string
 
     return private_creator_string(ds, tag)
 

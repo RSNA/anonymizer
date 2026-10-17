@@ -12,6 +12,7 @@ import time
 import tkinter as tk
 import weakref
 from copy import copy
+from dataclasses import replace
 from pathlib import Path
 from pprint import pformat
 from tkinter import filedialog, messagebox, ttk
@@ -20,29 +21,61 @@ import click
 import customtkinter as ctk
 from customtkinter import ThemeManager
 from pydicom import dcmread
-from pydicom._version import __version__ as pydicom_version  # type: ignore
-from pynetdicom._version import __version__ as pynetdicom_version  # type: ignore
+from pydicom._version import __version__ as pydicom_version
+from pynetdicom._version import __version__ as pynetdicom_version
 
+from anonymizer.controller.ai.batch_config import (
+    AiBatchConfig,
+    AiBatchConfigError,
+    resolve_ai_batch_studies,
+    validate_ai_batch_config_gates,
+)
+from anonymizer.controller.ai.batch_process import format_ai_batch_completion_summary
+from anonymizer.controller.ai.embedded_phi.ner.cache import NerModelStatus, probe_ner_models
+from anonymizer.controller.ai.embedded_phi.pixel.cache import OCR_MODEL_DIR, OcrModelStatus, probe_ocr_models
+from anonymizer.controller.ai.tseg.config import apply_ai_features_preferences, merge_ai_features_into_state
+from anonymizer.controller.ai.tseg.readiness import log_runtime_status
+from anonymizer.controller.analytics.prefs import apply_analytics_preferences, merge_analytics_into_state
+from anonymizer.controller.headless import create_headless_controller, load_model
 from anonymizer.controller.process_ctp_lookup import commit_ctp_lookup
 from anonymizer.controller.project import ProjectController
+from anonymizer.mcp.server import MCP_HTTP_PATH, run_MCP
 from anonymizer.model.project import DICOMRuntimeError, ProjectModel
+from anonymizer.utils.app_state import ai_features_from_state, analytics_from_state, get_app_state_path
 from anonymizer.utils.logging import init_logging
-from anonymizer.utils.storage import is_hidden_path, list_import_directory_files
-from anonymizer.utils.translate import (
-    _,
-    get_current_language,
-    get_current_language_code,
-    set_language,
+from anonymizer.utils.storage.dicom_tree import (
+    is_hidden_path,
+    list_import_directory_files,
 )
+from anonymizer.utils.package_paths import ai_feature_dir
+from anonymizer.utils.translate import _, get_current_language, get_current_language_code, set_language
 from anonymizer.utils.version import get_version
-from anonymizer.view.common.fonts import AppFonts, create_app_fonts
-from anonymizer.view.common.help_docs import (
-    license_html_path,
-    open_help_page,
-    open_tutorials_channel,
+from anonymizer.view.ai.ai_features_dialog import show_ai_features_setup_dialog
+from anonymizer.view.common.app_window import (
+    attach_menubar_to_toplevels,
+    dismiss_app_window,
+    focus_app_window,
+    window_menu_label_for,
 )
+from anonymizer.view.common.ctk_safe import (
+    install_safe_scaling_tracker,
+    install_safe_scrollable_frame_widget_resolve,
+    install_safe_tk_font_destructor,
+    install_safe_tk_variable_destructor,
+    mark_ctk_window_alive,
+    pause_scaling_tracker_check,
+    purge_stale_scaling_windows,
+    resume_scaling_tracker_check,
+)
+from anonymizer.view.common.filesystem_drop import enable_filesystem_drops
+from anonymizer.view.common.fonts import AppFonts, create_app_fonts
+from anonymizer.view.common.help_docs import license_html_path, open_help_page, open_tutorials_channel
 from anonymizer.view.common.html_view import HTMLView
 from anonymizer.view.project.dataset import DatasetView
+from anonymizer.view.project.description_mapping_store import (
+    load_series_overrides,
+    load_study_loinc_overrides,
+)
 from anonymizer.view.project.export import ExportView
 from anonymizer.view.project.import_files_dialog import ImportFilesDialog
 from anonymizer.view.project.query_retrieve_import import QueryView
@@ -76,7 +109,6 @@ class Anonymizer(ctk.CTk):
         return _("RSNA DICOM Anonymizer Version").strip() + " " + get_version()
 
     def get_app_state_path(self) -> Path:
-        from anonymizer.utils.app_state import get_app_state_path
 
         return get_app_state_path()
 
@@ -87,7 +119,6 @@ class Anonymizer(ctk.CTk):
             ctypes.windll.shcore.SetProcessDpiAwareness(1)  # type: ignore
 
         super().__init__()
-        from anonymizer.view.common.ctk_safe import mark_ctk_window_alive
 
         mark_ctk_window_alive(self)
         self.logs_dir: Path = logs_dir
@@ -263,7 +294,6 @@ class Anonymizer(ctk.CTk):
         # repeated syncs (totals updates, analytics chrome, expand/collapse).
         if width == cur_w and height == cur_h and not log:
             return
-        from anonymizer.view.common.ctk_safe import pause_scaling_tracker_check, resume_scaling_tracker_check
 
         pause_scaling_tracker_check()
         try:
@@ -393,9 +423,6 @@ class Anonymizer(ctk.CTk):
         self.after(self.metrics_loop_interval, self.metrics_loop)
 
     def load_config(self):
-        from anonymizer.controller.ai.tseg.config import apply_ai_features_preferences
-        from anonymizer.controller.analytics.prefs import apply_analytics_preferences
-        from anonymizer.utils.app_state import ai_features_from_state, analytics_from_state
 
         logger.info(f"Load Config (App State): {self.get_app_state_path()}")
         try:
@@ -427,8 +454,6 @@ class Anonymizer(ctk.CTk):
             logger.warning(warn_msg)
 
     def save_config(self):
-        from anonymizer.controller.ai.tseg.config import merge_ai_features_into_state
-        from anonymizer.controller.analytics.prefs import merge_analytics_into_state
 
         logger.info(f"Save Config (App State): {self.get_app_state_path()}")
         try:
@@ -707,12 +732,10 @@ class Anonymizer(ctk.CTk):
             f"{self.controller.model.project_name}[{self.controller.model.site_id}] => {self.controller.model.abridged_storage_dir()}"
         )
 
-        from anonymizer.controller.ai.tseg.readiness import log_runtime_status
 
         self._release_welcome_window_constraints()
         self.welcome_view.release_images()
         self.welcome_view.destroy()
-        from anonymizer.view.common.ctk_safe import purge_stale_scaling_windows
 
         purge_stale_scaling_windows()
         log_runtime_status()
@@ -732,7 +755,6 @@ class Anonymizer(ctk.CTk):
             logger.error("Critical Internal Error creating Dashboard")
             return
 
-        from anonymizer.view.common.filesystem_drop import enable_filesystem_drops
 
         enable_filesystem_drops(self.dashboard, self.import_paths)
 
@@ -767,7 +789,6 @@ class Anonymizer(ctk.CTk):
 
     def _close_registered_app_windows(self) -> None:
         """Dismiss nested AppToplevels (settings + sub-dialogs) so wait_window returns."""
-        from anonymizer.view.common.app_window import dismiss_app_window
 
         # Newest first: Query Server before Project Settings, etc.
         for window in reversed(list(self._live_app_windows())):
@@ -1291,7 +1312,6 @@ class Anonymizer(ctk.CTk):
         logger.info(f"{self.controller}")
 
     def show_ai_features_setup_dialog(self) -> None:
-        from anonymizer.view.ai.ai_features_dialog import show_ai_features_setup_dialog
 
         def on_changed() -> None:
             if self.dataset_view is not None and self.dataset_view.winfo_exists():
@@ -1384,7 +1404,6 @@ class Anonymizer(ctk.CTk):
     def _attach_menu_to_window(self, window: tk.Misc) -> None:
         # Windows/Linux: menubar only on Welcome/Dashboard (this root). macOS: share
         # the system menubar while child windows are focused.
-        from anonymizer.view.common.app_window import attach_menubar_to_toplevels
 
         if not attach_menubar_to_toplevels() or self.menu_bar is None:
             return
@@ -1398,12 +1417,10 @@ class Anonymizer(ctk.CTk):
             self._attach_menu_to_window(window)
 
     def _focus_root_window(self) -> None:
-        from anonymizer.view.common.app_window import focus_app_window
 
         focus_app_window(self)
 
     def refresh_window_menu(self) -> None:
-        from anonymizer.view.common.app_window import focus_app_window, window_menu_label_for
 
         window_menu = self._window_menu
         if window_menu is None:
@@ -1525,12 +1542,6 @@ class Anonymizer(ctk.CTk):
 
 
 def run_GUI(logs_dir):
-    from anonymizer.view.common.ctk_safe import (
-        install_safe_scaling_tracker,
-        install_safe_scrollable_frame_widget_resolve,
-        install_safe_tk_font_destructor,
-        install_safe_tk_variable_destructor,
-    )
 
     install_safe_scaling_tracker()
     install_safe_scrollable_frame_widget_resolve()
@@ -1586,93 +1597,8 @@ def signal_handler(signum, frame):
     print("Signal received, shutting down...")
 
 
-def load_model(json_filepath: Path) -> ProjectModel:
-    try:
-        with open(json_filepath, "r") as f:
-            file_model = ProjectModel.from_json(f.read())  # type: ignore
-        if not isinstance(file_model, ProjectModel):
-            raise TypeError("Loaded object is not an instance of ProjectModel")
-        logger.info(f"Project Model successfully loaded from: {json_filepath}")
-        return file_model
-    except Exception as e1:
-        # Attempt to load backup file
-        backup_filepath = str(json_filepath) + ".bak"
-        if os.path.exists(backup_filepath):
-            try:
-                with open(backup_filepath, "r") as f:
-                    file_model = ProjectModel.from_json(f.read())  # type: ignore
-                if not isinstance(file_model, ProjectModel):
-                    raise TypeError("Loaded backup object is not an instance of ProjectModel")
-                logger.warning(f"Loaded Project Model from backup file: {backup_filepath}")
-                return file_model
-            except Exception as e2:
-                logger.error(f"Backup Project Model datafile corrupt: {e2}")
-                raise RuntimeError(f"Project datafile: {backup_filepath} and backup file corrupt\n\n{str(e2)}") from e2
-        else:
-            logger.error(f"Project Model datafile corrupt: {e1}")
-            raise RuntimeError(f"Project Model datafile: {json_filepath} corrupt\n\n{str(e1)}") from e1
-
-
-def create_headless_controller(project_model_path: Path) -> ProjectController | None:
-    if not project_model_path.exists():
-        logger.error(_("Project Model file not found") + f": {project_model_path}")
-        return None
-
-    if not project_model_path.is_file():
-        logger.error(_("Project Model path is not a file") + f": {project_model_path}")
-        return None
-
-    try:
-        file_model = load_model(project_model_path)
-    except Exception as e:
-        logger.error(f"Error loading Project Model: {str(e)}")
-        return None
-
-    logger.info(f"Project Model succesfully loaded from: {project_model_path}")
-
-    if not hasattr(file_model, "version"):
-        logger.error("Project Model missing version")
-        return None
-
-    logger.info(_("Project Model loaded successfully, version") + f": {file_model.version}")
-
-    if file_model.version != ProjectModel.MODEL_VERSION:
-        logger.info(
-            _("Project Model version mismatch")
-            + f": {file_model.version} != {ProjectModel.MODEL_VERSION} "
-            + _("upgrading accordingly")
-        )
-        model = ProjectModel()
-        model.__dict__.update(file_model.__dict__)
-        model.version = ProjectModel.MODEL_VERSION
-    else:
-        model = file_model
-
-    try:
-        controller = ProjectController(model)
-        if not controller:
-            raise RuntimeError(_("Fatal Internal Error, Project Controller not created"))
-
-        if file_model.version != ProjectModel.MODEL_VERSION:
-            controller.save_model()
-            logger.info(_("Project Model upgraded successfully to version" + f": {controller.model.version}"))
-
-    except Exception as e:
-        logger.error(f"Error creating Project Controller: {str(e)}")
-        return None
-
-    return controller
-
-
 def run_HEADLESS_AI_BATCH(project_model_path: Path, ai_batch_path: Path) -> int:
     """Run one-shot AI batch for studies in a project, then exit."""
-    from anonymizer.controller.ai.batch_config import (
-        AiBatchConfig,
-        AiBatchConfigError,
-        resolve_ai_batch_studies,
-        validate_ai_batch_config_gates,
-    )
-    from anonymizer.controller.ai.batch_process import format_ai_batch_completion_summary
 
     controller = create_headless_controller(project_model_path)
     if controller is None:
@@ -1723,9 +1649,18 @@ def run_HEADLESS_AI_BATCH(project_model_path: Path, ai_batch_path: Path) -> int:
             flush=True,
         )
 
+    mappings_dir = controller.model.mappings_dir()
+    options = batch_config.to_options()
+    if options.prefer_description_mappings:
+        options = replace(
+            options,
+            series_description_overrides=load_series_overrides(mappings_dir),
+            study_loinc_overrides=load_study_loinc_overrides(mappings_dir),
+        )
+
     summary = controller.ai_batch_process(
         list(studies),
-        batch_config.to_options(),
+        options,
         progress=on_progress,
         on_log=on_log,
     )
@@ -1833,13 +1768,6 @@ def main(
     # path[0]=="" resolves to install_dir and can shadow venv packages (e.g. totalsegmentator).
     if sys.path and sys.path[0] in ("", "."):
         sys.path.pop(0)
-    from anonymizer.controller.ai.embedded_phi.ner.cache import NerModelStatus, probe_ner_models
-    from anonymizer.controller.ai.embedded_phi.pixel.cache import (
-        OCR_MODEL_DIR,
-        OcrModelStatus,
-        probe_ocr_models,
-    )
-    from anonymizer.utils.package_paths import ai_feature_dir
 
     tseg_home = ai_feature_dir("tseg")
     tseg_weights = tseg_home / "nnunet" / "results"
@@ -1875,12 +1803,9 @@ def main(
         logger.info("NER models: %s (download Embedded PHI in AI Features)", ner_detail)
 
     # TotalSegmentator runtime (Harmonize / Face Blur prerequisites and model cache).
-    from anonymizer.controller.ai.tseg.readiness import log_runtime_status
 
     log_runtime_status()
 
-    from anonymizer.controller.ai.tseg.config import apply_ai_features_preferences
-    from anonymizer.controller.analytics.prefs import apply_analytics_preferences
 
     apply_ai_features_preferences()
     apply_analytics_preferences()
@@ -1936,7 +1861,6 @@ def dispatch_runtime(
         sys.exit(run_HEADLESS_AI_BATCH(config, ai_batch))
 
     if mcp is not None:
-        from anonymizer.mcp.server import MCP_HTTP_PATH, run_MCP
 
         if mcp == "":
             run_MCP(transport="stdio", init_logs=False)

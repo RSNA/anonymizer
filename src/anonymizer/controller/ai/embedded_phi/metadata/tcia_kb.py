@@ -11,6 +11,10 @@ from pathlib import Path
 
 from anonymizer.utils.package_paths import ASSETS_DIR
 
+try:
+    from pydicom.tag import Tag as PydicomTag
+except ImportError:
+    PydicomTag = None  # type: ignore[assignment,misc]
 logger = logging.getLogger(__name__)
 
 _POLICY = ASSETS_DIR / "anonymization_policy"
@@ -149,10 +153,6 @@ def match_tcia_private(
 
 def private_creator_string(ds: object, tag: object) -> str:
     """Return private creator string for ``tag``'s block on ``ds``, if present."""
-    try:
-        from pydicom.tag import Tag as PydicomTag
-    except ImportError:
-        return ""
     try:
         if not getattr(tag, "is_private", False):
             return ""

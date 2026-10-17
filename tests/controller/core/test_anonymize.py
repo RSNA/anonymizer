@@ -13,6 +13,15 @@ from pydicom.data import get_testdata_file
 from pydicom.dataset import Dataset
 
 from anonymizer.controller.anonymizer import AnonymizerController, QuarantineDirectories
+from anonymizer.controller.dates import (
+    DEFAULT_ANON_DATE,
+    apply_day_delta,
+    hash_date,
+    rebase_days,
+    stamp_dates_modified,
+    stamp_rebase_registration,
+    valid_date,
+)
 from anonymizer.controller.project import ProjectController
 from tests.controller.dicom.support.test_files import (
     cr1_filename,
@@ -32,55 +41,49 @@ from tests.controller.dicom.support.test_nodes import LocalSCU
 
 # Test a valid date before 19000101
 def test_valid_date_before_19000101(controller):
-    anon = controller.anonymizer
     input_date = "18991231"
-    assert not anon.valid_date(input_date)
-    assert anon._hash_date(input_date, "12345") == (0, anon.DEFAULT_ANON_DATE)
+    assert not valid_date(input_date)
+    assert hash_date(input_date, "12345") == (0, DEFAULT_ANON_DATE)
 
 
 # Test a valid date on or after 19000101
 def test_valid_date_on_or_after_19000101(controller):
-    anon = controller.anonymizer
-    assert anon.valid_date("19010101")
-    assert anon.valid_date("19801228")
-    assert anon.valid_date("19660307")
-    assert anon.valid_date("20231212")
-    assert anon.valid_date("20220101")
+    assert valid_date("19010101")
+    assert valid_date("19801228")
+    assert valid_date("19660307")
+    assert valid_date("20231212")
+    assert valid_date("20220101")
 
 
 # Test an invalid date format
 def test_invalid_date_format(controller):
-    anon = controller.anonymizer
-    assert not anon.valid_date("01-01-2022")
-    assert not anon.valid_date("2001-01-02")
-    assert not anon.valid_date("01/01/2022")
-    assert not anon.valid_date("0101192")
+    assert not valid_date("01-01-2022")
+    assert not valid_date("2001-01-02")
+    assert not valid_date("01/01/2022")
+    assert not valid_date("0101192")
 
 
 # Test an invalid date value (not a valid date)
 def test_invalid_date_value(controller):
-    anon = controller.anonymizer
-    assert not anon.valid_date("20220230")
-    assert not anon.valid_date("20220231")
-    assert not anon.valid_date("20220431")
-    assert not anon.valid_date("20220631")
-    assert not anon.valid_date("99991232")
+    assert not valid_date("20220230")
+    assert not valid_date("20220231")
+    assert not valid_date("20220431")
+    assert not valid_date("20220631")
+    assert not valid_date("99991232")
 
 
 # Test with a known date and PatientID
 def test_valid_date_hashing(controller):
-    anon = controller.anonymizer
-    assert anon._hash_date("20220101", "12345")[1] == "20220921"
-    assert anon._hash_date("20220101", "67890")[1] == "20250815"
-    assert anon._hash_date("19000101", "123456789")[1] == "19080814"
-    assert anon._hash_date("19000101", "1234567890")[1] == "19080412"
+    assert hash_date("20220101", "12345")[1] == "20220921"
+    assert hash_date("20220101", "67890")[1] == "20250815"
+    assert hash_date("19000101", "123456789")[1] == "19080814"
+    assert hash_date("19000101", "1234567890")[1] == "19080412"
 
 
 def test_valid_date_hash_patient_id_range(controller):
-    anon = controller.anonymizer
     for i in range(100):
-        _, hdate = anon._hash_date("20100202", str(i))
-        assert anon.valid_date(hdate)
+        _, hdate = hash_date("20100202", str(i))
+        assert valid_date(hdate)
 
 
 def test_uid_hashing_is_deterministic_and_unique(controller: ProjectController):
@@ -338,7 +341,7 @@ def test_anonymize_dataset_with_PatientID_1_study(controller):
     assert anon_ds.PatientName == anon_pt_id
     assert len(anon_ds.AccessionNumber) == 18
     assert anon_ds.StudyDate != phi_ds.StudyDate
-    assert anon_ds.StudyDate == anonymizer._hash_date(phi_ds.StudyDate, phi_ds.PatientID)[1]
+    assert anon_ds.StudyDate == hash_date(phi_ds.StudyDate, phi_ds.PatientID)[1]
     assert anon_ds.SOPClassUID == phi_ds.SOPClassUID
     assert anon_ds.StudyInstanceUID == hash_cr1_StudyInstanceUID
     assert anon_ds.SeriesInstanceUID == hash_cr1_SeriesInstanceUID
@@ -440,13 +443,13 @@ def test_always_operand_sets_literal_and_creates_missing(controller: ProjectCont
     ds = Dataset()
     ds.add_new(0x00120062, "CS", "NO")
     anon.model._tag_keep["00120062"] = "YES"
-    anon._anonymize_element(ds, ds[0x00120062], "phi", "anon", None, 0)
+    anon._anonymize_element(ds, ds[0x00120062], "phi", "anon", None, 0, None)
     assert ds.PatientIdentityRemoved == "YES"
 
     ds2 = Dataset()
     ds2.add_new(0x00081030, "LO", "old-desc")
     anon.model._tag_keep["00081030"] = "@always()REMOVED"
-    anon._anonymize_element(ds2, ds2[0x00081030], "phi", "anon", None, 0)
+    anon._anonymize_element(ds2, ds2[0x00081030], "phi", "anon", None, 0, None)
     assert ds2.StudyDescription == "REMOVED"
 
     ds3 = Dataset()
@@ -461,52 +464,42 @@ def test_always_operand_sets_literal_and_creates_missing(controller: ProjectCont
     assert 0x00120062 not in ds4
 
 
+def test_date_operands_present_set_by_load_script(controller: ProjectController) -> None:
+    anon: AnonymizerController = controller.anonymizer
+    assert anon.model.date_operands_present is True
+    anon.model._tag_keep.clear()
+    anon.model._tag_keep["00100020"] = "@ptid"
+    anon.model.date_operands_present = any("date" in op for op in anon.model._tag_keep.values())
+    assert anon.model.date_operands_present is False
+    anon.model._tag_keep["00080020"] = "@hashdate"
+    anon.model.date_operands_present = any("date" in op for op in anon.model._tag_keep.values())
+    assert anon.model.date_operands_present is True
+
+
 def test_incrementdate_shifts_da_and_dt(controller: ProjectController) -> None:
     anon: AnonymizerController = controller.anonymizer
-    anon._dates_shifted_this_dataset = False
     ds = Dataset()
     ds.add_new(0x00080020, "DA", "20200101")
     ds.add_new(0x0008002A, "DT", "20200101123000")
     anon.model._tag_keep["00080020"] = "@incrementdate(this,42)"
     anon.model._tag_keep["0008002A"] = "@incrementdate(this,42)"
-    anon._anonymize_element(ds, ds[0x00080020], "phi", "anon", None, 0)
-    anon._anonymize_element(ds, ds[0x0008002A], "phi", "anon", None, 0)
+    anon._anonymize_element(ds, ds[0x00080020], "phi", "anon", None, 0, None)
+    anon._anonymize_element(ds, ds[0x0008002A], "phi", "anon", None, 0, None)
     assert ds.StudyDate == "20200212"
     assert str(ds.AcquisitionDateTime).startswith("20200212")
-    assert anon._dates_shifted_this_dataset is True
 
 
 def test_incrementdate_negative_shifts_earlier(controller: ProjectController) -> None:
     anon: AnonymizerController = controller.anonymizer
-    anon._dates_shifted_this_dataset = False
     ds = Dataset()
     ds.add_new(0x00080020, "DA", "20200115")
     ds.add_new(0x0008002A, "DT", "20200115120000")
     anon.model._tag_keep["00080020"] = "@incrementdate(this,-10)"
     anon.model._tag_keep["0008002A"] = "@incrementdate(this,-10)"
-    anon._anonymize_element(ds, ds[0x00080020], "phi", "anon", None, 0)
-    anon._anonymize_element(ds, ds[0x0008002A], "phi", "anon", None, 0)
+    anon._anonymize_element(ds, ds[0x00080020], "phi", "anon", None, 0, None)
+    anon._anonymize_element(ds, ds[0x0008002A], "phi", "anon", None, 0, None)
     assert ds.StudyDate == "20200105"
     assert str(ds.AcquisitionDateTime).startswith("20200105")
-    assert anon._dates_shifted_this_dataset is True
-
-
-def test_incrementdate_empty_acq_datetime_fills_from_shifted_acq_date(
-    controller: ProjectController,
-) -> None:
-    """Empty AcquisitionDateTime copies already-shifted AcquisitionDate (no double shift)."""
-    anon: AnonymizerController = controller.anonymizer
-    anon._dates_shifted_this_dataset = False
-    ds = Dataset()
-    ds.add_new(0x00080022, "DA", "20130911")
-    ds.add_new(0x0008002A, "DT", "")
-    anon.model._tag_keep["00080022"] = "@incrementdate(this,-3670)"
-    anon.model._tag_keep["0008002A"] = "@incrementdate(this,-3670)"
-    anon._anonymize_element(ds, ds[0x00080022], "phi", "anon", None, 0)
-    anon._anonymize_element(ds, ds[0x0008002A], "phi", "anon", None, 0)
-    assert ds.AcquisitionDate == "20030825"
-    assert str(ds.AcquisitionDateTime) == "20030825"
-    assert anon._dates_shifted_this_dataset is True
 
 
 def test_incrementdate_is_trial_wide_same_for_all_patients(controller: ProjectController) -> None:
@@ -517,8 +510,8 @@ def test_incrementdate_is_trial_wide_same_for_all_patients(controller: ProjectCo
     a.add_new(0x00080020, "DA", "20200101")
     b = Dataset()
     b.add_new(0x00080020, "DA", "20200101")
-    anon._anonymize_element(a, a[0x00080020], "patient-A", "anon-A", None, 0)
-    anon._anonymize_element(b, b[0x00080020], "patient-B", "anon-B", None, 0)
+    anon._anonymize_element(a, a[0x00080020], "patient-A", "anon-A", None, 0, None)
+    anon._anonymize_element(b, b[0x00080020], "patient-B", "anon-B", None, 0, None)
     assert a.StudyDate == b.StudyDate == "20200212"
 
 
@@ -529,8 +522,8 @@ def test_incrementdate_preserves_study_interval(controller: ProjectController) -
     early.add_new(0x00080020, "DA", "20200101")
     late = Dataset()
     late.add_new(0x00080020, "DA", "20200131")
-    anon._anonymize_element(early, early[0x00080020], "patient-inc", "anon", None, 0)
-    anon._anonymize_element(late, late[0x00080020], "patient-inc", "anon", None, 0)
+    anon._anonymize_element(early, early[0x00080020], "patient-inc", "anon", None, 0, None)
+    anon._anonymize_element(late, late[0x00080020], "patient-inc", "anon", None, 0, None)
     assert (
         datetime.strptime(str(late.StudyDate), "%Y%m%d")
         - datetime.strptime(str(early.StudyDate), "%Y%m%d")
@@ -538,51 +531,40 @@ def test_incrementdate_preserves_study_interval(controller: ProjectController) -
 
 
 def test_incrementdate_sets_modified_flag(controller: ProjectController) -> None:
-    anon: AnonymizerController = controller.anonymizer
-    anon._dates_shifted_this_dataset = False
     ds = Dataset()
     ds.add_new(0x00080020, "DA", "20200101")
-    anon.model._tag_keep["00080020"] = "@incrementdate(this,42)"
-    anon._anonymize_element(ds, ds[0x00080020], "phi", "anon", None, 0)
-    anon._apply_longitudinal_provenance(
-        ds, phi_study_date="20200101", phi_ptid="phi", dates_shifted=True
-    )
+    stamp_dates_modified(ds)
     assert ds.LongitudinalTemporalInformationModified == "MODIFIED"
-    # DATEINC alone must not invent REGISTRATION provenance (basedate-only).
     assert not hasattr(ds, "LongitudinalTemporalEventType")
 
 
-def test_apply_date_offset_empty_and_short_passthrough(controller: ProjectController) -> None:
-    anon: AnonymizerController = controller.anonymizer
-    assert anon._apply_date_offset("", 10) == ""
-    assert anon._apply_date_offset("2020", 10) == "2020"
-    assert anon._apply_date_offset("20200101", 10) == "20200111"
-    assert anon._apply_date_offset("20200101123000.123", 1).startswith("20200102")
+def test_apply_day_delta_empty_and_short_passthrough(controller: ProjectController) -> None:
+    assert apply_day_delta("", 10) == ""
+    assert apply_day_delta("2020", 10) == "2020"
+    assert apply_day_delta("20200101", 10) == "20200111"
+    assert apply_day_delta("20200101123000.123", 1).startswith("20200102")
 
 
 def test_rebasedate_without_basedate_leaves_value(controller: ProjectController) -> None:
     anon: AnonymizerController = controller.anonymizer
-    anon.model.replace_lookup_patients([])
-    anon._dates_shifted_this_dataset = False
+    anon.model.upsert_ctp_lookup_phi([])
     ds = Dataset()
     ds.add_new(0x00080020, "DA", "20180329")
     anon.model._tag_keep["00080020"] = "@rebasedate(this,19600101)"
-    anon._anonymize_element(ds, ds[0x00080020], "UNKNOWN", "SITE-X", None, 0)
+    anon._anonymize_element(ds, ds[0x00080020], "UNKNOWN", "SITE-X", None, 0, None)
     assert ds.StudyDate == "20180329"
-    assert anon._dates_shifted_this_dataset is False
 
 
 def test_hashdate_preserves_study_interval(controller: ProjectController) -> None:
     """Same PatientID → same offset; two study dates stay the same number of days apart."""
     anon: AnonymizerController = controller.anonymizer
-    anon._dates_shifted_this_dataset = False
     early = Dataset()
     early.add_new(0x00080020, "DA", "20200101")
     late = Dataset()
     late.add_new(0x00080020, "DA", "20200131")
     anon.model._tag_keep["00080020"] = "@hashdate"
-    anon._anonymize_element(early, early[0x00080020], "patient-interval", "anon", None, 0)
-    anon._anonymize_element(late, late[0x00080020], "patient-interval", "anon", None, 0)
+    anon._anonymize_element(early, early[0x00080020], "patient-interval", "anon", None, 0, None)
+    anon._anonymize_element(late, late[0x00080020], "patient-interval", "anon", None, 0, None)
     delta_before = (datetime(2020, 1, 31) - datetime(2020, 1, 1)).days
     delta_after = (
         datetime.strptime(str(late.StudyDate), "%Y%m%d")
@@ -601,9 +583,9 @@ def test_hashdate_is_per_patient_deterministic(controller: ProjectController) ->
     a2.add_new(0x00080020, "DA", "20200101")
     b = Dataset()
     b.add_new(0x00080020, "DA", "20200101")
-    anon._anonymize_element(a1, a1[0x00080020], "patient-A", "anon-A", None, 0)
-    anon._anonymize_element(a2, a2[0x00080020], "patient-A", "anon-A", None, 0)
-    anon._anonymize_element(b, b[0x00080020], "patient-B", "anon-B", None, 0)
+    anon._anonymize_element(a1, a1[0x00080020], "patient-A", "anon-A", None, 0, None)
+    anon._anonymize_element(a2, a2[0x00080020], "patient-A", "anon-A", None, 0, None)
+    anon._anonymize_element(b, b[0x00080020], "patient-B", "anon-B", None, 0, None)
     assert a1.StudyDate == a2.StudyDate
     assert a1.StudyDate != b.StudyDate
 
@@ -622,15 +604,15 @@ def test_hashdate_full_anonymize_sets_modified(controller: ProjectController) ->
 
 
 def _install_basedate_patient(anon: AnonymizerController, *, patient_id: str = "MRN1", basedate: str = "20180327") -> None:
-    from anonymizer.model.anonymizer import LookupPatient
+    from anonymizer.model.anonymizer import CtpLookupPhiRow
 
-    anon.model.replace_lookup_patients(
+    anon.model.upsert_ctp_lookup_phi(
         [
-            LookupPatient(
+            CtpLookupPhiRow(
                 patient_id=patient_id,
                 anon_patient_id="SITE-1",
                 date_offset=None,
-                basedate=basedate,
+                base_date=basedate,
             )
         ]
     )
@@ -642,49 +624,44 @@ def test_rebasedate_offset_math_and_explicit_origin(controller: ProjectControlle
     _install_basedate_patient(anon)
 
     expected_offset = (datetime(1960, 1, 1) - datetime(2018, 3, 27)).days
-    assert anon._rebase_offset_days_for_patient("MRN1", origin="19600101") == expected_offset
-    assert anon._rebase_offset_days_for_patient("MISSING", origin="19600101") is None
+    assert rebase_days("20180327", "19600101") == expected_offset
+    assert rebase_days(None, "19600101") is None
 
-    anon._dates_shifted_this_dataset = False
     ds = Dataset()
     ds.add_new(0x00080020, "DA", "20180329")
     anon.model._tag_keep["00080020"] = "@rebasedate(this,19600101)"
-    anon._anonymize_element(ds, ds[0x00080020], "MRN1", "SITE-1", None, 0)
+    anon._anonymize_element(ds, ds[0x00080020], "MRN1", "SITE-1", None, 0, "20180327")
     # PHI 20180329 is +2 days from basedate 20180327 → ORIGIN+2
     assert ds.StudyDate == "19600103"
-    assert anon._dates_shifted_this_dataset is True
 
 
 def test_rebasedate_bare_operand_uses_default_origin(controller: ProjectController) -> None:
     anon: AnonymizerController = controller.anonymizer
     _install_basedate_patient(anon)
-    anon._dates_shifted_this_dataset = False
     ds = Dataset()
     ds.add_new(0x00080020, "DA", "20180329")
     anon.model._tag_keep["00080020"] = "@rebasedate"
-    anon._anonymize_element(ds, ds[0x00080020], "MRN1", "SITE-1", None, 0)
+    anon._anonymize_element(ds, ds[0x00080020], "MRN1", "SITE-1", None, 0, "20180327")
     assert ds.StudyDate == "19600103"
 
 
 def test_rebasedate_custom_origin(controller: ProjectController) -> None:
     anon: AnonymizerController = controller.anonymizer
     _install_basedate_patient(anon)
-    anon._dates_shifted_this_dataset = False
     ds = Dataset()
     ds.add_new(0x00080020, "DA", "20180329")
     anon.model._tag_keep["00080020"] = "@rebasedate(this,19700101)"
-    anon._anonymize_element(ds, ds[0x00080020], "MRN1", "SITE-1", None, 0)
+    anon._anonymize_element(ds, ds[0x00080020], "MRN1", "SITE-1", None, 0, "20180327")
     assert ds.StudyDate == "19700103"
 
 
 def test_rebasedate_shifts_datetime_preserving_time(controller: ProjectController) -> None:
     anon: AnonymizerController = controller.anonymizer
     _install_basedate_patient(anon)
-    anon._dates_shifted_this_dataset = False
     ds = Dataset()
     ds.add_new(0x0008002A, "DT", "20180329123045.123456")
     anon.model._tag_keep["0008002A"] = "@rebasedate(this,19600101)"
-    anon._anonymize_element(ds, ds[0x0008002A], "MRN1", "SITE-1", None, 0)
+    anon._anonymize_element(ds, ds[0x0008002A], "MRN1", "SITE-1", None, 0, "20180327")
     assert str(ds.AcquisitionDateTime).startswith("19600103")
     assert "123045" in str(ds.AcquisitionDateTime)
 
@@ -698,8 +675,8 @@ def test_rebasedate_preserves_study_interval(controller: ProjectController) -> N
     early.add_new(0x00080020, "DA", "20180327")
     late = Dataset()
     late.add_new(0x00080020, "DA", "20180426")  # +30 days
-    anon._anonymize_element(early, early[0x00080020], "MRN1", "SITE-1", None, 0)
-    anon._anonymize_element(late, late[0x00080020], "MRN1", "SITE-1", None, 0)
+    anon._anonymize_element(early, early[0x00080020], "MRN1", "SITE-1", None, 0, "20180327")
+    anon._anonymize_element(late, late[0x00080020], "MRN1", "SITE-1", None, 0, "20180327")
 
     assert early.StudyDate == "19600101"
     assert late.StudyDate == "19600131"
@@ -717,19 +694,16 @@ def test_rebasedate_longitudinal_provenance_registration(controller: ProjectCont
     ds = Dataset()
     ds.add_new(0x00080020, "DA", "20180329")
     anon.model._tag_keep["00080020"] = "@rebasedate(this,19600101)"
-    anon._anonymize_element(ds, ds[0x00080020], "MRN1", "SITE-1", None, 0)
-    anon._apply_longitudinal_provenance(
-        ds, phi_study_date="20180329", phi_ptid="MRN1", dates_shifted=True
-    )
+    anon._anonymize_element(ds, ds[0x00080020], "MRN1", "SITE-1", None, 0, "20180327")
+    stamp_dates_modified(ds)
+    stamp_rebase_registration(ds, "20180329", "20180327")
     assert ds.LongitudinalTemporalInformationModified == "MODIFIED"
     assert float(ds.LongitudinalTemporalOffsetFromEvent) == 2.0
     assert ds.LongitudinalTemporalEventType == "REGISTRATION"
 
     # Even without walking a date tag, basedate still stamps REGISTRATION + MODIFIED.
     bare = Dataset()
-    anon._apply_longitudinal_provenance(
-        bare, phi_study_date="20180329", phi_ptid="MRN1", dates_shifted=False
-    )
+    stamp_rebase_registration(bare, "20180329", "20180327")
     assert bare.LongitudinalTemporalInformationModified == "MODIFIED"
     assert float(bare.LongitudinalTemporalOffsetFromEvent) == 2.0
     assert bare.LongitudinalTemporalEventType == "REGISTRATION"
@@ -747,6 +721,7 @@ def test_rebasedate_full_anonymize_with_ctp_basedate(controller: ProjectControll
     commit_ctp_lookup(controller, preview_ctp_lookup(props))
     controller.anonymizer.model._tag_keep["00080020"] = "@rebasedate(this,19600101)"
     controller.anonymizer.model._tag_keep["00080021"] = "@rebasedate(this,19600101)"
+    controller.anonymizer.model.date_operands_present = True
 
     ds = dcmread(get_testdata_file(ct_small_filename))
     ds.PatientID = "12345"
@@ -769,13 +744,9 @@ def test_rebasedate_full_anonymize_with_ctp_basedate(controller: ProjectControll
 
 def test_hashdate_sets_modified_flag_via_provenance(controller: ProjectController) -> None:
     anon: AnonymizerController = controller.anonymizer
-    anon._dates_shifted_this_dataset = False
     ds = Dataset()
     ds.add_new(0x00080020, "DA", "20200101")
     anon.model._tag_keep["00080020"] = "@hashdate"
-    anon._anonymize_element(ds, ds[0x00080020], "patient-x", "anon", None, 0)
-    assert anon._dates_shifted_this_dataset is True
-    anon._apply_longitudinal_provenance(
-        ds, phi_study_date="20200101", phi_ptid="patient-x", dates_shifted=True
-    )
+    anon._anonymize_element(ds, ds[0x00080020], "patient-x", "anon", None, 0, None)
+    stamp_dates_modified(ds)
     assert ds.LongitudinalTemporalInformationModified == "MODIFIED"

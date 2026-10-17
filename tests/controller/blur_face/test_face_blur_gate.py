@@ -11,7 +11,6 @@ import SimpleITK as sitk
 from pydicom.data import get_testdata_file
 
 from anonymizer.controller.ai.blur_face import (
-    MIN_FACE_MASK_VOXELS,
     CachedRegionSignal,
     FaceBlurEligibility,
     FaceBlurGateDecision,
@@ -27,6 +26,7 @@ from anonymizer.controller.ai.blur_face import (
 )
 from anonymizer.controller.ai.tseg.config import MIN_STRUCTURE_VOXELS
 from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult, resolve_series_geometry
+from anonymizer.controller.ai.tseg.face_gate import MIN_FACE_MASK_VOXELS
 from anonymizer.controller.ai.tseg.seg_retention import write_structure_voxels
 from anonymizer.controller.ai.tseg.segment import series_cache_dir
 from tests.controller.tseg.support.synthetic_ct import (
@@ -164,7 +164,7 @@ def test_evaluate_allows_mr_when_head_cached_and_weights_ready(tmp_path: Path) -
     _write_head_region_cache(series_dir)
     ds = pydicom.dcmread(next(series_dir.glob("*.dcm")))
     ds.Modality = "MR"
-    with patch("anonymizer.controller.ai.tseg.model_cache.mr_face_model_ready", return_value=True):
+    with patch("anonymizer.controller.ai.blur_face.pipeline.mr_face_model_ready", return_value=True):
         result = evaluate_face_blur_eligibility(series_dir, ds=ds, geometry=_geometry())
     assert result.decision == FaceBlurGateDecision.ALLOW
     assert result.reason == FaceBlurGateReason.CACHED_REGIONS_HEAD

@@ -164,9 +164,11 @@ def test_existing_phi_bypasses_lookup_requirement(controller, tmp_path: Path) ->
     )
     commit_ctp_lookup(controller, preview_ctp_lookup(props))
     assert controller.anonymizer.model._lookup_required is True
-    assert controller.anonymizer.model.get_lookup_patient("PREEXISTING") is None
+    # PREEXISTING still has PHI from prior anonymize; OTHER was upserted from properties.
+    assert controller.anonymizer.model.get_phi_by_phi_patient_id("PREEXISTING") is not None
+    assert controller.anonymizer.model.get_phi_by_phi_patient_id("OTHER") is not None
 
-    # New SOP for the same PHI PatientID must succeed without a lookup row.
+    # New SOP for the same PHI PatientID must succeed without being in the new lookup set.
     again = dcmread(get_testdata_file(ct_small_filename))
     again.PatientID = "PREEXISTING"
     again.StudyDate = "20200101"

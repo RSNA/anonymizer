@@ -7,7 +7,7 @@ Burnt-in pixel OCR (`pixel/`) and free-text NER (`ner/`) for post-ingest de-iden
 | Module | Role |
 | --- | --- |
 | [`ner/engine.py`](ner/engine.py) | `Entity`; `detect_entities` / `detect_entities_in_segments`; `replace_entities` |
-| [`ner/cache.py`](ner/cache.py) | `ner_ready` / `probe_ner_models` / `download_ner_models` / `remove_ner_models` |
+| [`ner/cache.py`](ner/cache.py) | `NerModelOptions`; `ner_ready` / `probe_ner_models` / `download_ner_models` / `remove_ner_models` |
 | [`ner/synthetic_phi.py`](ner/synthetic_phi.py) + `pools/` | `generate_synthetic_phi(...)` offline replacements |
 | [`report/process_report_text.py`](report/process_report_text.py) | `detect_phi_in_text` / `detect_phi` / `remove_phi` / `write_report_text` |
 | [`pixel/detect_text.py`](pixel/detect_text.py) | EasyOCR → whitelist → `detect_entities` for PHI labels |
@@ -33,7 +33,11 @@ from anonymizer.controller.ai.embedded_phi.ner.engine import (
     detect_entities_in_segments,
     replace_entities,
 )
-from anonymizer.controller.ai.embedded_phi.ner.cache import ner_ready, download_ner_models
+from anonymizer.controller.ai.embedded_phi.ner.cache import (
+    NerModelOptions,
+    ner_ready,
+    download_ner_models,
+)
 from anonymizer.controller.ai.embedded_phi.ner.synthetic_phi import generate_synthetic_phi
 ```
 
@@ -42,9 +46,10 @@ from anonymizer.controller.ai.embedded_phi.ner.synthetic_phi import generate_syn
 | `detect_entities(text, *, locale="en_US")` | `list[Entity]` (offsets into `text`) |
 | `detect_entities_in_segments(segments, …)` | per-segment `list[Entity]` (chunks of whole fields; breaks only on field boundaries) |
 | `replace_entities(text, entities=None, *, mode="blank"\|"synth", …)` | `(new_text, entities_used)` |
+| `NerModelOptions(model_id=…, cache_dir=…, local_files_only=…)` | frozen overrides for cache helpers (defaults = packaged model) |
 | `ner_ready()` | `bool` — weights present and transformers/torch import |
 | `probe_ner_models()` | `(NerModelStatus, localized_message)` |
-| `download_ner_models(*, locale="en_US")` | `(ok, message)` |
+| `download_ner_models(*, locale="en_US", options=None)` | `(ok, message)` |
 | `generate_synthetic_phi(label, *, project_id, anon_ptid, …)` | synthetic replacement string |
 
 ```python

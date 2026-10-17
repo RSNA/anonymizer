@@ -11,10 +11,13 @@ import SimpleITK as sitk
 from pydicom import Dataset, dcmread
 from pydicom.errors import InvalidDicomError
 
+from anonymizer.controller.ai.tseg.dicom_geometry import stackable_dicom_paths
 from anonymizer.controller.ai.tseg.seg_retention import (
     MASK_GEOMETRY_FILENAME,
     mask_geometry_from_image,
+    read_mask_geometry,
 )
+from anonymizer.utils.storage.dicom_tree import get_dcm_files
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +127,6 @@ def write_planar_annotation_geometry(cache_dir: Path, volume: sitk.Image) -> Pat
 
 def is_planar_pixel_space_geometry(cache_dir: Path) -> bool:
     """True when ``mask_geometry.json`` was created for planar CR/DX/US/MG annotation."""
-    from anonymizer.controller.ai.tseg.seg_retention import read_mask_geometry
 
     geometry = read_mask_geometry(Path(cache_dir))
     if not geometry:
@@ -146,8 +148,6 @@ def annotation_source_dicom_paths(series_dir: Path) -> list[Path]:
     Prefers stackable slice listing when available; otherwise expands multi-frame
     instances the same way ``load_series_frames`` does.
     """
-    from anonymizer.controller.ai.tseg.dicom_geometry import stackable_dicom_paths
-    from anonymizer.utils.storage import get_dcm_files
 
     series_dir = Path(series_dir)
     try:

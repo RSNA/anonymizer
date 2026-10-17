@@ -13,10 +13,7 @@ from anonymizer.controller.ai.embedded_phi.metadata.extract import (
     SpanFragment,
     extract_metadata_phi_rows,
 )
-from anonymizer.controller.ai.embedded_phi.metadata.iod_allowlist import (
-    load_dicom_info,
-    mark_iod_unexpected,
-)
+from anonymizer.controller.ai.embedded_phi.metadata.iod_allowlist import load_dicom_info, mark_iod_unexpected
 
 logger = logging.getLogger(__name__)
 

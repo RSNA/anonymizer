@@ -57,15 +57,19 @@ from pydicom.dataset import FileMetaDataset
 from pydicom.sequence import Sequence as DicomSequence
 from pydicom.uid import ExplicitVRLittleEndian, generate_uid
 
-from anonymizer.controller.ai.embedded_phi.classify_series import (
-    ENCAPSULATED_PDF_SOP_CLASS_UID,
-    SR_SOP_CLASS_PREFIX,
-)
+from anonymizer.controller.ai.embedded_phi.classify_series import ENCAPSULATED_PDF_SOP_CLASS_UID, SR_SOP_CLASS_PREFIX
 from anonymizer.controller.ai.embedded_phi.ner.engine import Entity, detect_entities, replace_entities
-from anonymizer.controller.ai.embedded_phi.ner.radiology_filters import (
-    collect_anonymized_values,
-    mask_text_for_ner,
-)
+from anonymizer.controller.ai.embedded_phi.ner.radiology_filters import collect_anonymized_values, mask_text_for_ner
+
+try:
+    import pypdfium2 as pdfium
+except ImportError:  # pragma: no cover
+    pdfium = None  # type: ignore[assignment]
+
+try:
+    from pypdf import PdfReader
+except ImportError:  # pragma: no cover
+    PdfReader = None  # type: ignore[assignment,misc]
 
 logger = logging.getLogger(__name__)
 
@@ -495,9 +499,7 @@ def render_pdf_pages(data: bytes, *, scale: float = 1.5) -> list[Image.Image]:
     Returns:
         One PIL image per page, or empty list if unusable.
     """
-    try:
-        import pypdfium2 as pdfium
-    except ImportError:  # pragma: no cover
+    if pdfium is None:  # pragma: no cover
         logger.warning("report: pypdfium2 not installed; PDF page render skipped")
         return []
     try:
@@ -925,9 +927,7 @@ def _extract_pdf_text_from_bytes(data: bytes) -> str:
     Returns:
         Normalized text layer, or ``\"\"`` if none / unreadable.
     """
-    try:
-        from pypdf import PdfReader
-    except ImportError:  # pragma: no cover
+    if PdfReader is None:  # pragma: no cover
         logger.warning("report: pypdf not installed; PDF text extraction skipped")
         return ""
     try:

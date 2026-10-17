@@ -1,7 +1,7 @@
 """MCP MVP end-to-end: create → import Davidson → strip pixel PHI → export preview.
 
 Runs against an in-process tool stack (no HTTP) for CI, and optionally against a
-live ``rsna-anonymizer --mcp`` HTTP server when ``ANONYMIZER_MCP_E2E=1``.
+live ``rsna-anonymizer --mcp`` HTTP server via ``pytest -m mcp_e2e``.
 
 Real EasyOCR is opt-in via ``pytest -m ocr_integration`` (slow; downloads weights).
 Default path mocks OCR like ``test_imaging_phase2``.
@@ -110,11 +110,7 @@ def test_mvp_remove_pixel_phi_real_ocr_davidson(mvp_store: Path):
     assert "preview_path" not in preview
 
 
-def _http_e2e_enabled() -> bool:
-    return os.environ.get("ANONYMIZER_MCP_E2E", "").strip() in {"1", "true", "yes"}
-
-
-@pytest.mark.skipif(not _http_e2e_enabled(), reason="Set ANONYMIZER_MCP_E2E=1 to run live HTTP MCP e2e")
+@pytest.mark.mcp_e2e
 def test_mvp_http_server_davidson(tmp_path: Path):
     """Spawn ``rsna-anonymizer --mcp HOST:PORT`` and drive tools over HTTP."""
     import asyncio

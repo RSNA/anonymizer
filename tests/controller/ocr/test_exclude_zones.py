@@ -12,7 +12,10 @@ from anonymizer.controller.ai.embedded_phi.pixel.exclude_zones import (
 )
 from anonymizer.controller.runner import OcrRemoveMode
 from anonymizer.controller.series_overlay import OCRText, UserRectangle
-from anonymizer.utils.storage import load_project_exclude_rects, save_project_exclude_rects
+from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
+    load_project_exclude_rects,
+    save_project_exclude_rects,
+)
 
 
 def _ocr(text: str, *, phi: str | None = None, box: tuple[int, int, int, int] = (0, 0, 10, 10)) -> OCRText:

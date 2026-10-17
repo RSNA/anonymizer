@@ -16,14 +16,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from fastmcp.tools import Tool
+
 from anonymizer.mcp.api import handlers
-from anonymizer.mcp.api.catalog import (
-    MCP_TOOL_NAMES,
-    TOOL_CATALOG,
-    TOOL_INPUT_MODELS,
-    ZERO_ARG_TOOLS,
-)
-from anonymizer.mcp.api.handlers import (  # noqa: F401 — public API
+from anonymizer.mcp.api.catalog import MCP_TOOL_NAMES, TOOL_CATALOG, TOOL_INPUT_MODELS, ZERO_ARG_TOOLS
+from anonymizer.mcp.api.handlers import (
     configure_remote,
     create_project,
     export_series_preview,
@@ -47,7 +44,6 @@ from anonymizer.mcp.api.wire import as_plain_tool, parse_wire_text, wire_text
 
 def register_tools(server: Any) -> None:
     """Register catalog tools on FastMCP with Pydantic ``inputSchema`` + annotations."""
-    from fastmcp.tools import Tool
 
     for spec in TOOL_CATALOG:
         fn = getattr(handlers, spec.name)

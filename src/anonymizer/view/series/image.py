@@ -9,25 +9,16 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
+from anonymizer.controller.ai.tseg.config import segmentation_mode_display
 from anonymizer.controller.series_io import SeriesProjections
-from anonymizer.controller.series_overlay import (
-    LayerType,
-    OCRText,
-    OverlayData,
-    Segmentation,
-    UserRectangle,
-)
+from anonymizer.controller.series_overlay import LayerType, OCRText, OverlayData, Segmentation, UserRectangle
 from anonymizer.utils.translate import _
 from anonymizer.utils.windowing import apply_windowing
 from anonymizer.view.common.ctk_safe import dispose_photo_image
 from anonymizer.view.common.tk_mouse import pointer_buttons
 from anonymizer.view.common.tooltip import MotionTooltipController
 from anonymizer.view.reports.entity_colors import entity_color_bgr, entity_label_display
-from anonymizer.view.series.anatomy_overlay import (
-    bgr_to_hex,
-    latch_button_width_px,
-    structure_button_label,
-)
+from anonymizer.view.series.anatomy_overlay import bgr_to_hex, latch_button_width_px, structure_button_label
 from anonymizer.view.series.histogram import Histogram
 from anonymizer.view.series.series_overlay import render_segmentations_overlay
 
@@ -865,12 +856,11 @@ class ImageViewer(ctk.CTkFrame):
         """Set panel title to ``Segmentation`` or ``Segmentation [3 mm]`` when mode is known."""
         if self._segmentation_title_label is None:
             return
-        if mode:
-            from anonymizer.controller.ai.tseg.config import segmentation_mode_display
-
-            text = f"{_('Segmentation')} [{segmentation_mode_display(mode)}]"
-        else:
-            text = _("Segmentation")
+        text = (
+            f"{_('Segmentation')} [{segmentation_mode_display(mode)}]"
+            if mode
+            else _("Segmentation")
+        )
         self._segmentation_title_label.configure(text=text)
 
     def set_segmentation_structures(

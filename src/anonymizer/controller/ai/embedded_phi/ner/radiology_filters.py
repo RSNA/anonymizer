@@ -27,6 +27,7 @@ from dataclasses import dataclass
 
 from pydicom.dataset import Dataset
 
+from anonymizer.controller.ai.embedded_phi.metadata.extract import DATE_VRS, TEXT_VRS
 from anonymizer.controller.ai.embedded_phi.ner.engine import Entity
 from anonymizer.controller.ai.embedded_phi.term_similarity import similarity_term_match
 
@@ -357,7 +358,6 @@ def _metadata_skip_reason(
         return FilterHit("anonymizer", text, detail=item.field_name or item.tag)
 
     # Lazy: metadata.extract is SSOT for TEXT_VRS / DATE_VRS (avoid import cycle).
-    from anonymizer.controller.ai.embedded_phi.metadata.extract import DATE_VRS, TEXT_VRS
 
     vr = str(item.vr or "").upper()
     if item.is_date or vr in DATE_VRS or is_compact_dicom_datetime(text):

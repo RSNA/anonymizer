@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 from anonymizer.controller.ai.embedded_phi.ner.engine import SCORED_LABELS
-from anonymizer.controller.ai.embedded_phi.report.process_report_text import (
-    METADATA_LABEL_SCORED_FAMILY,
-)
+from anonymizer.controller.ai.embedded_phi.report.process_report_text import METADATA_LABEL_SCORED_FAMILY
 from anonymizer.utils.translate import _
 
 # Hex colors keyed by entity label. Keys must stay aligned with ``SCORED_LABELS``.

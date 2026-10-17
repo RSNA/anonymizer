@@ -20,7 +20,7 @@ from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
 from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import remove_pixel_phi
 from anonymizer.controller.runner import RemovePixelPhiRunner
 from anonymizer.controller.series_io import load_series_frames
-from anonymizer.utils.storage import load_default_whitelist
+from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_default_whitelist
 from tests.controller.ocr.conftest import assert_dcm
 from tests.controller.support.us_rgb_fixtures import (
     US_RGB_BATCH_PIXELS_CHANGED,

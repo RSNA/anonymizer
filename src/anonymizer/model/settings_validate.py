@@ -9,10 +9,10 @@ from __future__ import annotations
 import string
 from typing import Any
 
-from anonymizer.model.project import DICOMNode, NetworkTimeouts
-from anonymizer.utils.modalities import get_modalities
+from anonymizer.model.project import AnonymizationPolicy, DICOMNode, NetworkTimeouts, ProjectModel
+from anonymizer.utils.modalities import Modality, get_modality_catalog
 from anonymizer.utils.network import is_valid_ip
-from anonymizer.utils.translate import language_to_code
+from anonymizer.utils.translate import code_to_language, language_to_code
 
 # --- Limits (SettingsDialog / NetworkTimeoutsDialog / DICOMNodeDialog / MCP) ---
 
@@ -106,7 +106,6 @@ def validate_language_code(value: str) -> str:
 
 def validate_anonymization_policy(value: str | None) -> str:
     """Return normalized policy value; missing/empty → strict."""
-    from anonymizer.model.project import AnonymizationPolicy
 
     text = (value or "").strip().lower()
     if not text:
@@ -183,7 +182,6 @@ def validate_network_timeouts(
     base: NetworkTimeouts | None = None,
 ) -> NetworkTimeouts:
     """Validate provided timeout fields; fill omitted from ``base`` or factory defaults."""
-    from anonymizer.model.project import ProjectModel
 
     src = base if base is not None else ProjectModel.default_timeouts()
     tcp = (
@@ -234,7 +232,6 @@ def validate_local_scp(
     base: DICOMNode | None = None,
 ) -> DICOMNode:
     """Validate local SCP fields; fill omitted from ``base`` or factory default."""
-    from anonymizer.model.project import ProjectModel
 
     src = base if base is not None else ProjectModel.default_local_server()
     resolved_ip = validate_ip(ip if ip is not None else src.ip)
@@ -283,11 +280,11 @@ def validate_remote_node(
 
 
 def validate_modality_codes(modalities: list[str]) -> list[str]:
-    catalog = get_modalities()
-    bad = [m for m in modalities if m not in catalog]
+    catalog = get_modality_catalog()
+    bad = [m for m in modalities if Modality.from_code(m) not in catalog]
     if bad:
         raise SettingsValidationError(
-            f"Unknown modality code(s): {bad}. Use codes from get_modalities() / project defaults."
+            f"Unknown modality code(s): {bad}. Use codes from get_modality_catalog() / project defaults."
         )
     return list(modalities)
 
@@ -316,8 +313,6 @@ def timeouts_dict(timeouts: NetworkTimeouts) -> dict[str, float]:
 
 def settings_defaults_payload() -> dict[str, Any]:
     """Factory defaults + short help for the interactive setup wizard."""
-    from anonymizer.model.project import ProjectModel
-    from anonymizer.utils.translate import code_to_language
 
     model = ProjectModel()
     scp = model.scp

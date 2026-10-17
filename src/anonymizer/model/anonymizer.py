@@ -5,12 +5,12 @@ and anonymization lookups. It also includes SQLAlchemy ORM classes for Series, S
 
 import hashlib
 import logging
+import re
 import xml.etree.ElementTree as ET
 from collections.abc import Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from difflib import SequenceMatcher
 from functools import wraps
 from pathlib import Path
 from pprint import pformat
@@ -23,7 +23,6 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
-    UniqueConstraint,
     create_engine,
     delete,
     func,
@@ -43,8 +42,14 @@ from sqlalchemy.orm import (
     sessionmaker,
 )
 
-from anonymizer.utils.modalities import series_is_tseg_eligible
-from anonymizer.utils.storage import JavaAnonymizerExportedStudy
+from anonymizer.utils.modalities import (
+    ContentClass,
+    Modality,
+    StudyImagingComposition,
+    XR_MODALITIES,
+    get_modality_catalog,
+)
+from anonymizer.utils.storage.java_index import JavaAnonymizerExportedStudy
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +84,10 @@ class Series(Base):
         back_populates="series", cascade="all, delete-orphan", init=False
     )
 
+    def is_description_harmonized(self) -> bool:
+        """True when ``harmonized_description`` is non-blank."""
+        return bool((self.harmonized_description or "").strip())
+
 
 class Study(Base):
     __tablename__ = "studies"
@@ -98,6 +107,57 @@ class Study(Base):
 
     series: Mapped[list[Series]] = relationship(back_populates="study", cascade="all, delete-orphan", init=False)
 
+    def harmonize_series(self, *classes: ContentClass) -> list[Series]:
+        """
+        Filter child series by ContentClass.
+
+        Args:
+            classes: ContentClass values to include (typically D3 and/or D2).
+
+        Returns:
+            Matching series. TEXT series are included only if ContentClass.TEXT is passed.
+        """
+        if not classes:
+            return []
+        wanted = frozenset(classes)
+        result: list[Series] = []
+        for series in self.series or []:
+            series_mod = Modality.from_code(series.modality)
+            if series_mod is None or not get_modality_catalog()[series_mod].harmonize:
+                continue
+            cls = get_modality_catalog()[series_mod].content_class
+            if cls is not None and cls in wanted:
+                result.append(series)
+        return result
+
+    def all_series_harmonized(self) -> bool:
+        """
+        True when every D3 ∪ D2 Harmonize series has a non-blank description.
+
+        Returns False when the study has no such series (TEXT-only / empty).
+        """
+        eligible = self.harmonize_series(ContentClass.D3, ContentClass.D2)
+        if not eligible:
+            return False
+        return all(series.is_description_harmonized() for series in eligible)
+
+    def harmonize_composition(self) -> StudyImagingComposition:
+        """
+        Study imaging Harmonize makeup for LOINC path selection.
+
+        Returns:
+            MIXED when both D3 and D2 series are present.
+        """
+        has_3d = bool(self.harmonize_series(ContentClass.D3))
+        has_2d = bool(self.harmonize_series(ContentClass.D2))
+        if has_3d and has_2d:
+            return StudyImagingComposition.MIXED
+        if has_3d:
+            return StudyImagingComposition.D3
+        if has_2d:
+            return StudyImagingComposition.D2
+        return StudyImagingComposition.NONE
+
 
 class PHI(Base):
     __tablename__ = "phi"
@@ -108,7 +168,8 @@ class PHI(Base):
     sex: Mapped[str | None] = mapped_column(String, default=None)
     dob: Mapped[str | None] = mapped_column(String, default=None)
     ethnic_group: Mapped[str | None] = mapped_column(String, default=None)
-    date_offset: Mapped[int | None] = mapped_column(Integer, default=None) # from lookup table
+    date_offset: Mapped[int | None] = mapped_column(Integer, default=None)  # from lookup dateoffset/
+    base_date: Mapped[str | None] = mapped_column(String, default=None)  # from lookup basedate/
 
     studies: Mapped[list[Study] | None] = relationship(
         back_populates="patient", cascade="all, delete-orphan", init=False
@@ -127,66 +188,13 @@ class UID(Base):
     phi_uid: Mapped[str] = mapped_column(String, unique=True, index=True)
 
 
-class LookupPatient(Base):
-    __tablename__ = "lookup_patient"
-
-    patient_id: Mapped[str] = mapped_column(String, primary_key=True)
-    anon_patient_id: Mapped[str] = mapped_column(String)
-    date_offset: Mapped[int | None] = mapped_column(Integer, default=None)
-    basedate: Mapped[str | None] = mapped_column(String, default=None)
-
-
-class DescriptionMapping(Base):
-    """Per-project original→harmonized description memory (manual Set description corrections)."""
-
-    __tablename__ = "description_mappings"
-    __table_args__ = (
-        UniqueConstraint(
-            "kind",
-            "modality",
-            "cohort",  # SQLite column name; ORM attr is ``origin``
-            "original_normalized",
-            name="uq_description_mapping_key",
-        ),
-    )
-
-    mapping_pk: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, init=False)
-    kind: Mapped[str] = mapped_column(String)  # "series" | "study"
-    original_normalized: Mapped[str] = mapped_column(String)
-    original_display: Mapped[str] = mapped_column(String)
-    harmonized_description: Mapped[str] = mapped_column(String)
-    modality: Mapped[str] = mapped_column(String, default="")
-    # Who produced the mapping: ``Manual`` or an AI feature / algorithm name.
-    # DB column remains ``cohort`` for existing project databases.
-    origin: Mapped[str] = mapped_column("cohort", String, default="")
-    loinc: Mapped[str | None] = mapped_column(String, default=None)
-    updated_at: Mapped[str] = mapped_column(String, default="")
-
-
-# Stored in DescriptionMapping.origin — Manual Set description, or AI process label.
-DESCRIPTION_MAPPING_ORIGIN_MANUAL = "Manual"
-# Legacy cohort keys rewritten to Manual on open (pre-Origin column semantics).
-_LEGACY_DESCRIPTION_MAPPING_COHORTS = frozenset({"", "tseg", "XR", "US", "MG"})
-
-
 @dataclass(frozen=True)
-class DescriptionMappingRecord:
-    """Read-model row for description mapping list/lookup APIs."""
-
-    mapping_pk: int
-    kind: str
-    modality: str
-    origin: str
-    original_display: str
-    harmonized_description: str
-    loinc: str | None
-    updated_at: str
-    similarity: float = 1.0
-
-
-def normalize_description_for_mapping(text: str) -> str:
-    """Normalize description text for mapping keys and similarity compare."""
-    return " ".join((text or "").casefold().split())
+class CtpLookupPhiRow:
+    """One CTP lookup assignment to upsert onto PHI (settings-time commit)."""
+    patient_id: str
+    anon_patient_id: str
+    date_offset: int | None = None
+    base_date: str | None = None
 
 
 @dataclass(frozen=True)
@@ -245,8 +253,6 @@ def format_embedded_phi_texts(texts: Sequence[str]) -> str:
     return ", ".join(parts)
 
 
-
-
 @dataclass(frozen=True)
 class SeriesProcessingStatus:
     embedded_phi_applied_count: int
@@ -255,95 +261,11 @@ class SeriesProcessingStatus:
     face_blur_algorithm: str | None
 
 
-
-
-def _study_tseg_series_all_harmonized(study: Study) -> bool:
-    """Return True when every CT|MR series in the study has a harmonized_description."""
-    tseg_series = [series for series in (study.series or []) if series_is_tseg_eligible(series.modality)]
-    if not tseg_series:
-        return False
-    return all(
-        series.harmonized_description is not None and bool(str(series.harmonized_description).strip())
-        for series in tseg_series
-    )
-
-
-def _study_planar_series_all_harmonized(study: Study) -> bool:
-    """Return True when every XR/US/MG series in the study has a harmonized_description."""
-    from anonymizer.utils.modalities import series_is_planar_harmonize_eligible
-
-    planar_series = [
-        series for series in (study.series or []) if series_is_planar_harmonize_eligible(series.modality)
-    ]
-    if not planar_series:
-        return False
-    return all(
-        series.harmonized_description is not None and bool(str(series.harmonized_description).strip())
-        for series in planar_series
-    )
-
-
-def _study_has_tseg_series(study: Study) -> bool:
-    return any(series_is_tseg_eligible(series.modality) for series in (study.series or []))
-
-
-def _study_has_planar_series(study: Study) -> bool:
-    from anonymizer.utils.modalities import series_is_planar_harmonize_eligible
-
-    return any(series_is_planar_harmonize_eligible(series.modality) for series in (study.series or []))
-
-
-def _study_ct_series_all_harmonized(study: Study) -> bool:
-    """Backward-compatible alias for ``_study_tseg_series_all_harmonized``."""
-    return _study_tseg_series_all_harmonized(study)
-
-
-def _sqlite_column_type(column: Column) -> str | None:
-    """Map a SQLAlchemy column to a SQLite ADD COLUMN type, or None if unsupported."""
-    column_type = column.type
-    if isinstance(column_type, String):
-        return "TEXT"
-    if isinstance(column_type, Integer):
-        return "INTEGER"
-    if isinstance(column_type, Boolean):
-        return "INTEGER"
-    logger.warning(
-        "SQLite schema sync: unsupported column type %r for %s.%s",
-        column_type,
-        column.table.name,
-        column.name,
-    )
-    return None
-
-
-# (table, legacy column, current column) — renamed in place so existing capture data survives.
-_LEGACY_COLUMN_RENAMES: tuple[tuple[str, str, str], ...] = (
-    ("instances", "pixel_phi", "embedded_phi"),
-    ("series", "pixel_phi_scanned", "embedded_phi_scanned"),
-)
-
-
-def _sqlite_add_column_sql(table_name: str, column: Column) -> str | None:
-    sqlite_type = _sqlite_column_type(column)
-    if sqlite_type is None:
-        return None
-
-    parts = [f"ALTER TABLE {table_name} ADD COLUMN {column.name} {sqlite_type}"]
-    if not column.nullable and column.default is not None:
-        default = column.default.arg if hasattr(column.default, "arg") else column.default
-        if isinstance(default, bool):
-            default = int(default)
-        parts.append(f"DEFAULT {default!r}" if isinstance(default, str) else f"DEFAULT {default}")
-    return " ".join(parts)
-
-
 class AnonymizerModel:
     """
     The Anonymizer data model class to store PHI (Protected Health Information) with anonymized key lookups.
 
-    ``MODEL_VERSION`` tracks the code release schema generation. Existing project SQLite databases are
-    upgraded on open by ``_ensure_schema_columns``, which adds any ORM-mapped columns missing from
-    older ``anonymizer.db`` files. Bumping ``MODEL_VERSION`` alone does not migrate the database.
+    ``MODEL_VERSION`` tracks the code release schema generation.
     """
 
     # Model Version Control
@@ -386,6 +308,8 @@ class AnonymizerModel:
         # Default anon_patient_id for the default PHI record
         self.default_anon_pt_id: str = self._format_anon_patient_id(0)
         self._tag_keep: dict[str, str] = {}
+        self._lookup_required = False
+        self.date_operands_present = False
         # Create the deterministic, project-specific salt for accession_number hash:
         salt_string = f"anonymizer::{self._site_id}::{self._uid_prefix}"
         self._accession_salt = salt_string.encode("utf-8")
@@ -396,70 +320,10 @@ class AnonymizerModel:
         # Construct Thread Local Scoped Session Factory
         self.session_factory = scoped_session(sessionmaker(bind=self.engine))
 
-        # Create tables IFF they don't exist
-        Base.metadata.create_all(self.engine)
-        self._ensure_schema_columns()
-
         # Default PHI record: (patient_id=DEFAULT_PHI_PATIENT_ID_PK_VALUE, anon_patient_id = site_id + "-000000")
         self._add_default_PHI()
         self._load_script(script_path)
 
-
-    def _ensure_schema_columns(self) -> None:
-        """Add any ORM-mapped columns missing from existing SQLite databases."""
-        if not self._db_url.startswith("sqlite"):
-            logger.debug("SQLite schema sync skipped for non-sqlite database URL.")
-            return
-
-        with self.engine.connect() as conn:
-            for table in Base.metadata.sorted_tables:
-                table_exists = conn.execute(
-                    text("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = :name"),
-                    {"name": table.name},
-                ).fetchone()
-                if table_exists is None:
-                    continue
-
-                existing_columns = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table.name})"))}
-                for legacy_table, old_name, new_name in _LEGACY_COLUMN_RENAMES:
-                    if legacy_table == table.name and old_name in existing_columns and new_name not in existing_columns:
-                        conn.execute(text(f"ALTER TABLE {table.name} RENAME COLUMN {old_name} TO {new_name}"))
-                        existing_columns = (existing_columns - {old_name}) | {new_name}
-                        logger.info("SQLite schema sync: renamed %s.%s -> %s", table.name, old_name, new_name)
-                for column in table.columns:
-                    if column.name in existing_columns:
-                        continue
-                    add_column_sql = _sqlite_add_column_sql(table.name, column)
-                    if add_column_sql is None:
-                        continue
-                    conn.execute(text(add_column_sql))
-                    logger.info("SQLite schema sync: added %s.%s", table.name, column.name)
-            self._migrate_description_mapping_origin_labels(conn)
-            conn.commit()
-
-    def _migrate_description_mapping_origin_labels(self, conn) -> None:
-        """Rewrite legacy Harmonize cohort keys (tseg/XR/…) to Origin=Manual."""
-        exists = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'description_mappings'")
-        ).fetchone()
-        if exists is None:
-            return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(description_mappings)"))}
-        if "cohort" not in cols:
-            return
-        placeholders = ", ".join(f"'{v}'" for v in sorted(_LEGACY_DESCRIPTION_MAPPING_COHORTS))
-        result = conn.execute(
-            text(
-                f"UPDATE description_mappings SET cohort = :manual "
-                f"WHERE cohort IN ({placeholders}) OR cohort IS NULL"
-            ),
-            {"manual": DESCRIPTION_MAPPING_ORIGIN_MANUAL},
-        )
-        if result.rowcount:
-            logger.info(
-                "SQLite schema sync: migrated %d description_mappings cohort→Origin Manual",
-                result.rowcount,
-            )
 
     def _get_class_name(self) -> str:
         return self.__class__.__name__
@@ -624,7 +488,9 @@ class AnonymizerModel:
             logger.info(f"_tag_keep has {len(self._tag_keep)} entries with {len(filtered_tag_keep)} operations")
             logger.info(f"_tag_keep operations:\n{pformat(filtered_tag_keep)}")
             self._lookup_required = any("@lookup" in operation for operation in self._tag_keep.values())
+            self.date_operands_present = any("date" in operation for operation in self._tag_keep.values())
             logger.info(f"Lookup required: {self._lookup_required}")
+            logger.info(f"Date operands present: {self.date_operands_present}")
             return
 
         except FileNotFoundError:
@@ -646,6 +512,8 @@ class AnonymizerModel:
             raise FileNotFoundError(f"Script file {script_path} does not exist.")
         self._script_path = script_path
         self._tag_keep.clear()
+        self._lookup_required = False
+        self.date_operands_present = False
         self._load_script(script_path)
 
     def resolve_tag_keep(self, tag: str) -> str | None:
@@ -654,7 +522,6 @@ class AnonymizerModel:
         Exact hex keys win; otherwise ``GGGGXXEE`` patterns match any byte in ``XX``.
         Clinical walks may override XX via creator-aware TCIA KB before calling this.
         """
-        import re
 
         key = str(tag).upper()
         if key in self._tag_keep:
@@ -672,22 +539,59 @@ class AnonymizerModel:
         return None
 
     @use_session()
-    def replace_lookup_patients(self, rows: list[LookupPatient]) -> int:
-        """Replace entire lookup_patient table (settings-time CTP lookup commit)."""
-        self.session.execute(delete(LookupPatient))
+    def upsert_ctp_lookup_phi(self, rows: Sequence[CtpLookupPhiRow]) -> int:
+        """
+        Upsert CTP lookup assignments onto PHI (settings-time commit).
+
+        Creates or updates PHI rows with anon_patient_id, date_offset, and base_date.
+        After upsert, deletes study-less PHI not in the new set (keeps the default
+        blank PatientID row; never cascade-deletes studies).
+
+        Args:
+            rows: Lookup assignments from the CTP properties file.
+
+        Returns:
+            Number of rows upserted.
+        """
+        keep_ids = {row.patient_id for row in rows}
         for row in rows:
-            self.session.add(row)
+            phi = self.session.get(PHI, row.patient_id)
+            if phi is None:
+                self.session.add(
+                    PHI(
+                        patient_id=row.patient_id,
+                        anon_patient_id=row.anon_patient_id,
+                        date_offset=row.date_offset,
+                        base_date=row.base_date,
+                    )
+                )
+            else:
+                phi.anon_patient_id = row.anon_patient_id
+                phi.date_offset = row.date_offset
+                phi.base_date = row.base_date
+
+        candidates = self.session.execute(
+            select(PHI).where(PHI.patient_id != self.DEFAULT_PHI_PATIENT_ID_PK_VALUE)
+        ).scalars().all()
+        for phi in candidates:
+            if phi.patient_id in keep_ids:
+                continue
+            study_count = self.session.execute(
+                select(func.count()).select_from(Study).where(Study.patient_id == phi.patient_id)
+            ).scalar_one()
+            if study_count == 0:
+                self.session.delete(phi)
         return len(rows)
 
     @use_session(is_read_only_operation=True)
-    def get_lookup_patient(self, patient_id: str) -> LookupPatient | None:
-        return self.session.get(LookupPatient, patient_id)
-
-    @use_session(is_read_only_operation=True)
     def get_totals(self) -> Totals:
+        patients_with_studies = self.session.execute(
+            select(func.count(func.distinct(Study.patient_id))).where(
+                Study.patient_id != self.DEFAULT_PHI_PATIENT_ID_PK_VALUE
+            )
+        ).scalar_one()
         return Totals(
-            patients=self.session.execute(select(func.count()).select_from(PHI)).scalar_one()
-            - 1,  # don't include default patient
+            patients=int(patients_with_studies or 0),
             studies=self.session.execute(select(func.count()).select_from(Study)).scalar_one(),
             series=self.session.execute(select(func.count()).select_from(Series)).scalar_one(),
             instances=self.session.execute(select(func.count()).select_from(Instance)).scalar_one(),
@@ -1007,6 +911,19 @@ class AnonymizerModel:
 
         return formatted_hash
 
+    def _fill_phi_demographics_from_dataset(self, phi: PHI, ds: Dataset) -> None:
+        """Copy missing PHI demographics from the DICOM dataset (lookup-precreated PHI)."""
+        if phi.patient_id == self.DEFAULT_PHI_PATIENT_ID_PK_VALUE:
+            return
+        if hasattr(ds, "PatientName") and not phi.patient_name:
+            phi.patient_name = str(ds.get("PatientName"))
+        if hasattr(ds, "PatientSex") and not phi.sex:
+            phi.sex = str(ds.get("PatientSex"))
+        if hasattr(ds, "PatientBirthDate") and not phi.dob:
+            phi.dob = str(ds.get("PatientBirthDate"))
+        if hasattr(ds, "EthnicGroup") and not phi.ethnic_group:
+            phi.ethnic_group = str(ds.get("EthnicGroup"))
+
     def _get_or_create_phi(self, ds: Dataset) -> PHI:
         # If PHI PatientID is missing in dataset, as per DICOM Standard, pydicom should return "", handle missing attribute
         # Missing or blank corresponds to AnonymizerModel.DEFAULT_ANON_PATIENT_ID ("000000") initialised in AnonymizerModel.add_default_PHI()
@@ -1015,25 +932,20 @@ class AnonymizerModel:
         phi: PHI | None = self.session.get(PHI, phi_ptid)
         if phi:
             logger.debug("Found existing PHI record")
+            self._fill_phi_demographics_from_dataset(phi, ds)
             return phi
 
-        logger.debug("Creating PHI record for new patient_id")
-
-        lookup_patient = None
         if self._lookup_required:
-            lookup_patient = self.session.get(LookupPatient, phi_ptid)
-            if lookup_patient is None:
-                msg = f"Lookup Error: PatientID '{phi_ptid}' not found in lookup table"
-                logger.error(msg)
-                raise KeyError(msg)
-            anon_ptid = lookup_patient.anon_patient_id
-            logger.info(f"Using lookup table: anon_patient_id:{anon_ptid}, date_offset:{lookup_patient.date_offset}")
-        else:
-            # Generate a NEW anon_patient_id based on the site_id and the current patient count:
-            last_anon_patient_id = self.session.execute(select(func.max(PHI.anon_patient_id))).scalar_one()
-            last_phi_index = int(last_anon_patient_id.split("-")[-1]) if last_anon_patient_id else 0
-            anon_ptid = self._format_anon_patient_id(phi_index=last_phi_index + 1)
-            logger.info(f"Generated new anon_patient_id:{anon_ptid}")
+            msg = f"Lookup Error: PatientID '{phi_ptid}' not found in lookup table"
+            logger.error(msg)
+            raise KeyError(msg)
+
+        logger.debug("Creating PHI record for new patient_id")
+        # Generate a NEW anon_patient_id based on the site_id and the current patient count:
+        last_anon_patient_id = self.session.execute(select(func.max(PHI.anon_patient_id))).scalar_one()
+        last_phi_index = int(last_anon_patient_id.split("-")[-1]) if last_anon_patient_id else 0
+        anon_ptid = self._format_anon_patient_id(phi_index=last_phi_index + 1)
+        logger.info(f"Generated new anon_patient_id:{anon_ptid}")
 
         new_phi: PHI = PHI(
             patient_id=phi_ptid,
@@ -1042,7 +954,8 @@ class AnonymizerModel:
             sex=str(ds.get("PatientSex")) if hasattr(ds, "PatientSex") else None,
             dob=str(ds.get("PatientBirthDate")) if hasattr(ds, "PatientBirthDate") else None,
             ethnic_group=str(ds.get("EthnicGroup")) if hasattr(ds, "EthnicGroup") else None,
-            date_offset=lookup_patient.date_offset if lookup_patient is not None else None
+            date_offset=None,
+            base_date=None,
         )
         self.session.add(new_phi)
         return new_phi
@@ -1291,31 +1204,22 @@ class AnonymizerModel:
         return True
 
     @use_session(is_read_only_operation=True)
-    def study_is_harmonized(self, anon_study_uid: str) -> bool:
-        """Return True when every CT|MR series in the study has harmonized_description set."""
+    def study_all_series_harmonized(self, anon_study_uid: str) -> bool:
+        """True when every D3 ∪ D2 Harmonize series has a non-blank description."""
         stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
         study = self.session.execute(stmt).scalar_one_or_none()
         if study is None:
             return False
-        return _study_ct_series_all_harmonized(study)
+        return study.all_series_harmonized()
 
     @use_session(is_read_only_operation=True)
-    def study_is_planar_harmonized(self, anon_study_uid: str) -> bool:
-        """Return True when every XR/US/MG series has harmonized_description (ignores CT/MR)."""
+    def study_harmonize_composition(self, anon_study_uid: str) -> StudyImagingComposition:
+        """Return study Harmonize makeup for LOINC path selection."""
         stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
         study = self.session.execute(stmt).scalar_one_or_none()
         if study is None:
-            return False
-        return _study_planar_series_all_harmonized(study)
-
-    @use_session(is_read_only_operation=True)
-    def study_composition_for_harmonize(self, anon_study_uid: str) -> tuple[bool, bool]:
-        """Return ``(has_tseg_series, has_planar_series)`` for LOINC offer branching."""
-        stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
-        study = self.session.execute(stmt).scalar_one_or_none()
-        if study is None:
-            return False, False
-        return _study_has_tseg_series(study), _study_has_planar_series(study)
+            return StudyImagingComposition.NONE
+        return study.harmonize_composition()
 
     @use_session()
     def set_study_harmonized_description(self, anon_study_uid: str, description: str) -> bool:
@@ -1369,322 +1273,80 @@ class AnonymizerModel:
         text = str(value).strip()
         return text or None
 
-    @use_session()
-    def upsert_description_mapping(
-        self,
-        *,
-        kind: str,
-        original: str,
-        harmonized: str,
-        modality: str = "",
-        origin: str = DESCRIPTION_MAPPING_ORIGIN_MANUAL,
-        loinc: str | None = None,
-    ) -> bool:
-        """
-        Upsert an original→harmonized mapping from a manual Set description apply.
-
-        Study mappings require a non-empty LOINC (study = LOINC only).
-        Series mappings are RadLex Playbook strings (no LOINC).
-        ``origin`` is ``Manual`` or the AI feature / algorithm that decided the value.
-        Does nothing when original is empty, or when original and harmonized
-        are the same after normalization (no identity mappings).
-        """
-        kind_key = (kind or "").strip().lower()
-        if kind_key not in {"series", "study"}:
-            return False
-        original_display = (original or "").strip()
-        harmonized_text = (harmonized or "").strip()
-        if not original_display or not harmonized_text:
-            return False
-        original_normalized = normalize_description_for_mapping(original_display)
-        if not original_normalized:
-            return False
-        if original_normalized == normalize_description_for_mapping(harmonized_text):
-            logger.debug(
-                "Skipping identity description mapping (%s): %r",
-                kind_key,
-                original_display,
-            )
-            return False
-        loinc_code = (loinc or "").strip() or None
-        if kind_key == "study" and not loinc_code:
-            logger.error("Study description mapping requires a LOINC code")
-            return False
-        modality_key = (modality or "").strip().upper()
-        origin_key = (origin or DESCRIPTION_MAPPING_ORIGIN_MANUAL).strip() or DESCRIPTION_MAPPING_ORIGIN_MANUAL
-        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        stmt = select(DescriptionMapping).where(
-            DescriptionMapping.kind == kind_key,
-            DescriptionMapping.modality == modality_key,
-            DescriptionMapping.origin == origin_key,
-            DescriptionMapping.original_normalized == original_normalized,
-        )
-        row = self.session.execute(stmt).scalar_one_or_none()
-        if row is None:
-            self.session.add(
-                DescriptionMapping(
-                    kind=kind_key,
-                    modality=modality_key,
-                    origin=origin_key,
-                    original_normalized=original_normalized,
-                    original_display=original_display,
-                    harmonized_description=harmonized_text,
-                    loinc=loinc_code if kind_key == "study" else None,
-                    updated_at=now,
-                )
-            )
-        else:
-            row.original_display = original_display
-            row.harmonized_description = harmonized_text
-            row.loinc = loinc_code if kind_key == "study" else None
-            row.updated_at = now
-        return True
-
-    def remember_series_description_mapping(
-        self,
-        *,
-        series_uid: str,
-        modality: str,
-        harmonized: str,
-        origin: str = DESCRIPTION_MAPPING_ORIGIN_MANUAL,
-    ) -> bool:
-        """Persist original→harmonized series mapping using sticky intake SeriesDescription."""
-        original = (self.get_series_description(series_uid) or "").strip()
-        if not original:
-            return False
-        return self.upsert_description_mapping(
-            kind="series",
-            original=original,
-            harmonized=harmonized,
-            modality=modality,
-            origin=origin,
-        )
-
-    def remember_study_description_mapping(
-        self,
-        *,
-        anon_study_uid: str,
-        modality: str,
-        harmonized: str,
-        loinc: str,
-        origin: str = DESCRIPTION_MAPPING_ORIGIN_MANUAL,
-    ) -> bool:
-        """Persist original→harmonized study mapping using sticky intake StudyDescription."""
-        original = (self.get_study_description(anon_study_uid) or "").strip()
-        if not original:
-            return False
-        return self.upsert_description_mapping(
-            kind="study",
-            original=original,
-            harmonized=harmonized,
-            modality=modality,
-            loinc=loinc,
-            origin=origin,
-        )
-
     @use_session(is_read_only_operation=True)
-    def list_description_mappings(self, *, kind: str | None = None) -> list[DescriptionMappingRecord]:
-        stmt = select(DescriptionMapping).order_by(DescriptionMapping.updated_at.desc(), DescriptionMapping.mapping_pk.desc())
-        if kind:
-            kind_key = kind.strip().lower()
-            stmt = stmt.where(DescriptionMapping.kind == kind_key)
-        rows = self.session.execute(stmt).scalars().all()
-        return [
-            DescriptionMappingRecord(
-                mapping_pk=row.mapping_pk,
-                kind=row.kind,
-                modality=row.modality,
-                origin=row.origin,
-                original_display=row.original_display,
-                harmonized_description=row.harmonized_description,
-                loinc=row.loinc,
-                updated_at=row.updated_at,
-            )
-            for row in rows
-        ]
-
-    @use_session()
-    def delete_description_mapping(self, mapping_pk: int) -> bool:
-        stmt = select(DescriptionMapping).where(DescriptionMapping.mapping_pk == mapping_pk)
-        row = self.session.execute(stmt).scalar_one_or_none()
-        if row is None:
-            return False
-        self.session.delete(row)
-        return True
-
-    @use_session(is_read_only_operation=True)
-    def lookup_description_mapping(
-        self,
-        *,
-        kind: str,
-        original: str,
-        modality: str = "",
-        threshold: float = 0.90,
-    ) -> DescriptionMappingRecord | None:
-        """
-        Find the best original→harmonized mapping by SequenceMatcher ratio.
-
-        Prefer exact normalized match; otherwise return the highest ratio ≥ threshold
-        within the same kind/modality. On a tie, prefer Origin=Manual.
-        """
-        kind_key = (kind or "").strip().lower()
-        if kind_key not in {"series", "study"}:
-            return None
-        needle = normalize_description_for_mapping(original)
-        if not needle:
-            return None
-        modality_key = (modality or "").strip().upper()
-        stmt = select(DescriptionMapping).where(
-            DescriptionMapping.kind == kind_key,
-            DescriptionMapping.modality == modality_key,
-        )
-        rows = self.session.execute(stmt).scalars().all()
-        if not rows:
-            return None
-
-        def _record(row: DescriptionMapping, similarity: float) -> DescriptionMappingRecord:
-            return DescriptionMappingRecord(
-                mapping_pk=row.mapping_pk,
-                kind=row.kind,
-                modality=row.modality,
-                origin=row.origin,
-                original_display=row.original_display,
-                harmonized_description=row.harmonized_description,
-                loinc=row.loinc,
-                updated_at=row.updated_at,
-                similarity=similarity,
-            )
-
-        def _prefer_manual(a: DescriptionMapping, b: DescriptionMapping) -> DescriptionMapping:
-            if a.origin == DESCRIPTION_MAPPING_ORIGIN_MANUAL and b.origin != DESCRIPTION_MAPPING_ORIGIN_MANUAL:
-                return a
-            if b.origin == DESCRIPTION_MAPPING_ORIGIN_MANUAL and a.origin != DESCRIPTION_MAPPING_ORIGIN_MANUAL:
-                return b
-            return a
-
-        exact: DescriptionMapping | None = None
-        best: DescriptionMapping | None = None
-        best_ratio = 0.0
-        for row in rows:
-            if row.original_normalized == needle:
-                exact = row if exact is None else _prefer_manual(exact, row)
-                continue
-            ratio = SequenceMatcher(None, needle, row.original_normalized).ratio()
-            if ratio < threshold:
-                continue
-            if best is None or ratio > best_ratio:
-                best = row
-                best_ratio = ratio
-            elif ratio == best_ratio and best is not None:
-                best = _prefer_manual(best, row)
-        if exact is not None:
-            return _record(exact, 1.0)
-        if best is None:
-            return None
-        return _record(best, best_ratio)
-
-    @use_session(is_read_only_operation=True)
-    def get_ct_series_harmonized_descriptions(self, anon_study_uid: str) -> list[str]:
-        """Return non-empty CT|MR Series.harmonized_description values for a study."""
-        stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
-        study = self.session.execute(stmt).scalar_one_or_none()
-        if study is None:
-            return []
-        descriptions: list[str] = []
-        for series in study.series or []:
-            if not series_is_tseg_eligible(series.modality):
-                continue
-            text = (series.harmonized_description or "").strip()
-            if text:
-                descriptions.append(text)
-        return descriptions
-
-    @use_session(is_read_only_operation=True)
-    def get_planar_series_harmonized_descriptions(self, anon_study_uid: str) -> list[str]:
-        """Return non-empty XR/US/MG Series.harmonized_description values for a study."""
-        from anonymizer.utils.modalities import series_is_planar_harmonize_eligible
-
-        stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
-        study = self.session.execute(stmt).scalar_one_or_none()
-        if study is None:
-            return []
-        descriptions: list[str] = []
-        for series in study.series or []:
-            if not series_is_planar_harmonize_eligible(series.modality):
-                continue
-            text = (series.harmonized_description or "").strip()
-            if text:
-                descriptions.append(text)
-        return descriptions
-
-    @use_session(is_read_only_operation=True)
-    def get_planar_series_modalities(self, anon_study_uid: str) -> list[str]:
-        """Return modality codes for planar Harmonize series in a study."""
-        from anonymizer.utils.modalities import series_is_planar_harmonize_eligible
-
+    def get_3d_series_harmonized_descriptions(self, anon_study_uid: str) -> list[str]:
+        """Return non-empty D3 Series.harmonized_description values for a study."""
         stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
         study = self.session.execute(stmt).scalar_one_or_none()
         if study is None:
             return []
         return [
-            str(series.modality or "").strip().upper()
-            for series in (study.series or [])
-            if series_is_planar_harmonize_eligible(series.modality)
+            text
+            for series in study.harmonize_series(ContentClass.D3)
+            if (text := (series.harmonized_description or "").strip())
         ]
 
     @use_session(is_read_only_operation=True)
-    def get_tseg_series_modalities(self, anon_study_uid: str) -> list[str]:
-        """Return modality codes for CT|MR series in a study."""
+    def get_2d_series_harmonized_descriptions(self, anon_study_uid: str) -> list[str]:
+        """Return non-empty D2 Series.harmonized_description values for a study."""
         stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
         study = self.session.execute(stmt).scalar_one_or_none()
         if study is None:
             return []
         return [
-            str(series.modality or "").strip().upper()
-            for series in (study.series or [])
-            if series_is_tseg_eligible(series.modality)
+            text
+            for series in study.harmonize_series(ContentClass.D2)
+            if (text := (series.harmonized_description or "").strip())
         ]
 
     @use_session(is_read_only_operation=True)
-    def get_planar_series_instance_count(self, anon_study_uid: str) -> int:
-        """Sum instance counts for planar Harmonize series (CXR view estimate from ORM)."""
-        from anonymizer.utils.modalities import series_is_planar_harmonize_eligible
+    def get_2d_series_modalities(self, anon_study_uid: str) -> list[str]:
+        """Return modality codes for D2 Harmonize series in a study."""
+        stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
+        study = self.session.execute(stmt).scalar_one_or_none()
+        if study is None:
+            return []
+        return [str(series.modality or "").strip().upper() for series in study.harmonize_series(ContentClass.D2)]
 
+    @use_session(is_read_only_operation=True)
+    def get_3d_series_modalities(self, anon_study_uid: str) -> list[str]:
+        """Return modality codes for D3 series in a study."""
+        stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
+        study = self.session.execute(stmt).scalar_one_or_none()
+        if study is None:
+            return []
+        return [str(series.modality or "").strip().upper() for series in study.harmonize_series(ContentClass.D3)]
+
+    @use_session(is_read_only_operation=True)
+    def get_2d_series_instance_count(self, anon_study_uid: str) -> int:
+        """Sum instance counts for D2 Harmonize series (CXR view estimate from ORM)."""
         stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(
             selectinload(Study.series).selectinload(Series.instances)
         )
         study = self.session.execute(stmt).scalar_one_or_none()
         if study is None:
             return 0
-        total = 0
-        for series in study.series or []:
-            if series_is_planar_harmonize_eligible(series.modality):
-                total += len(series.instances or [])
-        return total
+        return sum(len(series.instances or []) for series in study.harmonize_series(ContentClass.D2))
 
     @use_session(is_read_only_operation=True)
     def get_compatible_series_harmonized_descriptions(
         self,
         anon_study_uid: str,
         *,
-        modality: object | None,
+        modality: str | None,
         exclude_anon_series_uid: str | None = None,
     ) -> list[str]:
         """Return other series' harmonized descriptions on the study with compatible modality."""
-        from anonymizer.utils.modalities import (
-            normalize_modality,
-            planar_harmonize_cohort,
-            series_is_planar_harmonize_eligible,
-            series_is_tseg_eligible,
-        )
 
         stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
         study = self.session.execute(stmt).scalar_one_or_none()
         if study is None:
             return []
 
-        target = normalize_modality(modality)
-        target_cohort = planar_harmonize_cohort(modality)
+        target = Modality.from_code(modality)
+        if target is None:
+            return []
+        target_cls = get_modality_catalog()[target].content_class
         descriptions: list[str] = []
         for series in study.series or []:
             if exclude_anon_series_uid and series.anon_series_uid == exclude_anon_series_uid:
@@ -1692,12 +1354,15 @@ class AnonymizerModel:
             text = (series.harmonized_description or "").strip()
             if not text:
                 continue
-            series_mod = series.modality
-            if series_is_tseg_eligible(target) and series_is_tseg_eligible(series_mod):
-                if normalize_modality(series_mod) == target:
+            series_mod = Modality.from_code(series.modality)
+            if series_mod is None:
+                continue
+            series_cls = get_modality_catalog()[series_mod].content_class
+            if target_cls is ContentClass.D3 and series_cls is ContentClass.D3:
+                if series_mod is target:
                     descriptions.append(text)
-            elif target_cohort is not None and series_is_planar_harmonize_eligible(series_mod):
-                if planar_harmonize_cohort(series_mod) == target_cohort:
+            elif target_cls is ContentClass.D2 and series_cls is ContentClass.D2:
+                if (target in XR_MODALITIES and series_mod in XR_MODALITIES) or target is series_mod:
                     descriptions.append(text)
         return descriptions
 
@@ -1716,7 +1381,7 @@ class AnonymizerModel:
     @use_session(is_read_only_operation=True)
     def find_studies_with_series_fingerprint(self, fingerprint: tuple[str, ...]) -> list[str]:
         """
-        Return anon_study_uid values whose CT|MR harmonized series descriptions match ``fingerprint``.
+        Return anon_study_uid values whose D3 harmonized series descriptions match ``fingerprint``.
 
         Fingerprint is a sorted multiset of Playbook series description strings.
         """
@@ -1726,19 +1391,17 @@ class AnonymizerModel:
         matches: list[str] = []
         for study in studies:
             descriptions = [
-                (series.harmonized_description or "").strip()
-                for series in (study.series or [])
-                if series_is_tseg_eligible(series.modality)
-                and (series.harmonized_description or "").strip()
+                text
+                for series in study.harmonize_series(ContentClass.D3)
+                if (text := (series.harmonized_description or "").strip())
             ]
             if tuple(sorted(descriptions)) == target:
                 matches.append(study.anon_study_uid)
         return matches
 
     @use_session(is_read_only_operation=True)
-    def find_studies_with_planar_series_fingerprint(self, fingerprint: tuple[str, ...]) -> list[str]:
-        """Return anon_study_uid values whose XR/US/MG harmonized descriptions match ``fingerprint``."""
-        from anonymizer.utils.modalities import series_is_planar_harmonize_eligible
+    def find_studies_with_2d_series_fingerprint(self, fingerprint: tuple[str, ...]) -> list[str]:
+        """Return anon_study_uid values whose D2 harmonized descriptions match ``fingerprint``."""
 
         target = tuple(fingerprint)
         stmt = select(Study).options(selectinload(Study.series))
@@ -1746,10 +1409,9 @@ class AnonymizerModel:
         matches: list[str] = []
         for study in studies:
             descriptions = [
-                (series.harmonized_description or "").strip()
-                for series in (study.series or [])
-                if series_is_planar_harmonize_eligible(series.modality)
-                and (series.harmonized_description or "").strip()
+                text
+                for series in study.harmonize_series(ContentClass.D2)
+                if (text := (series.harmonized_description or "").strip())
             ]
             if tuple(sorted(descriptions)) == target:
                 matches.append(study.anon_study_uid)

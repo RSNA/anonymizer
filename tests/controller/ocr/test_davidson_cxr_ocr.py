@@ -176,7 +176,7 @@ def test_davidson_overlay_draw_includes_portable_when_project_whitelist_omits_it
 def test_davidson_default_cr_whitelist_hides_portable_and_semi_upright() -> None:
     """Packaged CR/DX defaults must hide common Davidson overlay markers."""
     from anonymizer.controller.series_overlay import OCRText
-    from anonymizer.utils.storage import load_default_whitelist
+    from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_default_whitelist
 
     detections = [
         OCRText(text="DAVIDSON DOUGLAS [M]", top_left=(0, 0), bottom_right=(10, 10), prob=0.9),

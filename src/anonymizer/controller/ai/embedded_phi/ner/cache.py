@@ -1,27 +1,30 @@
 """OpenMed DeID model cache: download, probe, load, and remove weights.
 
-Weights live under ``assets/ai/embedded_phi/model`` (override with
-``PHI_NER_MODEL_CACHE``). Repo: ``OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1``.
+Weights live under ``assets/ai/embedded_phi/model`` (override via
+``NerModelOptions.cache_dir``). Repo: ``OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1``.
 
 Public API
 ----------
+``NerModelOptions``
+    Frozen overrides for model id, cache directory, and HF local-files-only mode.
+
 ``ner_ready()``
     True when weights are present and transformers/torch import.
 
 ``probe_ner_models()``
     ``(NerModelStatus, localized_message)`` for UI.
 
-``download_ner_models(*, locale=\"en_US\")``
+``download_ner_models(*, locale=\"en_US\", options=None)``
     Fetch weights into the product cache → ``(ok, message)``.
 
-``remove_ner_models()``
+``remove_ner_models(*, options=None)``
     Delete the on-disk cache.
 
-``load_token_classification_pipeline(model_id)``
+``load_token_classification_pipeline(model_id, *, options=None)``
     Build the HF token-classification pipeline (used by ``ner.detect_entities``).
 
-``resolve_model_id(locale=\"en_US\")``
-    Local cache path when present, else HF repo id.
+``resolve_model_id(locale=\"en_US\", *, options=None)``
+    Local cache path when present, else HF repo id (or ``options.model_id``).
 
 ``NerModelStatus``
     ``READY`` / ``MISSING`` / ``DOWNLOADING`` / ``FAILED``.
@@ -32,13 +35,25 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from huggingface_hub import snapshot_download
+from transformers import AutoModelForTokenClassification, AutoTokenizer, pipeline
+
 from anonymizer.utils.package_paths import ai_feature_dir
-from anonymizer.utils.storage import update_model_download
+from anonymizer.controller.ai.model_download import update_model_download
 from anonymizer.utils.translate import _
 
+try:
+    import torch  # noqa: F401
+except ImportError:
+    torch = None  # type: ignore[assignment,misc]
+try:
+    import transformers  # noqa: F401
+except ImportError:
+    transformers = None  # type: ignore[assignment,misc]
 logger = logging.getLogger(__name__)
 
 HF_REPO_ID = "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1"
@@ -46,6 +61,15 @@ MODEL_DIR = ai_feature_dir("embedded_phi", "model")
 _MIN_MODEL_FILES = 3
 DOWNLOAD_ID = "embedded_phi"
 _downloading = False
+
+
+@dataclass(frozen=True)
+class NerModelOptions:
+    """Overrides for PHI NER weight resolution and Hugging Face load mode."""
+
+    model_id: str | None = None
+    cache_dir: Path | None = None
+    local_files_only: bool = False
 
 
 class NerModelStatus(StrEnum):
@@ -62,17 +86,17 @@ class NerModelStatus(StrEnum):
 # ---------------------------------------------------------------------------
 
 
-def ner_ready() -> bool:
+def ner_ready(*, options: NerModelOptions | None = None) -> bool:
     """
     Return whether NER weights are ready for inference.
 
     Returns:
         True when ``probe_ner_models()`` reports ``READY``.
     """
-    return probe_ner_models()[0] == NerModelStatus.READY
+    return probe_ner_models(options=options)[0] == NerModelStatus.READY
 
 
-def probe_ner_models() -> tuple[NerModelStatus, str]:
+def probe_ner_models(*, options: NerModelOptions | None = None) -> tuple[NerModelStatus, str]:
     """
     Probe download / readiness state for UI messaging.
 
@@ -83,17 +107,20 @@ def probe_ner_models() -> tuple[NerModelStatus, str]:
         return NerModelStatus.DOWNLOADING, _("Downloading PHI NER models…")
     if not _transformers_available():
         return NerModelStatus.FAILED, _("transformers/torch not installed")
-    if _model_files_present():
+    if _model_files_present(options):
         return NerModelStatus.READY, _("Downloaded")
     return NerModelStatus.MISSING, _("Not downloaded")
 
 
-def download_ner_models(*, locale: str = "en_US") -> tuple[bool, str]:
+def download_ner_models(
+    *, locale: str = "en_US", options: NerModelOptions | None = None
+) -> tuple[bool, str]:
     """
     Download PHI NER models into the product cache if missing.
 
     Args:
         locale: Passed through to the pin helper (reserved for future packs).
+        options: Optional model/cache overrides.
 
     Returns:
         ``(ok, localized_or_error_message)``.
@@ -101,13 +128,13 @@ def download_ner_models(*, locale: str = "en_US") -> tuple[bool, str]:
     global _downloading
     if not _transformers_available():
         return False, _("transformers/torch not installed")
-    if _model_files_present():
+    if _model_files_present(options):
         return True, _("PHI NER models already downloaded.")
     _downloading = True
     try:
         update_model_download(DOWNLOAD_ID, message=_("Downloading PHI NER model…"))
-        _pin_deid_model(locale)
-        if _model_files_present():
+        _pin_deid_model(locale, options=options)
+        if _model_files_present(options):
             return True, _("PHI NER models downloaded.")
         return False, _("PHI NER model download incomplete.")
     except Exception as exc:  # noqa: BLE001
@@ -117,38 +144,36 @@ def download_ner_models(*, locale: str = "en_US") -> tuple[bool, str]:
         _downloading = False
 
 
-def remove_ner_models() -> None:
+def remove_ner_models(*, options: NerModelOptions | None = None) -> None:
     """
     Delete the on-disk NER model cache and recreate an empty cache directory.
 
     Returns:
         None.
     """
-    cache = _model_cache_dir()
+    cache = _model_cache_dir(options)
     if cache.is_dir():
         shutil.rmtree(cache)
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    cache.mkdir(parents=True, exist_ok=True)
     logger.info("Removed PHI NER models from %s (%s)", cache, HF_REPO_ID)
 
 
-def load_token_classification_pipeline(model_id: str):
+def load_token_classification_pipeline(
+    model_id: str, *, options: NerModelOptions | None = None
+):
     """
     Build a Hugging Face token-classification pipeline for ``model_id``.
 
     Args:
         model_id: Local directory or Hugging Face repo id.
+        options: Optional load-mode overrides (``local_files_only``).
 
     Returns:
         ``transformers`` pipeline with ``aggregation_strategy=\"max\"`` and no
         custom score threshold (HF default keeps all aggregated spans).
     """
-    from transformers import (
-        AutoModelForTokenClassification,
-        AutoTokenizer,
-        pipeline,
-    )
-
-    lfo = _local_files_only()
+    opts = _resolve_options(options)
+    lfo = opts.local_files_only
     tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=lfo)
     model = AutoModelForTokenClassification.from_pretrained(model_id, local_files_only=lfo)
     # OpenMed labels every WordPiece as B-* (never I-*), so "simple" never merges
@@ -163,20 +188,23 @@ def load_token_classification_pipeline(model_id: str):
     )
 
 
-def resolve_model_id(_locale: str = "en_US") -> str:
+def resolve_model_id(
+    _locale: str = "en_US", *, options: NerModelOptions | None = None
+) -> str:
     """
     Prefer a local cache directory when present; else the HF repo id.
 
     Args:
         _locale: Reserved for future locale-specific packs (currently unused).
+        options: Optional model/cache overrides.
 
     Returns:
-        Filesystem path string or ``HF_REPO_ID``.
+        Filesystem path string, ``options.model_id``, or ``HF_REPO_ID``.
     """
-    override = os.environ.get("PHI_NER_DEID_MODEL", "").strip()
-    if override:
-        return override
-    cache = _model_cache_dir()
+    opts = _resolve_options(options)
+    if opts.model_id:
+        return opts.model_id
+    cache = _model_cache_dir(opts)
     if cache.is_dir() and (cache / "config.json").is_file():
         return str(cache)
     nested = cache / HF_REPO_ID.replace("/", "__")
@@ -190,59 +218,51 @@ def resolve_model_id(_locale: str = "en_US") -> str:
 # ---------------------------------------------------------------------------
 
 
-def _model_cache_dir() -> Path:
+def _resolve_options(options: NerModelOptions | None) -> NerModelOptions:
+    return options if options is not None else NerModelOptions()
+
+
+def _model_cache_dir(options: NerModelOptions | None = None) -> Path:
     """
     Resolve the directory used for OpenMed DeID weights.
 
     Returns:
-        ``PHI_NER_MODEL_CACHE`` when set, otherwise the packaged ``MODEL_DIR``.
+        ``options.cache_dir`` when set, otherwise the packaged ``MODEL_DIR``.
     """
-    raw = os.environ.get("PHI_NER_MODEL_CACHE", "").strip()
-    return Path(raw).expanduser() if raw else MODEL_DIR
+    opts = _resolve_options(options)
+    return Path(opts.cache_dir).expanduser() if opts.cache_dir is not None else MODEL_DIR
 
 
-def _local_files_only() -> bool:
-    """
-    Return whether Hugging Face loads must use local files only.
-
-    Returns:
-        True when ``PHI_NER_LOCAL_FILES_ONLY`` is a truthy string.
-    """
-    return os.environ.get("PHI_NER_LOCAL_FILES_ONLY", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-    }
-
-
-def _pin_deid_model(locale: str = "en_US") -> Path:
+def _pin_deid_model(
+    locale: str = "en_US", *, options: NerModelOptions | None = None
+) -> Path:
     """
     Download the DeID model into the product cache.
 
     Args:
         locale: Reserved for future locale-specific packs (currently unused).
+        options: Optional cache-directory override.
 
     Returns:
         Cache directory path after snapshot download.
     """
-    from huggingface_hub import snapshot_download
 
     del locale
-    dest = _model_cache_dir()
+    dest = _model_cache_dir(options)
     dest.mkdir(parents=True, exist_ok=True)
     snapshot_download(repo_id=HF_REPO_ID, local_dir=str(dest))
     logger.info("Pinned Embedded PHI DeID model → %s", dest)
     return dest
 
 
-def _model_files_present() -> bool:
+def _model_files_present(options: NerModelOptions | None = None) -> bool:
     """
     Return whether the cache looks like a complete model tree.
 
     Returns:
         True when ``config.json`` exists and enough non-dot files are present.
     """
-    cache = _model_cache_dir()
+    cache = _model_cache_dir(options)
     if not cache.is_dir():
         return False
     try:
@@ -259,9 +279,4 @@ def _transformers_available() -> bool:
     Returns:
         True when both packages import successfully.
     """
-    try:
-        import torch  # noqa: F401
-        import transformers  # noqa: F401
-    except ImportError:
-        return False
-    return True
+    return torch is not None and transformers is not None

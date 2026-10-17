@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
     from anonymizer.controller.project import ProjectController
     from anonymizer.view.common.fonts import AppFonts
+from anonymizer.view.reports.report_text_review import show_report_text_review
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,6 @@ def open_series_workspace(
     kind = classify_series(series_path, modality=modality)
     logger.info("open_series_workspace kind=%s path=%s", kind.value, series_path)
     if kind in _TEXT_WORKSPACE_KINDS:
-        from anonymizer.view.reports.report_text_review import show_report_text_review
 
         document_kind = "sr" if kind is SeriesKind.NATIVE_SR else "pdf"
         return show_report_text_review(

@@ -6,12 +6,8 @@ import customtkinter as ctk
 from customtkinter import ThemeManager
 from pynetdicom.sop_class import _STORAGE_CLASSES
 
-from anonymizer.utils.modalities import get_modalities
-from anonymizer.utils.translate import (
-    _,
-    insert_space_after_codes,
-    insert_spaces_between_cases,
-)
+from anonymizer.utils.modalities import Modality, get_modality_catalog
+from anonymizer.utils.translate import _, insert_space_after_codes, insert_spaces_between_cases
 from anonymizer.view.common.app_window import AppToplevel, install_modal_dismiss
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import default_char_width_px
@@ -206,8 +202,12 @@ class SOPClassesDialog(AppToplevel):
     def _from_modalities_selection_button_pressed(self):
         logger.info("_from_modalities_selection_button_pressed")
         self.sop_classes.clear()
+        catalog = get_modality_catalog()
         for modality in self.modalities:
-            self.sop_classes += get_modalities()[modality][1]
+            parsed = Modality.from_code(modality)
+            if parsed is None:
+                continue
+            self.sop_classes += list(catalog[parsed].sop_class_uids)
         for item in self._tree.get_children():
             self._tree.item(item, tags="")
             if item in self.sop_classes:

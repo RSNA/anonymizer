@@ -13,20 +13,24 @@ from pathlib import Path
 import numpy as np
 import SimpleITK as sitk
 
-from anonymizer.controller.ai.tseg.seg_retention import (
-    MASK_GEOMETRY_FILENAME,
-    mask_geometry_from_image,
-)
+from anonymizer.controller.ai.tseg.dicom_geometry import build_sitk_volume_from_series_frames, is_stackable_image_header
+from anonymizer.controller.ai.tseg.seg_retention import MASK_GEOMETRY_FILENAME, mask_geometry_from_image
+from anonymizer.controller.annotations.planar_geometry import build_planar_sitk_volume, write_planar_annotation_geometry
 from anonymizer.controller.annotations.store import (
     LABEL_MAP_FILENAME,
     AnnotateSession,
     LabelEntry,
     add_user_label,
+    label_name_taken,
+    labels_path,
     load_annotate_session,
     next_label_color,
     next_label_id,
+    resolve_normative_organ,
     save_annotate_session,
 )
+from anonymizer.controller.series_io import load_series_frames
+from anonymizer.utils.modalities import ContentClass, Modality, get_modality_catalog
 
 logger = logging.getLogger(__name__)
 
@@ -329,17 +333,6 @@ def ensure_series_annotation_geometry(
     if session is not None:
         return session
 
-    from anonymizer.controller.ai.tseg.dicom_geometry import (
-        build_sitk_volume_from_series_frames,
-        is_stackable_image_header,
-    )
-    from anonymizer.controller.annotations.planar_geometry import (
-        build_planar_sitk_volume,
-        write_planar_annotation_geometry,
-    )
-    from anonymizer.controller.annotations.store import labels_path
-    from anonymizer.controller.series_io import load_series_frames
-    from anonymizer.utils.modalities import is_planar_harmonize_modality
 
     series_dir = Path(series_dir)
     loaded = load_series_frames(series_dir)
@@ -348,7 +341,8 @@ def ensure_series_annotation_geometry(
     slice_paths = loaded.slice_paths
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    use_planar = is_planar_harmonize_modality(getattr(metadata, "Modality", None))
+    meta_mod = Modality.from_code(getattr(metadata, "Modality", None))
+    use_planar = meta_mod is not None and get_modality_catalog()[meta_mod].content_class is ContentClass.D2
     wrote = False
     if is_stackable_image_header(metadata) and frames.ndim == 3 and (
         reference_frames is None or frames.shape == loaded.frames.shape
@@ -455,10 +449,6 @@ def _add_label_entry(
     color_bgr: tuple[int, int, int] | None = None,
 ) -> LabelEntry | None:
     """Add a user label, or return None when the name already exists (skip duplicate)."""
-    from anonymizer.controller.annotations.store import (
-        label_name_taken,
-        resolve_normative_organ,
-    )
 
     if label_name_taken(session, name):
         return None

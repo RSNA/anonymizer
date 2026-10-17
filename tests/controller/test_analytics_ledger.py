@@ -10,13 +10,13 @@ import SimpleITK as sitk
 
 from anonymizer.controller.ai.tseg.config import TSEG_CACHE_DIRNAME
 from anonymizer.controller.ai.tseg.seg_retention import (
-    finalize_seg_cache,
     write_primary_segment_voxels,
     write_structure_voxels,
 )
 from anonymizer.controller.analytics.dataset import (
     _collect_tseg_anatomy,
     _series_anatomy_contribution,
+    finalize_seg_cache_with_ledger,
     rebuild_anatomy_ledger,
     upsert_series_ledger_from_cache,
 )
@@ -170,7 +170,7 @@ def test_finalize_upserts_ledger_for_project_series(tmp_path: Path) -> None:
     cache = series_path / TSEG_CACHE_DIRNAME
     seg = cache / "seg"
     _write_brain_mask(seg, 2000)
-    finalize_seg_cache(cache, seg, {"brain": 2000})
+    finalize_seg_cache_with_ledger(cache, seg, {"brain": 2000})
 
     images = tmp_path / "public"
     assert ledger_exists(images)

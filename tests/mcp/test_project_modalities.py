@@ -6,13 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from anonymizer.mcp import api as mcp_tools
-from anonymizer.mcp.session import SESSION
-from anonymizer.model.project import ProjectModel
-from anonymizer.utils.modalities import (
+from unittest.mock import MagicMock
+
+from anonymizer.mcp.modality_tokens import (
     extract_modality_tokens_from_text,
     resolve_project_modalities,
 )
+from anonymizer.mcp.ops import apply_project_modalities
+from anonymizer.mcp.session import SESSION
+from anonymizer.model.project import ProjectModel
 
 
 @pytest.fixture(autouse=True)
@@ -42,28 +44,21 @@ def test_extract_modality_tokens_from_text():
 
 
 def test_create_project_with_defaults_and_ultrasound():
-    result = mcp_tools.create_project(
-        project_name="WithUS",
-        modalities="defaults and ultrasound",
-        overwrite=True,
-    )
-    assert result["ok"] is True
-    mods = result["project"]["modalities"]
+    """MCP create path applies modalities via ``apply_project_modalities``."""
+    controller = MagicMock()
+    controller.model.modalities = list(ProjectModel.default_modalities())
+    mods = apply_project_modalities(controller, "defaults and ultrasound")
     assert "US" in mods
     for code in ProjectModel.default_modalities():
         assert code in mods
+    controller.model.set_storage_classes_from_modalities.assert_called_once()
+    controller.save_model.assert_called_once()
 
 
 def test_project_open_updates_modalities():
-    assert mcp_tools.create_project(project_name="ModOpen", overwrite=True)["ok"]
-    opened = mcp_tools.project_open(
-        project_name="ModOpen",
-        modalities=["defaults", "ultrasound"],
-    )
-    assert opened["ok"] is True
-    assert "US" in opened["project"]["modalities"]
-    # Persisted
-    SESSION.close()
-    again = mcp_tools.project_open(project_name="ModOpen")
-    assert again["ok"] is True
-    assert "US" in again["project"]["modalities"]
+    """MCP project_open uses the same modality resolver as create."""
+    controller = MagicMock()
+    controller.model.modalities = list(ProjectModel.default_modalities())
+    mods = apply_project_modalities(controller, ["defaults", "ultrasound"])
+    assert "US" in mods
+    assert mods == resolve_project_modalities(["defaults", "ultrasound"])

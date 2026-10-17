@@ -6,6 +6,8 @@ from functools import lru_cache
 from importlib import resources
 from pathlib import Path
 
+from anonymizer.mcp.api.catalog import render_tools_api_markdown
+
 _ASSET_NAME = "instructions.md"
 
 
@@ -22,6 +24,5 @@ def load_server_instructions() -> str:
             raise FileNotFoundError(f"MCP instructions asset missing: {path}") from None
         text = path.read_text(encoding="utf-8")
 
-    from anonymizer.mcp.api.catalog import render_tools_api_markdown
 
     return (text.strip() + "\n\n" + render_tools_api_markdown()).strip() + "\n"

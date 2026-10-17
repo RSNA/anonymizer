@@ -35,6 +35,7 @@ from numpy import ndarray
 from PIL import Image
 from pydicom import Dataset
 
+from anonymizer.controller.series_io import load_series_frames
 from anonymizer.controller.series_overlay import OCRText
 from anonymizer.utils.dicom import get_wl_ww
 from anonymizer.utils.windowing import apply_windowing
@@ -256,7 +257,6 @@ def create_projection_from_series(series_path: Path) -> Projection:
 
     logger.debug(f"Create Projection from {series_path.name}")
 
-    from anonymizer.controller.series_io import load_series_frames
 
     loaded = load_series_frames(series_path)
     cache_loaded_series(series_path, loaded)

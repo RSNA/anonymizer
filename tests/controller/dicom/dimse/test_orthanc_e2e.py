@@ -7,10 +7,10 @@ import os
 import pytest
 from pydicom import dcmread
 
-from anonymizer.controller.dicom.requests import MoveStudiesRequest
 from anonymizer.controller.dicom.hierarchies import StudyUIDHierarchy
+from anonymizer.controller.dicom.requests import MoveStudiesRequest
 from anonymizer.controller.project import ProjectController
-from anonymizer.utils.storage import count_studies_series_images
+from anonymizer.utils.storage.dicom_tree import count_studies_series_images
 from tests.controller.dicom.support.helpers import (
     ct_head_paths,
     cxr_paths,

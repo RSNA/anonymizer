@@ -10,6 +10,7 @@ from anonymizer.view.project.dataset import DatasetView
 
 def test_find_dataset_view_parent_returns_index_ancestor() -> None:
     index = MagicMock(spec=DatasetView)
+    index.IS_DATASET_VIEW = True
     child = MagicMock()
     child.master = index
 
@@ -18,6 +19,7 @@ def test_find_dataset_view_parent_returns_index_ancestor() -> None:
 
 def test_return_to_dataset_view_refreshes_and_focuses_index() -> None:
     index = MagicMock(spec=DatasetView)
+    index.IS_DATASET_VIEW = True
     index._update_tree_from_phi_index = MagicMock()
     index.lift = MagicMock()
     index.focus_force = MagicMock()

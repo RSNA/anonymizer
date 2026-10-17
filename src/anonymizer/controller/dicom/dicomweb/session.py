@@ -11,6 +11,7 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 from anonymizer.model.project import DICOMNode, NetworkTimeouts
+from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,6 @@ def probe_connection(node: DICOMNode, timeouts: NetworkTimeouts) -> tuple[bool, 
     Returns ``(success, message)``. HTTP 200/204 count as success; 401/403 as auth failure.
     Honors ``NetworkTimeouts.tcp_connection`` / ``network`` on the HTTP request.
     """
-    from anonymizer.utils.translate import _
 
     if not node.dicomweb:
         return False, _("DICOMweb is not enabled for this node")

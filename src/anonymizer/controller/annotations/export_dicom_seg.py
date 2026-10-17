@@ -8,14 +8,13 @@ from pathlib import Path
 
 import numpy as np
 import SimpleITK as sitk
+from pydicom import dcmread
 from pydicom.dataset import Dataset, FileDataset, FileMetaDataset
 from pydicom.sequence import Sequence
-from pydicom.uid import (
-    ExplicitVRLittleEndian,
-    SegmentationStorage,
-    generate_uid,
-)
+from pydicom.uid import ExplicitVRLittleEndian, SegmentationStorage, generate_uid
 
+from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir
+from anonymizer.controller.annotations.planar_geometry import annotation_source_dicom_paths
 from anonymizer.controller.annotations.store import (
     AnnotateSession,
     LabelEntry,
@@ -75,7 +74,6 @@ def count_exportable_segment_labels(cache_dir: Path) -> int:
 
 def count_patient_exportable_segment_labels(patient_dir: Path) -> int:
     """Sum exportable segment labels across all series under a patient directory."""
-    from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir
 
     patient_dir = Path(patient_dir)
     if not patient_dir.is_dir():
@@ -225,9 +223,7 @@ def _source_refs_from_series(series_dir: Path) -> tuple[Dataset | None, list[Dat
     Uses Series View frame order (stackable slices, or expanded multi-frame / planar
     listing) so ``zi`` aligns with label volume depth.
     """
-    from pydicom import dcmread
 
-    from anonymizer.controller.annotations.planar_geometry import annotation_source_dicom_paths
 
     try:
         paths = annotation_source_dicom_paths(series_dir)

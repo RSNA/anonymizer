@@ -7,27 +7,27 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from anonymizer.utils.storage import (
-    DownloadProgress,
-    any_model_download_active,
-    begin_model_download,
-    count_quarantine_images,
+from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
     default_whitelist_path,
-    end_model_download,
-    get_model_download_progress,
-    is_model_download_active,
     load_default_whitelist,
     load_project_whitelist,
     load_whitelist_from_txt,
-    project_dir_from_series_path,
     project_whitelist_options_path,
     project_whitelist_path,
     save_project_whitelist,
     save_whitelist_to_txt,
+)
+from anonymizer.controller.ai.model_download import (
+    DownloadProgress,
+    any_model_download_active,
+    begin_model_download,
+    end_model_download,
+    get_model_download_progress,
+    is_model_download_active,
     track_tqdm_model_download,
     update_model_download,
 )
-
+from anonymizer.utils.storage.dicom_tree import count_quarantine_images
 
 @pytest.fixture(autouse=True)
 def _clear_progress() -> None:
@@ -127,14 +127,6 @@ def test_whitelist_roundtrip_and_paths(tmp_path: Path) -> None:
     assert default_whitelist_path("CT").name == "ct.txt"
     assert project_whitelist_path(tmp_path, "MR").name == "mr.txt"
     assert project_whitelist_options_path(tmp_path, "US").name.endswith(".options.json")
-
-    series = tmp_path / "public" / "pt" / "study" / "series"
-    series.mkdir(parents=True)
-    assert project_dir_from_series_path(series) == tmp_path
-    shallow = tmp_path / "only"
-    shallow.mkdir()
-    # parents[3] may still resolve; just exercise the call
-    _ = project_dir_from_series_path(shallow)
 
     wl_file = tmp_path / "wl.txt"
     save_whitelist_to_txt(wl_file, ["brain", "LIVER", "brain"])

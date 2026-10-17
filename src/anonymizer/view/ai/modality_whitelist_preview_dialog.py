@@ -14,21 +14,10 @@ from anonymizer.controller.ai.batch_process import (
     format_modality_whitelist_heading,
     modalities_in_selected_studies,
 )
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    OcrWhitelistMatchSettings,
-    describe_match_settings,
-)
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import OcrWhitelistMatchSettings, describe_match_settings
 from anonymizer.utils.translate import _
-from anonymizer.view.ai.features.look import (
-    FEATURE_ACTION_BUTTON_WIDTH,
-    FEATURE_DIALOG_PAD,
-    FEATURE_INTRO_WRAP,
-)
-from anonymizer.view.common.app_window import (
-    AppToplevel,
-    fit_toplevel_to_content,
-    present_toplevel_centered_on_parent,
-)
+from anonymizer.view.ai.features.look import FEATURE_ACTION_BUTTON_WIDTH, FEATURE_DIALOG_PAD, FEATURE_INTRO_WRAP
+from anonymizer.view.common.app_window import AppToplevel, fit_toplevel_to_content, present_toplevel_centered_on_parent
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 
 

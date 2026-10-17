@@ -14,25 +14,24 @@ from pydicom import Dataset, dcmread
 from pydicom.dataelem import DataElement
 from pydicom.dataset import FileMetaDataset
 from pydicom.errors import InvalidDicomError
-from pydicom.pixels.processing import (
-    apply_color_lut,
-    apply_modality_lut,
-    convert_color_space,
-)
+from pydicom.pixels.processing import apply_color_lut, apply_modality_lut, convert_color_space
 from pydicom.sequence import Sequence
 from pydicom.tag import Tag
 from pydicom.uid import ExplicitVRLittleEndian
 
-from anonymizer.controller.ai.tseg.dicom_geometry import (
-    list_dicom_paths,
-    stackable_dicom_paths,
-)
+from anonymizer.controller.ai.tseg.dicom_geometry import list_dicom_paths, stackable_dicom_paths
 
 if TYPE_CHECKING:
     from anonymizer.controller.ai.embedded_phi.metadata.extract import MetadataPhiRow
+from datetime import datetime
+
+from anonymizer.controller.ai.embedded_phi.metadata.series_index import (
+    extract_sop_metadata_rows,
+    unique_metadata_texts,
+)
 from anonymizer.utils.dicom import SUPPORTED_PHOTOMETRIC_INTERPRETATIONS, get_wl_ww
 from anonymizer.utils.memory import log_process_memory
-from anonymizer.utils.storage import get_dcm_files
+from anonymizer.utils.storage.dicom_tree import get_dcm_files
 from anonymizer.utils.version import get_version
 
 logger = logging.getLogger(__name__)
@@ -110,9 +109,6 @@ def load_series_frames(
 ) -> LoadedSeries:
     """Load a DICOM series directory (anatomical frames only, no projections)."""
     # Lazy import: metadata.extract → anonymizer_script must not load at series_io import time.
-    from anonymizer.controller.ai.embedded_phi.metadata.series_index import (
-        unique_metadata_texts,
-    )
 
     logger.info("load_series_frames: %s", series_path)
     metadata, frames, slice_paths, sop_uids, metadata_by_sop = _load_series_frames(
@@ -593,10 +589,6 @@ def _load_series_frames(
         FileNotFoundError: If the series_path does not exist.
         PermissionError: If read permissions are denied.
     """
-    from anonymizer.controller.ai.embedded_phi.metadata.series_index import (
-        extract_sop_metadata_rows,
-        unique_metadata_texts,
-    )
 
     if not series_path.is_dir():
         raise FileNotFoundError(f"Provided path is not a directory: {series_path}")
@@ -871,7 +863,6 @@ def _append_original_attributes(ds: Dataset, modified_attrs: Dataset) -> None:
 
     Does not add private creator tags.
     """
-    from datetime import datetime
 
     now = datetime.now()
     item = Dataset()

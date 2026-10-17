@@ -16,10 +16,11 @@ Submodules
 ``ner.cache``
     OpenMed DeID weight download / readiness.
 
+    - ``NerModelOptions`` — frozen overrides (``model_id``, ``cache_dir``, ``local_files_only``)
     - ``ner_ready()`` → bool
     - ``probe_ner_models()`` → ``(NerModelStatus, message)``
-    - ``download_ner_models(*, locale=\"en_US\")`` → ``(ok, message)``
-    - ``remove_ner_models()``
+    - ``download_ner_models(*, locale=\"en_US\", options=None)`` → ``(ok, message)``
+    - ``remove_ner_models(*, options=None)``
     - ``NerModelStatus`` — ``READY`` / ``MISSING`` / ``DOWNLOADING`` / ``FAILED``
 
 ``ner.synthetic_phi``

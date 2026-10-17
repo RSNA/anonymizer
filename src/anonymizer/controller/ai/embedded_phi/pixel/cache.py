@@ -11,7 +11,7 @@ from easyocr import Reader
 
 from anonymizer.utils.network import ensure_ssl_certifi
 from anonymizer.utils.package_paths import ai_feature_dir
-from anonymizer.utils.storage import update_model_download
+from anonymizer.controller.ai.model_download import update_model_download
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)

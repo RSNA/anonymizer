@@ -7,16 +7,15 @@ call sites that omit ``profile`` keep identical behavior.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
-from pydicom import Dataset
+from pydicom import Dataset, dcmread
 
-from anonymizer.controller.ai.tseg.config import (
-    FACE_MASK_FILENAME,
-    FACE_TASK,
-    ROI_SUBSET,
-)
-from anonymizer.utils.modalities import normalize_modality
+from anonymizer.controller.ai.tseg.config import FACE_MASK_FILENAME, FACE_TASK, ROI_SUBSET, STRUCTURE_TO_REGION
+from anonymizer.controller.ai.tseg.dicom_geometry import sorted_dicom_paths
+from anonymizer.controller.ai.tseg.model_cache import harmonize_anatomy_task_ids, mr_anatomy_task_ids
+from anonymizer.utils.modalities import Modality
 
 FaceFillMode = Literal["hu_band", "intensity_percentile"]
 
@@ -77,13 +76,11 @@ class TsegModalityProfile:
 
 def _ct_structure_to_region() -> dict[str, str]:
     # Lazy import: avoid circular import with segment.py (which may take a profile).
-    from anonymizer.controller.ai.tseg.segment import STRUCTURE_TO_REGION
 
     return dict(STRUCTURE_TO_REGION)
 
 
 def _mr_structure_to_region() -> dict[str, str]:
-    from anonymizer.controller.ai.tseg.segment import STRUCTURE_TO_REGION
 
     merged = dict(STRUCTURE_TO_REGION)
     merged.update(STRUCTURE_TO_REGION_MR_EXTRA)
@@ -173,7 +170,6 @@ def mr_structure_to_region_for_series(ds: Dataset | None) -> dict[str, str]:
 
 def ct_modality_profile() -> TsegModalityProfile:
     """Return the production CT profile (must stay bit-identical to pre-MR defaults)."""
-    from anonymizer.controller.ai.tseg.model_cache import harmonize_anatomy_task_ids
 
     return TsegModalityProfile(
         modality="CT",
@@ -191,7 +187,6 @@ def ct_modality_profile() -> TsegModalityProfile:
 
 
 def mr_modality_profile() -> TsegModalityProfile:
-    from anonymizer.controller.ai.tseg.model_cache import mr_anatomy_task_ids
 
     return TsegModalityProfile(
         modality="MR",
@@ -208,16 +203,16 @@ def mr_modality_profile() -> TsegModalityProfile:
     )
 
 
-def profile_for_modality(value: object | None) -> TsegModalityProfile | None:
+def profile_for_modality(value: str | Modality | None) -> TsegModalityProfile | None:
     """
     Resolve a TSEG modality profile.
 
-    Returns None for unsupported modalities (US, XR, …).
+    Returns None for unsupported modalities (US, XR, PT, …).
     """
-    code = normalize_modality(value)
-    if code == "CT":
+    modality = value if isinstance(value, Modality) else Modality.from_code(value)
+    if modality is Modality.CT:
         return ct_modality_profile()
-    if code == "MR":
+    if modality is Modality.MR:
         return mr_modality_profile()
     return None
 
@@ -237,11 +232,7 @@ def resolve_profile_for_series(series_directory: object) -> TsegModalityProfile 
 
 def load_series_header_dataset(series_directory: object) -> Dataset | None:
     """Read the first stackable DICOM header in a series directory."""
-    from pathlib import Path
 
-    from pydicom import dcmread
-
-    from anonymizer.controller.ai.tseg.dicom_geometry import sorted_dicom_paths
 
     try:
         paths = sorted_dicom_paths(Path(series_directory))

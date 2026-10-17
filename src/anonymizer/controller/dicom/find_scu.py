@@ -10,11 +10,7 @@ from pydicom import Dataset
 from pynetdicom.status import QR_FIND_SERVICE_CLASS_STATUS
 
 from anonymizer.controller.dicom import dicomweb as dicomweb_api
-from anonymizer.controller.dicom.hierarchies import (
-    InstanceUIDHierarchy,
-    SeriesUIDHierarchy,
-    StudyUIDHierarchy,
-)
+from anonymizer.controller.dicom.hierarchies import InstanceUIDHierarchy, SeriesUIDHierarchy, StudyUIDHierarchy
 from anonymizer.controller.dicom.requests import FindStudyRequest, FindStudyResponse
 from anonymizer.model.project import DICOMRuntimeError
 from anonymizer.utils.dicom import C_FAILURE, C_PENDING_A, C_PENDING_B, C_SUCCESS

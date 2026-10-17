@@ -64,15 +64,15 @@ def test_study_harmonize_status_delegates_to_anon_model(
     mock_load: MagicMock,
 ) -> None:
     anon_model = MagicMock()
-    anon_model.study_is_harmonized.return_value = True
+    anon_model.study_all_series_harmonized.return_value = True
     assert study_harmonize_status(anon_model, "anon_study") is True
-    anon_model.study_is_harmonized.assert_called_once_with("anon_study")
+    anon_model.study_all_series_harmonized.assert_called_once_with("anon_study")
     mock_load.assert_not_called()
 
     anon_model.reset_mock()
-    anon_model.study_is_harmonized.return_value = False
+    anon_model.study_all_series_harmonized.return_value = False
     assert study_harmonize_status(anon_model, "anon_study") is False
-    anon_model.study_is_harmonized.assert_called_once_with("anon_study")
+    anon_model.study_all_series_harmonized.assert_called_once_with("anon_study")
     mock_load.assert_not_called()
 
 

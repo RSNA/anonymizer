@@ -8,7 +8,7 @@ from pathlib import Path
 
 from anonymizer.controller.project import ProjectController
 from anonymizer.model.project import DICOMNode, ProjectModel
-from anonymizer.utils.storage import list_import_directory_files
+from anonymizer.utils.storage.dicom_tree import list_import_directory_files
 from anonymizer.utils.translate import get_current_language_code
 
 logger = logging.getLogger(__name__)
@@ -68,14 +68,15 @@ def discover_imported_fixtures(images_dir: Path) -> set[str]:
 def create_capture_project(storage_dir: Path, *, project_name: str = "HelpScreenshots") -> Path:
     """Create a ProjectModel.json under ``storage_dir`` and return the project directory."""
     storage_dir.mkdir(parents=True, exist_ok=True)
-    (storage_dir / "private").mkdir(exist_ok=True)
-    (storage_dir / "public").mkdir(exist_ok=True)
 
     port = preferred_scp_port()
     model = ProjectModel()
     model.language_code = get_current_language_code()
     model.project_name = project_name
     model.storage_dir = storage_dir
+    # Match ProjectModel path policy: translated private/*, ASCII public (images).
+    storage_dir.joinpath(model.PRIVATE_DIR).mkdir(exist_ok=True)
+    storage_dir.joinpath(model.PUBLIC_DIR).mkdir(exist_ok=True)
     # Help demos include ultrasound (blend Remove Text) as well as CR/DX/CT/MR.
     if "US" not in model.modalities:
         model.modalities = list(model.modalities) + ["US"]

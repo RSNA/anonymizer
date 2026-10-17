@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from pydicom import Dataset
 
-from anonymizer.model.anonymizer import AnonymizerModel, LookupPatient
+from anonymizer.model.anonymizer import AnonymizerModel, CtpLookupPhiRow
 from tests.opened_anonymizer_model import opened_anonymizer_model
 
 TEST_DB_DIALECT = "sqlite"
@@ -43,9 +43,9 @@ def mock_dataset() -> Dataset:
     return ds
 
 
-def _enable_lookup(model: AnonymizerModel, rows: list[LookupPatient]) -> None:
+def _enable_lookup(model: AnonymizerModel, rows: list[CtpLookupPhiRow]) -> None:
     model._lookup_required = True
-    model.replace_lookup_patients(rows)
+    model.upsert_ctp_lookup_phi(rows)
 
 
 def test_capture_phi_non_lookup_uses_hash_date_offset(anonymizer_model: AnonymizerModel, mock_dataset: Dataset) -> None:
@@ -66,7 +66,7 @@ def test_capture_phi_lookup_with_date_offset_uses_lookup_value(
 ) -> None:
     _enable_lookup(
         anonymizer_model,
-        [LookupPatient(patient_id="123456", anon_patient_id="LOOKUP-001", date_offset=127)],
+        [CtpLookupPhiRow(patient_id="123456", anon_patient_id="LOOKUP-001", date_offset=127)],
     )
 
     _, anon_ptid, _, date_offset = anonymizer_model.capture_phi(
@@ -80,6 +80,7 @@ def test_capture_phi_lookup_with_date_offset_uses_lookup_value(
     assert phi.date_offset == 127
     assert date_offset == 127
     assert study.anon_date_delta == 127
+    assert phi.patient_name == "Doe^John"
 
 
 def test_capture_phi_lookup_without_date_offset_falls_back_to_hash(
@@ -87,7 +88,7 @@ def test_capture_phi_lookup_without_date_offset_falls_back_to_hash(
 ) -> None:
     _enable_lookup(
         anonymizer_model,
-        [LookupPatient(patient_id="123456", anon_patient_id="LOOKUP-001", date_offset=None)],
+        [CtpLookupPhiRow(patient_id="123456", anon_patient_id="LOOKUP-001", date_offset=None)],
     )
     hash_offset = 55
 
@@ -108,7 +109,7 @@ def test_capture_phi_second_study_reuses_phi_date_offset(
 ) -> None:
     _enable_lookup(
         anonymizer_model,
-        [LookupPatient(patient_id="123456", anon_patient_id="LOOKUP-001", date_offset=127)],
+        [CtpLookupPhiRow(patient_id="123456", anon_patient_id="LOOKUP-001", date_offset=127)],
     )
 
     anonymizer_model.capture_phi(source="pytest", ds=mock_dataset, date_offset_from_hash=42)
@@ -143,7 +144,7 @@ def test_capture_phi_existing_phi_skips_lookup_requirement(
     """Already-captured patients are not re-checked against the lookup table."""
     anonymizer_model.capture_phi(source="pytest", ds=mock_dataset, date_offset_from_hash=33)
     anonymizer_model._lookup_required = True
-    # No LookupPatient rows — would KeyError for a new patient.
+    # No CTP lookup PHI for other patients — would KeyError for a new patient.
 
     second = deepcopy(mock_dataset)
     second.StudyInstanceUID = "1.2.840.113619.2.5.1762583153.17482.978957064.4"
@@ -188,3 +189,20 @@ def test_load_script_sets_lookup_required(anonymizer_model: AnonymizerModel, tmp
     anonymizer_model.reload_script(lookup_script)
 
     assert anonymizer_model._lookup_required is True
+
+
+def test_upsert_ctp_lookup_phi_sets_base_date(anonymizer_model: AnonymizerModel) -> None:
+    anonymizer_model.upsert_ctp_lookup_phi(
+        [
+            CtpLookupPhiRow(
+                patient_id="MRN1",
+                anon_patient_id="SITE-1",
+                date_offset=None,
+                base_date="20180327",
+            )
+        ]
+    )
+    phi = anonymizer_model.get_phi_by_phi_patient_id("MRN1")
+    assert phi is not None
+    assert phi.base_date == "20180327"
+    assert phi.anon_patient_id == "SITE-1"

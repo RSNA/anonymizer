@@ -10,12 +10,12 @@ from pydicom.dataset import Dataset
 import tests.controller.dicom.support.pacs_simulator_scp as pacs_simulator_scp
 from anonymizer.controller.dicom.requests import MoveStudiesRequest
 from anonymizer.controller.project import ProjectController
-from anonymizer.utils.storage import count_studies_series_images
+from anonymizer.utils.storage.dicom_tree import count_studies_series_images
 from tests.controller.dicom.support.helpers import send_file_to_scp
 from tests.controller.dicom.support.test_files import (
+    ct_small_filename,
     ct_small_SeriesInstanceUID,
     ct_small_StudyInstanceUID,
-    ct_small_filename,
     patient3_id,
 )
 from tests.controller.dicom.support.test_nodes import LocalStorageSCP, PACSSimulatorSCP

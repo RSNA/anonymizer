@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+from pydicom import dcmread
+
 from anonymizer.controller.ai.harmonize.playbook import (
     ANATOMIC_PLANE_PLAYBOOK_CODES,
     BODY_PART_PLAYBOOK_CODES,
@@ -21,6 +23,14 @@ from anonymizer.controller.ai.harmonize.playbook import (
     SERIES_TYPE_PLAYBOOK_CODES,
     SLICE_THICKNESS_PLAYBOOK_CODES,
     VIEW_PLAYBOOK_CODES,
+)
+from anonymizer.controller.ai.tseg.dicom_geometry import list_dicom_paths
+from anonymizer.controller.ai.tseg.modality_profile import ct_modality_profile, resolve_profile_for_series
+from anonymizer.controller.ai.tseg.segment import (
+    _segmentation_cache_valid,
+    collect_structure_voxels,
+    dominant_region_from_voxels,
+    series_cache_dir,
 )
 from anonymizer.utils.translate import get_current_language_code
 
@@ -241,6 +251,26 @@ def load_loinc_study_descriptions(csv_path: str | None = None) -> tuple[tuple[st
     return tuple(rows)
 
 
+def long_common_name_for_loinc(loinc_number: str, *, csv_path: str | None = None) -> str | None:
+    """
+    Resolve a LOINC number to its LongCommonName from the study catalog.
+
+    Args:
+        loinc_number: LOINC code (e.g. ``41806-1``).
+        csv_path: Optional override path for the LOINC StudyDescription CSV.
+
+    Returns:
+        LongCommonName, or None when the code is unknown.
+    """
+    code = (loinc_number or "").strip()
+    if not code:
+        return None
+    for catalog_code, name in load_loinc_study_descriptions(csv_path):
+        if catalog_code == code:
+            return name
+    return None
+
+
 def load_ct_loinc_study_descriptions(csv_path: str | None = None) -> tuple[tuple[str, str], ...]:
     return load_loinc_study_descriptions_for_prefix("CT ", csv_path=csv_path)
 
@@ -265,13 +295,13 @@ def study_series_description_fingerprint(descriptions: list[str] | tuple[str, ..
 
 def fingerprint_for_harmonized_study(anon_model, anon_study_uid: str) -> tuple[str, ...]:
     """Fingerprint of harmonized CT|MR series descriptions stored for a study."""
-    return study_series_description_fingerprint(anon_model.get_ct_series_harmonized_descriptions(anon_study_uid))
+    return study_series_description_fingerprint(anon_model.get_3d_series_harmonized_descriptions(anon_study_uid))
 
 
 def fingerprint_for_planar_harmonized_study(anon_model, anon_study_uid: str) -> tuple[str, ...]:
     """Fingerprint of harmonized XR/US/MG series descriptions stored for a study."""
     return study_series_description_fingerprint(
-        anon_model.get_planar_series_harmonized_descriptions(anon_study_uid)
+        anon_model.get_2d_series_harmonized_descriptions(anon_study_uid)
     )
 
 
@@ -385,16 +415,6 @@ def _sort_anatomy(parts: Sequence[str]) -> tuple[str, ...]:
 
 def series_region_voxel_counts(series_path: Path) -> dict[str, int]:
     """Return TS region voxel counts from the series seg cache, or empty if unavailable."""
-    from anonymizer.controller.ai.tseg.modality_profile import (
-        ct_modality_profile,
-        resolve_profile_for_series,
-    )
-    from anonymizer.controller.ai.tseg.segment import (
-        _segmentation_cache_valid,
-        collect_structure_voxels,
-        dominant_region_from_voxels,
-        series_cache_dir,
-    )
 
     series_path = Path(series_path)
     profile = resolve_profile_for_series(series_path) or ct_modality_profile()
@@ -1103,9 +1123,7 @@ def loinc_declared_view_count(long_common_name: str) -> int | None:
 
 def count_planar_series_images(series_directory: Path) -> int:
     """Count image instances in a series folder (files × NumberOfFrames when set)."""
-    from pydicom import dcmread
 
-    from anonymizer.controller.ai.tseg.dicom_geometry import list_dicom_paths
 
     series_directory = Path(series_directory)
     if not series_directory.is_dir():

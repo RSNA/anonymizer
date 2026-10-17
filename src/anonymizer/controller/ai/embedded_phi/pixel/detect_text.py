@@ -35,12 +35,13 @@ if TYPE_CHECKING:
 
 from anonymizer.controller.ai.embedded_phi.ner.cache import ner_ready
 from anonymizer.controller.ai.embedded_phi.ner.engine import detect_entities, detect_locale_supported
+from anonymizer.controller.ai.embedded_phi.term_similarity import similarity_term_match
 from anonymizer.controller.series_io import (
     stored_monochrome_to_series_buffer,
 )
 from anonymizer.controller.series_overlay import OCRText, UserRectangle
 from anonymizer.utils.dicom import get_wl_ww
-from anonymizer.utils.storage import (
+from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
     load_default_whitelist,
     load_project_whitelist,
     project_whitelist_options_path,
@@ -443,7 +444,6 @@ def find_whitelist_match(
     similarity_threshold: float,
     min_length_ratio: float = OCR_WHITELIST_MIN_LENGTH_RATIO,
 ) -> WhitelistMatchResult:
-    from anonymizer.controller.ai.embedded_phi.term_similarity import similarity_term_match
 
     hit = similarity_term_match(
         text,

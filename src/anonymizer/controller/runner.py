@@ -11,11 +11,7 @@ from typing import Callable, Protocol
 from easyocr import Reader
 
 from anonymizer.controller.ai.embedded_phi.ner.cache import download_ner_models
-from anonymizer.controller.ai.embedded_phi.pixel.cache import (
-    OCR_LANGS,
-    OCR_MODEL_DIR,
-    download_ocr_models,
-)
+from anonymizer.controller.ai.embedded_phi.pixel.cache import OCR_LANGS, OCR_MODEL_DIR, download_ocr_models
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     OcrWhitelistMatchSettings,
     detect_text,
@@ -23,11 +19,10 @@ from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     load_modality_whitelist_match_settings,
     ocr_image_for_frame,
 )
-from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
-    _ocr_use_gpu,
-    remove_pixel_phi,
-)
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import _ocr_use_gpu, remove_pixel_phi
 from anonymizer.controller.ai.feature_availability import embedded_phi_has_models
+from anonymizer.controller.ai.tseg.contrast import release_working_memory
+from anonymizer.controller.ai.tseg.model_cache import clear_predictor_cache, preload_face_models, tseg_batch_session
 from anonymizer.controller.series_io import load_series_frames
 from anonymizer.controller.series_overlay import OCRText
 from anonymizer.controller.work_state import WorkState
@@ -394,7 +389,6 @@ class HarmonizeRunner:
     """Batch harmonize phase: owns TotalSegmentator session for the algorithm pass."""
 
     def enter_models(self) -> ModelHandle:
-        from anonymizer.controller.ai.tseg.model_cache import tseg_batch_session
 
         logger.info("HarmonizeRunner.enter_models")
         session = tseg_batch_session(preload=True)
@@ -402,7 +396,6 @@ class HarmonizeRunner:
         return ModelHandle(_extra={"tseg_session": session})
 
     def exit_models(self, handle: ModelHandle) -> None:
-        from anonymizer.controller.ai.tseg.contrast import release_working_memory
 
         logger.info("HarmonizeRunner.exit_models")
         session = handle._extra.pop("tseg_session", None)
@@ -418,7 +411,6 @@ class FaceBlurRunner:
     """Batch face-blur phase: owns face-segmentation model preload for the algorithm pass."""
 
     def enter_models(self) -> ModelHandle:
-        from anonymizer.controller.ai.tseg.model_cache import preload_face_models, tseg_batch_session
 
         logger.info("FaceBlurRunner.enter_models")
         session = tseg_batch_session(preload=False)
@@ -427,8 +419,6 @@ class FaceBlurRunner:
         return ModelHandle(_extra={"tseg_session": session})
 
     def exit_models(self, handle: ModelHandle) -> None:
-        from anonymizer.controller.ai.tseg.contrast import release_working_memory
-        from anonymizer.controller.ai.tseg.model_cache import clear_predictor_cache
 
         logger.info("FaceBlurRunner.exit_models")
         session = handle._extra.pop("tseg_session", None)

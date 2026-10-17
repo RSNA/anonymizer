@@ -40,6 +40,10 @@ from anonymizer.controller.ai.embedded_phi.metadata.iod_allowlist import load_di
 
 if TYPE_CHECKING:
     from dicom_validator.validator.dicom_info import DicomInfo
+from dicom_validator.validator.error_handler import NullValidationResultHandler
+from dicom_validator.validator.iod_validator import IODValidator
+from dicom_validator.validator.validation_result import ErrorCode, Status
+from pydicom.datadict import keyword_for_tag
 
 logger = logging.getLogger(__name__)
 
@@ -218,9 +222,6 @@ def detect_iod_qc(
     dicom_info: DicomInfo | None = None,
 ) -> QcInstanceReport:
     """Detect curated IOD QC issues on one dataset (header-only is fine)."""
-    from dicom_validator.validator.error_handler import NullValidationResultHandler
-    from dicom_validator.validator.iod_validator import IODValidator
-    from dicom_validator.validator.validation_result import Status
 
     info = dicom_info if dicom_info is not None else load_dicom_info()
     sop_uid = str(getattr(ds, "SOPInstanceUID", "") or "").strip()
@@ -474,7 +475,6 @@ def _issue(
 
 
 def _kind_from_error_code(code: object) -> QcErrorKind | None:
-    from dicom_validator.validator.validation_result import ErrorCode
 
     mapping = {
         ErrorCode.TagMissing: QcErrorKind.TAG_MISSING,
@@ -511,7 +511,6 @@ def _tag_token(tag: object) -> str:
     if tag is None:
         return ""
     try:
-        from pydicom.datadict import keyword_for_tag
 
         kw = keyword_for_tag(tag)
         if kw:

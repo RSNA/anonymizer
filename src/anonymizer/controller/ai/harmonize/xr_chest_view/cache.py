@@ -13,8 +13,9 @@ from pathlib import Path
 
 import requests
 
+from anonymizer.controller.ai.harmonize.model_slot import ModelSlot
 from anonymizer.utils.package_paths import ai_feature_dir
-from anonymizer.utils.storage import update_model_download
+from anonymizer.controller.ai.model_download import update_model_download
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
@@ -39,6 +40,14 @@ _PARAMS_URL = f"{_HF_BASE}/parameters.json"
 DOWNLOAD_ID = "harmonize_cxr_view"
 
 _downloading = False
+
+# Loaded weights live here (not in ``predict``) so download/remove can clear without importing inference.
+MODEL_SLOT: ModelSlot = ModelSlot(label="CXp view")
+
+
+def clear_model_cache() -> None:
+    """Drop in-memory weights (after remove/download)."""
+    MODEL_SLOT.clear()
 
 
 class XrChestViewModelStatus(StrEnum):
@@ -115,7 +124,6 @@ def download_xr_chest_view_models(*, verbose: bool = False) -> tuple[bool, str]:
             _download_file(_PARAMS_URL, XR_CHEST_VIEW_PARAMS_PATH, label="parameters.json")
         except Exception:
             logger.warning("Optional XR chest view parameters.json download failed", exc_info=True)
-        from anonymizer.controller.ai.harmonize.xr_chest_view.predict import clear_model_cache
 
         clear_model_cache()
         _downloading = False
@@ -135,7 +143,6 @@ download_cxp_view_models = download_xr_chest_view_models
 
 
 def remove_xr_chest_view_models() -> None:
-    from anonymizer.controller.ai.harmonize.xr_chest_view.predict import clear_model_cache
 
     if XR_CHEST_VIEW_DIR.is_dir():
         shutil.rmtree(XR_CHEST_VIEW_DIR)

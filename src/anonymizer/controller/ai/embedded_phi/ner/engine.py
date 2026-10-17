@@ -51,6 +51,14 @@ from anonymizer.controller.ai.embedded_phi.ner.cache import (
 )
 from anonymizer.controller.ai.embedded_phi.ner.synthetic_phi import generate_synthetic_phi
 
+try:
+    import torch  # noqa: F401
+except ImportError:
+    torch = None  # type: ignore[assignment,misc]
+try:
+    import transformers  # noqa: F401
+except ImportError:
+    transformers = None  # type: ignore[assignment,misc]
 logger = logging.getLogger(__name__)
 
 SCORED_LABELS = (
@@ -664,14 +672,6 @@ def _ensure_pipeline(locale: str):
     model_id = resolve_model_id(locale)
     if _PIPE is not None and model_id == _PIPE_MODEL_ID:
         return _PIPE
-    try:
-        import torch  # noqa: F401
-        import transformers  # noqa: F401
-    except ImportError as exc:
-        _PIPE_ERROR = f"transformers/torch not installed: {exc}"
-        logger.error("ner: %s", _PIPE_ERROR)
-        _PIPE = None
-        return None
     try:
         _PIPE = load_token_classification_pipeline(model_id)
         _PIPE_MODEL_ID = model_id

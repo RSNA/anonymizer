@@ -10,17 +10,17 @@ from pydicom import Dataset
 from pydicom.dataset import FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian
 
-from anonymizer.controller.ai.harmonize.xr_chest_view.cache import (
-    CxpViewModelStatus,
-    download_cxp_view_models,
-    probe_cxp_view_models,
-    remove_cxp_view_models,
-)
 from anonymizer.controller.ai.harmonize.xp_bodypart.cache import (
     XpBodypartModelStatus,
     download_xp_bodypart_models,
     probe_xp_bodypart_models,
     remove_xp_bodypart_models,
+)
+from anonymizer.controller.ai.harmonize.xr_chest_view.cache import (
+    CxpViewModelStatus,
+    download_cxp_view_models,
+    probe_cxp_view_models,
+    remove_cxp_view_models,
 )
 from anonymizer.controller.ai.tseg.readiness import (
     anatomy_ct_ready,
@@ -139,7 +139,7 @@ def test_cxp_and_xp_cache_probe_and_fake_download(tmp_path: Path, monkeypatch: p
 
     monkeypatch.setattr(cxp_mod, "_download_file", _fake_dl)
     monkeypatch.setattr(
-        "anonymizer.controller.ai.harmonize.xr_chest_view.predict.clear_model_cache",
+        "anonymizer.controller.ai.harmonize.xr_chest_view.cache.clear_model_cache",
         lambda: None,
     )
     missing = tmp_path / "missing.pt"
@@ -168,7 +168,7 @@ def test_cxp_and_xp_cache_probe_and_fake_download(tmp_path: Path, monkeypatch: p
 
     monkeypatch.setattr(xp_mod, "_download_file", _fake_dl)
     monkeypatch.setattr(
-        "anonymizer.controller.ai.harmonize.xp_bodypart.predict.clear_model_cache",
+        "anonymizer.controller.ai.harmonize.xp_bodypart.cache.clear_model_cache",
         lambda: None,
     )
     # XP download probes while _downloading is still True → may report incomplete; still covers path

@@ -7,7 +7,12 @@ from dataclasses import dataclass, replace
 
 from pydicom import Dataset
 
-from anonymizer.controller.ai.tseg.config import MIN_STRUCTURE_VOXELS
+from anonymizer.controller.ai.harmonize.profile_2d import profile_2d_from_dataset
+from anonymizer.controller.ai.tseg.config import (
+    MIN_STRUCTURE_VOXELS,
+    segmentation_mode_display,
+    segmentation_mode_for_modality,
+)
 from anonymizer.controller.ai.tseg.dicom_geometry import (
     MPR_KEYWORDS,
     RENDER_KEYWORDS,
@@ -16,12 +21,17 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
     SeriesGeometryResult,
     dimensionality_label,
     format_geometry_summary,
+    geometry_skip_reason_label,
     plane_label,
     provenance_label,
 )
-from anonymizer.controller.ai.tseg.segment import TS_result, anatomy_metadata_fallback_allowed
+from anonymizer.controller.ai.tseg.segment import (
+    TS_result,
+    anatomy_metadata_fallback_allowed,
+    format_anatomy_regions_summary,
+)
 from anonymizer.controller.ai.tseg.series_classification import metadata_diagnostic_fallback_allowed
-from anonymizer.utils.modalities import is_mr_modality
+from anonymizer.utils.modalities import Modality
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
@@ -561,7 +571,6 @@ def _playbook_body_part_evidence(
     geometry: SeriesGeometryResult | None = None,
 ) -> str:
     if tseg is not None and tseg.body_parts_present.strip() and tseg.error is None:
-        from anonymizer.controller.ai.tseg.segment import format_anatomy_regions_summary
 
         return format_anatomy_regions_summary(tseg)
     if attributes is not None:
@@ -1059,7 +1068,7 @@ def _metadata_route_for_series_type(series_type_code: str, ds: Dataset) -> Metad
     return MetadataHarmonizeRoute(
         series_type_code,
         include_plane=True,
-        iv_contrast_from_dicom=is_mr_modality(ds.get("Modality")),
+        iv_contrast_from_dicom=Modality.from_code(ds.get("Modality")) is Modality.MR,
     )
 
 
@@ -1089,7 +1098,7 @@ def resolve_metadata_harmonize_route(
         return MetadataHarmonizeRoute(
             "",
             include_plane=True,
-            iv_contrast_from_dicom=is_mr_modality(ds.get("Modality")),
+            iv_contrast_from_dicom=Modality.from_code(ds.get("Modality")) is Modality.MR,
         )
 
     if (
@@ -1108,7 +1117,7 @@ def resolve_metadata_harmonize_route(
         return MetadataHarmonizeRoute(
             "",
             include_plane=True,
-            iv_contrast_from_dicom=is_mr_modality(ds.get("Modality")),
+            iv_contrast_from_dicom=Modality.from_code(ds.get("Modality")) is Modality.MR,
         )
     return None
 
@@ -1317,7 +1326,7 @@ def build_playbook_attributes(
     anatomic_plane_code = map_anatomic_plane_code(geometry)
     series_type_code = map_series_type_code(ds, geometry)
 
-    if ds is not None and is_mr_modality(ds.get("Modality")):
+    if ds is not None and Modality.from_code(ds.get("Modality")) is Modality.MR:
         iv_contrast_code, _evidence = map_mr_iv_contrast_from_dicom(ds)
         attributes = PlaybookHarmonizeAttributes(
             body_part_code=body_part_code,
@@ -1466,9 +1475,8 @@ def harmonize_dicom_rows(ds: Dataset) -> list[tuple[str, str, str]]:
     Volumetric CT/MR and planar XR/US/MG use different inputs; unused modality
     fields (e.g. View Position on CT, Slice Thickness on CXR) are omitted.
     """
-    from anonymizer.controller.ai.harmonize.planar_profile import planar_profile_from_dataset
 
-    planar = planar_profile_from_dataset(ds)
+    profile_2d = profile_2d_from_dataset(ds)
 
     # Shared identity / text fields consulted by keyword mappers.
     common_head = [
@@ -1479,13 +1487,13 @@ def harmonize_dicom_rows(ds: Dataset) -> list[tuple[str, str, str]]:
         _dicom_row(ds, _("Body Part Examined"), "(0018,0015)", "BodyPartExamined"),
     ]
 
-    if planar is not None:
+    if profile_2d is not None:
         rows = list(common_head)
         rows.append(_dicom_row(ds, _("Image Laterality"), "(0020,0062)", "ImageLaterality"))
         rows.append(_dicom_row(ds, _("Laterality"), "(0020,0060)", "Laterality"))
-        # All planar cohorts search ViewPosition via the metadata keyword blob.
+        # All 2D playbooks search ViewPosition via the metadata keyword blob.
         rows.append(_dicom_row(ds, _("View Position"), "(0018,5101)", "ViewPosition"))
-        if planar.cohort == "MG":
+        if Modality.MG in profile_2d.modalities:
             rows.append(
                 (_("View Code Sequence"), "(0054,0220)", _view_code_sequence_display(ds))
             )
@@ -1508,10 +1516,6 @@ def harmonize_dicom_rows(ds: Dataset) -> list[tuple[str, str, str]]:
 
 def _totalsegmentator_anatomy_source(*, ds: Dataset | None = None) -> str:
     """Body Part source label including the active workstation resolution."""
-    from anonymizer.controller.ai.tseg.config import (
-        segmentation_mode_display,
-        segmentation_mode_for_modality,
-    )
 
     modality = getattr(ds, "Modality", None) if ds is not None else None
     resolution = segmentation_mode_display(segmentation_mode_for_modality(modality))
@@ -1571,7 +1575,6 @@ def playbook_plane_row_values(
     code = anatomic_plane_code or map_anatomic_plane_code(geometry)
     evidence = format_geometry_summary(geometry)
     if not geometry.ts_suitable:
-        from anonymizer.controller.ai.tseg.dicom_geometry import geometry_skip_reason_label
 
         evidence = f"{evidence} — {geometry_skip_reason_label(geometry)}"
     return (
@@ -1593,7 +1596,7 @@ def playbook_iv_contrast_row_values(
     ds: Dataset | None = None,
 ) -> tuple[str, str, str, str, str]:
     """Playbook table row for IV contrast (CT phase classifier or MR DICOM headers)."""
-    if ds is not None and is_mr_modality(ds.get("Modality")):
+    if ds is not None and Modality.from_code(ds.get("Modality")) is Modality.MR:
         if attributes is not None:
             code = attributes.iv_contrast_code
             evidence = map_mr_iv_contrast_from_dicom(ds)[1]

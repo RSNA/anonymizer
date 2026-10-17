@@ -4,63 +4,50 @@ from __future__ import annotations
 
 import json
 import logging
-import sys
+import shutil
 from collections.abc import Callable
-from enum import StrEnum
 from pathlib import Path
 
+from totalsegmentator.config import get_license_number, get_totalseg_dir, is_valid_license, setup_nnunet, setup_totalseg
+from totalsegmentator.nnunet import get_output_folder
+
+from anonymizer.controller.ai.tseg.config import ENABLE_TS_CONTRAST, normalize_segmentation_mode
+from anonymizer.controller.ai.tseg.contrast import verify_xgboost_runtime
+from anonymizer.controller.ai.tseg.model_cache import (
+    clear_predictor_cache,
+    ct_anatomy_task_ids_for_mode,
+    download_segmentation_model_weights,
+    face_task_ids,
+    harmonize_ts_task_ids,
+    installed_ct_segmentation_modes,
+    installed_mr_segmentation_modes,
+    mr_anatomy_task_ids,
+    mr_anatomy_task_ids_for_mode,
+    mr_face_task_ids,
+    resolve_harmonize_model_folder,
+)
+from anonymizer.controller.ai.tseg.ts_probe import (
+    TSEG_INSTALL_HINT,
+    TsWeightKind,
+    checkpoint_ready,
+    totalsegmentator_available,
+    verify_face_license,
+)
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 
-_TSEG_INSTALL_HINT = "pip install rsna-anonymizer"
 _TS_ACADEMIC_LICENSE_URL = "https://backend.totalsegmentator.com/license-academic/"
-_CHECKPOINT_NAME = "checkpoint_final.pth"
 _PLANS = "nnUNetPlans"
 _MODEL = "3d_fullres"
-
-
-class TsWeightKind(StrEnum):
-    ANATOMY = "anatomy"  # CT Harmonize (total + contrast)
-    ANATOMY_MR = "anatomy_mr"  # MR Harmonize (total_mr)
-    FACE = "face"  # CT Face Blur
-    FACE_MR = "face_mr"  # MR Face Blur
-    BRAIN_STRUCTURES = "brain_structures"
 
 
 def ts_academic_license_url() -> str:
     return _TS_ACADEMIC_LICENSE_URL
 
 
-def totalsegmentator_available() -> bool:
-    """True when the TotalSegmentator package is installed and importable."""
-    import importlib
-    import importlib.metadata as md
-    import importlib.util
-
-    try:
-        md.version("totalsegmentator")
-    except md.PackageNotFoundError:
-        return False
-
-    saved_path = sys.path
-    try:
-        sys.path = [entry for entry in sys.path if entry not in ("", ".")]
-        spec = importlib.util.find_spec("totalsegmentator")
-        if spec is None or spec.loader is None:
-            return False
-        importlib.import_module("totalsegmentator")
-    except ImportError as exc:
-        logger.debug("TotalSegmentator import check failed: %s", exc)
-        return False
-    finally:
-        sys.path = saved_path
-    return True
-
-
 def xgboost_available() -> bool:
     try:
-        from anonymizer.controller.ai.tseg.contrast import verify_xgboost_runtime
 
         verify_xgboost_runtime()
     except (RuntimeError, ImportError):
@@ -72,7 +59,6 @@ def get_stored_face_license() -> str:
     if not totalsegmentator_available():
         return ""
     try:
-        from totalsegmentator.config import get_license_number
 
         return (get_license_number() or "").strip()
     except Exception:
@@ -82,22 +68,6 @@ def get_stored_face_license() -> str:
 def face_license_available() -> bool:
     ok, _ = verify_face_license()
     return ok
-
-
-def verify_face_license() -> tuple[bool, str]:
-    if not totalsegmentator_available():
-        return False, _("TotalSegmentator not installed. Install with: {hint}").format(hint=_TSEG_INSTALL_HINT)
-    try:
-        from totalsegmentator.config import has_valid_license_offline
-    except ImportError as exc:
-        return False, _("TotalSegmentator license check unavailable: {error}").format(error=exc)
-    try:
-        valid, message = has_valid_license_offline()
-    except Exception as exc:
-        return False, _("License check failed: {error}").format(error=exc)
-    if valid == "yes":
-        return True, message
-    return False, message
 
 
 def _face_license_format_error(license_number: str) -> str | None:
@@ -118,12 +88,7 @@ def apply_face_license(license_number: str) -> tuple[bool, str]:
     normalized = license_number.strip()
 
     if not totalsegmentator_available():
-        return False, _("TotalSegmentator not installed. Install with: {hint}").format(hint=_TSEG_INSTALL_HINT)
-
-    try:
-        from totalsegmentator.config import get_totalseg_dir, is_valid_license, setup_totalseg
-    except ImportError as exc:
-        return False, _("TotalSegmentator license setup unavailable: {error}").format(error=exc)
+        return False, _("TotalSegmentator not installed. Install with: {hint}").format(hint=TSEG_INSTALL_HINT)
 
     setup_totalseg()
     config_path = get_totalseg_dir() / "config.json"
@@ -187,8 +152,6 @@ def _brain_structures_task_spec() -> tuple[int, str, str]:
 
 def resolve_model_folder(task_id: int, trainer: str, model: str = _MODEL) -> Path | None:
     try:
-        from totalsegmentator.config import setup_nnunet, setup_totalseg
-        from totalsegmentator.nnunet import get_output_folder
 
         setup_nnunet()
         setup_totalseg()
@@ -198,19 +161,6 @@ def resolve_model_folder(task_id: int, trainer: str, model: str = _MODEL) -> Pat
     except Exception as exc:
         logger.debug("TS weight folder lookup failed for task %s: %s", task_id, exc)
         return None
-
-
-def checkpoint_ready(model_folder: Path | None) -> bool:
-    """True when ``checkpoint_final.pth`` exists under the model folder (root or fold_*)."""
-    if model_folder is None:
-        return False
-    root_checkpoint = model_folder / _CHECKPOINT_NAME
-    if root_checkpoint.is_file():
-        return True
-    fold_checkpoint = model_folder / "fold_0" / _CHECKPOINT_NAME
-    if fold_checkpoint.is_file():
-        return True
-    return any(model_folder.glob(f"fold_*/{_CHECKPOINT_NAME}"))
 
 
 def _all_tasks_ready(task_ids: tuple[int, ...], *, resolve_folder) -> bool:
@@ -227,11 +177,6 @@ def anatomy_ct_ready(mode: str | None = None) -> bool:
     """True when all CT Harmonize weight files for ``mode`` exist on disk."""
     if not totalsegmentator_available():
         return False
-    from anonymizer.controller.ai.tseg.config import ENABLE_TS_CONTRAST, normalize_segmentation_mode
-    from anonymizer.controller.ai.tseg.model_cache import (
-        ct_anatomy_task_ids_for_mode,
-        resolve_harmonize_model_folder,
-    )
 
     resolved = normalize_segmentation_mode(mode)
     contrast = (776,) if ENABLE_TS_CONTRAST else ()
@@ -242,11 +187,6 @@ def anatomy_ct_ready(mode: str | None = None) -> bool:
 def anatomy_mr_ready(mode: str | None = None) -> bool:
     if not totalsegmentator_available():
         return False
-    from anonymizer.controller.ai.tseg.config import normalize_segmentation_mode
-    from anonymizer.controller.ai.tseg.model_cache import (
-        mr_anatomy_task_ids_for_mode,
-        resolve_harmonize_model_folder,
-    )
 
     task_ids = mr_anatomy_task_ids_for_mode(normalize_segmentation_mode(mode))
     return _all_tasks_ready(task_ids, resolve_folder=resolve_harmonize_model_folder)
@@ -255,7 +195,6 @@ def anatomy_mr_ready(mode: str | None = None) -> bool:
 def face_ct_ready() -> bool:
     if not totalsegmentator_available():
         return False
-    from anonymizer.controller.ai.tseg.model_cache import face_task_ids
 
     _task_id, trainer, model = _face_task_spec()
     return all(checkpoint_ready(resolve_model_folder(tid, trainer, model)) for tid in face_task_ids())
@@ -264,7 +203,6 @@ def face_ct_ready() -> bool:
 def face_mr_ready() -> bool:
     if not totalsegmentator_available():
         return False
-    from anonymizer.controller.ai.tseg.model_cache import mr_face_task_ids
 
     _task_id, trainer, model = _face_mr_task_spec()
     return all(checkpoint_ready(resolve_model_folder(tid, trainer, model)) for tid in mr_face_task_ids())
@@ -297,7 +235,6 @@ def download_segmentation_model(
     on_complete: Callable[[bool], None] | None = None,
 ) -> bool:
     """Download weights for ``kind``. Returns True when files exist afterward. No status cache."""
-    from anonymizer.controller.ai.tseg.model_cache import download_segmentation_model_weights
 
     if weight_kind_ready(kind):
         logger.info("Segmentation models: %s already installed", kind.value)
@@ -329,16 +266,7 @@ def download_segmentation_model(
 
 def remove_segmentation_model(kind: TsWeightKind) -> bool:
     """Delete on-disk TotalSegmentator weights for one model kind."""
-    import shutil
 
-    from anonymizer.controller.ai.tseg.model_cache import (
-        clear_predictor_cache,
-        face_task_ids,
-        harmonize_ts_task_ids,
-        mr_anatomy_task_ids,
-        mr_face_task_ids,
-        resolve_harmonize_model_folder,
-    )
 
     removed = False
     if kind == TsWeightKind.ANATOMY:
@@ -385,8 +313,8 @@ def remove_segmentation_model(kind: TsWeightKind) -> bool:
 def log_runtime_status() -> None:
     """Log a concise file-based readiness summary (no cached status object)."""
     if not totalsegmentator_available():
-        logger.info("Harmonize unavailable: TotalSegmentator not installed (%s)", _TSEG_INSTALL_HINT)
-        logger.info("Face Blur unavailable: TotalSegmentator not installed (%s)", _TSEG_INSTALL_HINT)
+        logger.info("Harmonize unavailable: TotalSegmentator not installed (%s)", TSEG_INSTALL_HINT)
+        logger.info("Face Blur unavailable: TotalSegmentator not installed (%s)", TSEG_INSTALL_HINT)
         return
 
     if xgboost_available():
@@ -394,10 +322,6 @@ def log_runtime_status() -> None:
     else:
         logger.warning("Harmonize: unavailable - XGBoost or its platform OpenMP runtime is not available")
 
-    from anonymizer.controller.ai.tseg.model_cache import (
-        installed_ct_segmentation_modes,
-        installed_mr_segmentation_modes,
-    )
 
     ct_modes = installed_ct_segmentation_modes()
     mr_modes = installed_mr_segmentation_modes()

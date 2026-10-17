@@ -13,6 +13,7 @@ from anonymizer.controller.ai.harmonize.pipeline import (
     study_description_edit_offer,
 )
 from anonymizer.controller.phi_io import PHI_IndexRecord
+from anonymizer.utils.modalities import StudyImagingComposition
 
 
 def test_series_description_edit_choices_ct_radlex_variants() -> None:
@@ -94,10 +95,10 @@ def test_series_description_group_choices_raw_expands_catalog() -> None:
 
 def test_study_description_edit_choices_mr_head_hint_not_abdomen() -> None:
     model = MagicMock()
-    model.study_composition_for_harmonize.return_value = (True, False)
+    model.study_harmonize_composition.return_value = StudyImagingComposition.D3
     model.get_study_harmonized_description.return_value = None
-    model.get_ct_series_harmonized_descriptions.return_value = []
-    model.get_tseg_series_modalities.return_value = ["MR"]
+    model.get_3d_series_harmonized_descriptions.return_value = []
+    model.get_3d_series_modalities.return_value = ["MR"]
 
     pairs = study_description_edit_choices(
         model,
@@ -124,11 +125,11 @@ def test_classify_and_group_series_choices() -> None:
         series_description_group_choices,
     )
 
-    assert series_description_cohort_key("CT") == "tseg"
+    assert series_description_cohort_key("CT") == "3D"
     assert series_description_cohort_key("CR") == "XR"
-    assert series_description_cohort_key("SR") == "report"
-    assert series_description_cohort_key("DOC") == "report"
-    assert series_description_cohort_key("PDF") == "report"
+    assert series_description_cohort_key("SR") == "TEXT"
+    assert series_description_cohort_key("DOC") == "TEXT"
+    assert series_description_cohort_key("PDF") == "TEXT"
     info = classify_description_edit_selection(series_cohort_keys=["XR", "XR"])
     assert info.kind == "series"
     mixed = classify_description_edit_selection(series_cohort_keys=["XR", "US"])
@@ -153,13 +154,13 @@ def test_classify_and_group_series_choices() -> None:
     assert peers == ["s2"]
 
     model = MagicMock()
-    model.study_composition_for_harmonize.return_value = (False, True)
+    model.study_harmonize_composition.return_value = StudyImagingComposition.D2
     model.get_study_harmonized_description.side_effect = lambda uid: {
         "study-a": "XR Chest AP",
         "study-b": "XR Chest AP",
         "study-c": "XR Chest PA",
     }.get(uid)
-    model.find_studies_with_planar_series_fingerprint.return_value = []
+    model.find_studies_with_2d_series_fingerprint.return_value = []
     study_peers = find_similar_study_uids(
         model,
         "study-a",
@@ -188,14 +189,14 @@ def test_ensure_min_description_choices_keeps_existing_when_already_enough() -> 
 
 def test_study_description_edit_offer_planar_uses_orm_instance_count() -> None:
     model = MagicMock()
-    model.study_composition_for_harmonize.return_value = (False, True)
+    model.study_harmonize_composition.return_value = StudyImagingComposition.D2
     model.get_study_harmonized_description.return_value = "XR Chest AP"
-    model.get_planar_series_harmonized_descriptions.return_value = ["Chest AP"]
-    model.get_planar_series_modalities.return_value = ["CR"]
-    model.get_planar_series_instance_count.return_value = 2
+    model.get_2d_series_harmonized_descriptions.return_value = ["Chest AP"]
+    model.get_2d_series_modalities.return_value = ["CR"]
+    model.get_2d_series_instance_count.return_value = 2
 
     with patch(
-        "anonymizer.controller.ai.harmonize.loinc_study.rank_planar_loinc_study_descriptions",
+        "anonymizer.controller.ai.harmonize.pipeline.rank_planar_loinc_study_descriptions",
         return_value=[
             LoincStudyMatch("36643-5", "XR Chest 2 Views", 400.0),
             LoincStudyMatch("36572-6", "XR Chest AP", 200.0),
@@ -212,13 +213,13 @@ def test_study_description_edit_offer_planar_uses_orm_instance_count() -> None:
 
 def test_study_description_edit_offer_ct_skips_series_paths() -> None:
     model = MagicMock()
-    model.study_composition_for_harmonize.return_value = (True, False)
+    model.study_harmonize_composition.return_value = StudyImagingComposition.D3
     model.get_study_harmonized_description.return_value = "CT Chest WO contrast"
-    model.get_ct_series_harmonized_descriptions.return_value = ["Ch Ax WO"]
-    model.get_tseg_series_modalities.return_value = ["CT"]
+    model.get_3d_series_harmonized_descriptions.return_value = ["Ch Ax WO"]
+    model.get_3d_series_modalities.return_value = ["CT"]
 
     with patch(
-        "anonymizer.controller.ai.harmonize.loinc_study.build_study_description_ranking",
+        "anonymizer.controller.ai.harmonize.pipeline.build_study_description_ranking",
         return_value=(
             MagicMock(),
             [LoincStudyMatch("29252-4", "CT Chest WO contrast", 500.0)],
@@ -235,11 +236,11 @@ def test_study_description_edit_offer_ct_skips_series_paths() -> None:
 
 def test_study_description_edit_choices_pads_from_loinc_prefix_not_index() -> None:
     model = MagicMock()
-    model.study_composition_for_harmonize.return_value = (False, True)
+    model.study_harmonize_composition.return_value = StudyImagingComposition.D2
     model.get_study_harmonized_description.return_value = "XR Chest AP"
-    model.get_planar_series_harmonized_descriptions.return_value = ["Chest AP"]
-    model.get_planar_series_modalities.return_value = ["CR"]
-    model.get_planar_series_instance_count.return_value = 1
+    model.get_2d_series_harmonized_descriptions.return_value = ["Chest AP"]
+    model.get_2d_series_modalities.return_value = ["CR"]
+    model.get_2d_series_instance_count.return_value = 1
 
     with (
         patch(
@@ -269,11 +270,11 @@ def test_study_description_edit_choices_pads_from_loinc_prefix_not_index() -> No
 
 def test_study_description_edit_offer_skips_non_loinc_current() -> None:
     model = MagicMock()
-    model.study_composition_for_harmonize.return_value = (False, True)
+    model.study_harmonize_composition.return_value = StudyImagingComposition.D2
     model.get_study_harmonized_description.return_value = "Custom Study Name"
-    model.get_planar_series_harmonized_descriptions.return_value = ["Chest AP"]
-    model.get_planar_series_modalities.return_value = ["CR"]
-    model.get_planar_series_instance_count.return_value = 1
+    model.get_2d_series_harmonized_descriptions.return_value = ["Chest AP"]
+    model.get_2d_series_modalities.return_value = ["CR"]
+    model.get_2d_series_instance_count.return_value = 1
 
     with patch(
         "anonymizer.controller.ai.harmonize.loinc_study.rank_planar_loinc_study_descriptions",
@@ -296,7 +297,8 @@ def test_report_only_study_skips_study_loinc_path() -> None:
     )
 
     model = MagicMock()
-    model.study_composition_for_harmonize.return_value = (False, False)
+    model.study_harmonize_composition.return_value = StudyImagingComposition.NONE
+    model.study_all_series_harmonized.return_value = False
     model.get_study_harmonized_description.return_value = None
 
     assert study_ready_for_description_edit(model, "study-sr") is False

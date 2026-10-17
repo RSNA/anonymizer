@@ -36,6 +36,8 @@ from typing import Any
 import customtkinter as ctk
 import matplotlib
 
+from anonymizer.view.common.ctk_safe import dispose_photo_image
+
 matplotlib.use("Agg")
 from matplotlib import cbook, font_manager
 from matplotlib import pyplot as plt
@@ -607,7 +609,6 @@ def _embed_figure(
     When the cell already has a chart label (bin-width re-paint), swap the image
     in place so the dashboard does not flash empty.
     """
-    from anonymizer.view.common.ctk_safe import dispose_photo_image
 
     organ_hit = getattr(fig, "_analytics_organ_hit", None)
     try:

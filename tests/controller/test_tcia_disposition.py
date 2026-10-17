@@ -9,12 +9,12 @@ from pydicom.dataset import Dataset, FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian, SecondaryCaptureImageStorage, generate_uid
 
 from anonymizer.assets.scripts.diff_clinical_table1 import diff_vs_table1
-from anonymizer.controller.ai.embedded_phi.metadata.tcia_kb import match_tcia_private
-from anonymizer.controller.anonymizer import AnonymizerController
 from anonymizer.controller.ai.embedded_phi.metadata.process_private_tags_tcia import (
     collapse_retain_safe_action,
     tcia_disposition_to_operand,
 )
+from anonymizer.controller.ai.embedded_phi.metadata.tcia_kb import match_tcia_private
+from anonymizer.controller.anonymizer import AnonymizerController
 from anonymizer.model.project import AnonymizationPolicy, ProjectModel
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -157,13 +157,12 @@ def test_clinical_ingest_leaves_private_tags_untouched(tmp_path: Path) -> None:
         _CLINICAL,
         f"sqlite:///{tmp_path / 'a.db'}",
     )
-    ctrl._dates_shifted_this_dataset = False
     ctrl._preserve_private_tags = True
     ctrl._clean_tag_translate_table = str.maketrans("", "", "() ,")
 
     ds = _sc_ds()
     ds.private_block(0x0009, del_creator, create=True).add_new(0x01, "LO", "leave-me")
     elem = next(e for e in ds if e.tag.is_private and int(e.tag.element) & 0xFF == 0x01)
-    ctrl._anonymize_element(ds, elem, "phi", "anon", None, 0)
+    ctrl._anonymize_element(ds, elem, "phi", "anon", None, 0, None)
     assert elem.value == "leave-me"
     assert elem.tag in ds

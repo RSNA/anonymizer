@@ -21,11 +21,7 @@ from pathlib import Path
 
 from pydicom.dataset import Dataset
 
-from anonymizer.controller.ai.embedded_phi.ner.engine import (
-    Entity,
-    detect_entities,
-    detect_entities_in_segments,
-)
+from anonymizer.controller.ai.embedded_phi.ner.engine import Entity, detect_entities, detect_entities_in_segments
 from anonymizer.controller.ai.embedded_phi.ner.radiology_filters import (
     MetadataNerItem,
     collect_anonymized_values,

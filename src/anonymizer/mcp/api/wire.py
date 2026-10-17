@@ -11,6 +11,9 @@ import json
 from functools import wraps
 from typing import Any
 
+from fastmcp.tools import ToolResult
+from mcp.types import ImageContent, TextContent
+
 
 def _slim_project(proj: Any) -> Any:
     if not isinstance(proj, dict):
@@ -122,8 +125,6 @@ def parse_wire_text(text: str) -> dict[str, Any]:
 
 def as_plain_tool(fn: Any) -> Any:
     """Wrap a dict-returning handler as MCP ``ToolResult`` (text + optional image)."""
-    from fastmcp.tools import ToolResult
-    from mcp.types import ImageContent, TextContent
 
     @wraps(fn)
     def wrapper(*args: Any, **kwargs: Any) -> ToolResult:

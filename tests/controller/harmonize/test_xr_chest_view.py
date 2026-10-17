@@ -10,6 +10,10 @@ import pytest
 from pydicom.dataset import Dataset, FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian, generate_uid
 
+from anonymizer.controller.ai.harmonize.playbook_planar import (
+    build_planar_playbook_attributes,
+    planar_harmonize_analysis_rows,
+)
 from anonymizer.controller.ai.harmonize.xr_chest_view.cache import CxpViewModelStatus, probe_cxp_view_models
 from anonymizer.controller.ai.harmonize.xr_chest_view.fuse import fuse_xr_view
 from anonymizer.controller.ai.harmonize.xr_chest_view.labels import (
@@ -18,10 +22,6 @@ from anonymizer.controller.ai.harmonize.xr_chest_view.labels import (
 )
 from anonymizer.controller.ai.harmonize.xr_chest_view.predict import CxpViewPrediction
 from anonymizer.controller.ai.harmonize.xr_chest_view.preprocess import upright_array
-from anonymizer.controller.ai.harmonize.playbook_planar import (
-    build_planar_playbook_attributes,
-    planar_harmonize_analysis_rows,
-)
 
 
 def _pred(

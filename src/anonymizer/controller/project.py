@@ -42,16 +42,17 @@ from anonymizer.controller.ai.harmonize import (
     HarmonizeStudiesSummary,
     harmonize_studies_batch,
 )
+from anonymizer.controller.ai.tseg.cache import clear_series_tseg_cache, resolve_series_cache_dir
+from anonymizer.controller.analytics.dataset import build_dataset_analytics
+from anonymizer.controller.annotations import export_dicom_seg
+from anonymizer.controller.annotations.export_dicom_seg import build_dicom_seg_export_session
 from anonymizer.controller.anonymizer import AnonymizerController
+from anonymizer.controller.anonymizer_script import packaged_script_path_for_policy
 from anonymizer.controller.dicom import dicomweb as dicomweb_api
 from anonymizer.controller.dicom.association import AssociationMixin
 from anonymizer.controller.dicom.echo_scu import EchoMixin
 from anonymizer.controller.dicom.find_scu import FindMixin
-from anonymizer.controller.dicom.hierarchies import (
-    InstanceUIDHierarchy,
-    SeriesUIDHierarchy,
-    StudyUIDHierarchy,
-)
+from anonymizer.controller.dicom.hierarchies import InstanceUIDHierarchy, SeriesUIDHierarchy, StudyUIDHierarchy
 from anonymizer.controller.dicom.requests import (
     EchoRequest,
     EchoResponse,
@@ -73,16 +74,13 @@ from anonymizer.controller.phi_io import (
 from anonymizer.controller.phi_io import (
     import_java_phi_studies as phi_io_import_java_phi_studies,
 )
+from anonymizer.controller.process_ctp_lookup import migrate_project_script_from_private, project_anonymizer_script_path
 from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import PHI, SeriesProcessingStatus
-from anonymizer.model.project import (
-    AnonymizationPolicy,
-    AuthenticationError,
-    DICOMRuntimeError,
-    ProjectModel,
-)
+from anonymizer.model.project import AnonymizationPolicy, AuthenticationError, DICOMRuntimeError, ProjectModel
 from anonymizer.utils.logging import set_logging_levels
-from anonymizer.utils.storage import JavaAnonymizerExportedStudy
+from anonymizer.utils.modalities import Modality, get_modality_catalog
+from anonymizer.utils.storage.java_index import JavaAnonymizerExportedStudy
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
@@ -208,7 +206,6 @@ class ProjectController(
         self.anonymizer = AnonymizerController(project_model=model)
 
     def build_dataset_analytics(self, *, should_abort=None):
-        from anonymizer.controller.analytics.dataset import build_dataset_analytics
 
         return build_dataset_analytics(
             self.anonymizer.model,
@@ -657,9 +654,6 @@ class ProjectController(
         user ROI ``annotations/``. Failures for individual series are logged and
         skipped so the patient export continues.
         """
-        from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir
-        from anonymizer.controller.annotations import export_dicom_seg
-        from anonymizer.controller.annotations.export_dicom_seg import build_dicom_seg_export_session
 
         patient_dir = Path(patient_dir)
         for study_path in sorted(patient_dir.iterdir()):
@@ -923,7 +917,6 @@ class ProjectController(
         *,
         also_clear_annotations: bool = False,
     ) -> None:
-        from anonymizer.controller.ai.tseg.cache import clear_series_tseg_cache
 
         clear_series_tseg_cache(
             series_path,
@@ -985,11 +978,6 @@ class ProjectController(
         Strict → ``default-anonymizer.script``; Clinical → ``clinical-anonymizer.script``.
         Clinical also enables SR/PDF modalities when missing.
         """
-        from anonymizer.controller.process_ctp_lookup import (
-            migrate_project_script_from_private,
-            project_anonymizer_script_path,
-        )
-        from anonymizer.utils.modalities import get_modalities
 
         if policy is None:
             policy = getattr(self.model, "anonymization_policy", AnonymizationPolicy.STRICT)
@@ -999,7 +987,6 @@ class ProjectController(
             policy = AnonymizationPolicy.STRICT
         self.model.anonymization_policy = policy
 
-        from anonymizer.controller.anonymizer_script import packaged_script_path_for_policy
 
         source = packaged_script_path_for_policy(policy)
         if not source.is_file():
@@ -1014,11 +1001,11 @@ class ProjectController(
         self.anonymizer.model.reload_script(dest)
 
         if policy is AnonymizationPolicy.CLINICAL:
-            catalog = get_modalities()
+            catalog = get_modality_catalog()
             mods = list(self.model.modalities)
-            for code in ("SR", "PDF"):
-                if code in catalog and code not in mods:
-                    mods.append(code)
+            for code in (Modality.SR, Modality.PDF):
+                if code in catalog and code.value not in mods:
+                    mods.append(code.value)
             self.model.modalities = mods
             # Add SR/PDF SOP classes; keep any custom storage classes already selected.
             self.model.ensure_storage_classes_from_modalities()

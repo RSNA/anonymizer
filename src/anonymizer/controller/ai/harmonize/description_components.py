@@ -6,14 +6,22 @@ Avoids cartesian-product catalogs. Callers pick one value per field and
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from anonymizer.controller.ai.harmonize.loinc_study import parse_playbook_series_description
-from anonymizer.controller.ai.harmonize.playbook import (
-    BODY_PART_PLAYBOOK_CODES,
-    SLICE_THICKNESS_EMITTED_CODES,
+from anonymizer.controller.ai.harmonize.loinc_study import (
+    infer_loinc_anatomy_from_text,
+    parse_playbook_series_description,
 )
+from anonymizer.controller.ai.harmonize.playbook import BODY_PART_PLAYBOOK_CODES, SLICE_THICKNESS_EMITTED_CODES
+from anonymizer.controller.ai.harmonize.profile_2d import (
+    is_2d_harmonize_modality,
+    normalize_2d_modality_label,
+)
+from anonymizer.utils.modalities import Modality
+
+_TSEG_PLAYBOOK_MODALITIES = frozenset({Modality.CT, Modality.MR})
 
 # Closest edit sets + full vocab in clinical / SeriesNameV4 frequency order
 # (typical codes first — never alphabetical for short enums).
@@ -340,7 +348,6 @@ def _ordered_body_parts(preferred: Sequence[str], *, include_all: bool) -> list[
 
 
 def _playbook_body_parts_from_anatomy_hint(anatomy_hint: str) -> list[str]:
-    from anonymizer.controller.ai.harmonize.loinc_study import infer_loinc_anatomy_from_text
 
     codes: list[str] = []
     seen: set[str] = set()
@@ -356,7 +363,6 @@ def _playbook_body_parts_from_anatomy_hint(anatomy_hint: str) -> list[str]:
 
 
 def _planar_recognized_anatomy(tokens: Sequence[str]) -> str | None:
-    import re
 
     if not tokens:
         return None
@@ -515,23 +521,18 @@ def series_playbook_component_options(
     Full (``full_vocab=True``): entire frozenset vocabulary per field — never a
     cartesian product of composed strings.
     """
-    from anonymizer.utils.modalities import (
-        planar_harmonize_cohort,
-        series_is_planar_harmonize_eligible,
-        series_is_tseg_eligible,
-    )
 
     current = (current_description or "").strip()
     hint = (anatomy_hint or "").strip()
 
-    if series_is_tseg_eligible(modality):
+    if Modality.from_code(modality) in _TSEG_PLAYBOOK_MODALITIES:
         if not current:
             parts = _playbook_body_parts_from_anatomy_hint(hint) if hint else []
             current = f"{parts[0]} Ax WO" if parts else "Ch Ax WO"
         return _tseg_component_options(current, anatomy_hint=hint or current, full_vocab=full_vocab)
 
-    if series_is_planar_harmonize_eligible(modality):
-        cohort = planar_harmonize_cohort(modality) or "XR"
+    if is_2d_harmonize_modality(modality):
+        cohort = normalize_2d_modality_label(modality) or "XR"
         if not current:
             if cohort == "US":
                 current = "Abdomen"
@@ -566,9 +567,8 @@ def series_playbook_component_initial(
 
 
 def series_playbook_component_field_order(modality: object | None) -> tuple[str, ...]:
-    from anonymizer.utils.modalities import series_is_tseg_eligible
 
-    if series_is_tseg_eligible(modality):
+    if Modality.from_code(modality) in _TSEG_PLAYBOOK_MODALITIES:
         return TSEG_COMPONENT_FIELDS
     return PLANAR_COMPONENT_FIELDS
 
@@ -579,16 +579,11 @@ def format_series_playbook_fields(
     modality: object | None,
 ) -> str:
     """Assemble description from a UI field map for the given modality."""
-    from anonymizer.utils.modalities import (
-        planar_harmonize_cohort,
-        series_is_planar_harmonize_eligible,
-        series_is_tseg_eligible,
-    )
 
-    if series_is_tseg_eligible(modality):
+    if Modality.from_code(modality) in _TSEG_PLAYBOOK_MODALITIES:
         return format_playbook_series_description(playbook_selection_from_field_map(fields))
-    if series_is_planar_harmonize_eligible(modality):
-        cohort = planar_harmonize_cohort(modality) or "XR"
+    if is_2d_harmonize_modality(modality):
+        cohort = normalize_2d_modality_label(modality) or "XR"
         return format_planar_component_description(
             planar_selection_from_field_map(fields, cohort=cohort)
         )

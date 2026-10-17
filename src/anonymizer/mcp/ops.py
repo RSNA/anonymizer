@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from PIL import Image
 
 from anonymizer.controller.ai.batch_process import apply_remove_pixel_phi_series
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
@@ -22,6 +23,7 @@ from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     normalize_pixel_phi_removal_mode,
 )
 from anonymizer.controller.ai.harmonize import auto_apply_best_study_descriptions
+from anonymizer.controller.ai.harmonize.xp_bodypart.preprocess import uint8_grayscale_from_array
 from anonymizer.controller.project import MoveStudiesRequest, ProjectController, StudyUIDHierarchy
 from anonymizer.controller.runner import RemovePixelPhiRunner
 from anonymizer.controller.series_io import load_series_frames
@@ -48,9 +50,13 @@ from anonymizer.model.settings_validate import (
     validate_transfer_syntaxes,
     validate_uid_root,
 )
-from anonymizer.utils.modalities import resolve_project_modalities
-from anonymizer.utils.storage import get_dcm_files, list_import_directory_files
+from anonymizer.mcp.modality_tokens import resolve_project_modalities
+from anonymizer.utils.storage.dicom_tree import (
+    get_dcm_files,
+    list_import_directory_files,
+)
 from anonymizer.utils.translate import _
+from anonymizer.utils.windowing import apply_windowing
 
 logger = logging.getLogger(__name__)
 
@@ -995,11 +1001,6 @@ def export_series_preview(
     study: str = "",
     series: str = "",
 ) -> dict[str, Any]:
-    try:
-        from PIL import Image
-    except ImportError as exc:  # pragma: no cover
-        raise HeadlessOpsError(f"Pillow required for preview export: {exc}") from exc
-
     resolved = resolve_series(
         controller,
         anon_series_uid=anon_series_uid,
@@ -1061,16 +1062,12 @@ def export_series_preview(
     if idx < 0 or idx >= len(frames):
         raise HeadlessOpsError(f"frame_index {idx} out of range (0..{len(frames) - 1})")
 
-    from anonymizer.utils.windowing import apply_windowing
 
     frame = frames[idx]
     wl, ww = loaded.default_window
     try:
         bgr = apply_windowing(float(wl), float(ww), frame)
     except Exception:
-        from anonymizer.controller.ai.harmonize.xp_bodypart.preprocess import (
-            uint8_grayscale_from_array,
-        )
 
         gray = uint8_grayscale_from_array(np.asarray(frame))
         bgr = np.stack([gray, gray, gray], axis=-1)

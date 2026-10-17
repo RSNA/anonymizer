@@ -6,7 +6,7 @@ import contextlib
 import json
 import logging
 import re
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum, auto
@@ -41,11 +41,8 @@ from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
     apply_instance_embedded_phi_for_dcm,
     remove_pixel_phi,
 )
-from anonymizer.controller.ai.embedded_phi.report.process_report_text import (
-    detect_phi,
-    remove_phi,
-    write_report_text,
-)
+from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_project_exclude_rects
+from anonymizer.controller.ai.embedded_phi.report.process_report_text import detect_phi, remove_phi, write_report_text
 from anonymizer.controller.ai.harmonize import (
     HarmonizeProgress,
     auto_apply_best_study_descriptions,
@@ -73,7 +70,6 @@ from anonymizer.controller.runner import (
 )
 from anonymizer.controller.series_io import load_series_frames, save_series_frames
 from anonymizer.utils.memory import MemoryGuard, MemorySnapshot, capture_memory_snapshot, collect_garbage_safe
-from anonymizer.utils.storage import load_project_exclude_rects
 from anonymizer.utils.translate import _
 
 if TYPE_CHECKING:
@@ -83,6 +79,11 @@ if TYPE_CHECKING:
     from anonymizer.controller.work_state import WorkState
     from anonymizer.model.anonymizer import AnonymizerModel
     from anonymizer.model.project import ProjectModel
+from pydicom import dcmread
+
+from anonymizer.controller.ai.harmonize import format_harmonize_batch_contrast_log_lines
+from anonymizer.controller.create_projections import invalidate_projection_cache
+from anonymizer.utils.storage.dicom_tree import get_dcm_files
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,8 @@ class AiBatchProcessOptions:
     ocr_use_exclude_areas: bool = False
     include_brain_structures: bool = False
     prefer_description_mappings: bool = True
+    series_description_overrides: Mapping[str, str] = field(default_factory=dict)
+    study_loinc_overrides: Mapping[str, str] = field(default_factory=dict)
 
 
 def whitelist_for_batch_ocr(
@@ -989,7 +992,6 @@ def _apply_report_text_phi_series(
     Returns:
         Batch outcome for the series.
     """
-    from anonymizer.utils.storage import get_dcm_files
 
     dcm_paths = sorted(get_dcm_files(series_path))
     if not dcm_paths:
@@ -1018,7 +1020,6 @@ def _apply_report_text_phi_series(
     all_removed: list[str] = []
     for dcm_path in dcm_paths:
         try:
-            from pydicom import dcmread
 
             ds = dcmread(dcm_path)
             phi_header = None
@@ -1105,7 +1106,6 @@ def _apply_remove_pixel_phi_series(
     try:
         dcm_paths = stackable_dicom_paths(series_path)
     except ValueError:
-        from anonymizer.utils.storage import get_dcm_files
 
         dcm_paths = sorted(get_dcm_files(series_path))
 
@@ -1264,8 +1264,8 @@ def _apply_harmonize_series(
     progress: Callable[[HarmonizeProgress], None] | None,
     include_brain_structures: bool = False,
     prefer_description_mappings: bool = True,
+    series_description_overrides: Mapping[str, str] | None = None,
 ) -> tuple[AiBatchOutcome, list[str]]:
-    from anonymizer.controller.ai.harmonize import format_harmonize_batch_contrast_log_lines
 
     apply_outcome = harmonize_and_apply_series(
         series_path,
@@ -1273,6 +1273,7 @@ def _apply_harmonize_series(
         progress=progress,
         include_brain_structures=include_brain_structures,
         prefer_description_mappings=prefer_description_mappings,
+        series_description_overrides=series_description_overrides,
     )
     log_lines: list[str] = []
     if apply_outcome.status == "ok" and apply_outcome.harmonized is not None:
@@ -1298,6 +1299,8 @@ def _auto_apply_study_descriptions_for_uids(
     anon_model: AnonymizerModel,
     anon_study_uids: Sequence[str],
     log_workflow: Callable[[str], None],
+    prefer_description_mappings: bool = True,
+    study_loinc_overrides: Mapping[str, str] | None = None,
 ) -> None:
     """
     Best-guess LOINC StudyDescription (same API as Series View).
@@ -1313,6 +1316,8 @@ def _auto_apply_study_descriptions_for_uids(
         images_dir=images_dir,
         anon_model=anon_model,
         anon_study_uids=study_uids,
+        prefer_description_mappings=prefer_description_mappings,
+        study_loinc_overrides=study_loinc_overrides,
     )
     for offer, updated in applied_study_descs:
         if not updated or not offer.matches:
@@ -1406,7 +1411,6 @@ def _apply_face_blur_series(
                 "failed",
                 _("Failed to save blurred frames"),
             )
-        from anonymizer.controller.create_projections import invalidate_projection_cache
 
         invalidate_projection_cache(series_path)
         apply_series_face_blur_metadata(anon_model, series_uid, preview.blur_mode.value)
@@ -1754,6 +1758,8 @@ def ai_batch_process(
                     anon_model=anon_model,
                     anon_study_uids=tuple(uid for _, uid in studies),
                     log_workflow=log_workflow,
+                    prefer_description_mappings=options.prefer_description_mappings,
+                    study_loinc_overrides=options.study_loinc_overrides,
                 )
             continue
 
@@ -1831,6 +1837,8 @@ def ai_batch_process(
                             anon_model=anon_model,
                             anon_study_uids=(series_path.parent.name,),
                             log_workflow=log_workflow,
+                            prefer_description_mappings=options.prefer_description_mappings,
+                            study_loinc_overrides=options.study_loinc_overrides,
                         )
                     continue
 
@@ -1923,6 +1931,7 @@ def ai_batch_process(
                         progress=harmonize_progress,
                         include_brain_structures=options.include_brain_structures,
                         prefer_description_mappings=options.prefer_description_mappings,
+                        series_description_overrides=options.series_description_overrides,
                     )
                     for line in harmonize_log_lines:
                         log_workflow(format_batch_workflow_log_line(format_batch_step_subline(line)))
@@ -1935,6 +1944,8 @@ def ai_batch_process(
                             anon_model=anon_model,
                             anon_study_uids=(series_path.parent.name,),
                             log_workflow=log_workflow,
+                            prefer_description_mappings=options.prefer_description_mappings,
+                            study_loinc_overrides=options.study_loinc_overrides,
                         )
                 else:
                     volume_context = volume_contexts.pop(series_path, None)

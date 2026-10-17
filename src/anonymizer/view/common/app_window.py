@@ -11,7 +11,7 @@ from typing import Any, Protocol
 
 import customtkinter as ctk
 
-from anonymizer.view.common.ctk_safe import mark_ctk_window_alive
+from anonymizer.view.common.ctk_safe import mark_ctk_window_alive, teardown_ctk_toplevel
 
 logger = logging.getLogger(__name__)
 
@@ -319,7 +319,6 @@ def dismiss_app_window(window: tk.Misc, *, parent: tk.Misc | None = None) -> Non
             with contextlib.suppress(Exception):
                 handler()
             return
-    from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 
     with contextlib.suppress(Exception):
         teardown_ctk_toplevel(window, parent=parent)

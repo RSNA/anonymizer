@@ -8,11 +8,10 @@ import tkinter as tk
 
 def find_dataset_view_parent(window: tk.Misc) -> tk.Misc | None:
     """Return the nearest DatasetView ancestor, or None if not in that hierarchy."""
-    from anonymizer.view.project.dataset import DatasetView
 
     widget: tk.Misc | None = window
     while widget is not None:
-        if isinstance(widget, DatasetView):
+        if getattr(widget, "IS_DATASET_VIEW", False) is True:
             return widget
         widget = getattr(widget, "master", None)
     return None

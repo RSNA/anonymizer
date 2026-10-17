@@ -10,7 +10,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydicom.dataset import Dataset
 
-from anonymizer.controller.runner import OcrRemoveMode
 from anonymizer.controller.ai.batch_process import (
     AiBatchAlgorithm,
     AiBatchOutcome,
@@ -56,6 +55,7 @@ from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     OcrWhitelistMatchSettings,
     PixelPhiRemovalMode,
 )
+from anonymizer.controller.runner import OcrRemoveMode
 from tests.controller.blur_face.test_face_blur_gate import _geometry, _write_chest_region_cache
 
 
@@ -962,16 +962,6 @@ def test_batch_run_capture_writes_log_and_json(tmp_path: Path) -> None:
     assert capture.log_path.parent == model.batch_runs_dir()
 
 
-def test_project_dir_from_series_path_matches_batch_storage_dir(tmp_path: Path) -> None:
-    from anonymizer.utils.storage import project_dir_from_series_path
-
-    storage_dir = tmp_path / "my_project"
-    series_path = storage_dir / "public" / "anon_pt" / "anon_study" / "series_a"
-    series_path.mkdir(parents=True)
-
-    assert project_dir_from_series_path(series_path) == storage_dir
-
-
 @patch("anonymizer.controller.ai.batch_process._apply_remove_pixel_phi_series")
 def test_ai_batch_process_forwards_project_storage_dir_for_pixel_phi(
     mock_remove: MagicMock,
@@ -1113,7 +1103,7 @@ def test_format_exclude_areas_modality_detail_count_only() -> None:
 
 
 def test_format_batch_exclude_areas_log_lines_lists_saved_modalities(tmp_path: Path) -> None:
-    from anonymizer.utils.storage import save_project_exclude_rects
+    from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import save_project_exclude_rects
 
     save_project_exclude_rects(
         tmp_path,
@@ -1186,7 +1176,7 @@ def test_apply_remove_pixel_phi_series_phi_only_and_named_zones(
     mock_remove: MagicMock,
     tmp_path: Path,
 ) -> None:
-    from anonymizer.utils.storage import save_project_exclude_rects
+    from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import save_project_exclude_rects
 
     ds = _batch_test_dataset(modality="US")
     mock_load.return_value = ds

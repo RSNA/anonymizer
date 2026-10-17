@@ -17,22 +17,49 @@ from tkinter import messagebox, ttk
 import customtkinter as ctk
 
 from anonymizer.controller.ai.feature_availability import any_ai_batch_feature_allowed
+from anonymizer.controller.ai.harmonize import (
+    apply_series_descriptions,
+    apply_study_descriptions,
+    classify_description_edit_selection,
+    find_similar_series_uids,
+    find_similar_study_uids,
+    format_series_playbook_fields,
+    series_description_cohort_key,
+    series_description_edit_choices,
+    series_description_group_choices,
+    series_playbook_component_field_order,
+    series_playbook_component_initial,
+    series_playbook_component_options,
+    study_description_edit_choices,
+    study_description_group_choices,
+    study_loinc_prefix_for_edit,
+    study_ready_for_description_edit,
+)
 from anonymizer.controller.phi_io import PHI_IndexRecord, PHI_SeriesIndexRecord
 from anonymizer.controller.project import ProjectController
+from anonymizer.utils.modalities import ContentClass, Modality, get_modality_catalog
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.ai_batch_process_dialog import AiBatchProcessDialog
 from anonymizer.view.ai.ai_batch_process_options_dialog import show_ai_batch_process_options_dialog
+from anonymizer.view.ai.set_description_dialog import (
+    CatalogKind,
+    ExpandCatalogLoader,
+    RadLexComposeSpec,
+    show_set_description_dialog,
+)
 from anonymizer.view.common.app_window import AppToplevel, focus_app_window
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
+from anonymizer.view.common.filesystem_drop import enable_filesystem_drops
 from anonymizer.view.common.fonts import AppFonts, char_width_px
 from anonymizer.view.common.tooltip import MotionTooltipController, bind_hover_tooltip
 from anonymizer.view.project.delete_studies_dialog import DeleteStudiesDialog
-from anonymizer.view.reports.open_workspace import open_series_workspace
-from anonymizer.view.series.projection import (
-    ProjectionView,
-    projection_study_uids,
-    study_has_projection_series,
+from anonymizer.view.project.description_mapping_store import (
+    remember_series_override,
+    remember_study_override,
 )
+from anonymizer.view.project.description_mappings import show_description_mappings_dialog
+from anonymizer.view.reports.open_workspace import open_series_workspace
+from anonymizer.view.series.projection import ProjectionView, projection_study_uids, study_has_projection_series
 from anonymizer.view.shell.dashboard import Dashboard
 
 logger = logging.getLogger(__name__)
@@ -126,6 +153,9 @@ class DatasetView(AppToplevel):
         _project_model (ProjectModel): The project model.
     """
 
+    # Duck-typing marker so navigation helpers need not import this module.
+    IS_DATASET_VIEW = True
+
     # Tree #0 (harmonized) and Original Description: same default width; both stretch
     # so they share leftover view width. User can still drag-resize columns.
     _MIN_DESCRIPTION_CHARS = 40
@@ -137,10 +167,7 @@ class DatasetView(AppToplevel):
     _BUTTON_PAD = 10
     _BUTTON_COUNT = 9
     _BUTTON_ROW_WIDTH_PX = (
-        7 * _BUTTON_WIDTH
-        + _MAPPINGS_BUTTON_WIDTH
-        + _SELECT_SIMILAR_WIDTH
-        + (_BUTTON_COUNT + 1) * _BUTTON_PAD
+        7 * _BUTTON_WIDTH + _MAPPINGS_BUTTON_WIDTH + _SELECT_SIMILAR_WIDTH + (_BUTTON_COUNT + 1) * _BUTTON_PAD
     )
 
     def __init__(
@@ -193,7 +220,6 @@ class DatasetView(AppToplevel):
 
     def _enable_filesystem_drops(self) -> None:
         """Optional OS file/folder drop → same ImportFilesDialog path as File menu."""
-        from anonymizer.view.common.filesystem_drop import enable_filesystem_drops
 
         app = self._parent.master  # Anonymizer (Dashboard's master)
         on_paths = getattr(app, "import_paths", None)
@@ -331,10 +357,7 @@ class DatasetView(AppToplevel):
         self._description_mappings_button.grid(row=0, column=3, padx=PAD, pady=PAD, sticky="e")
         bind_hover_tooltip(
             self._description_mappings_button,
-            _(
-                "View and delete saved description mappings for this project: "
-                "RadLex for series, LOINC for studies."
-            ),
+            _("View and delete saved description mappings for this project: RadLex for series, LOINC for studies."),
             parent=self,
         )
 
@@ -406,11 +429,6 @@ class DatasetView(AppToplevel):
         """
         Return ``(kind, uids, selection_info)`` where kind is ``series``, ``study``, or ``invalid``.
         """
-        from anonymizer.controller.ai.harmonize import (
-            classify_description_edit_selection,
-            series_description_cohort_key,
-            study_loinc_prefix_for_edit,
-        )
 
         selected = list(self._tree.selection())
         series_uids: list[str] = []
@@ -459,11 +477,6 @@ class DatasetView(AppToplevel):
 
     def _similar_peer_uids_for_selection(self) -> list[str] | None:
         """Return peer UIDs for the single selected row, or None if Select similar is N/A."""
-        from anonymizer.controller.ai.harmonize import (
-            find_similar_series_uids,
-            find_similar_study_uids,
-            study_loinc_prefix_for_edit,
-        )
 
         selected = list(self._tree.selection())
         if len(selected) != 1:
@@ -632,13 +645,6 @@ class DatasetView(AppToplevel):
         blank_compose: bool = False,
         catalog_kind: str = "radlex",
     ) -> None:
-        from anonymizer.controller.ai.harmonize import apply_series_descriptions
-        from anonymizer.view.ai.set_description_dialog import (
-            CatalogKind,
-            ExpandCatalogLoader,
-            RadLexComposeSpec,
-            show_set_description_dialog,
-        )
 
         if not series_dirs:
             return
@@ -671,6 +677,17 @@ class DatasetView(AppToplevel):
             description=result.description,
             anon_model=self._controller.anonymizer.model,
         )
+        mappings_dir = self._controller.model.mappings_dir()
+        anon_model = self._controller.anonymizer.model
+        for series_dir in updated:
+            series_uid = Path(series_dir).name
+            original = (anon_model.get_series_description(series_uid) or "").strip()
+            if original:
+                remember_series_override(
+                    mappings_dir,
+                    original=original,
+                    harmonized=result.description,
+                )
         self._update_tree_from_phi_index()
         if len(series_dirs) > 1:
             messagebox.showinfo(
@@ -694,11 +711,6 @@ class DatasetView(AppToplevel):
         expand_loader=None,
         showing_full_catalog: bool = False,
     ) -> None:
-        from anonymizer.controller.ai.harmonize import apply_study_descriptions
-        from anonymizer.view.ai.set_description_dialog import (
-            ExpandCatalogLoader,
-            show_set_description_dialog,
-        )
 
         if not labels or not anon_study_uids:
             return
@@ -724,6 +736,17 @@ class DatasetView(AppToplevel):
             description=result.description,
             loinc_number=result.loinc_number,
         )
+        if result.loinc_number:
+            mappings_dir = self._controller.model.mappings_dir()
+            anon_model = self._controller.anonymizer.model
+            for anon_study_uid in updated:
+                original = (anon_model.get_study_description(anon_study_uid) or "").strip()
+                if original:
+                    remember_study_override(
+                        mappings_dir,
+                        original=original,
+                        loinc_number=result.loinc_number,
+                    )
         self._update_tree_from_phi_index()
         if len(anon_study_uids) > 1:
             messagebox.showinfo(
@@ -1193,16 +1216,12 @@ class DatasetView(AppToplevel):
             pair = self._series_by_uid.get(series_uid)
             if pair is None:
                 return None
-            from anonymizer.controller.ai.harmonize import series_description_cohort_key
-            from anonymizer.utils.modalities import is_report_harmonize_modality
 
             if series_description_cohort_key(pair[1].modality) is None:
                 return None
-            if is_report_harmonize_modality(pair[1].modality):
-                return _(
-                    "Double-click description to set series description "
-                    "· Right-click opens Report View"
-                )
+            row_mod = Modality.from_code(pair[1].modality)
+            if row_mod is not None and get_modality_catalog()[row_mod].content_class is ContentClass.TEXT:
+                return _("Double-click description to set series description · Right-click opens Report View")
             return _(
                 "Double-click description to choose a RadLex name "
                 "(expand to full catalog if needed) · Right-click opens Series View"
@@ -1213,32 +1232,30 @@ class DatasetView(AppToplevel):
             record = self._studies_by_uid.get(study_uid)
             if record is None:
                 return None
-            from anonymizer.controller.ai.harmonize import study_loinc_prefix_for_edit
 
             anon_model = self._controller.anonymizer.model
-            if study_loinc_prefix_for_edit(anon_model, study_uid) is None and not (
-                anon_model.get_study_harmonized_description(study_uid) or ""
-            ).strip():
+            if (
+                study_loinc_prefix_for_edit(anon_model, study_uid) is None
+                and not (anon_model.get_study_harmonized_description(study_uid) or "").strip()
+            ):
                 # PHI_IndexRecord.modality is unused; series modalities live on nested series.
                 if not (record.modalities_display() or "").strip():
                     return None
             right_click = self._study_right_click_hint(record)
             return _(
-                "Double-click description to choose a LOINC name "
-                "(expand to full catalog if needed) · {right_click}"
+                "Double-click description to choose a LOINC name (expand to full catalog if needed) · {right_click}"
             ).format(right_click=right_click)
         return None
 
     def _study_right_click_hint(self, record: PHI_IndexRecord) -> str:
         """Short right-click action text for a study row tooltip."""
-        from anonymizer.utils.modalities import is_report_harmonize_modality
 
         if study_has_projection_series(record):
             return _("Right-click opens projections")
         report_uids = [
             s.anon_series_uid
             for s in (record.series or [])
-            if is_report_harmonize_modality(s.modality)
+            if (m := Modality.from_code(s.modality)) is not None and get_modality_catalog()[m].content_class is ContentClass.TEXT
         ]
         if len(report_uids) == 1:
             return _("Right-click opens Report View")
@@ -1429,17 +1446,10 @@ class DatasetView(AppToplevel):
         self._description_combo_open_after_id = self.after(10, open_dropdown)
 
     def _description_mappings_button_pressed(self) -> None:
-        from anonymizer.view.project.description_mappings import show_description_mappings_dialog
 
-        show_description_mappings_dialog(self, anon_model=self._controller.anonymizer.model)
+        show_description_mappings_dialog(self, mappings_dir=self._controller.model.mappings_dir())
 
     def _edit_study_description(self, iid: str, anon_study_uid: str) -> None:
-        from anonymizer.controller.ai.harmonize import (
-            study_description_edit_choices,
-            study_description_group_choices,
-            study_loinc_prefix_for_edit,
-            study_ready_for_description_edit,
-        )
 
         record = self._studies_by_uid.get(anon_study_uid)
         if record is None:
@@ -1457,11 +1467,10 @@ class DatasetView(AppToplevel):
             )
             return
 
-        if study_loinc_prefix_for_edit(anon_model, anon_study_uid) is None and not (
-            anon_model.get_study_harmonized_description(anon_study_uid) or ""
-        ).strip():
-            from anonymizer.controller.ai.harmonize import series_description_cohort_key
-
+        if (
+            study_loinc_prefix_for_edit(anon_model, anon_study_uid) is None
+            and not (anon_model.get_study_harmonized_description(anon_study_uid) or "").strip()
+        ):
             # Allow edit when any child series is Harmonize-eligible (incl. SR/DOC/PDF).
             if not any(series_description_cohort_key(s.modality) for s in (record.series or [])):
                 return
@@ -1521,14 +1530,12 @@ class DatasetView(AppToplevel):
         if n > 1:
             title = _("Set {modality} study description ({n})").format(modality=modality, n=n)
             hint = _(
-                "Applies to all {n} selected {modality} studies · Expand to the full catalog "
-                "if the category is wrong"
+                "Applies to all {n} selected {modality} studies · Expand to the full catalog if the category is wrong"
             ).format(n=n, modality=modality)
         else:
             title = _("Set {modality} study description").format(modality=modality)
             hint = _(
-                "Closest matches for this study · Expand to the full {modality} LOINC catalog "
-                "if the category is wrong"
+                "Closest matches for this study · Expand to the full {modality} LOINC catalog if the category is wrong"
             ).format(modality=modality)
 
         def expand_loader() -> tuple[list[str], dict[str, str | None]]:
@@ -1568,16 +1575,6 @@ class DatasetView(AppToplevel):
         )
 
     def _edit_series_description(self, iid: str, anon_series_uid: str) -> None:
-        from anonymizer.controller.ai.harmonize import (
-            format_series_playbook_fields,
-            series_description_cohort_key,
-            series_description_edit_choices,
-            series_description_group_choices,
-            series_playbook_component_field_order,
-            series_playbook_component_initial,
-            series_playbook_component_options,
-        )
-        from anonymizer.view.ai.set_description_dialog import RadLexComposeSpec
 
         pair = self._series_by_uid.get(anon_series_uid)
         if pair is None:
@@ -1586,16 +1583,14 @@ class DatasetView(AppToplevel):
         cohort = series_description_cohort_key(series.modality)
         if cohort is None:
             return
-        is_report = cohort == "report"
+        is_report = cohort == ContentClass.TEXT.value
         harmonized = (series.harmonized_description or "").strip()
         original = (series.description or "").strip()
         current = harmonized or original
         study_hint = (study.study_description or "").strip()
 
         kind, uids, _info = self._selected_description_targets()
-        group_uids = (
-            uids if kind == "series" and anon_series_uid in uids and len(uids) > 1 else [anon_series_uid]
-        )
+        group_uids = uids if kind == "series" and anon_series_uid in uids and len(uids) > 1 else [anon_series_uid]
         images_dir = Path(self._controller.model.images_dir())
 
         if len(group_uids) > 1:
@@ -1683,20 +1678,16 @@ class DatasetView(AppToplevel):
         if blank_compose:
             if n > 1:
                 title = _("Set {modality} series description ({n})").format(modality=modality, n=n)
-                hint = _(
-                    "No description yet · pick each {modality} RadLex field for all {n} series"
-                ).format(modality=modality, n=n)
+                hint = _("No description yet · pick each {modality} RadLex field for all {n} series").format(
+                    modality=modality, n=n
+                )
             else:
                 title = _("Set {modality} series description").format(modality=modality)
-                hint = _("No description yet · pick each {modality} RadLex field").format(
-                    modality=modality
-                )
+                hint = _("No description yet · pick each {modality} RadLex field").format(modality=modality)
         elif unharmonized:
             if n > 1:
                 title = _("Set {modality} series description ({n})").format(modality=modality, n=n)
-                hint = _(
-                    "Pick each {modality} RadLex field for all {n} series"
-                ).format(modality=modality, n=n)
+                hint = _("Pick each {modality} RadLex field for all {n} series").format(modality=modality, n=n)
             else:
                 title = _("Set {modality} series description").format(modality=modality)
                 hint = _("Pick each {modality} RadLex field").format(modality=modality)
@@ -1709,8 +1700,7 @@ class DatasetView(AppToplevel):
         else:
             title = _("Set {modality} series description").format(modality=modality)
             hint = _(
-                "Closest matches for this series · Compose RadLex to pick body part, "
-                "plane, contrast, and other fields"
+                "Closest matches for this series · Compose RadLex to pick body part, plane, contrast, and other fields"
             )
 
         # Unharmonized stepwise seeds empty (no invented Ch Ax WO). Closest toggle uses original.
@@ -1743,15 +1733,11 @@ class DatasetView(AppToplevel):
             ),
             load_options=lambda full_vocab: series_playbook_component_options(
                 modality=seed_modality,
-                current_description=(
-                    seed_description if full_vocab else (closest_seed or seed_description)
-                ),
+                current_description=(seed_description if full_vocab else (closest_seed or seed_description)),
                 anatomy_hint=anatomy_hint,
                 full_vocab=full_vocab,
             ),
-            format_description=lambda fields: format_series_playbook_fields(
-                fields, modality=seed_modality
-            ),
+            format_description=lambda fields: format_series_playbook_fields(fields, modality=seed_modality),
         )
 
         self._apply_series_description_dialog(
@@ -1809,7 +1795,6 @@ class DatasetView(AppToplevel):
         Study right-click: Projection View when imaging series exist; otherwise Report View
         for a single report-only series. Never open an empty Projection View for SR/DOC/PDF-only.
         """
-        from anonymizer.utils.modalities import is_report_harmonize_modality
 
         if study_has_projection_series(record):
             self._open_projection_view([record])
@@ -1817,7 +1802,7 @@ class DatasetView(AppToplevel):
         report_uids = [
             s.anon_series_uid
             for s in (record.series or [])
-            if is_report_harmonize_modality(s.modality)
+            if (m := Modality.from_code(s.modality)) is not None and get_modality_catalog()[m].content_class is ContentClass.TEXT
         ]
         if len(report_uids) == 1:
             self._open_series_by_uid(report_uids[0])

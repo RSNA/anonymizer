@@ -19,7 +19,7 @@ from anonymizer.model.anonymizer import (
     Study,
     format_embedded_phi_texts,
 )
-from anonymizer.utils.storage import JavaAnonymizerExportedStudy
+from anonymizer.utils.storage.java_index import JavaAnonymizerExportedStudy
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
@@ -343,39 +343,13 @@ class PHI_IndexRecord:
         return patients, studies, series
 
 
-def _study_ct_series_all_harmonized(study: Study) -> bool:
-    """Backward-compatible CT-only check (prefer ``_study_index_harmonized`` for Dataset)."""
-    ct_series = [series for series in (study.series or []) if (series.modality or "").upper() == "CT"]
-    if not ct_series:
-        return False
-    return all(
-        series.harmonized_description is not None and bool(str(series.harmonized_description).strip())
-        for series in ct_series
-    )
-
-
 def _study_index_harmonized(study: Study) -> bool:
     """True when Dataset should show the study Harmonized (green).
 
-    - Studies with CT/MR series: all CT/MR series have ``harmonized_description``
-      (planar siblings do not block).
-    - Pure XR/US/MG studies: all planar Harmonize series are done.
-    - Report-only (SR/DOC/PDF) studies are not study-green from series alone;
-      SR/DOC siblings never gate CT/MR or planar green.
+    Every tseg ∪ planar Harmonize series must have ``harmonized_description``.
+    Report-only (SR/DOC/PDF) studies are not study-green from series alone.
     """
-    from anonymizer.utils.modalities import (
-        series_is_planar_harmonize_eligible,
-        series_is_tseg_eligible,
-    )
-
-    tseg_series = [s for s in (study.series or []) if series_is_tseg_eligible(s.modality)]
-    if tseg_series:
-        return all(bool((s.harmonized_description or "").strip()) for s in tseg_series)
-
-    planar_series = [s for s in (study.series or []) if series_is_planar_harmonize_eligible(s.modality)]
-    if planar_series:
-        return all(bool((s.harmonized_description or "").strip()) for s in planar_series)
-    return False
+    return study.all_series_harmonized()
 
 
 def _study_face_blur_label(study: Study) -> str:

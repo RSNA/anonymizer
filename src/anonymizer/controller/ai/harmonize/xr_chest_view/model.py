@@ -9,10 +9,7 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 
-from anonymizer.controller.ai.harmonize.xr_chest_view.labels import (
-    CXP_PROJECTION_LABELS,
-    CXP_ROTATION_LABELS,
-)
+from anonymizer.controller.ai.harmonize.xr_chest_view.labels import CXP_PROJECTION_LABELS, CXP_ROTATION_LABELS
 
 logger = logging.getLogger(__name__)
 

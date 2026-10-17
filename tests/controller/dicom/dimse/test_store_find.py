@@ -8,7 +8,7 @@ from pydicom.errors import InvalidDicomError
 
 import tests.controller.dicom.support.pacs_simulator_scp as pacs_simulator_scp
 from anonymizer.controller.project import ProjectController
-from anonymizer.utils.storage import count_studies_series_images
+from anonymizer.utils.storage.dicom_tree import count_studies_series_images
 from tests.controller.dicom.support.helpers import (
     export_patients_from_local_storage_to_test_pacs,
     pacs_storage_dir,

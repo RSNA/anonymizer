@@ -78,6 +78,6 @@ def test_segmentation_mode_for_modality() -> None:
         set_ct_segmentation_mode("6mm")
         set_mr_segmentation_mode("1.5mm")
         assert segmentation_mode_for_modality("CT") == "6mm"
-        assert segmentation_mode_for_modality("MRI") == "1.5mm"
+        assert segmentation_mode_for_modality("MR") == "1.5mm"
     finally:
         clear_segmentation_mode_cache()

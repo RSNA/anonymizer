@@ -9,11 +9,7 @@ import customtkinter as ctk
 
 from anonymizer.controller.ai.tseg.config import PRIMARY_SEGMENT_ORDER
 from anonymizer.controller.analytics.dataset import organ_display_name
-from anonymizer.controller.annotations.store import (
-    AnnotateSession,
-    label_name_taken,
-    resolve_normative_organ,
-)
+from anonymizer.controller.annotations.store import AnnotateSession, label_name_taken, resolve_normative_organ
 from anonymizer.utils.translate import _
 from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel

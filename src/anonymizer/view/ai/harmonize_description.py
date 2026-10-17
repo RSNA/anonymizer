@@ -11,7 +11,7 @@ from tkinter import messagebox
 from pydicom import Dataset
 
 from anonymizer.controller.ai.feature_availability import harmonize_allowed_for_modality
-from anonymizer.utils.modalities import is_harmonize_modality
+from anonymizer.utils.modalities import Modality, get_modality_catalog
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.harmonize_results import (
     HarmonizeBatchOutcome,
@@ -40,7 +40,8 @@ def harmonize_button_visible(
     """Show Harmonize when models/path are ready and the series ORM flag is not set."""
     if not harmonize_models_ready:
         return False
-    if not is_harmonize_modality(modality):
+    series_mod = Modality.from_code(modality)
+    if series_mod is None or not get_modality_catalog()[series_mod].harmonize:
         return False
     return not already_harmonized
 
@@ -52,6 +53,7 @@ def launch_harmonize_description(
     ds: Dataset | None,
     anon_model,
     fonts: AppFonts | None = None,
+    mappings_dir: Path | None = None,
     existing_view: HarmonizeResultsView | None = None,
     on_series_description_updated: Callable[[], None] | None = None,
     on_closed: Callable[[HarmonizeBatchOutcome], None] | None = None,
@@ -66,6 +68,7 @@ def launch_harmonize_description(
         ds: Loaded series dataset (first instance).
         anon_model: AnonymizerModel for ORM / PHI header.
         fonts: Optional app fonts.
+        mappings_dir: Project ``storage_dir/mappings`` for description override CSVs.
         existing_view: Caller's held Harmonize window, if any.
         on_series_description_updated: Refresh host title/index after Accept.
         on_closed: Host cleanup when Harmonize closes.
@@ -74,7 +77,8 @@ def launch_harmonize_description(
     Returns:
         The Harmonize window, or ``None`` if the action was blocked / cancelled.
     """
-    if ds is None or not is_harmonize_modality(getattr(ds, "Modality", None)):
+    ds_mod = Modality.from_code(getattr(ds, "Modality", None) if ds is not None else None)
+    if ds is None or ds_mod is None or not get_modality_catalog()[ds_mod].harmonize:
         return None
     modality = getattr(ds, "Modality", None)
     if not harmonize_allowed_for_modality(modality):
@@ -120,6 +124,7 @@ def launch_harmonize_description(
         current_description=str(ds.get("SeriesDescription", "") or "").strip(),
         fonts=fonts,
         anon_model=anon_model,
+        mappings_dir=mappings_dir,
         on_series_description_updated=on_series_description_updated,
         on_closed=on_closed,
     )

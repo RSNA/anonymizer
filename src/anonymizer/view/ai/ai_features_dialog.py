@@ -7,11 +7,7 @@ from collections.abc import Callable
 import customtkinter as ctk
 
 from anonymizer.utils.translate import _
-from anonymizer.view.ai.features.look import (
-    FEATURE_ACTION_BUTTON_WIDTH,
-    FEATURE_DIALOG_PAD,
-    FEATURE_INTRO_WRAP,
-)
+from anonymizer.view.ai.features.look import FEATURE_ACTION_BUTTON_WIDTH, FEATURE_DIALOG_PAD, FEATURE_INTRO_WRAP
 from anonymizer.view.ai.features.panel import AiFeaturesPanel
 from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel

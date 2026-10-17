@@ -6,8 +6,9 @@ import logging
 import shutil
 from pathlib import Path
 
-from anonymizer.anonymizer import create_headless_controller
+from anonymizer.controller.headless import create_headless_controller
 from anonymizer.controller.project import ProjectController
+from anonymizer.controller.runner import RemovePixelPhiRunner
 from anonymizer.model.project import ProjectModel
 
 logger = logging.getLogger(__name__)
@@ -152,7 +153,6 @@ class ProjectSession:
     def ensure_ocr_reader(self, runner: object | None = None) -> object:
         if self._ocr_handle is not None and getattr(self._ocr_handle, "reader", None) is not None:
             return self._ocr_handle
-        from anonymizer.controller.runner import RemovePixelPhiRunner
 
         self._ocr_runner = runner or RemovePixelPhiRunner()
         self._ocr_handle = self._ocr_runner.enter_models()

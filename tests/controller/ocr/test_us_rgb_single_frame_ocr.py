@@ -22,13 +22,12 @@ from anonymizer.controller.runner import OcrEditContext, RemovePixelPhiRunner, R
 from anonymizer.controller.series_io import load_series_frames
 from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import AnonymizerModel
-from anonymizer.utils.storage import load_default_whitelist
+from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_default_whitelist
 from tests.controller.ocr.conftest import assert_dcm
 from tests.controller.support.pixel_phi_test_support import register_series_with_anonymizer
 from tests.controller.support.us_rgb_fixtures import (
     US_RGB_BATCH_LOG_TOKENS,
     US_RGB_BATCH_OCR_TEXTS,
-    US_RGB_BATCH_PIXELS_CHANGED,
     US_RGB_BATCH_REMOVED_TEXTS,
     US_RGB_DCM,
     US_RGB_DIR,

@@ -154,7 +154,7 @@ def _anatomy_only_series(tmp_path: Path) -> Path:
     return series
 
 
-@patch("anonymizer.controller.ai.tseg.segment.finalize_seg_cache", side_effect=lambda cache, seg, voxels: voxels)
+@patch("anonymizer.controller.ai.tseg.segment.finalize_seg_cache_with_ledger", side_effect=lambda cache, seg, voxels: voxels)
 @patch("anonymizer.controller.ai.tseg.segment.collect_structure_voxels_from_masks", return_value={"cerebellum": 4000})
 @patch("anonymizer.controller.ai.tseg.readiness.verify_face_license", return_value=(True, ""))
 @patch("anonymizer.controller.ai.tseg.segment.run_brain_structures_segmentation", return_value=1.0)

@@ -62,10 +62,13 @@ from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
     collect_series_view_embedded_phi_texts,
     remove_ocr_text_from_frame,
 )
-from anonymizer.controller.ai.feature_availability import (
-    face_blur_allowed,
-    harmonize_allowed_for_modality,
+from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
+    load_default_whitelist,
+    load_project_exclude_rects,
+    save_project_exclude_rects,
+    save_project_whitelist,
 )
+from anonymizer.controller.ai.feature_availability import face_blur_allowed, harmonize_allowed_for_modality
 from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir, tseg_cache_summary
 from anonymizer.controller.ai.tseg.config import TSEG_CACHE_DIRNAME
 from anonymizer.controller.ai.tseg.dicom_geometry import (
@@ -120,20 +123,10 @@ from anonymizer.controller.series_overlay import LayerType, OCRText, OverlayData
 from anonymizer.controller.work_state import WorkState
 from anonymizer.utils.dicom import get_wl_ww
 from anonymizer.utils.memory import collect_garbage_safe, log_process_memory
-from anonymizer.utils.storage import (
-    get_dcm_files,
-    load_default_whitelist,
-    load_project_exclude_rects,
-    project_dir_from_series_path,
-    save_project_exclude_rects,
-    save_project_whitelist,
-)
+from anonymizer.utils.storage.dicom_tree import get_dcm_files
 from anonymizer.utils.translate import _
 from anonymizer.utils.windowing import apply_windowing
-from anonymizer.view.ai.blur_face_results import (
-    face_blur_mode_from_menu_label,
-    face_blur_mode_menu_values,
-)
+from anonymizer.view.ai.blur_face_results import face_blur_mode_from_menu_label, face_blur_mode_menu_values
 from anonymizer.view.ai.face_blur_review_dialog import show_face_blur_review_dialog
 from anonymizer.view.ai.harmonize_description import (
     harmonize_button_visible,
@@ -141,10 +134,7 @@ from anonymizer.view.ai.harmonize_description import (
     launch_harmonize_description,
 )
 from anonymizer.view.ai.harmonize_results import HarmonizeBatchOutcome
-from anonymizer.view.common.app_window import (
-    AppCTkToplevel,
-    refresh_app_window_menu,
-)
+from anonymizer.view.common.app_window import AppCTkToplevel, refresh_app_window_menu
 from anonymizer.view.common.ctk_safe import mark_ctk_window_destroyed
 from anonymizer.view.common.fonts import AppFonts
 from anonymizer.view.common.job_poller import start_background_job
@@ -168,6 +158,23 @@ from anonymizer.view.series.metadata_assessment_dialog import MetadataAssessment
 
 if TYPE_CHECKING:
     from anonymizer.controller.project import ProjectController
+from tkinter import filedialog
+
+from easyocr import Reader
+
+from anonymizer.controller.ai.embedded_phi.ner.cache import download_ner_models
+from anonymizer.controller.ai.embedded_phi.pixel.cache import (
+    OCR_LANGS,
+    OCR_MODEL_DIR,
+    download_ocr_models,
+)
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import detect_text
+from anonymizer.controller.ai.feature_availability import embedded_phi_has_models
+from anonymizer.controller.ai.tseg.segment import read_cached_segmentation_mode
+from anonymizer.controller.analytics.dataset import upsert_series_ledger_from_cache
+from anonymizer.utils.modalities import Modality
+from anonymizer.view.common.ux_fields import truncate_series_description
+from anonymizer.view.series.new_segment_dialog import show_new_segment_dialog
 
 logger = logging.getLogger(__name__)
 
@@ -314,9 +321,10 @@ def clear_cache_button_visible(
     has_segment_masks: bool = False,
 ) -> bool:
     """Show Clear when Harmonize completed or orphan segment masks remain on disk."""
-    from anonymizer.utils.modalities import is_tseg_modality
 
-    return is_tseg_modality(modality) and (already_harmonized or has_segment_masks)
+    return Modality.from_code(modality) in {Modality.CT, Modality.MR} and (
+        already_harmonized or has_segment_masks
+    )
 
 
 def blur_face_toolbar_visible(
@@ -600,9 +608,8 @@ class SeriesView(AppCTkToplevel):
         )
 
         series_geometry: SeriesGeometryResult | None = None
-        from anonymizer.utils.modalities import is_tseg_modality
 
-        if is_tseg_modality(getattr(loaded.metadata, "Modality", None)):
+        if Modality.from_code(getattr(loaded.metadata, "Modality", None)) in {Modality.CT, Modality.MR}:
             series_geometry = load_geometry_cache(series_path)
 
         log_process_memory(
@@ -1038,7 +1045,7 @@ class SeriesView(AppCTkToplevel):
 
     def _log_whitelist_trace(self, action: str, *, delta: str | None = None) -> None:
         modality = self._ds.Modality if self._ds is not None else None
-        project_dir = project_dir_from_series_path(self._series_path)
+        project_dir = self._controller.model.storage_dir
         items = self._capture_whitelist_items()
         logger.debug(
             "Whitelist %s modality=%s project_dir=%s count=%d items=%s%s",
@@ -1054,7 +1061,7 @@ class SeriesView(AppCTkToplevel):
         if self._ds is None or self._ds.Modality is None:
             self._whitelist_match_settings = default_whitelist_match_settings()
             return
-        project_dir = project_dir_from_series_path(self._series_path)
+        project_dir = self._controller.model.storage_dir
         self._whitelist_match_settings = load_modality_whitelist_match_settings(project_dir, self._ds.Modality)
         self._apply_whitelist_match_settings_to_ui()
         self._log_whitelist_trace(
@@ -1559,7 +1566,7 @@ class SeriesView(AppCTkToplevel):
         if self._ds is None or self._ds.Modality is None:
             logger.error("CRITICAL: Modality not found in dataset; whitelist not loaded")
         else:
-            project_dir = project_dir_from_series_path(self._series_path)
+            project_dir = self._controller.model.storage_dir
             whitelist = load_modality_whitelist(project_dir, self._ds.Modality)
             for item in whitelist:
                 self.whitelist.insert(tk.END, item)
@@ -1574,7 +1581,6 @@ class SeriesView(AppCTkToplevel):
         return loaded.metadata, frames, loaded.slice_paths
 
     def _update_title(self):
-        from anonymizer.view.common.ux_fields import truncate_series_description
 
         title = _("Series View")
         if self._ds:
@@ -1834,7 +1840,7 @@ class SeriesView(AppCTkToplevel):
         ds = self._current_slice_dataset()
         if ds is None:
             return
-        project_dir = project_dir_from_series_path(self._series_path)
+        project_dir = self._controller.model.storage_dir
         whitelist: list[str] = []
         if hasattr(self, "whitelist"):
             whitelist = [str(t) for t in self.whitelist.get(0, tk.END)]
@@ -2093,7 +2099,6 @@ class SeriesView(AppCTkToplevel):
             self.image_viewer.set_segmentation_structures([])
             self._sync_annotate_availability()
             return
-        from anonymizer.controller.ai.tseg.segment import read_cached_segmentation_mode
 
         present = collect_primary_segment_voxels(seg_dir) if seg_dir.is_dir() else {}
         mode = read_cached_segmentation_mode(seg_dir.parent) if present else None
@@ -2319,16 +2324,7 @@ class SeriesView(AppCTkToplevel):
 
     def process_single_frame_ocr(self, frame_index: int):
         """Performs OCR on a single frame (sync fallback — prefer background detect_text job)."""
-        from easyocr import Reader
 
-        from anonymizer.controller.ai.embedded_phi.ner.cache import download_ner_models
-        from anonymizer.controller.ai.embedded_phi.pixel.cache import (
-            OCR_LANGS,
-            OCR_MODEL_DIR,
-            download_ocr_models,
-        )
-        from anonymizer.controller.ai.embedded_phi.pixel.detect_text import detect_text, ocr_image_for_frame
-        from anonymizer.controller.ai.feature_availability import embedded_phi_has_models
 
         if self._ds is None:
             return
@@ -2437,7 +2433,6 @@ class SeriesView(AppCTkToplevel):
         self._ocr_work_state.reset()
         wl, ww = self._dicom_wl or 0.0, self._dicom_ww or 0.0
         if self._ds is not None:
-            from anonymizer.utils.dicom import get_wl_ww
 
             wl, ww = get_wl_ww(self._ds)
         self._ocr_work_state.bind(
@@ -2458,7 +2453,7 @@ class SeriesView(AppCTkToplevel):
             self.detected_text.clear()
             if hasattr(self, "image_viewer"):
                 self.image_viewer.clear_text_overlays()
-        project_dir = project_dir_from_series_path(self._series_path)
+        project_dir = self._controller.model.storage_dir
         options = RunOptions(
             edit_context=edit_context,
             whitelist=[],
@@ -2824,7 +2819,7 @@ class SeriesView(AppCTkToplevel):
         if self._ds is None:
             return ""
         rects = self._all_active_exclude_normalized()
-        project_dir = project_dir_from_series_path(self._series_path)
+        project_dir = self._controller.model.storage_dir
         modality = str(self._ds.get("Modality", "") or "")
         save_project_exclude_rects(project_dir, modality, rects)
         self._saved_exclude_fingerprint = self._exclude_rects_fingerprint(rects)
@@ -2840,7 +2835,7 @@ class SeriesView(AppCTkToplevel):
     def _load_saved_exclude_areas(self) -> None:
         if self._ds is None or not hasattr(self, "image_viewer"):
             return
-        project_dir = project_dir_from_series_path(self._series_path)
+        project_dir = self._controller.model.storage_dir
         modality = str(self._ds.get("Modality", "") or "")
         stored = load_project_exclude_rects(project_dir, modality)
         self._saved_exclude_fingerprint = self._exclude_rects_fingerprint(stored)
@@ -2889,6 +2884,7 @@ class SeriesView(AppCTkToplevel):
             ds=self._ds,
             anon_model=self._controller.anonymizer.model,
             fonts=self._fonts,
+            mappings_dir=self._controller.model.mappings_dir(),
             existing_view=getattr(self, "_harmonize_view", None),
             on_series_description_updated=self._on_series_description_updated,
             on_closed=self._on_harmonize_closed,
@@ -2939,7 +2935,6 @@ class SeriesView(AppCTkToplevel):
 
     def _on_annotate_import_segments(self) -> None:
         """Import researcher NIfTI/NRRD masks into user annotation labels."""
-        from tkinter import filedialog
 
         session = self._ensure_annotate_session()
         if session is None:
@@ -3264,7 +3259,6 @@ class SeriesView(AppCTkToplevel):
                 parent=self,
             )
             return
-        from anonymizer.view.series.new_segment_dialog import show_new_segment_dialog
 
         result = show_new_segment_dialog(self, session)
         if not result.applied or not result.name:
@@ -3313,16 +3307,17 @@ class SeriesView(AppCTkToplevel):
         try:
             save_annotate_session(session)
             if update_ledger:
-                from anonymizer.controller.analytics.dataset import upsert_series_ledger_from_cache
 
                 upsert_series_ledger_from_cache(session.cache_dir)
         except Exception:
             logger.exception("Failed to save annotations")
 
     def clear_ts_cache_button_clicked(self) -> None:
-        from anonymizer.utils.modalities import is_tseg_modality
 
-        if self._ds is None or not is_tseg_modality(getattr(self._ds, "Modality", None)):
+        if self._ds is None or Modality.from_code(getattr(self._ds, "Modality", None)) not in {
+            Modality.CT,
+            Modality.MR,
+        }:
             return
         if not self._clear_ts_cache_button_visible():
             return
@@ -3462,11 +3457,7 @@ class SeriesView(AppCTkToplevel):
             if self._whitelist_changed or self._whitelist_match_changed:
                 logger.error("CRITICAL: Modality not found in dataset")
             return
-        project_dir = project_dir_from_series_path(self._series_path)
-        if project_dir is None:
-            if self._whitelist_changed or self._whitelist_match_changed:
-                logger.error("CRITICAL: Series path does not have enough parents - cannot determine project directory")
-            return
+        project_dir = self._controller.model.storage_dir
 
         if self._whitelist_changed:
             whitelist_set = self.get_whitelist_set()

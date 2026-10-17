@@ -33,6 +33,7 @@ from anonymizer.view.common.ux_fields import (
 
 if TYPE_CHECKING:
     from anonymizer.controller.project import ProjectController
+from anonymizer.controller.dicom import dicomweb as dicomweb_api
 
 logger = logging.getLogger(__name__)
 
@@ -575,7 +576,6 @@ class DICOMNodeDialog(AppToplevel):
         def worker() -> None:
             try:
                 if node.dicomweb:
-                    from anonymizer.controller.dicom import dicomweb as dicomweb_api
 
                     ok, message = dicomweb_api.probe_connection(
                         node, self._controller.model.network_timeouts

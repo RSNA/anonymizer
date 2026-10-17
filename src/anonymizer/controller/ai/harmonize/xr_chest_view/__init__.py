@@ -5,7 +5,6 @@ Upstream weights come from MedicalAILabo ``CXp-Projection-Rotation-Mislabel-Chec
 """
 
 from anonymizer.controller.ai.harmonize.xr_chest_view.cache import (
-    # Back-compat aliases
     CXP_VIEW_DIR,
     XR_CHEST_VIEW_DIR,
     CxpViewModelStatus,

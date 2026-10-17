@@ -438,15 +438,19 @@ def test_maybe_offer_only_when_study_complete_and_description_empty():
     from anonymizer.controller.ai.harmonize import maybe_offer_study_description_harmonize
 
     model = MagicMock()
-    model.study_is_harmonized.return_value = False
+    model.study_all_series_harmonized.return_value = False
+    model.get_study_harmonized_description.return_value = None
     assert maybe_offer_study_description_harmonize(model, "study-1") is None
 
-    model.study_is_harmonized.return_value = True
+    model.study_all_series_harmonized.return_value = True
     model.get_study_harmonized_description.return_value = "CT Chest WO contrast"
     assert maybe_offer_study_description_harmonize(model, "study-1") is None
 
     model.get_study_harmonized_description.return_value = None
-    model.get_ct_series_harmonized_descriptions.return_value = ["Ch Ax PortVen"]
+    from anonymizer.utils.modalities import StudyImagingComposition
+
+    model.study_harmonize_composition.return_value = StudyImagingComposition.D3
+    model.get_3d_series_harmonized_descriptions.return_value = ["Ch Ax PortVen"]
     model.find_studies_with_series_fingerprint.return_value = ["study-1"]
     model.get_anon_patient_id_for_study.return_value = None
     offer = maybe_offer_study_description_harmonize(model, "study-1", top_n=3)

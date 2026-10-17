@@ -24,6 +24,7 @@ from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 
 if TYPE_CHECKING:
     from anonymizer.controller.anonymizer_script import ScriptDocument
+from anonymizer.controller.process_ctp_lookup import apply_lookup_operands
 
 logger = logging.getLogger(__name__)
 
@@ -207,7 +208,7 @@ class LookupTableDialog(AppToplevel):
 
         patient_count = len(self._preview.rows)
         offset_count = sum(1 for row in self._preview.rows if row.date_offset is not None)
-        basedate_count = sum(1 for row in self._preview.rows if row.basedate is not None)
+        basedate_count = sum(1 for row in self._preview.rows if row.base_date is not None)
         self._summary_label.configure(
             text=_(
                 "Patients: {patients}  |  With date offset: {offsets}  |  With basedate: {basedates}"
@@ -252,7 +253,6 @@ class LookupTableDialog(AppToplevel):
             else:
                 # Create-project staging: apply to in-memory document; defer SQL/files.
                 if self._script_document is not None:
-                    from anonymizer.controller.process_ctp_lookup import apply_lookup_operands
 
                     apply_lookup_operands(self._script_document, has_dateoffset=self._preview.has_dateoffset)
                 if self._on_pending_preview is not None:

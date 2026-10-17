@@ -9,21 +9,14 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
-from cv2 import (
-    INPAINT_TELEA,
-    dilate,
-    inpaint,
-)
+from cv2 import INPAINT_TELEA, dilate, inpaint
 from easyocr import Reader
 from numpy import ndarray
 from numpy.typing import NDArray
 from openjpeg.utils import encode_array
 from pydicom import Dataset, dcmread
 from pydicom.encaps import encapsulate
-from pydicom.pixels.processing import (
-    apply_color_lut,
-    convert_color_space,
-)
+from pydicom.pixels.processing import apply_color_lut, convert_color_space
 from pydicom.uid import JPEG2000Lossless
 
 if TYPE_CHECKING:

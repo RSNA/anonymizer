@@ -22,6 +22,7 @@ only non-zero algorithms included. Organ panel histograms patient-mean organ vol
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import math
@@ -36,21 +37,23 @@ from pathlib import Path
 from typing import Any
 
 from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir
-from anonymizer.controller.ai.tseg.config import PRIMARY_SEGMENT_GROUPS
+from anonymizer.controller.ai.tseg.config import PRIMARY_SEGMENT_GROUPS, TSEG_CACHE_DIRNAME
 from anonymizer.controller.ai.tseg.contrast import truncal_anatomy_present
+from anonymizer.controller.ai.tseg.modality_profile import resolve_profile_for_series
+from anonymizer.controller.ai.tseg.regions import (
+    body_parts_present,
+    collect_structure_voxels_from_masks,
+    dominant_region_from_voxels,
+)
 from anonymizer.controller.ai.tseg.seg_retention import (
     aggregate_primary_segment_voxels,
     ensure_organ_volumes_ml,
+    finalize_seg_cache,
     read_mask_geometry,
     read_primary_segment_voxels,
     read_structure_voxels,
     resolve_primary_segment_files,
     voxels_to_ml,
-)
-from anonymizer.controller.ai.tseg.segment import (
-    body_parts_present,
-    collect_structure_voxels_from_masks,
-    dominant_region_from_voxels,
 )
 from anonymizer.controller.analytics.ledger import (
     SeriesLedgerRow,
@@ -60,8 +63,9 @@ from anonymizer.controller.analytics.ledger import (
     upsert_series_row,
     utc_now_iso,
 )
+from anonymizer.controller.annotations.volumes import user_annotation_volumes_ml
 from anonymizer.model.anonymizer import AnonymizerModel, Study
-from anonymizer.utils.modalities import is_tseg_modality
+from anonymizer.utils.modalities import Modality
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
@@ -1042,7 +1046,6 @@ def _organ_volumes_ml_for_cache(cache_dir: Path) -> dict[str, float]:
     sidecars only when no anatomy masks exist. User annotation ml always
     overlays TS (user wins on the same organ key).
     """
-    from anonymizer.controller.annotations.volumes import user_annotation_volumes_ml
 
     volumes = ensure_organ_volumes_ml(cache_dir)
     if not volumes:
@@ -1321,7 +1324,6 @@ def upsert_series_ledger_from_cache(
     modality: str | None = None,
 ) -> SeriesLedgerRow | None:
     """Append/replace one ledger row after Harmonize finalize (best-effort)."""
-    from anonymizer.controller.ai.tseg.config import TSEG_CACHE_DIRNAME
 
     cache_dir = Path(cache_dir).resolve()
     if cache_dir.name != TSEG_CACHE_DIRNAME:
@@ -1344,7 +1346,6 @@ def upsert_series_ledger_from_cache(
     mod = (modality or "").strip().upper()
     if not mod:
         try:
-            from anonymizer.controller.ai.tseg.modality_profile import resolve_profile_for_series
 
             mod = str(resolve_profile_for_series(series_path).modality or "").strip().upper()
         except Exception:
@@ -1357,6 +1358,18 @@ def upsert_series_ledger_from_cache(
     row = contrib[2]
     upsert_series_row(images_dir, row)
     return row
+
+
+def finalize_seg_cache_with_ledger(
+    cache_dir: Path,
+    seg_dir: Path,
+    structure_voxels: dict[str, int],
+) -> dict[str, int]:
+    """Publish the seg cache, then append/replace the project analytics ledger row (best-effort)."""
+    primary_counts = finalize_seg_cache(cache_dir, seg_dir, structure_voxels)
+    with contextlib.suppress(Exception):
+        upsert_series_ledger_from_cache(cache_dir)
+    return primary_counts
 
 
 def _collect_tseg_anatomy(
@@ -1443,7 +1456,7 @@ def _assemble_anatomy(
     *,
     modality: str | None,
 ) -> AnatomyAnalytics:
-    if modality is not None and not is_tseg_modality(modality):
+    if modality is not None and Modality.from_code(modality) not in {Modality.CT, Modality.MR}:
         empty_regions = _distribution_from_counter(Counter(), total=0, order=BODY_REGIONS)
         return AnatomyAnalytics(
             available=False,
@@ -1455,7 +1468,9 @@ def _assemble_anatomy(
         )
 
     series_pool = [row for row in index.series if _series_matches(row, modality)]
-    ct_mr_series = sum(1 for row in series_pool if is_tseg_modality(row.modality))
+    ct_mr_series = sum(
+        1 for row in series_pool if Modality.from_code(row.modality) in {Modality.CT, Modality.MR}
+    )
     segmented = [mod for mod in index.segmented_modalities if modality is None or mod == modality]
     segmented_series = len(segmented)
 

@@ -8,10 +8,7 @@ from anonymizer.controller.ai.harmonize.xp_bodypart.cache import (
     remove_xp_bodypart_models,
     xp_bodypart_ready,
 )
-from anonymizer.controller.ai.harmonize.xp_bodypart.labels import (
-    XP_BODYPART_LABELS,
-    map_xp_label_to_planar_anatomy,
-)
+from anonymizer.controller.ai.harmonize.xp_bodypart.labels import XP_BODYPART_LABELS, map_xp_label_to_planar_anatomy
 from anonymizer.controller.ai.harmonize.xp_bodypart.predict import (
     XpBodypartPrediction,
     predict_body_part,

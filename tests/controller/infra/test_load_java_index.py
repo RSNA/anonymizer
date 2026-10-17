@@ -3,9 +3,10 @@ import time
 
 from pydicom.dataset import Dataset
 
+from anonymizer.controller.dates import hash_date
 from anonymizer.controller.project import ProjectController
 from anonymizer.model.anonymizer import AnonymizerModel
-from anonymizer.utils.storage import (
+from anonymizer.utils.storage.java_index import (
     JavaAnonymizerExportedStudy,
     read_java_anonymizer_index_xlsx,
 )
@@ -82,7 +83,7 @@ def test_load_java_index_into_new_project_and_import_ct_small(temp_dir: str, con
     assert len(phi.studies[0].series) == 1
     assert study.study_uid == ds.StudyInstanceUID
     assert study.study_date == ds.get("StudyDate")
-    date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
+    date_delta, _ = hash_date(phi.studies[0].study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
     assert study.description == ds.get("StudyDescription")
     assert study.accession_number == ds.get("AccessionNumber")

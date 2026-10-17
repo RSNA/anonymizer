@@ -12,14 +12,11 @@ from typing import Any, Literal
 import numpy as np
 import SimpleITK as sitk
 
-from anonymizer.controller.ai.tseg.seg_retention import (
-    read_mask_geometry,
-    sitk_image_from_mask_geometry,
-)
+from anonymizer.controller.ai.tseg.config import ANNOTATIONS_DIRNAME, PRIMARY_SEGMENT_ORDER
+from anonymizer.controller.ai.tseg.seg_retention import read_mask_geometry, sitk_image_from_mask_geometry
 
 logger = logging.getLogger(__name__)
 
-ANNOTATIONS_DIRNAME = "annotations"
 LABELS_FILENAME = "labels.nii.gz"
 LABEL_MAP_FILENAME = "label_map.json"
 EDITS_DIRNAME = "edits"
@@ -117,7 +114,6 @@ def resolve_normative_organ(name: str) -> str | None:
     Matches exact ``PRIMARY_SEGMENT_ORDER`` keys and display labels
     (case-insensitive; spaces/underscores interchangeable).
     """
-    from anonymizer.controller.ai.tseg.config import PRIMARY_SEGMENT_ORDER
 
     token = _normalize_organ_token(name)
     if not token:

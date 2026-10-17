@@ -19,6 +19,7 @@ V3_METADATA_COLUMNS = (
 )
 
 LOOKUP_PATIENT_TABLE = "lookup_patient"
+PHI_BASE_DATE_COLUMN = "base_date"
 
 
 def _create_v2_shaped_db(db_path: Path) -> None:
@@ -110,7 +111,7 @@ def mock_dataset() -> Dataset:
     return ds
 
 
-def test_lookup_patient_table_created_on_open(tmp_path: Path) -> None:
+def test_lookup_patient_table_absent_and_phi_has_base_date(tmp_path: Path) -> None:
     db_path = tmp_path / "fresh.db"
     with opened_anonymizer_model(f"sqlite:///{db_path}"):
         pass
@@ -123,7 +124,55 @@ def test_lookup_patient_table_created_on_open(tmp_path: Path) -> None:
             )
         }
     engine.dispose()
-    assert LOOKUP_PATIENT_TABLE in tables
+    assert LOOKUP_PATIENT_TABLE not in tables
+    assert PHI_BASE_DATE_COLUMN in _column_names(db_path, "phi")
+
+
+def test_legacy_lookup_patient_migrates_into_phi_then_dropped(tmp_path: Path) -> None:
+    db_path = tmp_path / "legacy_lookup.db"
+    _create_v2_shaped_db(db_path)
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE phi ADD COLUMN date_offset INTEGER"))
+        conn.execute(
+            text(
+                """
+                CREATE TABLE lookup_patient (
+                    patient_id TEXT PRIMARY KEY,
+                    anon_patient_id TEXT NOT NULL,
+                    date_offset INTEGER,
+                    basedate TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO lookup_patient (patient_id, anon_patient_id, date_offset, basedate) "
+                "VALUES ('MRN1', 'SITE-1', 42, '20180327')"
+            )
+        )
+        conn.commit()
+    engine.dispose()
+
+    with opened_anonymizer_model(f"sqlite:///{db_path}"):
+        pass
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.connect() as conn:
+        tables = {
+            row[0]
+            for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
+        }
+        row = conn.execute(
+            text("SELECT anon_patient_id, date_offset, base_date FROM phi WHERE patient_id = 'MRN1'")
+        ).fetchone()
+    engine.dispose()
+    assert LOOKUP_PATIENT_TABLE not in tables
+    assert row is not None
+    assert row[0] == "SITE-1"
+    assert row[1] == 42
+    assert row[2] == "20180327"
 
 
 def test_ensure_schema_columns_adds_v3_metadata_columns(tmp_path: Path) -> None:

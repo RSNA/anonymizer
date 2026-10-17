@@ -3,33 +3,25 @@
 from __future__ import annotations
 
 import logging
-import threading
 from dataclasses import dataclass
-from pathlib import Path
 
 import numpy as np
 import torch
 import torch.nn.functional as F
 
-from anonymizer.controller.ai.harmonize.xr_chest_view.cache import CXP_VIEW_WEIGHT_PATH, cxp_view_ready
+from anonymizer.controller.ai.harmonize.xr_chest_view.cache import CXP_VIEW_WEIGHT_PATH, MODEL_SLOT, cxp_view_ready
 from anonymizer.controller.ai.harmonize.xr_chest_view.labels import (
     CXP_PROJECTION_LABELS,
     CXP_ROTATION_LABELS,
     map_projection_to_playbook_view,
 )
 from anonymizer.controller.ai.harmonize.xr_chest_view.model import CxpViewNet, load_cxp_view_weights
-from anonymizer.controller.ai.harmonize.xr_chest_view.preprocess import (
-    tensor_from_grayscale_array,
-    upright_array,
-)
+from anonymizer.controller.ai.harmonize.xr_chest_view.preprocess import tensor_from_grayscale_array, upright_array
 
 logger = logging.getLogger(__name__)
 
 _HIGH_ROT_CONF = 0.8
 
-_model_lock = threading.Lock()
-_cached_model: CxpViewNet | None = None
-_cached_path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -49,24 +41,7 @@ class CxpViewPrediction:
 
 
 def _get_model() -> CxpViewNet:
-    global _cached_model, _cached_path
-    path = CXP_VIEW_WEIGHT_PATH.resolve()
-    with _model_lock:
-        if _cached_model is not None and _cached_path == path:
-            return _cached_model
-        if not path.is_file():
-            raise FileNotFoundError(f"CXp view weights missing: {path}")
-        logger.info("Loading CXp view weights from %s", path)
-        _cached_model = load_cxp_view_weights(path)
-        _cached_path = path
-        return _cached_model
-
-
-def clear_model_cache() -> None:
-    global _cached_model, _cached_path
-    with _model_lock:
-        _cached_model = None
-        _cached_path = None
+    return MODEL_SLOT.get(CXP_VIEW_WEIGHT_PATH.resolve(), load_cxp_view_weights)
 
 
 def _infer_once(pixels: np.ndarray) -> CxpViewPrediction:

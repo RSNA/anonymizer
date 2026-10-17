@@ -18,11 +18,11 @@ from anonymizer.controller.anonymizer_script import (
     normalize_anonymization_policy,
     should_install_anonymization_policy,
 )
-from anonymizer.controller.process_ctp_lookup import CtpLookupPreview
+from anonymizer.controller.process_ctp_lookup import _DEFAULT_SCRIPT_PATH, CtpLookupPreview
 from anonymizer.controller.project import ProjectController
 from anonymizer.model.project import AnonymizationPolicy, AWSCognito, DICOMNode, ProjectModel
 from anonymizer.utils.logging import set_logging_levels
-from anonymizer.utils.storage import (
+from anonymizer.utils.storage.java_index import (
     JavaAnonymizerExportedStudy,
     read_java_anonymizer_index_xlsx,
 )
@@ -554,7 +554,6 @@ class SettingsDialog(AppToplevel):
     def _open_anonymizer_script_dialog(self) -> None:
         script_path = Path(self.model.anonymizer_script_path)
         if not script_path.is_file():
-            from anonymizer.controller.process_ctp_lookup import _DEFAULT_SCRIPT_PATH
 
             if _DEFAULT_SCRIPT_PATH.is_file():
                 script_path = _DEFAULT_SCRIPT_PATH

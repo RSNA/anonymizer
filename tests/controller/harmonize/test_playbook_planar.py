@@ -18,17 +18,17 @@ from anonymizer.controller.ai.harmonize.pipeline import (
     _load_tseg_series_dataset,
     harmonize_series,
 )
-from anonymizer.controller.ai.harmonize.planar_profile import planar_profile_for_modality
+from anonymizer.controller.ai.feature_availability import harmonize_allowed_for_modality
+from anonymizer.controller.ai.harmonize.profile_2d import (
+    is_2d_harmonize_modality,
+    profile_2d_for_modality,
+)
 from anonymizer.controller.ai.harmonize.playbook_planar import (
     build_planar_harmonized_series_description,
     format_planar_series_description,
 )
-from anonymizer.utils.modalities import (
-    is_harmonize_modality,
-    is_planar_harmonize_modality,
-    is_tseg_modality,
-)
-from anonymizer.view.series.series import harmonize_button_visible
+from anonymizer.utils.modalities import ContentClass, Modality, get_modality_catalog
+from anonymizer.view.ai.harmonize_description import harmonize_button_visible
 from tests.paths import REPO_ROOT
 
 TEST_DCM = REPO_ROOT / "tests" / "controller" / "assets" / "test_dcm_files"
@@ -69,26 +69,29 @@ def us_rgb_series_dir(tmp_path: Path, us_rgb_path: Path) -> Path:
 
 
 def test_modality_gates_planar_vs_tseg() -> None:
-    assert is_planar_harmonize_modality("CR")
-    assert is_planar_harmonize_modality("DX")
-    assert is_planar_harmonize_modality("US")
-    assert is_planar_harmonize_modality("MG")
-    assert not is_planar_harmonize_modality("CT")
-    assert not is_planar_harmonize_modality("MR")
-    assert not is_planar_harmonize_modality("SC")
-    assert not is_planar_harmonize_modality("OT")
-    assert not is_planar_harmonize_modality("DOC")
+    assert is_2d_harmonize_modality("CR")
+    assert is_2d_harmonize_modality("DX")
+    assert is_2d_harmonize_modality("US")
+    assert is_2d_harmonize_modality("MG")
+    assert not is_2d_harmonize_modality("CT")
+    assert not is_2d_harmonize_modality("MR")
+    assert not is_2d_harmonize_modality("SC")
+    assert not is_2d_harmonize_modality("OT")
+    assert not is_2d_harmonize_modality("DOC")
 
-    assert is_tseg_modality("CT") and is_tseg_modality("MR")
-    assert not is_tseg_modality("CR")
-    assert is_harmonize_modality("CR") and is_harmonize_modality("US") and is_harmonize_modality("CT")
-    assert not is_harmonize_modality("SC")
+    catalog = get_modality_catalog()
+    assert catalog[Modality.CT].content_class is ContentClass.D3 and catalog[Modality.MR].content_class is ContentClass.D3
+    assert catalog[Modality.CR].content_class is ContentClass.D2
+    assert harmonize_allowed_for_modality("CR")
+    assert harmonize_allowed_for_modality("US")
+    assert not is_2d_harmonize_modality("SC")
 
-    assert planar_profile_for_modality("CR") is not None
-    assert planar_profile_for_modality("CR").cohort == "XR"
-    assert planar_profile_for_modality("US").loinc_prefix == "US "
-    assert planar_profile_for_modality("CT") is None
-    assert planar_profile_for_modality("SC") is None
+    cr_profile = profile_2d_for_modality("CR")
+    assert cr_profile is not None
+    assert cr_profile.modalities == (Modality.CR, Modality.DX)
+    assert profile_2d_for_modality("US").loinc_prefix == "US "
+    assert profile_2d_for_modality("CT") is None
+    assert profile_2d_for_modality("SC") is None
 
 
 def test_harmonize_button_visible_for_us_and_cxr() -> None:
@@ -110,6 +113,11 @@ def test_harmonize_button_visible_for_us_and_cxr() -> None:
     assert not harmonize_button_visible(
         harmonize_models_ready=True,
         modality="SC",
+        already_harmonized=False,
+    )
+    assert not harmonize_button_visible(
+        harmonize_models_ready=True,
+        modality="XX",
         already_harmonized=False,
     )
 

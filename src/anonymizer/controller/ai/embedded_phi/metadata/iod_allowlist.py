@@ -13,6 +13,7 @@ from anonymizer.utils.package_paths import ASSETS_DIR
 
 if TYPE_CHECKING:
     from dicom_validator.validator.dicom_info import DicomInfo
+from dicom_validator.spec_reader.edition_reader import EditionReader
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,6 @@ def load_dicom_info(edition: str | None = None) -> DicomInfo:
     Pass another edition id only when that edition's ``json/`` exists under
     the same assets root (or set ``path`` via tests).
     """
-    from dicom_validator.spec_reader.edition_reader import EditionReader
 
     ed = (edition or BUNDLED_DICOM_EDITION).strip() or BUNDLED_DICOM_EDITION
     reader = EditionReader(path=_DICOM_STANDARD_ASSETS)

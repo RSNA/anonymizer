@@ -40,6 +40,7 @@ from anonymizer.controller.ai.tseg.series_classification import (
     infer_survey_localizer_dimensionality,
     normalized_series_text,
 )
+from anonymizer.utils.modalities import Modality
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
@@ -905,7 +906,6 @@ def ensure_series_geometry(
     cached: SeriesGeometryResult | None = None,
 ) -> SeriesGeometryResult | None:
     """Return CT|MR series geometry from memory, cache, or on-demand analysis."""
-    from anonymizer.utils.modalities import is_tseg_modality
 
     if cached is not None:
         return cached
@@ -913,7 +913,7 @@ def ensure_series_geometry(
     resolved_modality = modality
     if resolved_modality is None and ds is not None:
         resolved_modality = getattr(ds, "Modality", None)
-    if not is_tseg_modality(resolved_modality):
+    if Modality.from_code(resolved_modality) not in {Modality.CT, Modality.MR}:
         return None
 
     series_directory = Path(series_directory)

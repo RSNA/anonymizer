@@ -24,7 +24,10 @@ from PIL import Image
 from pydicom import Dataset, dcmread
 from pydicom.pixel_data_handlers.util import apply_modality_lut, apply_voi_lut
 
-from anonymizer.utils.storage import count_series, get_dcm_files
+from anonymizer.utils.storage.dicom_tree import (
+    count_series,
+    get_dcm_files,
+)
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)

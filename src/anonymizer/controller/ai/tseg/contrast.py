@@ -13,9 +13,22 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+import psutil
+import xgboost
 
-from anonymizer.controller.ai.tseg.ml_env import sequential_ml_context
+from anonymizer.controller.ai.tseg.ml_env import preserve_accelerator_memory, sequential_ml_context
 from anonymizer.utils.memory import collect_garbage_safe, release_accelerator_caches
+
+try:
+    import nibabel as nib
+except ImportError:
+    nib = None  # type: ignore[assignment,misc]
+import torch
+from totalsegmentator.bin.totalseg_get_phase import pi_time_to_phase
+from totalsegmentator.python_api import totalsegmentator
+
+from anonymizer.controller.ai.tseg.config import STRUCTURE_TO_REGION
+from anonymizer.controller.ai.tseg.ts_probe import TSEG_INSTALL_HINT
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +48,6 @@ def _emit_contrast_progress(
 
 
 PHASES_WITH_CONTRAST: frozenset[str] = frozenset({"arterial_early", "arterial_late", "portal_venous"})
-
-_TSEG_INSTALL_HINT = "pip install rsna-anonymizer"
 
 # Same feature order as totalsegmentator.bin.totalseg_get_phase
 CONTRAST_ORGANS: tuple[str, ...] = (
@@ -143,7 +154,6 @@ def verify_xgboost_runtime() -> None:
     the system OpenMP library (libomp) that pip cannot install.
     """
     try:
-        import xgboost
 
         version = xgboost.__version__
         logger.debug("XGBoost version %s import OK", version)
@@ -160,7 +170,7 @@ def verify_xgboost_runtime() -> None:
             )
         raise RuntimeError(
             f"XGBoost is required for TotalSegmentator contrast analysis. "
-            f"Install with: {_TSEG_INSTALL_HINT}.{platform_hint}"
+            f"Install with: {TSEG_INSTALL_HINT}.{platform_hint}"
         ) from exc
 
 
@@ -173,7 +183,6 @@ def release_accelerator_memory() -> None:
 def log_memory_usage(stage: str) -> None:
     """Log process RSS at a pipeline stage (best-effort)."""
     try:
-        import psutil
 
         rss_mb = psutil.Process().memory_info().rss / (1024 * 1024)
         logger.debug("Memory [%s]: RSS %.0f MB", stage, rss_mb)
@@ -183,7 +192,6 @@ def log_memory_usage(stage: str) -> None:
 
 def release_working_memory(*, stage: str = "", preserve_accelerator: bool = False) -> None:
     """Release accelerator caches and run GC between harmonize pipeline stages."""
-    from anonymizer.controller.ai.tseg.model_cache import preserve_accelerator_memory
 
     release_accelerator_caches()
     if not preserve_accelerator and not preserve_accelerator_memory():
@@ -205,20 +213,10 @@ def release_before_contrast(*, stage: str = "before_contrast") -> None:
 
 
 def _require_nibabel():
-    try:
-        import nibabel as nib
-    except ImportError as exc:
-        raise ImportError(f"nibabel is required for contrast analysis. Install with: {_TSEG_INSTALL_HINT}") from exc
     return nib
 
 
 def _require_totalsegmentator():
-    try:
-        from totalsegmentator.python_api import totalsegmentator
-    except ImportError as exc:
-        raise ImportError(
-            f"TotalSegmentator is required for contrast analysis. Install with: {_TSEG_INSTALL_HINT}"
-        ) from exc
     return totalsegmentator
 
 
@@ -227,13 +225,12 @@ def _contrast_classifier_pickle_path() -> str:
         resource_root = importlib.resources.files("totalsegmentator")
     except ModuleNotFoundError as exc:
         raise ImportError(
-            f"TotalSegmentator is required for contrast classification. Install with: {_TSEG_INSTALL_HINT}"
+            f"TotalSegmentator is required for contrast classification. Install with: {TSEG_INSTALL_HINT}"
         ) from exc
     return str(resource_root / "resources/contrast_phase_classifiers_2024_07_19.pkl")
 
 
 def resolve_device(device: str | None = None) -> str:
-    import torch
 
     if device:
         return device
@@ -250,12 +247,6 @@ def resolve_contrast_device(device: str | None = None) -> str:
 
 
 def _require_pi_time_to_phase():
-    try:
-        from totalsegmentator.bin.totalseg_get_phase import pi_time_to_phase
-    except ImportError as exc:
-        raise ImportError(
-            f"TotalSegmentator contrast phase requires totalsegmentator and xgboost. Install with: {_TSEG_INSTALL_HINT}"
-        ) from exc
     return pi_time_to_phase
 
 
@@ -492,7 +483,6 @@ def structure_voxels_from_organ_stats(stats: dict) -> dict[str, int]:
     voxel counts. Until then, ratios remain meaningful for
     ``dominant_region_from_voxels`` / ``body_parts_present``.
     """
-    from anonymizer.controller.ai.tseg.segment import STRUCTURE_TO_REGION
 
     counts: dict[str, int] = {}
     for structure in STRUCTURE_TO_REGION:

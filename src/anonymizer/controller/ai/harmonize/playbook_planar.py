@@ -14,15 +14,45 @@ from dataclasses import dataclass
 
 from pydicom import Dataset
 
-from anonymizer.controller.ai.harmonize.planar_profile import (
-    PlanarModalityProfile,
-    loinc_prefix_for_planar_cohort,
-    planar_profile_from_dataset,
+from anonymizer.controller.ai.harmonize.profile_2d import (
+    Profile2D,
+    loinc_prefix_for_2d_modality,
+    normalize_2d_modality_label,
+    profile_2d_from_dataset,
 )
 from anonymizer.controller.ai.harmonize.playbook import map_body_part_from_dicom
+from anonymizer.utils.modalities import Modality
+from anonymizer.controller.ai.harmonize.xp_bodypart.fuse import fuse_planar_anatomy
+from anonymizer.controller.ai.harmonize.xp_bodypart.predict import XpBodypartPrediction
+from anonymizer.controller.ai.harmonize.xr_chest_view.fuse import fuse_xr_view
+from anonymizer.controller.ai.harmonize.xr_chest_view.predict import CxpViewPrediction
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
+
+_COHORT_LOINC_MODALITY: dict[str, Modality] = {
+    "XR": Modality.CR,
+    "US": Modality.US,
+    "MG": Modality.MG,
+}
+
+
+def _cohort_label_for_2d_profile(profile: Profile2D) -> str:
+    """Return XR / US / MG cohort label for a 2D Harmonize profile."""
+    return normalize_2d_modality_label(profile.modalities[0]) or "XR"
+
+
+def _loinc_prefix_for_cohort(
+    cohort: str,
+    *,
+    doppler: bool = False,
+    dbt: bool = False,
+    ffd: bool = False,
+) -> str:
+    """Map planar cohort label to LOINC LongCommonName prefix."""
+    modality = _COHORT_LOINC_MODALITY.get(cohort, Modality.CR)
+    return loinc_prefix_for_2d_modality(modality, doppler=doppler, dbt=dbt, ffd=ffd)
+
 
 # Playbook body-part codes → human-readable LOINC-friendly anatomy for planar strings.
 _PLAYBOOK_CODE_TO_ANATOMY_LABEL: dict[str, str] = {
@@ -359,10 +389,11 @@ def build_planar_playbook_attributes(
     pixel_pred: object | None = None,
     pixel_view_pred: object | None = None,
 ) -> PlanarPlaybookAttributes:
-    profile = planar_profile_from_dataset(ds)
+    profile = profile_2d_from_dataset(ds)
     if profile is None:
         raise ValueError("Not a planar Harmonize modality (XR/US/MG)")
 
+    cohort = _cohort_label_for_2d_profile(profile)
     blob = _metadata_blob(ds)
     dicom_label: str | None
     dicom_ev: str
@@ -375,9 +406,7 @@ def build_planar_playbook_attributes(
     pixel_label = ""
     pixel_conf: float | None = None
 
-    if profile.cohort == "XR" and pixel_pred is not None:
-        from anonymizer.controller.ai.harmonize.xp_bodypart.fuse import fuse_planar_anatomy
-        from anonymizer.controller.ai.harmonize.xp_bodypart.predict import XpBodypartPrediction
+    if cohort == "XR" and pixel_pred is not None:
 
         if not isinstance(pixel_pred, XpBodypartPrediction):
             raise TypeError("pixel_pred must be XpBodypartPrediction or None")
@@ -410,11 +439,9 @@ def build_planar_playbook_attributes(
     mode, mode_ev = "", ""
     technique, tech_ev = "", ""
 
-    if profile.cohort == "XR":
+    if cohort == "XR":
         view, view_ev = _map_xr_view(blob, ds)
         if pixel_view_pred is not None:
-            from anonymizer.controller.ai.harmonize.xr_chest_view.fuse import fuse_xr_view
-            from anonymizer.controller.ai.harmonize.xr_chest_view.predict import CxpViewPrediction
 
             if not isinstance(pixel_view_pred, CxpViewPrediction):
                 raise TypeError("pixel_view_pred must be CxpViewPrediction or None")
@@ -430,9 +457,9 @@ def build_planar_playbook_attributes(
             pixel_view_conf = fused_view.pixel_view_confidence
             rotation_label = fused_view.rotation_label or ""
             rotation_conf = fused_view.rotation_confidence
-    elif profile.cohort == "US":
+    elif cohort == "US":
         mode, mode_ev = _map_us_mode(blob)
-    elif profile.cohort == "MG":
+    elif cohort == "MG":
         if not body_label or body_label == "Head":
             body_label = "Breast"
             body_ev = body_ev or "default:Breast"
@@ -443,7 +470,7 @@ def build_planar_playbook_attributes(
             laterality, lat_ev = "Bilat", "default:screening"
 
     return PlanarPlaybookAttributes(
-        cohort=profile.cohort,
+        cohort=cohort,
         body_part_label=body_label,
         laterality_code=laterality,
         view_code=view,
@@ -494,10 +521,10 @@ def build_planar_harmonized_series_description(
 
 def planar_loinc_prefix_from_attributes(
     attributes: PlanarPlaybookAttributes,
-    profile: PlanarModalityProfile | None = None,
+    profile: Profile2D | None = None,
 ) -> str:
     cohort = attributes.cohort
-    return loinc_prefix_for_planar_cohort(
+    return _loinc_prefix_for_cohort(
         cohort,
         doppler=attributes.mode_code == "Doppler",
         dbt=attributes.technique_code == "DBT",
@@ -517,7 +544,7 @@ def planar_loinc_prefix_for_series_descriptions(
         return "DBT "
     if cohort == "MG" and re.search(r"\bFFD\b", joined):
         return "FFD "
-    return loinc_prefix_for_planar_cohort(cohort)
+    return _loinc_prefix_for_cohort(cohort)
 
 
 def _display_dicom_source() -> str:

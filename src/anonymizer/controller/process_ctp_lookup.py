@@ -11,7 +11,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from anonymizer.model.anonymizer import LookupPatient
+from anonymizer.controller.anonymizer_script import load_script_rules, write_script_rules
+from anonymizer.controller.anonymizer_script_paths import (
+    private_anonymizer_script_path,
+    project_anonymizer_script_path,
+)
+from anonymizer.model.anonymizer import CtpLookupPhiRow
 
 if TYPE_CHECKING:
     from anonymizer.controller.anonymizer_script import ScriptDocument
@@ -35,7 +40,7 @@ class LookupPatientRow:
     patient_id: str
     anon_patient_id: str
     date_offset: int | None = None
-    basedate: str | None = None
+    base_date: str | None = None
 
 
 @dataclass(frozen=True)
@@ -75,16 +80,6 @@ def private_lookup_properties_path(project_model) -> Path:
     return project_model.private_dir() / f"{project_model.site_id}-lookup.properties"
 
 
-def project_anonymizer_script_path(project_model) -> Path:
-    """Project script beside ``ProjectModel.json`` (config, not PHI)."""
-    return Path(project_model.storage_dir) / f"{project_model.site_id}-anonymizer.script"
-
-
-def private_anonymizer_script_path(project_model) -> Path:
-    """Legacy path under ``private/``; prefer ``project_anonymizer_script_path``."""
-    return project_anonymizer_script_path(project_model)
-
-
 def migrate_project_script_from_private(project_model) -> Path | None:
     """If an old ``private/{site}-anonymizer.script`` exists, move it beside ProjectModel.json."""
     dest = project_anonymizer_script_path(project_model)
@@ -115,7 +110,7 @@ def lookup_table_context(project_model, pending: CtpLookupPreview | None = None)
     return LookupTableContext(
         present=True,
         has_dateoffset=any(row.date_offset is not None for row in rows),
-        has_basedate=any(row.basedate is not None for row in rows),
+        has_basedate=any(row.base_date is not None for row in rows),
         path=path,
     )
 
@@ -169,7 +164,7 @@ def preview_ctp_lookup(
     """Parse properties and build script-change preview (document if given, else default asset)."""
     rows = _parse_properties(properties_path)
     has_dateoffset = any(row.date_offset is not None for row in rows)
-    has_basedate = any(row.basedate is not None for row in rows)
+    has_basedate = any(row.base_date is not None for row in rows)
     if document is not None:
         changes = preview_lookup_operand_changes(document, has_dateoffset=has_dateoffset)
         script_patch = ScriptPatchResult(proposed_xml="", changes=changes)
@@ -196,7 +191,6 @@ def commit_ctp_lookup(
     and written. Otherwise the project's current ``anonymizer_script_path`` is patched if
     present; otherwise the packaged default is used.
     """
-    from anonymizer.controller.anonymizer_script import load_script_rules, write_script_rules
 
     project_model = project_controller.model
     anonymizer_model = project_controller.anonymizer.model
@@ -225,16 +219,16 @@ def commit_ctp_lookup(
         else:
             write_patched_script(script_dest, preview.has_dateoffset)
 
-    orm_rows = [
-        LookupPatient(
+    phi_rows = [
+        CtpLookupPhiRow(
             patient_id=row.patient_id,
             anon_patient_id=row.anon_patient_id,
             date_offset=row.date_offset,
-            basedate=row.basedate,
+            base_date=row.base_date,
         )
         for row in preview.rows
     ]
-    anonymizer_model.replace_lookup_patients(orm_rows)
+    anonymizer_model.upsert_ctp_lookup_phi(phi_rows)
 
     project_model.anonymizer_script_path = script_dest
     project_controller.anonymizer.project_model.anonymizer_script_path = script_dest
@@ -242,7 +236,7 @@ def commit_ctp_lookup(
 
     logger.info(
         "CTP lookup committed: %d patients, properties=%s, script=%s",
-        len(orm_rows),
+        len(phi_rows),
         properties_dest,
         script_dest,
     )
@@ -343,7 +337,7 @@ def _parse_properties(path: Path) -> list[LookupPatientRow]:
                 patient_id=patient_id,
                 anon_patient_id=anon_patient_id,
                 date_offset=offset,
-                basedate=basedate.get(patient_id),
+                base_date=basedate.get(patient_id),
             )
         )
     return rows

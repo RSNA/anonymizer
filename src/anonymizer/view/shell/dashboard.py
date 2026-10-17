@@ -24,7 +24,10 @@ from anonymizer.controller.analytics.prefs import (
 from anonymizer.controller.project import EchoRequest, EchoResponse, ProjectController
 from anonymizer.model.anonymizer import Totals
 from anonymizer.utils.memory import schedule_collect_garbage_on_tk
-from anonymizer.utils.storage import count_quarantine_images, count_studies_series_images
+from anonymizer.utils.storage.dicom_tree import (
+    count_quarantine_images,
+    count_studies_series_images,
+)
 from anonymizer.utils.translate import _
 from anonymizer.view.common.ctk_safe import release_mpl_frame_images
 from anonymizer.view.common.fonts import AppFonts
@@ -33,6 +36,12 @@ from anonymizer.view.shell.analytics_charts import (
     analytics_scroll_height,
     analytics_scrollbar_needed,
     configure_granular_scroll,
+    relevant_board_widget_keys,
+    render_analytics_placeholder,
+    render_widget_section,
+    resolve_board_theme,
+    select_board_sections,
+    sync_widget_section,
 )
 
 logger = logging.getLogger(__name__)
@@ -419,7 +428,6 @@ class Dashboard(ctk.CTkFrame):
             self._close_show_dropdown()
 
     def _sync_board_widget_selection_with_snapshot(self, snapshot) -> None:
-        from anonymizer.view.shell.analytics_charts import relevant_board_widget_keys
 
         relevant = relevant_board_widget_keys(snapshot)
         self._analytics_relevant_board_widgets = relevant
@@ -797,11 +805,6 @@ class Dashboard(ctk.CTkFrame):
         force_repaint_organs: bool = False,
     ) -> None:
         """Sync the analytics board in place — only add/remove/move cells (no window flash)."""
-        from anonymizer.view.shell.analytics_charts import (
-            resolve_board_theme,
-            select_board_sections,
-            sync_widget_section,
-        )
 
         snapshot = self._analytics_cache
         host = self._analytics_flow_host
@@ -926,11 +929,6 @@ class Dashboard(ctk.CTkFrame):
                 bar.grid_remove()
 
     def _render_analytics_view(self, snapshot) -> None:
-        from anonymizer.view.shell.analytics_charts import (
-            render_widget_section,
-            resolve_board_theme,
-            select_board_sections,
-        )
 
         self._sync_organ_selection_with_snapshot(snapshot)
         self._sync_board_widget_selection_with_snapshot(snapshot)
@@ -986,7 +984,6 @@ class Dashboard(ctk.CTkFrame):
         return not self._analytics_board.winfo_children()
 
     def _request_analytics_refresh(self) -> None:
-        from anonymizer.view.shell.analytics_charts import render_analytics_placeholder
 
         if self._analytics_busy:
             logger.info("Analytics refresh: already busy, ignore")
@@ -1049,7 +1046,6 @@ class Dashboard(ctk.CTkFrame):
             self._schedule_analytics_poll()
 
     def _apply_analytics_snapshot(self, snapshot, error: str | None) -> None:
-        from anonymizer.view.shell.analytics_charts import render_analytics_placeholder
 
         logger.info(
             "Analytics apply: snapshot=%s error=%s expanded=%s",

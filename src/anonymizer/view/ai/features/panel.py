@@ -11,10 +11,9 @@ from tkinter import messagebox
 
 import customtkinter as ctk
 
-from anonymizer.controller.ai.feature_availability import (
-    embedded_phi_has_models,
-    face_blur_needs_license,
-)
+from anonymizer.controller.ai.feature_availability import embedded_phi_has_models, face_blur_needs_license
+from anonymizer.controller.ai.harmonize.xp_bodypart import xp_bodypart_ready
+from anonymizer.controller.ai.harmonize.xr_chest_view import xr_chest_view_ready
 from anonymizer.controller.ai.tseg.config import (
     get_ct_segmentation_mode,
     get_mr_segmentation_mode,
@@ -23,12 +22,8 @@ from anonymizer.controller.ai.tseg.config import (
     set_ct_segmentation_mode,
     set_mr_segmentation_mode,
 )
-from anonymizer.controller.ai.tseg.readiness import (
-    apply_face_license,
-    get_stored_face_license,
-    weight_kind_ready,
-)
-from anonymizer.utils.storage import get_model_download_progress
+from anonymizer.controller.ai.tseg.readiness import apply_face_license, get_stored_face_license, weight_kind_ready
+from anonymizer.controller.ai.model_download import get_model_download_progress
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.features.availability import (
     DownloadCompleteEvent,
@@ -581,7 +576,6 @@ class AiFeaturesPanel(ctk.CTkFrame):
             else:
                 logger.info("AI Features: %s model download finished successfully", event.download_id)
         elif event.download_id == AiModelGroupId.HARMONIZE_XR_BODYPART.value:
-            from anonymizer.controller.ai.harmonize.xp_bodypart import xp_bodypart_ready
 
             title = group.title() if group else event.download_id
             if event.error is not None or not xp_bodypart_ready():
@@ -595,7 +589,6 @@ class AiFeaturesPanel(ctk.CTkFrame):
             else:
                 logger.info("AI Features: XR body-part model download finished successfully")
         elif event.download_id == AiModelGroupId.HARMONIZE_CXR_VIEW.value:
-            from anonymizer.controller.ai.harmonize.xr_chest_view import xr_chest_view_ready
 
             title = group.title() if group else event.download_id
             if event.error is not None or not xr_chest_view_ready():

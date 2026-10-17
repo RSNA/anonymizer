@@ -13,8 +13,8 @@ from anonymizer.utils.dicom import C_FAILURE, C_SUCCESS
 from tests.controller.dicom.support.helpers import send_file_to_scp, send_files_to_scp
 from tests.controller.dicom.support.test_files import (
     CT_STUDY_1_SERIES_4_IMAGES,
-    ct_small_StudyInstanceUID,
     ct_small_filename,
+    ct_small_StudyInstanceUID,
     patient1_id,
     patient3_id,
 )

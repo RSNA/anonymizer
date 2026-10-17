@@ -7,7 +7,7 @@ from typing import Any, Callable
 from urllib.parse import quote
 
 from pydicom import Dataset
-from pydicom.datadict import dictionary_VR, tag_for_keyword
+from pydicom.datadict import dictionary_VR, keyword_for_tag, tag_for_keyword
 from pydicom.tag import Tag
 
 from anonymizer.controller.dicom.dicomweb.session import DicomWebSession
@@ -94,7 +94,6 @@ def qido_json_to_dataset(item: dict[str, Any]) -> Dataset:
         except Exception:
             # Fallback: set by keyword if known
             try:
-                from pydicom.datadict import keyword_for_tag
 
                 kw = keyword_for_tag(tag)
                 if kw:

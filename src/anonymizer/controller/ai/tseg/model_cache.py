@@ -4,36 +4,64 @@ from __future__ import annotations
 
 import logging
 import shutil
-import threading
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterator
+from typing import Any, Iterator
 
-if TYPE_CHECKING:
-    from anonymizer.controller.ai.tseg.readiness import TsWeightKind
+import torch
+
+try:
+    import totalsegmentator.nnunet as nnunet_module
+except ImportError:
+    nnunet_module = None  # type: ignore[assignment,misc]
+import multiprocessing
+
+from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
+from nnunetv2.utilities.file_path_utilities import get_output_folder
+
+from anonymizer.controller.ai.tseg.config import (
+    ENABLE_TS_CONTRAST,
+    get_ct_segmentation_mode,
+    get_mr_segmentation_mode,
+    normalize_segmentation_mode,
+)
+
+try:
+    from totalsegmentator.config import setup_nnunet, setup_totalseg
+except ImportError:
+    setup_nnunet = None  # type: ignore[assignment,misc]
+    setup_totalseg = None  # type: ignore[assignment,misc]
+import totalsegmentator.libs as ts_libs
+from totalsegmentator.libs import download_pretrained_weights
+
+from anonymizer.controller.ai.tseg.config import is_multi_model_segmentation_mode
+from anonymizer.controller.ai.tseg.contrast import log_memory_usage, release_working_memory
+from anonymizer.controller.ai.tseg.ml_env import (
+    SESSION_LOCK,
+    enter_session,
+    exit_session,
+    resolve_device,
+    session_active,
+)
+from anonymizer.controller.ai.tseg.ts_probe import (
+    TsWeightKind,
+    checkpoint_ready,
+    verify_face_license,
+)
+from anonymizer.utils.network import ensure_ssl_certifi
+from anonymizer.controller.ai.model_download import track_tqdm_model_download
+from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 
-_session_lock = threading.Lock()
-_session_depth = 0
 _predictor_cache: dict[tuple[Any, ...], Any] = {}
 _original_nnUNetv2_predict = None
 _patch_installed = False
 
 
-def session_active() -> bool:
-    """Return True while a harmonize batch session keeps TS predictors resident."""
-    return _session_depth > 0
-
-
-def preserve_accelerator_memory() -> bool:
-    """When True, skip torch cache clears so loaded TS weights stay resident."""
-    return session_active()
-
-
 def clear_predictor_cache() -> None:
     """Drop cached nnUNet predictors (e.g. on application shutdown)."""
-    with _session_lock:
+    with SESSION_LOCK:
         count = len(_predictor_cache)
         _predictor_cache.clear()
     if count:
@@ -117,7 +145,7 @@ def _get_or_create_predictor(
         disable_tta=disable_tta,
         perform_everything_on_gpu=perform_flag,
     )
-    with _session_lock:
+    with SESSION_LOCK:
         cached = _predictor_cache.get(key)
         if cached is not None:
             logger.debug("TS model cache: reusing predictor for %s", model_folder)
@@ -177,10 +205,6 @@ def _cached_nnUNetv2_predict(
             use_cropped_logits_resampling=use_cropped_logits_resampling,
         )
 
-    import torch
-    import totalsegmentator.nnunet as nnunet_module
-    from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
-    from nnunetv2.utilities.file_path_utilities import get_output_folder
 
     dir_in = str(dir_in)
     dir_out = str(dir_out)
@@ -190,7 +214,6 @@ def _cached_nnUNetv2_predict(
         f"-device must be either cpu, mps or cuda. Got: {device}."
     )
     if device == "cpu":
-        import multiprocessing
 
         torch.set_num_threads(multiprocessing.cpu_count())
         resolved_device = torch.device("cpu")
@@ -244,8 +267,6 @@ def _cached_nnUNetv2_predict(
     )
 
     if save_probabilities and save_probabilities_path is not None:
-        import shutil
-        from pathlib import Path
 
         save_path = Path(save_probabilities_path)
         shutil.copy(Path(dir_out) / "s01.npz", save_path)
@@ -256,12 +277,6 @@ def _install_predictor_cache_patch() -> None:
     global _original_nnUNetv2_predict, _patch_installed
     if _patch_installed:
         return
-    try:
-        import totalsegmentator.nnunet as nnunet_module
-    except ImportError:
-        logger.debug("TotalSegmentator not installed; predictor cache disabled")
-        return
-
     _original_nnUNetv2_predict = nnunet_module.nnUNetv2_predict
     nnunet_module.nnUNetv2_predict = _cached_nnUNetv2_predict
     _patch_installed = True
@@ -269,7 +284,6 @@ def _install_predictor_cache_patch() -> None:
 
 
 def _resolve_totalseg_device(device: str) -> str:
-    import torch
 
     if device == "gpu":
         if torch.cuda.is_available():
@@ -293,13 +307,11 @@ def harmonize_anatomy_task_ids() -> tuple[int, ...]:
     With ``roi_subset`` + ``body_seg`` (see ``run_segmentation``), TotalSegmentator
     downloads the main task (3mm/6mm/1.5mm) plus task 298 for rough ROI cropping on CT.
     """
-    from anonymizer.controller.ai.tseg.config import get_ct_segmentation_mode
 
     return ct_anatomy_task_ids_for_mode(get_ct_segmentation_mode())
 
 
 def ct_anatomy_task_ids_for_mode(mode: object | None) -> tuple[int, ...]:
-    from anonymizer.controller.ai.tseg.config import normalize_segmentation_mode
 
     normalized = normalize_segmentation_mode(mode)
     if normalized == "6mm":
@@ -315,13 +327,11 @@ def mr_anatomy_task_ids() -> tuple[int, ...]:
 
     1.5 mm includes crop companion task 852 (same pattern as CT including 298).
     """
-    from anonymizer.controller.ai.tseg.config import get_mr_segmentation_mode
 
     return mr_anatomy_task_ids_for_mode(get_mr_segmentation_mode())
 
 
 def mr_anatomy_task_ids_for_mode(mode: object | None) -> tuple[int, ...]:
-    from anonymizer.controller.ai.tseg.config import normalize_segmentation_mode
 
     normalized = normalize_segmentation_mode(mode)
     if normalized == "6mm":
@@ -333,7 +343,6 @@ def mr_anatomy_task_ids_for_mode(mode: object | None) -> tuple[int, ...]:
 
 def installed_ct_segmentation_modes() -> tuple[str, ...]:
     """Return CT resolutions whose full anatomy (+contrast) packs are on disk."""
-    from anonymizer.controller.ai.tseg.config import ENABLE_TS_CONTRAST
 
     contrast = (776,) if ENABLE_TS_CONTRAST else ()
 
@@ -381,7 +390,6 @@ def harmonize_contrast_task_ids() -> tuple[int, ...]:
     ``predict_contrast_phase`` runs ``task=headneck_bones_vessels`` (task 776) when brain
     volume is present in organ statistics. CT-only — never used for MR.
     """
-    from anonymizer.controller.ai.tseg.config import ENABLE_TS_CONTRAST
 
     if not ENABLE_TS_CONTRAST:
         return ()
@@ -422,8 +430,6 @@ def trainer_for_anatomy_task(task_id: int) -> str:
 
 def resolve_harmonize_model_folder(task_id: int) -> Path | None:
     try:
-        from totalsegmentator.config import setup_nnunet, setup_totalseg
-        from totalsegmentator.nnunet import get_output_folder
 
         setup_nnunet()
         setup_totalseg()
@@ -522,14 +528,12 @@ def profile_face_weights_ready(profile) -> bool:
 
 
 def _harmonize_task_checkpoint_ready(task_id: int) -> bool:
-    from anonymizer.controller.ai.tseg.readiness import checkpoint_ready
 
     return checkpoint_ready(resolve_harmonize_model_folder(task_id))
 
 
 def _face_task_checkpoint_ready() -> bool:
     """CT face task 303 only (per-series CT path)."""
-    from anonymizer.controller.ai.tseg.readiness import checkpoint_ready
 
     return checkpoint_ready(_resolve_task_model_folder(_FACE_TASK_ID, trainer=_FACE_TRAINER, model=_FACE_MODEL))
 
@@ -539,7 +543,6 @@ def mr_face_model_ready() -> bool:
 
 
 def _task_checkpoint_ready(task_id: int, *, trainer: str, model: str) -> bool:
-    from anonymizer.controller.ai.tseg.readiness import checkpoint_ready
 
     return checkpoint_ready(_try_resolve_task_model_folder(task_id, trainer=trainer, model=model))
 
@@ -561,7 +564,6 @@ _NNUNET_PLANS = "nnUNetPlans"
 
 
 def _resolve_task_model_folder(task_id: int, *, trainer: str, model: str) -> Path:
-    from totalsegmentator.nnunet import get_output_folder
 
     return Path(get_output_folder(task_id, trainer, _NNUNET_PLANS, model))
 
@@ -584,9 +586,7 @@ def _remove_incomplete_dataset_dir(model_folder: Path) -> None:
 
 def _ensure_pretrained_weights(task_id: int, *, trainer: str, model: str) -> None:
     """Download one TotalSegmentator task when its checkpoint is not on disk."""
-    from totalsegmentator.libs import download_pretrained_weights
 
-    from anonymizer.utils.network import ensure_ssl_certifi
 
     ensure_ssl_certifi()
     if _task_checkpoint_ready(task_id, trainer=trainer, model=model):
@@ -613,22 +613,18 @@ _TS_DOWNLOAD_ID: dict[str, str] = {
 
 def ts_task_download_label(task_id: int) -> str:
     """Technical label for download progress (clinician copy lives in the view layer)."""
-    from anonymizer.utils.translate import _
 
     return _("Model {task_id}").format(task_id=task_id)
 
 
 @contextmanager
-def _track_segmentation_model_download(kind: "TsWeightKind", *, task_id: int | None = None):
+def _track_segmentation_model_download(kind: TsWeightKind, *, task_id: int | None = None):
     """Wire TotalSegmentator tqdm/stdout capture to generic model download progress."""
-    from anonymizer.utils.storage import track_tqdm_model_download
-    from anonymizer.utils.translate import _
 
     download_id = _TS_DOWNLOAD_ID[kind.value]
     label = ts_task_download_label(task_id) if task_id is not None else ""
     start_message = _("Downloading: {label}…").format(label=label) if label else _("Downloading…")
 
-    import totalsegmentator.libs as ts_libs
 
     with track_tqdm_model_download(
         download_id,
@@ -640,24 +636,13 @@ def _track_segmentation_model_download(kind: "TsWeightKind", *, task_id: int | N
         yield
 
 
-def download_segmentation_model_weights(kind: "TsWeightKind") -> None:
+def download_segmentation_model_weights(kind: TsWeightKind) -> None:
     """Download TotalSegmentator weights for anatomy or face segmentation (no predictor preload)."""
-    from anonymizer.controller.ai.tseg.readiness import (
-        TsWeightKind as Kind,
-    )
-    from anonymizer.controller.ai.tseg.readiness import (
-        verify_face_license,
-    )
-
-    try:
-        from totalsegmentator.config import setup_nnunet, setup_totalseg
-    except ImportError as exc:
-        raise RuntimeError("TotalSegmentator is required. Install with pip install rsna-anonymizer") from exc
 
     setup_nnunet()
     setup_totalseg()
 
-    if kind == Kind.ANATOMY:
+    if kind == TsWeightKind.ANATOMY:
         task_ids = harmonize_ts_task_ids()
         missing = missing_harmonize_ts_task_ids()
         logger.info(
@@ -676,7 +661,7 @@ def download_segmentation_model_weights(kind: "TsWeightKind") -> None:
         logger.info("TS weights: CT harmonize models downloaded (tasks %s)", task_ids)
         return
 
-    if kind == Kind.ANATOMY_MR:
+    if kind == TsWeightKind.ANATOMY_MR:
         task_ids = mr_anatomy_task_ids()
         missing = missing_mr_anatomy_task_ids()
         logger.info(
@@ -695,7 +680,7 @@ def download_segmentation_model_weights(kind: "TsWeightKind") -> None:
         logger.info("TS weights: MR harmonize models downloaded (tasks %s)", task_ids)
         return
 
-    if kind == Kind.FACE:
+    if kind == TsWeightKind.FACE:
         licensed, message = verify_face_license()
         if not licensed:
             raise RuntimeError(message)
@@ -710,7 +695,7 @@ def download_segmentation_model_weights(kind: "TsWeightKind") -> None:
         logger.info("TS weights: CT face models downloaded (tasks %s)", task_ids)
         return
 
-    if kind == Kind.FACE_MR:
+    if kind == TsWeightKind.FACE_MR:
         licensed, message = verify_face_license()
         if not licensed:
             raise RuntimeError(message)
@@ -725,7 +710,7 @@ def download_segmentation_model_weights(kind: "TsWeightKind") -> None:
         logger.info("TS weights: MR face models downloaded (tasks %s)", task_ids)
         return
 
-    if kind == Kind.BRAIN_STRUCTURES:
+    if kind == TsWeightKind.BRAIN_STRUCTURES:
         licensed, message = verify_face_license()
         if not licensed:
             raise RuntimeError(message)
@@ -753,7 +738,6 @@ def download_segmentation_model_weights(kind: "TsWeightKind") -> None:
 
 
 def _brain_structures_task_checkpoint_ready() -> bool:
-    from anonymizer.controller.ai.tseg.readiness import checkpoint_ready
 
     return checkpoint_ready(
         _resolve_task_model_folder(
@@ -770,30 +754,17 @@ def preload_face_models(*, device: str | None = None) -> None:
 
     No-op when TotalSegmentator is not installed or academic license is missing.
     """
-    from anonymizer.controller.ai.tseg.readiness import verify_face_license
-
-    try:
-        from totalsegmentator.config import setup_nnunet, setup_totalseg
-        from totalsegmentator.libs import download_pretrained_weights
-        from totalsegmentator.nnunet import get_output_folder
-    except ImportError:
-        logger.debug("TS face preload skipped (TotalSegmentator not installed)")
-        return
 
     licensed, message = verify_face_license()
     if not licensed:
         logger.debug("TS face preload skipped: %s", message)
         return
 
-    from anonymizer.controller.ai.tseg.segment import resolve_device
 
     setup_nnunet()
     setup_totalseg()
 
     resolved = _resolve_totalseg_device(resolve_device(device))
-    import torch
-    import totalsegmentator.nnunet as nnunet_module
-    from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
 
     if resolved == "cpu":
         torch_device: Any = torch.device("cpu")
@@ -840,21 +811,10 @@ def preload_harmonize_models(*, device: str | None = None) -> None:
 
     Does not download missing modality groups. Safe when TotalSegmentator is absent (no-op).
     """
-    try:
-        from totalsegmentator.config import setup_nnunet, setup_totalseg
-        from totalsegmentator.libs import download_pretrained_weights
-        from totalsegmentator.nnunet import get_output_folder
-    except ImportError:
-        logger.debug("TS model cache preload skipped (TotalSegmentator not installed)")
-        return
-
-    from anonymizer.controller.ai.tseg.segment import resolve_device
-
     setup_nnunet()
     setup_totalseg()
 
     resolved = _resolve_totalseg_device(resolve_device(device))
-    import torch
 
     if resolved == "cpu":
         torch_device: Any = torch.device("cpu")
@@ -863,11 +823,6 @@ def preload_harmonize_models(*, device: str | None = None) -> None:
     else:
         torch_device = torch.device("mps")
 
-    from anonymizer.controller.ai.tseg.config import (
-        get_ct_segmentation_mode,
-        get_mr_segmentation_mode,
-        is_multi_model_segmentation_mode,
-    )
 
     download_task_ids: list[int] = []
     anatomy_task_ids: list[int] = []
@@ -887,8 +842,6 @@ def preload_harmonize_models(*, device: str | None = None) -> None:
         logger.debug("TS harmonize preload skipped (no CT/MR anatomy weights installed)")
         return
 
-    import totalsegmentator.nnunet as nnunet_module
-    from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
 
     for task_id in download_task_ids:
         download_pretrained_weights(task_id)
@@ -928,7 +881,6 @@ def preload_harmonize_models(*, device: str | None = None) -> None:
 
 def _release_batch_working_memory() -> None:
     """Release per-series allocations after a batch without dropping cached predictors."""
-    from anonymizer.controller.ai.tseg.contrast import log_memory_usage, release_working_memory
 
     release_working_memory(stage="tseg_batch_session_end", preserve_accelerator=True)
     log_memory_usage("tseg_batch_session_end")
@@ -942,20 +894,13 @@ def tseg_batch_session(*, preload: bool = True) -> Iterator[None]:
     Predictors remain cached after the context exits so a later batch in the same GUI
     session can reuse them. Call ``clear_predictor_cache()`` on shutdown if needed.
     """
-    global _session_depth
-
     _install_predictor_cache_patch()
-    with _session_lock:
-        _session_depth += 1
-        entering = _session_depth == 1
+    entering = enter_session()
 
     try:
         if entering and preload:
             preload_harmonize_models()
         yield
     finally:
-        with _session_lock:
-            _session_depth -= 1
-            exiting = _session_depth == 0
-        if exiting:
+        if exit_session():
             _release_batch_working_memory()

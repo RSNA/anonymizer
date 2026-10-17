@@ -6,27 +6,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 
-from anonymizer.controller.ai.embedded_phi.ner.cache import (
-    download_ner_models,
-    remove_ner_models,
-)
-from anonymizer.controller.ai.embedded_phi.pixel.cache import (
-    download_ocr_models,
-    remove_ocr_models,
-)
-from anonymizer.controller.ai.harmonize.xp_bodypart import (
-    download_xp_bodypart_models,
-    remove_xp_bodypart_models,
-)
-from anonymizer.controller.ai.harmonize.xr_chest_view import (
-    download_xr_chest_view_models,
-    remove_xr_chest_view_models,
-)
-from anonymizer.controller.ai.tseg.readiness import (
-    TsWeightKind,
-    download_segmentation_model,
-    remove_segmentation_model,
-)
+from anonymizer.controller.ai.embedded_phi.ner.cache import download_ner_models, remove_ner_models
+from anonymizer.controller.ai.embedded_phi.pixel.cache import download_ocr_models, remove_ocr_models
+from anonymizer.controller.ai.harmonize.xp_bodypart import download_xp_bodypart_models, remove_xp_bodypart_models
+from anonymizer.controller.ai.harmonize.xr_chest_view import download_xr_chest_view_models, remove_xr_chest_view_models
+from anonymizer.controller.ai.tseg.readiness import TsWeightKind, download_segmentation_model, remove_segmentation_model
 from anonymizer.utils.translate import _
 
 

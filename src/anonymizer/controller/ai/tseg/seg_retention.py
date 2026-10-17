@@ -9,8 +9,11 @@ import os
 from collections.abc import Mapping
 from pathlib import Path
 
+import nibabel as nib
+import numpy as np
 import SimpleITK as sitk
 from pydicom import dcmread
+from totalsegmentator.map_to_binary import class_map
 
 from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir
 from anonymizer.controller.ai.tseg.config import (
@@ -29,8 +32,14 @@ from anonymizer.controller.ai.tseg.config import (
     ROI_TIER_HEAD,
 )
 from anonymizer.controller.ai.tseg.dicom_geometry import sorted_dicom_paths
-from anonymizer.controller.ai.tseg.modality_profile import resolve_profile_for_series
-from anonymizer.utils.modalities import is_ct_modality
+from anonymizer.controller.ai.tseg.head_signals import CachedRegionSignal, MetadataSignal, metadata_signal
+from anonymizer.controller.ai.tseg.modality_profile import ct_modality_profile, resolve_profile_for_series
+from anonymizer.controller.ai.tseg.regions import (
+    body_parts_present,
+    collect_structure_voxels_from_masks,
+    dominant_region_from_voxels,
+)
+from anonymizer.utils.modalities import Modality
 
 logger = logging.getLogger(__name__)
 
@@ -388,7 +397,6 @@ def aggregate_primary_segment_voxels(
     so ``primary_segment_voxels.json`` never advertises undrawable overlays.
     Pass ``require_masks=False`` only when aggregating from statistics before masks exist.
     """
-    from anonymizer.controller.ai.tseg.segment import collect_structure_voxels_from_masks
 
     seg_dir = Path(seg_dir)
     present: dict[str, int] = {}
@@ -457,9 +465,6 @@ def write_binary_masks_from_multilabel(
 
     ``multilabel_img`` is a nibabel ``Nifti1Image`` (TotalSegmentator ``ml=True`` return).
     """
-    import nibabel as nib
-    import numpy as np
-    from totalsegmentator.map_to_binary import class_map
 
     if task not in class_map:
         raise KeyError(f"Unknown TotalSegmentator class map task: {task!r}")
@@ -602,11 +607,6 @@ def finalize_seg_cache(
     write_primary_segment_voxels(cache_dir, primary_counts)
     # Cache millilitre volumes so Dashboard Refresh does not re-scan NIfTI.
     ensure_organ_volumes_ml(cache_dir)
-    # Append/replace project analytics ledger row (best-effort; never fail finalize).
-    with contextlib.suppress(Exception):
-        from anonymizer.controller.analytics.dataset import upsert_series_ledger_from_cache
-
-        upsert_series_ledger_from_cache(cache_dir)
     # Sub-threshold detections (e.g. thin/unusual volumes) are pruned from seg/ and
     # leave non-zero structure counts without overlay masks — that is a valid publish.
     # Refuse only when latch-worthy anatomy would need Series View masks.
@@ -622,7 +622,6 @@ def finalize_seg_cache(
 
 def resolve_harmonize_roi_subset(series_directory: Path) -> tuple[tuple[str, ...], str]:
     """Choose CT ROI tier from DICOM metadata (HEAD / CHEST / FULL)."""
-    from anonymizer.controller.ai.blur_face.pipeline import MetadataSignal, metadata_signal
 
     series_directory = Path(series_directory)
     try:
@@ -678,18 +677,51 @@ def _series_instance_uid(series_directory: Path) -> str | None:
     return str(uid) if uid else None
 
 
+def cached_region_signal(series_directory: Path) -> CachedRegionSignal:
+    """
+    Infer head vs non-head from cached TotalSegmentator ROI masks (``0_TS_SEG/seg/``).
+
+    Returns ``UNAVAILABLE`` when harmonize/regions has not populated the cache.
+    """
+
+    seg_dir = resolve_series_cache_dir(series_directory) / "seg"
+    if not seg_dir.is_dir():
+        return CachedRegionSignal.UNAVAILABLE
+
+    profile = resolve_profile_for_series(series_directory) or ct_modality_profile()
+    # Use JSON sidecars only — never decode masks on the UI / eligibility path.
+
+    structure_voxels = read_structure_voxels(seg_dir.parent)
+    if structure_voxels is None:
+        return CachedRegionSignal.UNAVAILABLE
+    structure_voxels = {
+        name: int(structure_voxels.get(name, 0)) for name in profile.roi_subset
+    }
+    if not any(count >= MIN_STRUCTURE_VOXELS for count in structure_voxels.values()):
+        return CachedRegionSignal.UNAVAILABLE
+
+    region = dominant_region_from_voxels(
+        structure_voxels,
+        structure_to_region=profile.structure_to_region,
+    )
+    regions_label = body_parts_present(region.region_voxels)
+    if not regions_label:
+        return CachedRegionSignal.UNAVAILABLE
+
+    head_present = "Head" in regions_label.split("+")
+    if "+" in regions_label and head_present:
+        return CachedRegionSignal.MULTI_REGION
+    if region.dominant_region == "Head" or head_present:
+        return CachedRegionSignal.HEAD
+    if region.dominant_region in {"Chest", "Abdomen"}:
+        return CachedRegionSignal.NON_HEAD
+    return CachedRegionSignal.UNAVAILABLE
+
+
 def is_ct_head_series(series_directory: Path) -> bool:
     """True for CT series classified as head-dominant (face-blur candidate)."""
-    # Lazy: blur_face.pipeline imports segment, which imports this module.
-    from anonymizer.controller.ai.blur_face.pipeline import (
-        CachedRegionSignal,
-        MetadataSignal,
-        cached_region_signal,
-        metadata_signal,
-    )
-
     profile = resolve_profile_for_series(series_directory)
-    if profile is None or not is_ct_modality(profile.modality):
+    if profile is None or Modality.from_code(profile.modality) is not Modality.CT:
         return False
 
     region_signal = cached_region_signal(series_directory)

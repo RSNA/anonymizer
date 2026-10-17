@@ -205,7 +205,7 @@ def test_download_segmentation_model_runs_and_rechecks() -> None:
 
 
 def test_verify_face_license_without_package() -> None:
-    with patch("anonymizer.controller.ai.tseg.readiness.totalsegmentator_available", return_value=False):
+    with patch("anonymizer.controller.ai.tseg.ts_probe.totalsegmentator_available", return_value=False):
         ok, detail = verify_face_license()
     assert ok is False
     assert "not installed" in detail.lower()

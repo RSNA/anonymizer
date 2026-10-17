@@ -9,11 +9,8 @@ import numpy as np
 import SimpleITK as sitk
 
 from anonymizer.controller.ai.tseg.seg_retention import read_mask_geometry, voxels_to_ml
-from anonymizer.controller.annotations.store import (
-    analytics_organ_key,
-    labels_path,
-    read_label_map,
-)
+from anonymizer.controller.annotations.planar_geometry import is_planar_pixel_space_geometry
+from anonymizer.controller.annotations.store import analytics_organ_key, labels_path, read_label_map
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +41,6 @@ def user_annotation_volumes_ml(cache_dir: Path) -> dict[str, float]:
     synthetic spacing must not invent millilitres.
     """
     cache_dir = Path(cache_dir)
-    from anonymizer.controller.annotations.planar_geometry import is_planar_pixel_space_geometry
 
     if is_planar_pixel_space_geometry(cache_dir):
         return {}

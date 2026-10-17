@@ -11,8 +11,15 @@ from dataclasses import dataclass
 from typing import Literal
 
 import numpy as np
+import psutil
 
 from anonymizer.utils.translate import _
+
+try:
+    import torch
+except ImportError:
+    torch = None  # type: ignore[assignment,misc]
+import tkinter as tk
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +53,6 @@ def format_array_memory(array: np.ndarray | None) -> str:
 def capture_memory_snapshot() -> MemorySnapshot | None:
     """Return current process RSS and system memory usage, or None when psutil is unavailable."""
     try:
-        import psutil
 
         proc = psutil.Process(os.getpid())
         rss_mb = proc.memory_info().rss / (1024 * 1024)
@@ -168,11 +174,6 @@ def collect_garbage_safe(*, generations: int = 1) -> None:
 
 def release_accelerator_caches() -> None:
     """Release PyTorch CUDA/MPS allocator caches without invoking Python GC."""
-    try:
-        import torch
-    except ImportError:
-        return
-
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
@@ -184,7 +185,6 @@ def release_accelerator_caches() -> None:
 
 def schedule_collect_garbage_on_tk(widget, *, generations: int = 1) -> None:
     """Schedule a main-thread GC pass after the current Tk event (safe after dialog teardown)."""
-    import tkinter as tk
 
     if widget is None:
         return

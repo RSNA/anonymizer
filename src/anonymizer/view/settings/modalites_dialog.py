@@ -6,7 +6,7 @@ import customtkinter as ctk
 from customtkinter import ThemeManager
 
 from anonymizer.model.project import ProjectModel
-from anonymizer.utils.modalities import get_modalities
+from anonymizer.utils.modalities import get_modality_catalog
 from anonymizer.utils.translate import _
 from anonymizer.view.common.app_window import AppToplevel, install_modal_dismiss
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
@@ -101,16 +101,16 @@ class ModalitiesDialog(AppToplevel):
         scrollbar.grid(row=0, column=2, sticky="ns")
         self._tree.configure(yscrollcommand=scrollbar.set)
 
-        for code in get_modalities():
+        for code, entry in get_modality_catalog().items():
             tag = ""
-            if code in self.modalities:
+            if code.value in self.modalities:
                 tag = "green"
             try:
                 self._tree.insert(
                     "",
                     "end",
-                    iid=code,
-                    values=[code, get_modalities()[code][0]],
+                    iid=code.value,
+                    values=[code.value, entry.description],
                     tags=tag,
                 )
             except Exception as e:

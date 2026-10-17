@@ -7,29 +7,14 @@ from tkinter import filedialog, messagebox, ttk
 import customtkinter as ctk
 from pydicom import Dataset
 
-from anonymizer.controller.project import (
-    FindStudyRequest,
-    FindStudyResponse,
-    ProjectController,
-    StudyUIDHierarchy,
-)
-from anonymizer.utils.dicom import (
-    C_FAILURE,
-    C_PENDING_A,
-    C_PENDING_B,
-    C_SUCCESS,
-)
-from anonymizer.utils.storage import count_study_images
+from anonymizer.controller.project import FindStudyRequest, FindStudyResponse, ProjectController, StudyUIDHierarchy
+from anonymizer.utils.dicom import C_FAILURE, C_PENDING_A, C_PENDING_B, C_SUCCESS
+from anonymizer.utils.storage.dicom_tree import count_study_images
 from anonymizer.utils.translate import _
 from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import AppFonts
-from anonymizer.view.common.ux_fields import (
-    dicom_date_chars,
-    patient_id_max_chars,
-    patient_name_max_chars,
-    str_entry,
-)
+from anonymizer.view.common.ux_fields import dicom_date_chars, patient_id_max_chars, patient_name_max_chars, str_entry
 from anonymizer.view.project.import_studies_dialog import ImportStudiesDialog
 from anonymizer.view.shell.dashboard import Dashboard
 

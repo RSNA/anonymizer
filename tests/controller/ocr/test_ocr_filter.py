@@ -128,7 +128,7 @@ def test_load_modality_whitelist_project_file_replaces_defaults_without_removed_
 ) -> None:
     pkg_dir = Path(__file__).resolve().parents[3] / "src" / "anonymizer"
     monkeypatch.chdir(pkg_dir)
-    from anonymizer.utils.storage import load_default_whitelist
+    from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_default_whitelist
 
     project_dir = tmp_path / "project"
     defaults_without_bilateral = [
@@ -378,7 +378,7 @@ def test_load_modality_whitelist_project_file_without_portable(
 ) -> None:
     pkg_dir = Path(__file__).resolve().parents[3] / "src" / "anonymizer"
     monkeypatch.chdir(pkg_dir)
-    from anonymizer.utils.storage import load_default_whitelist
+    from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_default_whitelist
 
     project_dir = tmp_path / "project"
     defaults_without_portable = [term for term in load_default_whitelist("CR") if term != "PORTABLE"]

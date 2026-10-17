@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
@@ -23,11 +24,7 @@ from anonymizer.controller.ai.tseg.config import (
     set_mr_segmentation_mode,
 )
 from anonymizer.controller.phi_io import build_phi_index
-from anonymizer.controller.runner import (
-    OcrRemoveMode,
-    normalize_ocr_remove_mode,
-    ocr_remove_mode_from_legacy_whitelist,
-)
+from anonymizer.controller.runner import OcrRemoveMode, normalize_ocr_remove_mode, ocr_remove_mode_from_legacy_whitelist
 from anonymizer.model.anonymizer import AnonymizerModel
 
 _ALGORITHM_ALIASES: dict[str, AiBatchAlgorithm] = {
@@ -59,6 +56,8 @@ class AiBatchConfig:
     ocr_use_exclude_areas: bool = False
     include_brain_structures: bool = False
     prefer_description_mappings: bool = True
+    series_description_overrides: Mapping[str, str] = field(default_factory=dict)
+    study_loinc_overrides: Mapping[str, str] = field(default_factory=dict)
     ct_segmentation_mode: str | None = None
     mr_segmentation_mode: str | None = None
     studies: Literal["all"] | tuple[AiBatchStudyRef, ...] = "all"
@@ -73,6 +72,8 @@ class AiBatchConfig:
             ocr_use_exclude_areas=self.ocr_use_exclude_areas,
             include_brain_structures=self.include_brain_structures,
             prefer_description_mappings=self.prefer_description_mappings,
+            series_description_overrides=dict(self.series_description_overrides),
+            study_loinc_overrides=dict(self.study_loinc_overrides),
         )
 
     def apply_segmentation_modes(self) -> None:

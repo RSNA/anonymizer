@@ -14,7 +14,7 @@ from anonymizer.controller.process_ctp_lookup import (
     private_anonymizer_script_path,
     private_lookup_properties_path,
 )
-from anonymizer.model.anonymizer import AnonymizerModel, LookupPatient
+from anonymizer.model.anonymizer import AnonymizerModel
 from tests.opened_anonymizer_model import opened_anonymizer_model
 
 
@@ -56,7 +56,7 @@ def _lookup_rows_from_db(db_path: Path) -> list[tuple[str, str, int | None]]:
     engine = create_engine(f"sqlite:///{db_path}")
     with engine.connect() as conn:
         rows = conn.execute(
-            text("SELECT patient_id, anon_patient_id, date_offset FROM lookup_patient ORDER BY patient_id")
+            text("SELECT patient_id, anon_patient_id, date_offset FROM phi WHERE patient_id != '' ORDER BY patient_id")
         ).fetchall()
     engine.dispose()
     return [(row[0], row[1], row[2]) for row in rows]
@@ -67,8 +67,8 @@ def _assert_model_matches_expected(
     expected: dict[str, tuple[str, int | None]],
 ) -> None:
     for patient_id, (anon_id, offset) in expected.items():
-        row = model.get_lookup_patient(patient_id)
-        assert row is not None, f"missing lookup row for {patient_id!r}"
+        row = model.get_phi_by_phi_patient_id(patient_id)
+        assert row is not None, f"missing PHI for {patient_id!r}"
         assert row.anon_patient_id == anon_id
         assert row.date_offset == offset
 
@@ -87,7 +87,7 @@ def test_preview_parses_basedate(tmp_path: Path) -> None:
     )
     preview = preview_ctp_lookup(props)
     assert preview.has_basedate is True
-    assert preview.rows[0].basedate == "20180327"
+    assert preview.rows[0].base_date == "20180327"
 
 
 def test_preview_rejects_basedate_without_matching_ptid(tmp_path: Path) -> None:
@@ -269,10 +269,10 @@ def test_full_load_with_basedates_into_model(controller, tmp_path: Path) -> None
     assert preview.has_dateoffset is False
     commit_ctp_lookup(controller, preview)
 
-    row1 = controller.anonymizer.model.get_lookup_patient("MRN1")
-    row2 = controller.anonymizer.model.get_lookup_patient("MRN2")
-    assert row1 is not None and row1.basedate == "20180327"
-    assert row2 is not None and row2.basedate == "20190115"
+    row1 = controller.anonymizer.model.get_phi_by_phi_patient_id("MRN1")
+    row2 = controller.anonymizer.model.get_phi_by_phi_patient_id("MRN2")
+    assert row1 is not None and row1.base_date == "20180327"
+    assert row2 is not None and row2.base_date == "20190115"
     assert row1.date_offset is None and row2.date_offset is None
 
     ctx = lookup_table_context(controller.model)
@@ -355,8 +355,8 @@ def test_full_reload_replaces_all_lookup_patients(controller, tmp_path: Path) ->
     commit_ctp_lookup(controller, preview_ctp_lookup(second_props))
 
     model = controller.anonymizer.model
-    assert model.get_lookup_patient("OLD-1") is None
-    assert model.get_lookup_patient("OLD-2") is None
+    assert model.get_phi_by_phi_patient_id("OLD-1") is None
+    assert model.get_phi_by_phi_patient_id("OLD-2") is None
     _assert_model_matches_expected(model, expected_second)
 
     db_rows = _lookup_rows_from_db(Path(controller.model.get_db_url().replace("sqlite:///", "")))
@@ -381,7 +381,7 @@ def test_commit_writes_files_and_sql(controller, tmp_path: Path) -> None:
     assert script_path.is_file()
     assert controller.model.anonymizer_script_path == script_path
 
-    row = controller.anonymizer.model.get_lookup_patient("12345")
+    row = controller.anonymizer.model.get_phi_by_phi_patient_id("12345")
     assert row is not None
     assert row.anon_patient_id == "527408-000042"
     assert row.date_offset == 127
@@ -470,13 +470,15 @@ def test_commit_preserves_custom_operand_on_private_script(controller, tmp_path:
 
     db_path = tmp_path / "lookup.db"
     with opened_anonymizer_model(f"sqlite:///{db_path}") as model:
-        model.replace_lookup_patients(
+        from anonymizer.model.anonymizer import CtpLookupPhiRow
+
+        model.upsert_ctp_lookup_phi(
             [
-                LookupPatient(patient_id="A", anon_patient_id="X-001", date_offset=1),
-                LookupPatient(patient_id="B", anon_patient_id="X-002", date_offset=2),
+                CtpLookupPhiRow(patient_id="A", anon_patient_id="X-001", date_offset=1),
+                CtpLookupPhiRow(patient_id="B", anon_patient_id="X-002", date_offset=2),
             ]
         )
-        assert model.get_lookup_patient("A") is not None
-        model.replace_lookup_patients([LookupPatient(patient_id="C", anon_patient_id="X-003", date_offset=None)])
-        assert model.get_lookup_patient("A") is None
-        assert model.get_lookup_patient("C") is not None
+        assert model.get_phi_by_phi_patient_id("A") is not None
+        model.upsert_ctp_lookup_phi([CtpLookupPhiRow(patient_id="C", anon_patient_id="X-003", date_offset=None)])
+        assert model.get_phi_by_phi_patient_id("A") is None
+        assert model.get_phi_by_phi_patient_id("C") is not None

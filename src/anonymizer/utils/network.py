@@ -10,6 +10,7 @@ import os
 import socket
 import ssl
 
+import certifi
 import ifaddr
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,6 @@ def ensure_ssl_certifi() -> str:
     incomplete and raises ``SSLCertVerificationError``. Certifi ships a Mozilla
     CA bundle that works reliably across platforms.
     """
-    import certifi
 
     cafile = certifi.where()
     os.environ["SSL_CERT_FILE"] = cafile

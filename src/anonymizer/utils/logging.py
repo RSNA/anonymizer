@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import contextlib
 import logging
-import logging.handlers
 import os
 import sys
 from pathlib import Path

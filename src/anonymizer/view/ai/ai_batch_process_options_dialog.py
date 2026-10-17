@@ -37,15 +37,8 @@ from anonymizer.controller.runner import (
     ocr_remove_mode_tooltip,
 )
 from anonymizer.utils.translate import _
-from anonymizer.view.ai.blur_face_results import (
-    face_blur_mode_from_menu_label,
-    face_blur_mode_menu_values,
-)
-from anonymizer.view.ai.features.catalog import (
-    AiFeatureId,
-    feature_capability_description,
-    feature_title,
-)
+from anonymizer.view.ai.blur_face_results import face_blur_mode_from_menu_label, face_blur_mode_menu_values
+from anonymizer.view.ai.features.catalog import AiFeatureId, feature_capability_description, feature_title
 from anonymizer.view.ai.features.look import (
     FEATURE_ACTION_BUTTON_WIDTH,
     FEATURE_DETAIL_PADX,
@@ -64,6 +57,10 @@ from anonymizer.view.common.app_window import (
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.tooltip import bind_hover_tooltip
 from anonymizer.view.common.ux_fields import option_menu_width_for_labels
+from anonymizer.view.project.description_mapping_store import (
+    load_series_overrides,
+    load_study_loinc_overrides,
+)
 
 
 @dataclass(frozen=True)
@@ -472,6 +469,9 @@ class AiBatchProcessOptionsDialog(AppToplevel):
         prefer_mappings = bool(
             hasattr(self, "_prefer_description_mappings_var") and self._prefer_description_mappings_var.get() == 1
         )
+        mappings_dir = Path(self._project_dir) / "mappings"
+        series_overrides = load_series_overrides(mappings_dir) if prefer_mappings else {}
+        study_overrides = load_study_loinc_overrides(mappings_dir) if prefer_mappings else {}
         self._result = AiBatchProcessOptionsResult(
             confirmed=True,
             options=AiBatchProcessOptions(
@@ -482,6 +482,8 @@ class AiBatchProcessOptionsDialog(AppToplevel):
                 ocr_use_exclude_areas=ocr_use_exclude_areas,
                 include_brain_structures=include_brain,
                 prefer_description_mappings=prefer_mappings,
+                series_description_overrides=series_overrides,
+                study_loinc_overrides=study_overrides,
             ),
         )
         self._close()

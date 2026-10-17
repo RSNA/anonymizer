@@ -13,7 +13,6 @@ import SimpleITK as sitk
 
 from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir
 from anonymizer.controller.ai.tseg.config import (
-    BODY_PARTS,
     BRAIN_STRUCTURE_FILES,
     BRAIN_STRUCTURES_TASK,
     CONTRAST_PHASE_CACHE_FILENAME,
@@ -26,7 +25,6 @@ from anonymizer.controller.ai.tseg.config import (
     FACE_MASK_FILENAME,
     FACE_TASK,
     MIN_DICOM_SLICES,
-    MIN_REGION_FRACTION,
     MIN_STRUCTURE_VOXELS,
     ROI_SUBSET,
     ROI_SUBSET_MANIFEST_FILENAME,
@@ -53,12 +51,19 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
     stackable_dicom_paths,
     ts_regions_eligible,
 )
-from anonymizer.controller.ai.tseg.ml_env import sequential_ml_context
+from anonymizer.controller.ai.tseg.ml_env import resolve_device, sequential_ml_context
+from anonymizer.controller.ai.tseg.regions import (
+    RegionResult,
+    body_parts_present,
+    collect_structure_voxels_from_masks,
+    count_mask_voxels,
+    dominant_region_from_voxels,
+    is_multi_region,
+)
 from anonymizer.controller.ai.tseg.seg_retention import (
     anatomy_overlay_cache_ready,
     clear_anatomy_seg_masks,
     evict_tseg_volume,
-    finalize_seg_cache,
     latch_mask_stems_for_export,
     overlay_masks_present,
     read_structure_voxels,
@@ -68,8 +73,39 @@ from anonymizer.controller.ai.tseg.seg_retention import (
     widen_roi_tier,
     write_binary_masks_from_multilabel,
 )
+from anonymizer.controller.analytics.dataset import finalize_seg_cache_with_ledger
 from anonymizer.controller.series_io import load_series_frames
 from anonymizer.utils.translate import _
+
+try:
+    from totalsegmentator.python_api import totalsegmentator
+except ImportError:
+    totalsegmentator = None  # type: ignore[assignment,misc]
+
+from anonymizer.controller.ai.tseg.config import (
+    RELEASE_ANATOMY_PREDICTORS_BEFORE_CONTRAST,
+    ROI_SUBSET_FULL,
+    ROI_TIER_FULL,
+    normalize_segmentation_mode,
+)
+from anonymizer.controller.ai.tseg.contrast import _require_nibabel
+from anonymizer.controller.ai.tseg.face_gate import (
+    FaceBlurGateReason,
+    face_blur_gate_message,
+    face_mask_is_substantial,
+)
+from anonymizer.controller.ai.tseg.modality_profile import (
+    ct_modality_profile,
+    load_series_header_dataset,
+    mr_structure_to_region_for_series,
+    resolve_profile_for_series,
+)
+from anonymizer.controller.ai.tseg.model_cache import (
+    clear_predictor_cache,
+    profile_anatomy_weights_ready,
+    profile_face_weights_ready,
+)
+from anonymizer.controller.ai.tseg.ts_probe import verify_face_license
 
 logger = logging.getLogger(__name__)
 
@@ -107,68 +143,6 @@ class AnalysisProgress:
 
 
 ProgressCallback = Callable[[AnalysisProgress], None]
-
-STRUCTURE_TO_REGION: dict[str, str] = {
-    "brain": "Head",
-    "skull": "Head",
-    "spinal_cord": "Head",
-    "lung_upper_lobe_left": "Chest",
-    "lung_lower_lobe_left": "Chest",
-    "lung_upper_lobe_right": "Chest",
-    "lung_middle_lobe_right": "Chest",
-    "lung_lower_lobe_right": "Chest",
-    "heart": "Chest",
-    "trachea": "Chest",
-    "esophagus": "Chest",
-    "clavicula_left": "Chest",
-    "clavicula_right": "Chest",
-    **{f"rib_left_{i}": "Chest" for i in range(1, 13)},
-    **{f"rib_right_{i}": "Chest" for i in range(1, 13)},
-    **{f"vertebrae_C{i}": "Head" for i in range(1, 8)},
-    **{f"vertebrae_T{i}": "Chest" for i in range(1, 13)},
-    **{f"vertebrae_L{i}": "Abdomen" for i in range(1, 6)},
-    "vertebrae_S1": "Abdomen",
-    **{name: "Head" for name in (
-        "brainstem",
-        "subarachnoid_space",
-        "venous_sinuses",
-        "septum_pellucidum",
-        "cerebellum",
-        "caudate_nucleus",
-        "lentiform_nucleus",
-        "insular_cortex",
-        "internal_capsule",
-        "ventricle",
-        "central_sulcus",
-        "frontal_lobe",
-        "parietal_lobe",
-        "occipital_lobe",
-        "temporal_lobe",
-        "thalamus",
-    )},
-    "liver": "Abdomen",
-    "spleen": "Abdomen",
-    "kidney_left": "Abdomen",
-    "kidney_right": "Abdomen",
-    "stomach": "Abdomen",
-    "pancreas": "Abdomen",
-    "gallbladder": "Abdomen",
-    "colon": "Abdomen",
-    "small_bowel": "Abdomen",
-    "urinary_bladder": "Abdomen",
-    "hip_left": "Abdomen",
-    "hip_right": "Abdomen",
-    "sacrum": "Abdomen",
-}
-
-
-@dataclass(frozen=True)
-class RegionResult:
-    dominant_region: str
-    region_voxels: dict[str, int]
-    structures_present: dict[str, int]
-    region_fraction: float
-
 
 @dataclass(frozen=True)
 class TS_result:
@@ -232,45 +206,7 @@ def dicom_series_to_nifti(series_directory: Path, output_path: Path) -> int:
 
 
 def _require_totalsegmentator():
-    try:
-        from totalsegmentator.python_api import totalsegmentator
-    except ImportError as exc:
-        raise ImportError(
-            "TotalSegmentator is required for anatomy analysis. Install with: pip install rsna-anonymizer"
-        ) from exc
     return totalsegmentator
-
-
-def resolve_device(device: str | None) -> str:
-    import torch
-
-    if device:
-        return device
-    if torch.backends.mps.is_available():
-        return "mps"
-    if torch.cuda.is_available():
-        return "gpu"
-    return "cpu"
-
-
-def count_mask_voxels(mask_path: Path) -> int:
-    image = sitk.ReadImage(str(mask_path))
-    try:
-        array = sitk.GetArrayFromImage(image)
-        return int((array > 0).sum())
-    finally:
-        del image
-
-
-def collect_structure_voxels_from_masks(segmentation_dir: Path, structures: list[str]) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for structure in structures:
-        mask_path = segmentation_dir / f"{structure}.nii.gz"
-        if not mask_path.is_file():
-            counts[structure] = 0
-            continue
-        counts[structure] = count_mask_voxels(mask_path)
-    return counts
 
 
 def _anatomy_mask_stem(path: Path) -> str:
@@ -315,82 +251,6 @@ def collect_structure_voxels(segmentation_dir: Path, structures: list[str]) -> d
     if cached is not None and set(structures) <= set(cached.keys()):
         return {structure: int(cached.get(structure, 0)) for structure in structures}
     return collect_structure_voxels_from_masks(seg_dir, structures)
-
-
-def region_from_structure(
-    name: str,
-    *,
-    structure_to_region: dict[str, str] | None = None,
-) -> str | None:
-    mapping = structure_to_region if structure_to_region is not None else STRUCTURE_TO_REGION
-    return mapping.get(name)
-
-
-def dominant_region_from_voxels(
-    structure_voxels: dict[str, int],
-    *,
-    min_voxels: int = MIN_STRUCTURE_VOXELS,
-    structure_to_region: dict[str, str] | None = None,
-) -> RegionResult:
-    """Pick the region with the largest summed structure voxel count."""
-    region_voxels = {region: 0 for region in BODY_PARTS}
-    structures_present: dict[str, int] = {}
-
-    for structure, count in structure_voxels.items():
-        if count < min_voxels:
-            continue
-        region = region_from_structure(structure, structure_to_region=structure_to_region)
-        if region is None:
-            continue
-        structures_present[structure] = count
-        region_voxels[region] += count
-
-    ranked = sorted(region_voxels.items(), key=lambda item: (-item[1], BODY_PARTS.index(item[0])))
-    top_region, top_count = ranked[0]
-    second_count = ranked[1][1]
-    total = sum(region_voxels.values())
-
-    if total == 0:
-        return RegionResult(
-            dominant_region="",
-            region_voxels=region_voxels,
-            structures_present=structures_present,
-            region_fraction=0.0,
-        )
-
-    dominant_region = top_region if top_count > 0 else ""
-    region_fraction = float(top_count / total) if dominant_region else 0.0
-    if dominant_region and top_count == second_count:
-        region_fraction = 0.5
-
-    return RegionResult(
-        dominant_region=dominant_region,
-        region_voxels=region_voxels,
-        structures_present=structures_present,
-        region_fraction=region_fraction,
-    )
-
-
-def body_parts_present(
-    region_voxels: dict[str, int],
-    *,
-    min_fraction: float = MIN_REGION_FRACTION,
-    min_voxels: int = MIN_STRUCTURE_VOXELS,
-) -> str:
-    """Regions with substantial voxel mass, joined as e.g. ``Chest+Abdomen``."""
-    total = sum(region_voxels.values())
-    if total == 0:
-        return ""
-    present = [
-        region
-        for region in BODY_PARTS
-        if region_voxels.get(region, 0) >= min_voxels and region_voxels[region] / total >= min_fraction
-    ]
-    return "+".join(present)
-
-
-def is_multi_region(body_parts_present_label: str) -> bool:
-    return "+" in body_parts_present_label
 
 
 def cached_body_parts_label(series_directory: Path) -> str | None:
@@ -645,7 +505,6 @@ def _maybe_run_brain_structures(
         and not _brain_structures_cache_valid(seg_dir)
     ):
         return structure_voxels
-    from anonymizer.controller.ai.tseg.readiness import verify_face_license
 
     licensed, license_message = verify_face_license()
     if not licensed:
@@ -688,10 +547,6 @@ def analyze_tseg_face(
     anatomy regions). Face mask is cached at ``seg/face.nii.gz`` (CT) or
     ``seg/face_mr.nii.gz`` (MR).
     """
-    from anonymizer.controller.ai.tseg.modality_profile import (
-        resolve_profile_for_series,
-    )
-    from anonymizer.controller.ai.tseg.model_cache import profile_face_weights_ready
 
     series_directory = Path(series_directory)
     if not ENABLE_TSEG_FACE:
@@ -862,7 +717,6 @@ def estimate_tseg_contrast_remaining_sec(series_directory: Path) -> float:
 
 def face_mask_cache_path(series_directory: Path, *, profile=None) -> Path:
     """Cached face mask under ``<series>/0_TS_SEG/seg/`` (CT ``face.nii.gz`` / MR ``face_mr.nii.gz``)."""
-    from anonymizer.controller.ai.tseg.modality_profile import ct_modality_profile
 
     resolved = profile if profile is not None else ct_modality_profile()
     return series_cache_dir(series_directory) / "seg" / resolved.face_mask_filename
@@ -872,17 +726,11 @@ def _face_cache_valid(mask_path: Path) -> bool:
     """True when a cached face mask exists and has enough voxels to blur."""
     if not mask_path.is_file():
         return False
-    from anonymizer.controller.ai.blur_face import face_mask_is_substantial
 
     return face_mask_is_substantial(count_mask_voxels(mask_path))
 
 
 def _insufficient_face_mask_error(face_voxel_count: int) -> str | None:
-    from anonymizer.controller.ai.blur_face import (
-        FaceBlurGateReason,
-        face_blur_gate_message,
-        face_mask_is_substantial,
-    )
 
     if face_mask_is_substantial(face_voxel_count):
         return None
@@ -910,7 +758,6 @@ def write_roi_subset_manifest(
     segmentation_mode: str | None = None,
 ) -> None:
     """Record which TotalSegmentator ROI classes were requested for this series cache."""
-    from anonymizer.controller.ai.tseg.config import normalize_segmentation_mode
 
     cache_dir.mkdir(parents=True, exist_ok=True)
     payload: dict = {
@@ -928,7 +775,6 @@ def write_roi_subset_manifest(
 
 def read_cached_segmentation_mode(cache_dir: Path) -> str | None:
     """Return stored Harmonize segmentation thickness (``1.5mm`` / ``3mm`` / ``6mm``), if any."""
-    from anonymizer.controller.ai.tseg.config import normalize_segmentation_mode
 
     path = Path(cache_dir) / ROI_SUBSET_MANIFEST_FILENAME
     if not path.is_file():
@@ -1094,8 +940,6 @@ def analyze_tseg_regions(
         logger.info("TS regions: cancelled before start for %s", series_directory)
         return (_error_result(series_directory, HARMONIZE_CANCELLED_MESSAGE), None)
 
-    from anonymizer.controller.ai.tseg.modality_profile import resolve_profile_for_series
-    from anonymizer.controller.ai.tseg.model_cache import profile_anatomy_weights_ready
 
     series_directory = Path(series_directory)
     resolved = profile if profile is not None else resolve_profile_for_series(series_directory)
@@ -1273,7 +1117,6 @@ def _analyze_tseg_regions_impl(
             and structure_voxels.get("brain", 0) >= MIN_STRUCTURE_VOXELS
             and not _brain_structures_cache_valid(seg_dir)
         ):
-            from anonymizer.controller.ai.tseg.readiness import verify_face_license
 
             licensed, license_message = verify_face_license()
             if licensed:
@@ -1308,14 +1151,10 @@ def _analyze_tseg_regions_impl(
         elif include_brain_structures and not ENABLE_TSEG_BRAIN_STRUCTURES:
             logger.debug("TS regions: brain_structures disabled in config")
 
-        finalize_seg_cache(work_dir, seg_dir, structure_voxels)
+        finalize_seg_cache_with_ledger(work_dir, seg_dir, structure_voxels)
 
         structure_to_region = profile.structure_to_region
         if profile.modality == "MR":
-            from anonymizer.controller.ai.tseg.modality_profile import (
-                load_series_header_dataset,
-                mr_structure_to_region_for_series,
-            )
 
             header_ds = load_series_header_dataset(series_directory)
             structure_to_region = mr_structure_to_region_for_series(header_ds)
@@ -1400,8 +1239,6 @@ def analyze_tseg_ct_single_pass(
     Contrast phase is still applied by ``analyze_tseg_contrast`` (reuses the stats
     cache). Returns ``(result, nifti_path, used_single_pass)``.
     """
-    from anonymizer.controller.ai.tseg.config import ROI_SUBSET_FULL, ROI_TIER_FULL
-    from anonymizer.controller.ai.tseg.modality_profile import resolve_profile_for_series
 
     series_directory = Path(series_directory)
     if harmonize_cancel_requested(cancelled):
@@ -1494,7 +1331,7 @@ def analyze_tseg_ct_single_pass(
                         analysis_started=analysis_started,
                     )
                     structure_voxels = reconcile_structure_voxels_from_masks(seg_dir, structure_voxels)
-                    finalize_seg_cache(work_dir, seg_dir, structure_voxels)
+                    finalize_seg_cache_with_ledger(work_dir, seg_dir, structure_voxels)
                     region_result = _ts_result_from_structure_voxels(series_directory, structure_voxels)
                     _report_progress(
                         progress,
@@ -1515,7 +1352,6 @@ def analyze_tseg_ct_single_pass(
             )
             totalsegmentator = _require_totalsegmentator()
             ts_device = resolve_device(None)
-            from anonymizer.controller.ai.tseg.contrast import _require_nibabel
 
             ct_img = _require_nibabel().load(nifti_path)
             seg_dir.mkdir(parents=True, exist_ok=True)
@@ -1602,7 +1438,7 @@ def analyze_tseg_ct_single_pass(
             )
             # Stats volumes are mm³; replace with true mask voxel counts before sidecars.
             structure_voxels = reconcile_structure_voxels_from_masks(seg_dir, structure_voxels)
-            finalize_seg_cache(work_dir, seg_dir, structure_voxels)
+            finalize_seg_cache_with_ledger(work_dir, seg_dir, structure_voxels)
 
             region_result = _ts_result_from_structure_voxels(series_directory, structure_voxels)
             _report_progress(
@@ -1641,8 +1477,6 @@ def analyze_tseg_contrast(
 
     release_before_contrast(stage="ts_contrast_after_anatomy_release")
 
-    from anonymizer.controller.ai.tseg.config import RELEASE_ANATOMY_PREDICTORS_BEFORE_CONTRAST
-    from anonymizer.controller.ai.tseg.model_cache import clear_predictor_cache
 
     if RELEASE_ANATOMY_PREDICTORS_BEFORE_CONTRAST:
         clear_predictor_cache()
@@ -1746,7 +1580,6 @@ def analyze_series(
 
     MR series skip contrast phase (no IV phase model) and return ``native`` / WO.
     """
-    from anonymizer.controller.ai.tseg.modality_profile import resolve_profile_for_series
 
     if not series_directories:
         logger.error("No series directories provided for anatomy analysis.")

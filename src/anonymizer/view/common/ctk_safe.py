@@ -4,8 +4,15 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import sys
 import threading
 import tkinter as tk
+import tkinter.font as tkfont
+
+from customtkinter.windows.widgets.ctk_scrollable_frame import CTkScrollableFrame
+from customtkinter.windows.widgets.scaling.scaling_tracker import ScalingTracker
+
+from anonymizer.utils.memory import schedule_collect_garbage_on_tk
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +82,6 @@ def release_ctk_label_image(label: tk.Misc) -> None:
 
 def unregister_customtkinter_window(window: tk.Misc) -> None:
     with contextlib.suppress(Exception):
-        from customtkinter.windows.widgets.scaling.scaling_tracker import ScalingTracker
 
         ScalingTracker.remove_window(None, window)
         ScalingTracker.window_dpi_scaling_dict.pop(window, None)
@@ -95,7 +101,6 @@ def resume_scaling_tracker_check() -> None:
 def purge_stale_scaling_windows() -> None:
     """Drop destroyed CTk windows from CustomTkinter's scaling tracker."""
     with contextlib.suppress(Exception):
-        from customtkinter.windows.widgets.scaling.scaling_tracker import ScalingTracker
 
         _prune_stale_scaling_windows(ScalingTracker)
 
@@ -160,7 +165,6 @@ def _tk_scheduling_anchor() -> tk.Misc | None:
                 return root
 
     with contextlib.suppress(Exception):
-        from customtkinter.windows.widgets.scaling.scaling_tracker import ScalingTracker
 
         return _scaling_loop_anchor(ScalingTracker)
     return None
@@ -231,7 +235,6 @@ def teardown_ctk_toplevel(
     parent: tk.Misc | None = None,
 ) -> None:
     """Unified Toplevel close: unregister scaling, destroy, schedule GC."""
-    from anonymizer.utils.memory import schedule_collect_garbage_on_tk
 
     mark_ctk_window_destroyed(window)
     with contextlib.suppress(tk.TclError):
@@ -248,7 +251,6 @@ def install_safe_tk_font_destructor() -> None:
     if _FONT_DEL_PATCHED:
         return
 
-    import tkinter.font as tkfont
 
     def _safe_font_del(self) -> None:
         try:
@@ -315,7 +317,6 @@ def install_safe_scrollable_frame_widget_resolve() -> None:
     if _SCROLL_WIDGET_RESOLVE_PATCHED:
         return
 
-    from customtkinter.windows.widgets.ctk_scrollable_frame import CTkScrollableFrame
 
     original = CTkScrollableFrame._check_if_valid_scroll
 
@@ -338,7 +339,6 @@ def install_safe_scaling_tracker() -> None:
     if _PATCH_INSTALLED:
         return
 
-    from customtkinter.windows.widgets.scaling.scaling_tracker import ScalingTracker
 
     @classmethod
     def safe_check_dpi_scaling(cls) -> None:
@@ -363,7 +363,6 @@ def install_safe_scaling_tracker() -> None:
 
             if current_dpi_scaling_value != cls.window_dpi_scaling_dict.get(window):
                 cls.window_dpi_scaling_dict[window] = current_dpi_scaling_value
-                import sys
 
                 if sys.platform.startswith("win"):
                     with contextlib.suppress(tk.TclError):

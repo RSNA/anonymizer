@@ -14,7 +14,7 @@ from anonymizer.controller.ai.embedded_phi.report.process_report_text import (
     build_basic_text_sr,
     remove_phi,
 )
-from anonymizer.utils.storage import get_dcm_files
+from anonymizer.utils.storage.dicom_tree import get_dcm_files
 
 __all__ = [
     "BASIC_TEXT_SR_SOP_CLASS_UID",

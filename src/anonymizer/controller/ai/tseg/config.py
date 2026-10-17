@@ -13,6 +13,7 @@ from anonymizer.utils.app_state import (
     read_app_state,
     write_app_state,
 )
+from anonymizer.utils.modalities import Modality
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,8 @@ MIN_REGION_FRACTION = 0.15
 
 # Per-series cache directory (NIfTI volume, ROI seg masks, contrast statistics JSON).
 TSEG_CACHE_DIRNAME = "0_TS_SEG"
+# User annotation label volumes under the per-series cache (preserved when pruning TS masks).
+ANNOTATIONS_DIRNAME = "annotations"
 GEOMETRY_CACHE_FILENAME = "geometry.json"
 GEOMETRY_CACHE_VERSION = 3
 ROI_SUBSET_MANIFEST_FILENAME = "roi_subset.json"
@@ -64,6 +67,59 @@ BATCH_MEMORY_POLL_INTERVAL_SEC = 2.0
 
 
 BODY_PARTS: tuple[str, ...] = ("Head", "Chest", "Abdomen")
+
+STRUCTURE_TO_REGION: dict[str, str] = {
+    "brain": "Head",
+    "skull": "Head",
+    "spinal_cord": "Head",
+    "lung_upper_lobe_left": "Chest",
+    "lung_lower_lobe_left": "Chest",
+    "lung_upper_lobe_right": "Chest",
+    "lung_middle_lobe_right": "Chest",
+    "lung_lower_lobe_right": "Chest",
+    "heart": "Chest",
+    "trachea": "Chest",
+    "esophagus": "Chest",
+    "clavicula_left": "Chest",
+    "clavicula_right": "Chest",
+    **{f"rib_left_{i}": "Chest" for i in range(1, 13)},
+    **{f"rib_right_{i}": "Chest" for i in range(1, 13)},
+    **{f"vertebrae_C{i}": "Head" for i in range(1, 8)},
+    **{f"vertebrae_T{i}": "Chest" for i in range(1, 13)},
+    **{f"vertebrae_L{i}": "Abdomen" for i in range(1, 6)},
+    "vertebrae_S1": "Abdomen",
+    **{name: "Head" for name in (
+        "brainstem",
+        "subarachnoid_space",
+        "venous_sinuses",
+        "septum_pellucidum",
+        "cerebellum",
+        "caudate_nucleus",
+        "lentiform_nucleus",
+        "insular_cortex",
+        "internal_capsule",
+        "ventricle",
+        "central_sulcus",
+        "frontal_lobe",
+        "parietal_lobe",
+        "occipital_lobe",
+        "temporal_lobe",
+        "thalamus",
+    )},
+    "liver": "Abdomen",
+    "spleen": "Abdomen",
+    "kidney_left": "Abdomen",
+    "kidney_right": "Abdomen",
+    "stomach": "Abdomen",
+    "pancreas": "Abdomen",
+    "gallbladder": "Abdomen",
+    "colon": "Abdomen",
+    "small_bowel": "Abdomen",
+    "urinary_bladder": "Abdomen",
+    "hip_left": "Abdomen",
+    "hip_right": "Abdomen",
+    "sacrum": "Abdomen",
+}
 
 # TotalSegmentator ``total`` filenames used for region analysis + overlay groups.
 _LUNG_LOBE_FILES: tuple[str, ...] = (
@@ -257,9 +313,10 @@ def clear_segmentation_mode_cache() -> None:
     _mr_segmentation_mode = DEFAULT_SEGMENTATION_MODE  # type: ignore[assignment]
 
 
-def segmentation_mode_for_modality(modality: object | None) -> SegmentationMode:
-    code = str(modality or "").strip().upper()
-    if code in {"MR", "MRI"}:
+def segmentation_mode_for_modality(modality: str | Modality | None) -> SegmentationMode:
+    """Return the active segmentation mode for a DICOM modality code."""
+    parsed = modality if isinstance(modality, Modality) else Modality.from_code(modality)
+    if parsed is Modality.MR:
         return get_mr_segmentation_mode()
     return get_ct_segmentation_mode()
 

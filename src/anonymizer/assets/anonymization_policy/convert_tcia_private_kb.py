@@ -8,10 +8,7 @@ import csv
 import re
 from pathlib import Path
 
-from anonymizer.controller.ai.embedded_phi.metadata.tcia_kb import (
-    ACTION_PRIORITY,
-    action_beats,
-)
+from anonymizer.controller.ai.embedded_phi.metadata.tcia_kb import ACTION_PRIORITY, action_beats
 
 _DIR = Path(__file__).resolve().parent
 _DEFAULT_SRC = _DIR / "TCIAPrivateTagKB-02-01-2024-formatted.csv"

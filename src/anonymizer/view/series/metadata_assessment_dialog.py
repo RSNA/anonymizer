@@ -9,6 +9,7 @@ entity colors / hover chips.
 from __future__ import annotations
 
 import logging
+import platform
 import queue
 import threading
 import tkinter as tk
@@ -20,10 +21,7 @@ import customtkinter as ctk
 from customtkinter import ThemeManager
 from pydicom.dataset import Dataset
 
-from anonymizer.controller.ai.embedded_phi.metadata.detect import (
-    detect_phi_in_texts,
-    entity_count_by_label,
-)
+from anonymizer.controller.ai.embedded_phi.metadata.detect import detect_phi_in_texts, entity_count_by_label
 from anonymizer.controller.ai.embedded_phi.metadata.extract import is_anonymizer_field
 from anonymizer.controller.ai.embedded_phi.metadata.viewer_tree import (
     ITEM_NAME,
@@ -43,11 +41,7 @@ from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import char_width_px
 from anonymizer.view.common.tooltip import MotionTooltipController, TooltipContent
 from anonymizer.view.common.ux_fields import button_width_for_label
-from anonymizer.view.reports.entity_colors import (
-    entity_color_hex,
-    entity_label_display,
-    entity_scored_family,
-)
+from anonymizer.view.reports.entity_colors import entity_color_hex, entity_label_display, entity_scored_family
 from anonymizer.view.reports.report_text_review import detect_phi_button_label
 
 logger = logging.getLogger(__name__)
@@ -66,7 +60,6 @@ _PHI_TAG_PREFIX = "phi_"
 
 def _mono_char_width_px() -> int:
     """Match Dataset / global Treeview mono metrics without allocating AppFonts."""
-    import platform
 
     os_map = {"Darwin": "macOS", "Windows": "Windows", "Linux": "Linux"}
     os_key = os_map.get(platform.system(), "macOS")

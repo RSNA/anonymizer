@@ -414,7 +414,7 @@ def test_batch_detect_mode_filters_to_phi_only(
 
 def test_series_view_store_all_then_display_whitelist() -> None:
     """Series View contract: detect stores all; display filter applies whitelist."""
-    from anonymizer.utils.storage import load_default_whitelist
+    from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_default_whitelist
 
     stored = _davidson_detections()
     assert any(t.text == "Portable" for t in stored)

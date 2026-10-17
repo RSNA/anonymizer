@@ -7,6 +7,7 @@ import logging
 import re
 import string
 import tkinter as tk
+from datetime import datetime
 from pathlib import Path
 from tkinter import messagebox, ttk
 from typing import Callable
@@ -1565,7 +1566,6 @@ class OperandParamDialog(AppToplevel):
                 )
                 return
             try:
-                from datetime import datetime
 
                 datetime.strptime(raw, "%Y%m%d")
             except ValueError:

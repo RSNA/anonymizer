@@ -2,7 +2,6 @@
 This module contains the ProjectModel class and related data classes for storing project settings and configurations.
 """
 
-import os
 import time
 from copy import copy, deepcopy
 from dataclasses import asdict, dataclass, field
@@ -13,31 +12,17 @@ from pprint import pformat
 from typing import Dict, List
 
 from dataclasses_json import config, dataclass_json
-from pynetdicom._globals import DEFAULT_TRANSFER_SYNTAXES  # type: ignore
+from pynetdicom._globals import DEFAULT_TRANSFER_SYNTAXES
 
-from anonymizer.utils.modalities import DEFAULT_PROJECT_MODALITIES, get_modalities
+from anonymizer.utils.modalities import DEFAULT_PROJECT_MODALITIES, Modality, get_modality_catalog
 from anonymizer.utils.translate import _
 from anonymizer.utils.version import get_version
 
 
 class AnonymizationPolicy(StrEnum):
-    """Ingest script policy: Strict (default) or Clinical (compiled script)."""
-
+    """Ingest anonymization script policy: Strict (anonymization) or Clinical (TCIA de-identification)."""
     STRICT = "strict"
     CLINICAL = "clinical"
-
-
-def _use_ascii_storage_dirs() -> bool:
-    """When set (e.g. docs_help capture), keep filesystem folder names ASCII.
-
-    SimpleITK/NIfTI fails on Windows paths with translated names such as German
-    ``öffentlich``.
-    """
-    return os.environ.get("ANONYMIZER_ASCII_STORAGE_DIRS", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-    }
 
 
 # Controller Custom Error classes:
@@ -124,7 +109,6 @@ class ProjectModel:
     """
     The Project data model class to store all the project settings and configurations.
     """
-
     # Project Model Version Control
     MODEL_VERSION = 12
 
@@ -196,7 +180,7 @@ class ProjectModel:
 
     @staticmethod
     def default_modalities() -> List[str]:
-        return list(DEFAULT_PROJECT_MODALITIES)
+        return [m.value for m in DEFAULT_PROJECT_MODALITIES]
 
     @staticmethod
     def default_transfer_syntaxes() -> List[str]:
@@ -232,25 +216,15 @@ class ProjectModel:
     anonymizer_script_path: Path = field(default=Path("assets/scripts/default-anonymizer.script"), metadata=path_field)
     anonymization_policy: AnonymizationPolicy = AnonymizationPolicy.STRICT
 
-    def __post_init__(self):        # Sub-directories in the storage directory:
-        if _use_ascii_storage_dirs():
-            self.PRIVATE_DIR = "private"
-            self.PUBLIC_DIR = "public"
-            self.PHI_EXPORT_DIR = "phi_export"
-            self.QUARANTINE_DIR = "quarantine"
-            self.BATCH_RUNS_DIR = "batch_runs"
-        else:
-            self.PRIVATE_DIR = _("private")
-            self.PUBLIC_DIR = _("public")
-            self.PHI_EXPORT_DIR = _("phi_export")
-            self.QUARANTINE_DIR = _("quarantine")
-            self.BATCH_RUNS_DIR = _("batch_runs")
-        # Missing / unknown policy → Strict (MODEL_VERSION 12).
-        raw_policy = getattr(self, "anonymization_policy", AnonymizationPolicy.STRICT)
-        try:
-            self.anonymization_policy = AnonymizationPolicy(str(raw_policy).strip().lower())
-        except ValueError:
-            self.anonymization_policy = AnonymizationPolicy.STRICT
+    def __post_init__(self):
+        # Images tree stays ASCII English: SimpleITK/NIfTI fails on Windows when any
+        # ancestor path has non-ASCII (e.g. German öffentlich). Other project dirs
+        # follow the UI language for browsing.
+        self.PRIVATE_DIR = _("private")
+        self.PUBLIC_DIR = "public"
+        self.PHI_EXPORT_DIR = _("phi_export")
+        self.QUARANTINE_DIR = _("quarantine")
+        self.BATCH_RUNS_DIR = _("batch_runs")
         # New / empty projects derive SOP classes from modalities; loaded projects keep
         # persisted custom storage_classes (do not wipe on every __post_init__).
         if not self.storage_classes:
@@ -296,6 +270,10 @@ class ProjectModel:
     def images_dir(self) -> Path:
         return self.storage_dir.joinpath(self.PUBLIC_DIR)
 
+    def mappings_dir(self) -> Path:
+        """User-editable description mapping CSVs (UX only; not PHI)."""
+        return self.storage_dir.joinpath("mappings")
+
     def private_dir(self) -> Path:
         return self.storage_dir.joinpath(self.PRIVATE_DIR)
 
@@ -327,16 +305,23 @@ class ProjectModel:
             self.storage_classes = []
         else:
             self.storage_classes.clear()
+        catalog = get_modality_catalog()
         for modality in self.modalities:
-            self.storage_classes += get_modalities()[modality][1]
+            parsed = Modality.from_code(modality)
+            if parsed is None:
+                continue
+            self.storage_classes += list(catalog[parsed].sop_class_uids)
 
     def ensure_storage_classes_from_modalities(self) -> None:
         """Add SOP classes for selected modalities without removing custom extras."""
         if self.storage_classes is None:
             self.storage_classes = []
-        catalog = get_modalities()
+        catalog = get_modality_catalog()
         for modality in self.modalities:
-            for uid in catalog.get(modality, ("", []))[1]:
+            parsed = Modality.from_code(modality)
+            if parsed is None:
+                continue
+            for uid in catalog[parsed].sop_class_uids:
                 if uid not in self.storage_classes:
                     self.storage_classes.append(uid)
 

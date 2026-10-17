@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import tkinter as tk
+import tkinter.font as tkfont
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
@@ -12,6 +13,7 @@ from typing import Literal
 import customtkinter as ctk
 from customtkinter import ThemeManager
 
+from anonymizer.controller.ai.harmonize.playbook import playbook_component_code_tooltip
 from anonymizer.utils.translate import _
 from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
@@ -500,7 +502,6 @@ class SetDescriptionDialog(AppToplevel):
     @staticmethod
     def _compose_list_width(codes: list[str]) -> int:
         """Listbox ``width`` from measured text pixels (avoids oversized char cells)."""
-        import tkinter.font as tkfont
 
         font = tkfont.nametofont("TkTextFont")
         zero = max(1, int(font.measure("0")))
@@ -586,7 +587,6 @@ class SetDescriptionDialog(AppToplevel):
 
     def _bind_compose_code_tooltip(self, listbox: tk.Listbox, field_key: str) -> None:
         """Hover gloss for abbreviated Playbook codes (``CODE — full name``)."""
-        from anonymizer.controller.ai.harmonize.playbook import playbook_component_code_tooltip
 
         def _text_for_position(event: tk.Event) -> str | None:
             try:

@@ -12,8 +12,9 @@ from pathlib import Path
 
 import requests
 
+from anonymizer.controller.ai.harmonize.model_slot import ModelSlot
 from anonymizer.utils.package_paths import ai_feature_dir
-from anonymizer.utils.storage import update_model_download
+from anonymizer.controller.ai.model_download import update_model_download
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,14 @@ _PARAMS_URL = f"{_HF_BASE}/parameters.json"
 DOWNLOAD_ID = "harmonize_xr_bodypart"
 
 _downloading = False
+
+# Loaded weights live here (not in ``predict``) so download/remove can clear without importing inference.
+MODEL_SLOT: ModelSlot = ModelSlot(label="Xp bodypart")
+
+
+def clear_model_cache() -> None:
+    """Drop in-memory weights (after remove/download)."""
+    MODEL_SLOT.clear()
 
 
 class XpBodypartModelStatus(StrEnum):
@@ -102,7 +111,6 @@ def download_xp_bodypart_models(*, verbose: bool = False) -> tuple[bool, str]:
             _download_file(_PARAMS_URL, XP_BODYPART_PARAMS_PATH, label="parameters.json")
         except Exception:
             logger.warning("Optional parameters.json download failed", exc_info=True)
-        from anonymizer.controller.ai.harmonize.xp_bodypart.predict import clear_model_cache
 
         clear_model_cache()
         status, detail = probe_xp_bodypart_models()
@@ -119,7 +127,6 @@ def download_xp_bodypart_models(*, verbose: bool = False) -> tuple[bool, str]:
 
 def remove_xp_bodypart_models() -> None:
     """Delete cached Xp bodypart weights."""
-    from anonymizer.controller.ai.harmonize.xp_bodypart.predict import clear_model_cache
 
     if XP_BODYPART_DIR.is_dir():
         shutil.rmtree(XP_BODYPART_DIR)

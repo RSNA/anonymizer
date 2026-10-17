@@ -5,34 +5,16 @@ View imports these directly. Status strings, download manager, and catalog regis
 
 from __future__ import annotations
 
-from anonymizer.controller.ai.embedded_phi.ner.cache import (
-    NerModelStatus,
-    ner_ready,
-    probe_ner_models,
-)
-from anonymizer.controller.ai.embedded_phi.pixel.cache import (
-    OcrModelStatus,
-    ocr_models_ready,
-    probe_ocr_models,
-)
+from anonymizer.controller.ai.embedded_phi.ner.cache import NerModelStatus, ner_ready, probe_ner_models
+from anonymizer.controller.ai.embedded_phi.pixel.cache import OcrModelStatus, ocr_models_ready, probe_ocr_models
 from anonymizer.controller.ai.harmonize.xp_bodypart import (
     XpBodypartModelStatus,
     probe_xp_bodypart_models,
     xp_bodypart_ready,
 )
-from anonymizer.controller.ai.harmonize.xr_chest_view import (
-    CxpViewModelStatus,
-    cxp_view_ready,
-    probe_cxp_view_models,
-)
-from anonymizer.controller.ai.tseg.config import (
-    get_ct_segmentation_mode,
-    get_mr_segmentation_mode,
-)
-from anonymizer.controller.ai.tseg.model_cache import (
-    installed_ct_segmentation_modes,
-    installed_mr_segmentation_modes,
-)
+from anonymizer.controller.ai.harmonize.xr_chest_view import CxpViewModelStatus, cxp_view_ready, probe_cxp_view_models
+from anonymizer.controller.ai.tseg.config import get_ct_segmentation_mode, get_mr_segmentation_mode
+from anonymizer.controller.ai.tseg.model_cache import installed_ct_segmentation_modes, installed_mr_segmentation_modes
 from anonymizer.controller.ai.tseg.readiness import (
     anatomy_ct_ready,
     anatomy_mr_ready,
@@ -42,6 +24,11 @@ from anonymizer.controller.ai.tseg.readiness import (
     face_mr_ready,
     totalsegmentator_available,
     xgboost_available,
+)
+from anonymizer.utils.modalities import (
+    ContentClass,
+    Modality,
+    get_modality_catalog,
 )
 
 
@@ -58,22 +45,20 @@ def harmonize_allowed() -> bool:
     return True
 
 
-def harmonize_allowed_for_modality(modality: object | None) -> bool:
+def harmonize_allowed_for_modality(modality: str | None) -> bool:
     """True when Harmonize models/path for ``modality`` are ready."""
-    from anonymizer.utils.modalities import (
-        is_mr_modality,
-        is_planar_harmonize_modality,
-        is_report_harmonize_modality,
-        is_tseg_modality,
-    )
 
-    if is_planar_harmonize_modality(modality) or is_report_harmonize_modality(modality):
+    parsed = Modality.from_code(modality)
+    if parsed is None or not get_modality_catalog()[parsed].harmonize:
+        return False
+    cls = get_modality_catalog()[parsed].content_class
+    if cls is ContentClass.D2 or cls is ContentClass.TEXT:
         return True
-    if not is_tseg_modality(modality):
+    if parsed not in {Modality.CT, Modality.MR}:
         return False
     if not totalsegmentator_available():
         return False
-    if is_mr_modality(modality):
+    if parsed is Modality.MR:
         return bool(installed_mr_segmentation_modes())
     return bool(installed_ct_segmentation_modes()) and xgboost_available()
 

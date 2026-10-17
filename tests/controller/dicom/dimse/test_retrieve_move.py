@@ -18,7 +18,7 @@ from anonymizer.controller.project import (
     SeriesUIDHierarchy,
     StudyUIDHierarchy,
 )
-from anonymizer.utils.storage import count_studies_series_images
+from anonymizer.utils.storage.dicom_tree import count_studies_series_images
 from tests.controller.dicom.support.helpers import (
     pacs_storage_dir,
     request_to_move_studies_from_scp_to_local_scp,

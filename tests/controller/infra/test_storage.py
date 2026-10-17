@@ -8,15 +8,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.anonymizer.utils.storage import (
+from anonymizer.utils.storage.dicom_tree import (
     count_series,
     count_studies_series_images,
     count_study_images,
     get_dcm_files,
     is_hidden_path,
     list_import_directory_files,
-    read_java_anonymizer_index_xlsx,
 )
+from anonymizer.utils.storage.java_index import read_java_anonymizer_index_xlsx
 from tests.controller.paths import JAVA_GENERATED_INDEX
 
 
@@ -318,7 +318,7 @@ def test_load_data_from_existing_excel():
 def test_no_active_sheet():
     """Test that a ValueError is raised if no active sheet is found in the workbook."""
     # Mock the load_workbook function
-    with patch("src.anonymizer.utils.storage.load_workbook") as mock_load_workbook:
+    with patch("anonymizer.utils.storage.java_index.load_workbook") as mock_load_workbook:
         # Create a mock workbook with no active sheet
         mock_workbook = MagicMock()
         mock_workbook.active = None

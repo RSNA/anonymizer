@@ -9,20 +9,20 @@ from dataclasses import dataclass
 from functools import partial
 
 from anonymizer.controller.ai import feature_availability as feature_gates
-from anonymizer.controller.ai.embedded_phi.ner.cache import (
-    NerModelStatus,
-    ner_ready,
-    probe_ner_models,
-)
-from anonymizer.controller.ai.embedded_phi.pixel.cache import (
-    OcrModelStatus,
-    ocr_models_ready,
-    probe_ocr_models,
+from anonymizer.controller.ai.embedded_phi.ner.cache import NerModelStatus, ner_ready, probe_ner_models
+from anonymizer.controller.ai.embedded_phi.pixel.cache import OcrModelStatus, ocr_models_ready, probe_ocr_models
+from anonymizer.controller.ai.model_download import (
+    any_model_download_active,
+    begin_model_download,
+    end_model_download,
+    get_model_download_progress,
+    is_model_download_active,
 )
 from anonymizer.controller.ai.tseg.config import (
     get_ct_segmentation_mode,
     get_mr_segmentation_mode,
     normalize_segmentation_mode,
+    segmentation_mode_display,
 )
 from anonymizer.controller.ai.tseg.model_cache import (
     ct_face_models_ready,
@@ -43,13 +43,6 @@ from anonymizer.controller.ai.tseg.readiness import (
     totalsegmentator_available,
     ts_academic_license_url,
     xgboost_available,
-)
-from anonymizer.utils.storage import (
-    any_model_download_active,
-    begin_model_download,
-    end_model_download,
-    get_model_download_progress,
-    is_model_download_active,
 )
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.features.catalog import (
@@ -107,7 +100,6 @@ def _download_in_progress(download_id: str) -> bool:
 
 def _harmonize_resolution_status(*, active: object | None, installed: tuple[str, ...]) -> str:
     """Compact status; dropdown already shows the active resolution."""
-    from anonymizer.controller.ai.tseg.config import segmentation_mode_display
 
     active_mode = normalize_segmentation_mode(active)
     installed_modes = tuple(normalize_segmentation_mode(mode) for mode in installed)
@@ -409,7 +401,6 @@ class AiFeatureDownloadManager:
         preparing_message: str | None = None,
     ) -> bool:
         """Start a download if idle. Returns False when another download is already running."""
-        from anonymizer.utils.translate import _
 
         resolved_preparing = preparing_message or _("Preparing model download…")
         with self._lock:

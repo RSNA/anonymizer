@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from anonymizer.anonymizer import run_HEADLESS_AI_BATCH
 from anonymizer.controller.ai.batch_config import (
     AiBatchAlgorithm,
     AiBatchConfig,
@@ -199,14 +200,12 @@ def test_run_headless_ai_batch_invokes_controller(tmp_path: Path) -> None:
 
     with (
         patch("anonymizer.anonymizer.create_headless_controller", return_value=controller),
-        patch("anonymizer.controller.ai.batch_config.validate_ai_batch_config_gates"),
+        patch("anonymizer.anonymizer.validate_ai_batch_config_gates"),
         patch(
-            "anonymizer.controller.ai.batch_config.resolve_ai_batch_studies",
+            "anonymizer.anonymizer.resolve_ai_batch_studies",
             return_value=[("pt1", "study1")],
         ),
     ):
-        from anonymizer.anonymizer import run_HEADLESS_AI_BATCH
-
         exit_code = run_HEADLESS_AI_BATCH(project_path, batch_path)
 
     assert exit_code == 0
