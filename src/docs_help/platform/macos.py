@@ -17,7 +17,8 @@ from docs_help.platform.common import is_blank_capture, trim_transparent
 logger = logging.getLogger(__name__)
 
 _SWIFT_SRC = Path(__file__).with_name("list_cg_windows.swift")
-_HELPER_CACHE = Path(tempfile.gettempdir()) / "anonymizer_list_cg_windows"
+_HELPER_TEMP = tempfile.TemporaryDirectory(prefix="anonymizer-cg-windows-")
+_HELPER_CACHE = Path(_HELPER_TEMP.name) / "anonymizer_list_cg_windows"
 
 
 def _ensure_helper() -> Path:
