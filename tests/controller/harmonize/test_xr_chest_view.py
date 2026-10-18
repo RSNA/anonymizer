@@ -149,14 +149,9 @@ def _stub_planar_pipeline(
     from anonymizer.controller.ai.harmonize import pipeline as pipe
 
     monkeypatch.setattr(pipe, "_load_planar_series_dataset", lambda _p: ds)
-    monkeypatch.setattr(
-        "anonymizer.controller.ai.harmonize.xr_chest_view.cxp_view_ready",
-        lambda: True,
-    )
-    monkeypatch.setattr(
-        "anonymizer.controller.ai.harmonize.xp_bodypart.xp_bodypart_ready",
-        lambda: False,
-    )
+    # Patch pipeline bindings (top-level imports), not the source modules.
+    monkeypatch.setattr(pipe, "cxp_view_ready", lambda: True)
+    monkeypatch.setattr(pipe, "xp_bodypart_ready", lambda: False)
     called = MagicMock(return_value=_pred("AP", 0.95))
     monkeypatch.setattr(pipe, "predict_cxp_view", called)
     monkeypatch.setattr(pipe, "sorted_dicom_paths", lambda _p: [series / "slice.dcm"])
