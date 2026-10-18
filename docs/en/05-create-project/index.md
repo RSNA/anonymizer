@@ -11,7 +11,7 @@ Open a clean project with a storage folder and site identity ready for import.
 1. From **File → New Project**, open **New Project Settings**.
 2. Choose a **Project Name** (short, under 16 characters) and confirm the **Storage Directory**.
 3. Review Site ID and UID Root (usually leave defaults unless continuing a Java Anonymizer site).
-4. Choose **Anonymization Policy**: **Strict** (default, image-focused script) or **Clinical** (keeps report/clinical free-text tags and TCIA private-tag rules; enables SR/PDF modalities).
+4. Choose **Anonymization Policy**: **Strict** (default, image-focused script) or **Clinical** (keeps report/clinical free-text tags; enables SR/PDF modalities). Hover each option for a short summary. On an **existing** project, changing policy asks you to confirm — Accepting replaces the project anonymizer script with the packaged policy script (**custom script edits are lost**). Already-imported images are not re-processed.
 5. Confirm modalities and network settings with IT if you will query a PACS.
 6. Save / create the project. The packaged script is copied beside `ProjectModel.json` as `{site_id}-anonymizer.script`. The **Dashboard** opens.
 
@@ -34,6 +34,7 @@ Open a clean project with a storage folder and site identity ready for import.
 - Dashboard shows your project name and Site ID.
 - Storage directory exists and is writable.
 - You can open the currently curated **Dataset** (empty until you import) by clicking **View**.
+- After import, **Analytics** appears on the Dashboard (expand for cohort charts; organ volumes after Harmonize).
 
 
 
@@ -102,6 +103,10 @@ Which image types and encodings are allowed.
 The project **anonymizer script** is a CTP-compatible XML file that lists every DICOM tag the Anonymizer knows about and what to do with it. The packaged default follows the DICOM Basic Application Confidentiality Profile described in [De-identification protocol](../deidentification-protocol.md).
 
 Open **File → Project Settings** (or New Project Settings), then click **Edit Anonymizer Script**. The editor loads the packaged default until you Accept; after that it opens your project-private copy and shows its path at the top of the dialog.
+
+The header shows **Anonymization Policy** (**Strict** or **Clinical**), **Provenance** (packaged vs project script basename), and the project script **Path** once a private copy exists. Under **Clinical**, provenance points at `clinical-anonymizer.script` and Active rules keep more report / clinical free-text tags.
+
+![Anonymizer Script Editor (Clinical)](shots/macos/AnonymizerScriptEditor.png)
 
 #### Views
 
@@ -187,6 +192,20 @@ Raise anonymizer / network logging when troubleshooting with IT.
 ![Dashboard](shots/macos/Dashboard.png)
 
 The Dashboard exposes the main workflow buttons: **Search**, **View**, and **Send**.
+
+### Analytics (after you have studies)
+
+Once at least one study is in the project, an **Analytics** control appears on the Dashboard (below the main buttons). Expand it to see cohort charts — especially **organ volumes** after you have run [Harmonize](../08-process/03-harmonize-names/) on CT/MR series.
+
+1. Click **Analytics ▸** to expand the board.
+2. Use **Show** to choose which chart tiles are visible.
+3. Use **Volumes** to pick which organs appear in the volume histograms.
+4. Adjust **Bin width** if the histogram looks too coarse or too fine.
+5. Click **Refresh** after Harmonize or new imports so volumes update.
+
+![Dashboard Analytics expanded](shots/macos/Dashboard_Analytics.png)
+
+Analytics is for **review inside this project**. It does not change pixels or what you Send. After Harmonize on CT/MR (masks under the series cache), use **Volumes** to choose organs and **Show** for demographic tiles — a full board can include sex, age, modality, ethnicity, AI coverage, and many organ-volume histograms. Empty volume charts usually mean Harmonize has not produced anatomy masks yet for those series.
 
 ## If it fails
 

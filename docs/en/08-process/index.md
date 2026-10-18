@@ -2,6 +2,8 @@
 
 **Process** tools change anonymized **pixels** or **series / study names** after import. Work on **one series** in Series View (opened from [View](../07-view/)), or on **many studies** from Dataset ([AI Batch Process](05-run-on-many-studies/)).
 
+To **spot-check DICOM tags** without changing them, use Series View **Metadata** ([View](../07-view/#metadata-dicom-tags)). For cohort organ-volume charts on the Dashboard, see [Analytics](../05-create-project/#analytics-after-you-have-studies) (fills in after Harmonize on CT/MR).
+
 Models and licenses are set up once from Welcome — see [AI Features setup](../03-ai-features-setup/) before the tool chapters below.
 
 ## Tools

@@ -14,7 +14,7 @@ After importing from `tests/controller/assets/test_dcm_files` (see [Search](../0
 
 | Fixture | Role in the manual |
 | --- | --- |
-| **`davidson_cxr`** | Open in Series View here; burned-in text in [Remove Pixel PHI](../08-process/02-remove-burned-in-text/) |
+| **`davidson_cxr`** | Open in Series View here; [Metadata](#metadata-dicom-tags); burned-in text in [Remove Pixel PHI](../08-process/02-remove-burned-in-text/) |
 | **`CT_Head_With_Contrast`** | [Harmonize](../08-process/03-harmonize-names/) and [Face blur](../08-process/04-blur-faces/) |
 | **`us_rgb_single_frame`** | Ultrasound single-frame; burned-in overlays in [Remove Pixel PHI](../08-process/02-remove-burned-in-text/) (exclude-area demos) |
 
@@ -155,6 +155,7 @@ Open **Description Mappings** from the Dataset toolbar to list, inspect, or dele
 Series View is where you look at pixels and run per-series tools (models must be ready — see [AI Features setup](../03-ai-features-setup/)):
 
 - Scroll frames; zoom and pan the viewport; adjust window/level
+- **Metadata** — browse DICOM tags for the current image; optional **Detect PHI** on tag values (below)
 - **Detect / remove burned-in text** (OCR) and whitelist editing → [Remove Pixel PHI](../08-process/02-remove-burned-in-text/)
 - **Harmonize Description** → [Harmonize names](../08-process/03-harmonize-names/)
 - **Face blur** (when eligible) → [Blur faces](../08-process/04-blur-faces/)
@@ -165,6 +166,32 @@ Series View is where you look at pixels and run per-series tools (models must be
 Inside Series View, multi-frame series can also show **slice / min / mean / max** projection modes in the viewer (same idea as the multi-frame strip above, but for interactive scrolling).
 
 Open a series as described above ([Right-click a series → Series View](#right-click-a-series--series-view)); the review chrome is shown there (`SeriesView_Review.png`). After Harmonize with brain structures accepted, latch chips and overlays appear on the right — see the segmented middle-slice shot in [Harmonize names](../08-process/03-harmonize-names/#3-segmented-series-view) (`Process_Harmonize_SegmentedSeries.png`). Dedicated Annotate / zoom help shots are not captured yet; use the tables below until those land.
+
+### Metadata (DICOM tags)
+
+Import already replaces or removes patient identifiers in the file labels. **Metadata** lets you **spot-check** the tag tree for the **current image** — useful when a study still looks “too personal” in free-text fields, or when you use the **Clinical** anonymization policy (which keeps more report-oriented text).
+
+This is **not** the same as burned-in text on the picture. Pixel cleanup is [Remove Pixel PHI](../08-process/02-remove-burned-in-text/). Reports open in [Report Text Review](../08-process/02-remove-burned-in-text/#reports-and-free-text-report-text-review).
+
+#### Steps
+
+1. Open a series in Series View (demo: **`davidson_cxr`**).
+2. Click **Metadata** in the Series View toolbar.
+3. Browse the tree (**Field Name**, **Tag**, **Content**). Use **Search** to narrow by field name; **Expand** / **Collapse** to open or close branches.
+4. Optional — click **Detect PHI** (needs [Embedded PHI](../03-ai-features-setup/) models). Highlighted cells use the same colors as Report Text Review (Name, Location, ID, Phone, Date, Email). Hover a highlighted cell for a short label chip. The status line summarizes counts.
+5. Click **Close** when finished.
+
+![Metadata tree](shots/macos/MetadataAssessment.png)
+
+![Metadata after Detect PHI](shots/macos/MetadataAssessment_DetectPHI.png)
+
+!!! note "View only"
+    Metadata **Detect PHI** highlights leftover identifiers for review. It does **not** rewrite tags. Tag cleanup happens at import (and via the project anonymizer script). Use Remove Pixel PHI or Report Text Review when you need to change pixels or report text.
+
+#### What good looks like
+
+- The tree shows the current slice’s tags without crashing on large sequences.
+- After Detect PHI, colored cells and a status rollup appear when leftover identifiers are found; **No PHI detected** is also a valid result on a clean demo.
 
 ### Mouse and keyboard (viewport)
 
@@ -307,9 +334,11 @@ Use Dataset to export a spreadsheet that maps PHI identifiers to anonymized IDs 
 - Double-clicking a **series** or **study** description (single selection) opens RadLex / LOINC **Set description**; single-click only selects the row; modifier clicks keep multi-select.
 - **S / M / L** changes tile size; first open may build `Projection.pkl` under each series.
 - `davidson_cxr` loads and scrolls in Series View; Ctrl/Cmd+wheel zooms, middle-mouse or Shift+left-drag pans, **F** / **Fit** resets.
+- **Metadata** opens the tag tree; **Detect PHI** highlights leftover identifiers when Embedded PHI models are ready.
 - After Harmonize on CT/MR, **View** multi-latches overlays and **Annotate** paints one selected segment (Brush / Erase, wheel for size). On CR/DX/US/MG, **Annotate** is available without Harmonize (pixel-space ROIs).
 - AI columns update after Process tools.
 - **Create Patient Lookup** writes a CSV under `private/phi_export/` that opens with the expected columns.
+- Dashboard **Analytics** expands when the project has studies (organ volumes after Harmonize — see [Create a project](../05-create-project/#analytics-after-you-have-studies)).
 
 ## If it fails
 

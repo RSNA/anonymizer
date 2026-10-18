@@ -43,7 +43,8 @@ def mvp_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     SESSION.close()
 
 
-def _fake_easyocr(_reader, pixels, *, modality=None):
+def _fake_easyocr(_reader, pixels, *, modality=None, overrides=None):
+    del overrides  # match _easyocr_readtext; unused in the fake
     h, w = pixels.shape[:2]
     return [
         ([[0, 0], [30, 0], [30, 10], [0, 10]], "X", 0.9),

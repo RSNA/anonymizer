@@ -39,8 +39,9 @@ def _open_project_with_davidson() -> dict:
     return imported
 
 
-def _fake_easyocr_results(_reader, pixels, *, modality=None):
+def _fake_easyocr_results(_reader, pixels, *, modality=None, overrides=None):
     """Synthetic OCR boxes in corners (no real PHI strings that must stay out of MCP)."""
+    del overrides  # match _easyocr_readtext; unused in the fake
     h, w = pixels.shape[:2]
     # Minimal EasyOCR-like tuples: (bbox, text, conf)
     return [

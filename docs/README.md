@@ -24,12 +24,12 @@ Update this table when a locale catches up or lags after an English docs change.
 
 | Locale | Markdown | Screenshots | Notes |
 | --- | --- | --- | --- |
-| `en` | Current | macOS + Windows (partial) | Source of truth |
-| `de` | Full chapter set translated (machine draft; needs native review) | Windows shots present; `shots/macos/` temporarily filled from Windows DE captures so MkDocs does not fall back to English UI — replace with real macOS DE captures in Phase D | Phase C complete pending review |
-| `es` | Full chapter set translated (machine draft; needs native review) | Not captured yet | Phase C complete pending review |
-| `fr` | Full chapter set translated (machine draft; needs native review) | Not captured yet | Phase C complete pending review |
+| `en` | Current | macOS + Windows (partial); new soft shots `Dashboard_Analytics`, `MetadataAssessment`, `MetadataAssessment_DetectPHI` pending capture | Source of truth — includes Dashboard Analytics + Series View Metadata / Detect PHI |
+| `de` | Lags English (no Analytics / Metadata chapters yet) | Windows shots present; `shots/macos/` temporarily filled from Windows DE captures so MkDocs does not fall back to English UI — replace with real macOS DE captures in Phase D | Refresh from EN after Analytics + Metadata land; native review still pending |
+| `es` | Lags English (no Analytics / Metadata chapters yet) | Not captured yet | Refresh from EN after Analytics + Metadata land |
+| `fr` | Lags English (no Analytics / Metadata chapters yet) | Not captured yet | Refresh from EN after Analytics + Metadata land |
 
-**Process:** freeze English → machine draft → native review → link check. Do not merge unreviewed machine translation to `master`.
+**Process:** freeze English → machine draft → native review → link check. Do not merge unreviewed machine translation to `master`. English is the SSOT; update locales only after EN prose and screenshot recipes stabilize.
 
 ## Build / serve
 

@@ -39,6 +39,7 @@ from sqlalchemy.orm import (
     sessionmaker,
 )
 
+from anonymizer.model.sqlite_schema import ensure_sqlite_columns
 from anonymizer.utils.modalities import (
     XR_MODALITIES,
     ContentClass,
@@ -262,7 +263,10 @@ class AnonymizerModel:
     """
     The Anonymizer data model class to store PHI (Protected Health Information) with anonymized key lookups.
 
-    ``MODEL_VERSION`` tracks the code release schema generation.
+    ``MODEL_VERSION`` tracks the code release schema generation. Existing project SQLite
+    databases are upgraded on open by ``ensure_sqlite_columns`` (see ``sqlite_schema``),
+    which adds any ORM-mapped columns missing from older ``anonymizer.db`` files.
+    Bumping ``MODEL_VERSION`` alone does not migrate the database.
     """
 
     # Model Version Control
@@ -317,8 +321,9 @@ class AnonymizerModel:
         # Construct Thread Local Scoped Session Factory
         self.session_factory = scoped_session(sessionmaker(bind=self.engine))
 
-        # Create tables IFF they don't exist
+        # Create tables IFF they don't exist; then add missing columns on older SQLite DBs.
         Base.metadata.create_all(self.engine)
+        ensure_sqlite_columns(self.engine, Base.metadata, db_url=self._db_url)
 
         # Default PHI record: (patient_id=DEFAULT_PHI_PATIENT_ID_PK_VALUE, anon_patient_id = site_id + "-000000")
         self._add_default_PHI()

@@ -139,6 +139,14 @@ On this frame, a dense block of machine parameters (gain, depth, FR, DR, and sim
 - On `us_rgb_single_frame`: burned-in labels blended away without solid black bars; with Exclude Area, the mindray parameter block is not removed as PHI.
 - **Embedded PHI** column updates in Dataset (removed PHI text only).
 
+## Tag metadata vs burned-in text
+
+| What you see | Where to look |
+| --- | --- |
+| Names / IDs still in **DICOM tags** after import | Series View → [Metadata](../../07-view/#metadata-dicom-tags) (Detect PHI highlights; does not rewrite tags) |
+| Text **drawn on the image** | This chapter (Detect Text → Remove) |
+| Text inside **SR / Encapsulated PDF** | Report Text Review (below) |
+
 ## Reports and free text (Report Text Review)
 
 Structured Reports (and Encapsulated PDFs) open in **Report Text Review** instead of Series View:

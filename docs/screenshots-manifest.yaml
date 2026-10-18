@@ -142,13 +142,18 @@ workflows:
         window: AnonymizerScriptDialog
         severity: soft
         deps: [project]
+        recipe:
+          policy: clinical
         ux_elements:
+          - Anonymization Policy Clinical
+          - Provenance clinical-anonymizer.script (project)
+          - Applicable Standard
           - Active / Removed / All view
           - Search and Operand filter
-          - Tag / Name / Operand list
+          - Tag / Name / Operand list (clinical keep rules)
           - Operand help panel / Load Patient Lookup Table
           - Accept / Revert / Cancel
-        caption: "Anonymizer Script Editor — Active rules, operand help, lookup from side panel."
+        caption: "Anonymizer Script Editor under Clinical policy — policy chrome, clinical packaged script provenance, Active rules."
       - id: LookupTable
         file: LookupTable.png
         window: LookupTableDialog
@@ -170,6 +175,29 @@ workflows:
         deps: [project]
         ux_elements: [Search, View, Send buttons, Totals]
         caption: "Dashboard after project create — Search, View, Send."
+      - id: Dashboard_Analytics
+        file: Dashboard_Analytics.png
+        window: Dashboard
+        severity: soft
+        deps:
+          - project
+          - imported
+          - fixture:CT_Head_With_Contrast
+          - fixture:davidson_cxr
+          - fixture:us_rgb_single_frame
+        recipe:
+          action: expand_analytics
+          min_widgets: 10
+          seed_tseg: true
+        ux_elements:
+          - Analytics expand
+          - Show
+          - Volumes
+          - Bin width
+          - Refresh
+          - Demographic tiles (sex age modality ethnicity AI)
+          - Organ volume histograms (≥10 board widgets total)
+        caption: "Dashboard Analytics expanded with demographic tiles and multiple organ-volume charts (≥10 widgets)."
 
   - id: 06-search
     doc: 06-search/index.md
@@ -268,6 +296,24 @@ workflows:
         deps: [project, fixture:davidson_cxr]
         ux_elements: [Image viewport, Frame navigator, Toolbar]
         caption: "Series View reviewing davidson_cxr (before Process tools)."
+      - id: MetadataAssessment
+        file: MetadataAssessment.png
+        window: MetadataAssessmentDialog
+        severity: soft
+        deps: [project, fixture:davidson_cxr]
+        recipe:
+          mode: tree
+        ux_elements: [Field Name / Tag / Content tree, Search, Expand, Collapse, Detect PHI, Close]
+        caption: "Series View Metadata — DICOM tag tree for the current davidson_cxr image."
+      - id: MetadataAssessment_DetectPHI
+        file: MetadataAssessment_DetectPHI.png
+        window: MetadataAssessmentDialog
+        severity: soft
+        deps: [project, fixture:davidson_cxr, ocr_models]
+        recipe:
+          mode: detect
+        ux_elements: [Highlighted PHI cells, Entity color chips, Detection status]
+        caption: "Metadata after Detect PHI — leftover identifiers highlighted (view only; does not rewrite tags)."
       - id: Dataset_EditDescription
         file: Dataset_EditDescription.png
         window: DatasetView

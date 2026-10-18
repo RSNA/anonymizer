@@ -47,6 +47,12 @@ Harmonize shots reuse a saved TotalSegmentator `0_TS_SEG` tree under
 `docs/.capture_work/fixture_cache/` (gitignored). Detect Text shots apply
 committed boxes in `src/docs_help/ocr_cache/` instead of running EasyOCR.
 
+Soft shots for clinician UX also include:
+
+- `Dashboard_Analytics` — expand Analytics after importing `CT_Head_With_Contrast`
+- `MetadataAssessment` / `MetadataAssessment_DetectPHI` — Series View Metadata on
+  `davidson_cxr` (Detect PHI soft-fails when Embedded PHI models are missing)
+
 Markdown embeds the macOS path (`shots/macos/….png`) under the **current
 language** page. The published site’s `docs/javascripts/os_shots.js` swaps only
 the OS folder to `shots/windows/` for Windows visitors. If that PNG is missing,

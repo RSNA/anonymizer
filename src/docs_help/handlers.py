@@ -149,25 +149,69 @@ def shot_logging_levels(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
 
 
 def shot_anonymizer_script_editor(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
+    """Clinical policy script editor: policy chrome, clinical packaged rules, full toolbar."""
+    from anonymizer.model.project import AnonymizationPolicy
     from anonymizer.view.settings.anonymizer_script_dialog import AnonymizerScriptDialog
 
     _ensure_project(ctx)
-    model = ctx.app.controller.model
+    controller = ctx.app.controller
+    model = controller.model
+    # Install Clinical packaged script so the shot shows policy + provenance UX.
+    controller.apply_anonymization_policy(AnonymizationPolicy.CLINICAL)
+    controller.save_model()
     script_path = Path(model.anonymizer_script_path)
     if not script_path.is_file():
-        from anonymizer.controller.ingest.process_ctp_lookup import _DEFAULT_SCRIPT_PATH
-
-        script_path = _DEFAULT_SCRIPT_PATH
+        raise RuntimeError(f"Clinical project script missing after policy apply: {script_path}")
     parent = ctx.app.dashboard or ctx.app
     dlg = AnonymizerScriptDialog(
         parent,
         script_path=script_path,
         project_model=model,
-        project_controller=ctx.app.controller,
+        project_controller=controller,
     )
     try:
-        settle(dlg, max(ctx.settle_ms, 600))
-        return ShotResult(shot.id, "ok", script_path.name, ctx.grab(dlg, shot))
+        settle(dlg, max(ctx.settle_ms, 800))
+        wait_mapped(dlg)
+        with contextlib.suppress(Exception):
+            dlg._view_var.set("active")
+            dlg._on_view_changed()
+        # PatientID + @lookup_ptid: operand help + Load Lookup Table (clinical UX).
+        with contextlib.suppress(Exception):
+            dlg._search_var.set("PatientID")
+            settle(dlg, 200)
+            dlg._refresh_list()
+            settle(dlg, 200)
+            # Script XML tags are uncomma'd (00100020); display uses 0010,0020.
+            patient_id_tag = "00100020"
+            if not dlg._tree.exists(patient_id_tag):
+                children = dlg._tree.get_children("")
+                patient_id_tag = children[0] if children else ""
+            if patient_id_tag and dlg._tree.exists(patient_id_tag):
+                dlg._tree.selection_set(patient_id_tag)
+                dlg._tree.focus(patient_id_tag)
+                dlg._tree.see(patient_id_tag)
+                dlg._load_selection(patient_id_tag)
+                settle(dlg, 150)
+                # Apply directly (skips modal ensure) so Load Lookup Table appears.
+                dlg._apply_operand("lookup_ptid")
+                dlg._sync_operand_combo_from_rule()
+                dlg._refresh_operand_action_buttons()
+                settle(dlg, 250)
+                dlg._fit_dialog_height_to_help()
+                settle(dlg, 200)
+        settle(dlg, max(ctx.settle_ms, 500))
+        try:
+            dlg.lift()
+            dlg.attributes("-topmost", True)
+        except Exception:
+            pass
+        settle(dlg, 300)
+        dest = ctx.grab(dlg, shot, settle_ms=max(ctx.settle_ms, 700))
+        try:
+            dlg.attributes("-topmost", False)
+        except Exception:
+            pass
+        return ShotResult(shot.id, "ok", f"clinical:{script_path.name}", dest)
     finally:
         close_toplevel(dlg)
 
@@ -192,6 +236,190 @@ def shot_lookup_table(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
 def shot_dashboard(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     _ensure_project(ctx)
     return ShotResult(shot.id, "ok", "Dashboard", ctx.grab(ctx.app, shot))
+
+
+def shot_dashboard_analytics(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
+    """Dashboard Analytics with a full board (≥10 widgets: demographics + organ volumes)."""
+    import time
+
+    from anonymizer.controller.analytics.prefs import set_selected_board_widgets, set_selected_organs
+    from anonymizer.view.shell.analytics_charts import select_board_sections
+
+    from anonymizer.controller.analytics.dataset import upsert_series_ledger_from_cache
+    from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir
+    from docs_help.fixture_cache import seed_tseg_cache
+
+    _ensure_project(ctx)
+    # CT head supplies organ volumes (TSEG fixture cache); extras enrich modality/sex tiles.
+    _import_fixtures(ctx, "CT_Head_With_Contrast", "davidson_cxr", "us_rgb_single_frame")
+    # Resume paths skip import (and therefore seed) when fixtures are already marked imported.
+    images = ctx.app.controller.model.images_dir()
+    ct_series = series_for_fixture(images, "CT_Head_With_Contrast")
+    if ct_series is None or not seed_tseg_cache(ct_series, "CT_Head_With_Contrast"):
+        detail = "tseg_seed_failed" if ct_series is not None else "ct_head_series_missing"
+        if shot.soft:
+            return ShotResult(shot.id, "soft_fail", detail)
+        raise RuntimeError(f"Dashboard Analytics requires CT head TSEG cache ({detail})")
+    # Empty/stale project ledger short-circuits anatomy rebuild — upsert after seed.
+    ledger_row = upsert_series_ledger_from_cache(
+        resolve_series_cache_dir(ct_series),
+        modality="CT",
+    )
+    if ledger_row is None:
+        if shot.soft:
+            return ShotResult(shot.id, "soft_fail", "ledger_upsert_failed")
+        raise RuntimeError("Failed to upsert analytics ledger after TSEG seed")
+
+    dash = ctx.app.dashboard
+    if dash is None:
+        raise RuntimeError("Dashboard not open")
+    try:
+        dash._update_dashboard_from_file_system()
+    except Exception:
+        with contextlib.suppress(Exception):
+            dash.update_totals(ctx.app.controller.anonymizer.model.get_totals())
+    settle(dash, max(ctx.settle_ms, 400))
+
+    # Wait until anonymizer is idle so analytics refresh is not deferred.
+    deadline = time.monotonic() + 60.0
+    while time.monotonic() < deadline:
+        settle(ctx.app, 200)
+        if ctx.app.controller.anonymizer.idle():
+            break
+
+    if not dash._analytics_header.winfo_ismapped():
+        if shot.soft:
+            return ShotResult(shot.id, "soft_fail", "analytics_header_hidden")
+        raise RuntimeError("Analytics chrome hidden (no studies?)")
+    if not dash._analytics_expanded:
+        dash._analytics_expand()
+    settle(dash, max(ctx.settle_ms, 500))
+    dash._request_analytics_refresh()
+
+    deadline = time.monotonic() + 180.0
+    while time.monotonic() < deadline:
+        settle(ctx.app, 250)
+        if not getattr(dash, "_analytics_busy", False) and dash._analytics_cache is not None:
+            break
+    else:
+        if shot.soft:
+            return ShotResult(shot.id, "soft_fail", "analytics_refresh_timeout")
+        raise RuntimeError("Timed out waiting for Dashboard Analytics refresh")
+
+    snapshot = dash._analytics_cache
+    organ_names = [o.organ_name for o in snapshot.anatomy.organ_volumes]
+    if not organ_names:
+        if shot.soft:
+            return ShotResult(shot.id, "soft_fail", "no_organ_volumes")
+        raise RuntimeError("Analytics has no organ volumes after TSEG seed")
+
+    # Prefer many volume tiles so the board shows ≥10 widgets with demographics.
+    min_widgets = int((shot.recipe or {}).get("min_widgets") or 10)
+    set_selected_board_widgets(None, persist=False)  # all relevant demographic tiles
+    set_selected_organs(organ_names, persist=False)
+    dash._analytics_selected_organs = set(organ_names)
+    dash._render_analytics_view(snapshot)
+    settle(dash, max(ctx.settle_ms, 800))
+
+    sections = select_board_sections(
+        snapshot,
+        selected_organs=tuple(organ_names),
+        selected_board_widgets=None,
+    )
+    widget_count = len(sections.ordered)
+    if widget_count < min_widgets:
+        detail = f"widgets={widget_count}<{min_widgets} organs={len(organ_names)}"
+        if shot.soft:
+            return ShotResult(shot.id, "soft_fail", detail)
+        raise RuntimeError(f"Dashboard Analytics board too sparse: {detail}")
+
+    # Tall window so ≥10 tiles are visible in the grab (not only behind a scrollbar).
+    with contextlib.suppress(Exception):
+        ctx.app.geometry("1280x1680")
+        dash._fit_analytics_scroll_viewport()
+        dash._sync_project_window_size(grow_only=True)
+    settle(ctx.app, max(ctx.settle_ms, 500))
+    try:
+        ctx.app.lift()
+    except Exception:
+        pass
+    dest = ctx.grab(ctx.app, shot)
+    return ShotResult(shot.id, "ok", f"widgets={widget_count}", dest)
+
+
+def shot_metadata_assessment(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
+    """Series View Metadata tree; optional Detect PHI highlight (recipe.mode=detect)."""
+    import time
+    import tkinter as tk
+
+    from anonymizer.controller.ai.feature_availability import report_text_phi_ready
+    from anonymizer.view.series.metadata_assessment_dialog import MetadataAssessmentDialog
+    from anonymizer.view.series.series import show_series_view
+
+    fixture = _fixture_from_deps(shot.deps) or "davidson_cxr"
+    _import_fixtures(ctx, fixture)
+    series = series_for_fixture(ctx.app.controller.model.images_dir(), fixture)
+    if series is None:
+        raise RuntimeError(f"No series for {fixture}")
+    parent = ctx.app.dashboard or ctx.app
+    view = show_series_view(parent, controller=ctx.app.controller, series_path=series, fonts=ctx.app.fonts)
+    if view is None:
+        raise RuntimeError("SeriesView failed")
+    dlg: Any = None
+    try:
+        settle(view, max(ctx.settle_ms, 1000))
+        ds = view._current_slice_dataset()
+        if ds is None:
+            raise RuntimeError("No slice dataset for Metadata")
+        project_dir = ctx.app.controller.model.storage_dir
+        whitelist: list[str] = []
+        if hasattr(view, "whitelist"):
+            with contextlib.suppress(Exception):
+                whitelist = [str(t) for t in view.whitelist.get(0, tk.END)]
+        dlg = MetadataAssessmentDialog(
+            view,
+            dataset=ds,
+            project_dir=project_dir,
+            modality=str(getattr(ds, "Modality", "") or "") or None,
+            whitelist=whitelist,
+            whitelist_match_settings=getattr(view, "_whitelist_match_settings", None),
+        )
+        settle(dlg, max(ctx.settle_ms, 800))
+        wait_mapped(dlg)
+        mode = str((shot.recipe or {}).get("mode") or "tree").strip().lower()
+        if mode == "detect":
+            if not report_text_phi_ready():
+                if shot.soft:
+                    return ShotResult(shot.id, "soft_fail", "ner_models_missing")
+                raise RuntimeError("Embedded PHI models not ready for Metadata Detect PHI")
+            dlg._on_detect()
+            deadline = time.monotonic() + 180.0
+            while time.monotonic() < deadline:
+                settle(dlg, 200)
+                if not getattr(dlg, "_detecting", False):
+                    break
+            else:
+                if shot.soft:
+                    return ShotResult(shot.id, "soft_fail", "detect_timeout")
+                raise RuntimeError("Timed out waiting for Metadata Detect PHI")
+            settle(dlg, max(ctx.settle_ms, 500))
+        try:
+            dlg.lift()
+            dlg.attributes("-topmost", True)
+        except Exception:
+            pass
+        settle(dlg, 300)
+        dest = ctx.grab(dlg, shot)
+        try:
+            dlg.attributes("-topmost", False)
+        except Exception:
+            pass
+        detail = f"{fixture}:{mode}"
+        return ShotResult(shot.id, "ok", detail, dest)
+    finally:
+        if dlg is not None:
+            close_toplevel(dlg)
+        close_toplevel(view)
 
 
 def shot_ai_features(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
@@ -2513,6 +2741,7 @@ SHOT_HANDLERS: dict[str, Callable[[CaptureContext, ShotSpec], ShotResult]] = {
     "LookupTable": shot_lookup_table,
     "LoggingLevels": shot_logging_levels,
     "Dashboard": shot_dashboard,
+    "Dashboard_Analytics": shot_dashboard_analytics,
     "AiFeaturesSetup": shot_ai_features,
     "ImportFiles_Menu": shot_import_davidson_menu,
     "ImportDirectory_Chooser": shot_import_directory_chooser,
@@ -2532,6 +2761,8 @@ SHOT_HANDLERS: dict[str, Callable[[CaptureContext, ShotSpec], ShotResult]] = {
     "ViewProjections": shot_view_projections,
     "ViewProjections_Multi": shot_view_projections_multi,
     "SeriesView_Review": shot_series_review,
+    "MetadataAssessment": shot_metadata_assessment,
+    "MetadataAssessment_DetectPHI": shot_metadata_assessment,
     "AiBatchOptions": shot_ai_batch_options,
     "AiBatchRunning": shot_ai_batch_running,
     "SendView_Initial": shot_send_view,

@@ -36,7 +36,7 @@ def test_config_and_mcp_mutually_exclusive(monkeypatch: pytest.MonkeyPatch, tmp_
     config = tmp_path / "ProjectModel.json"
     config.write_text("{}", encoding="utf-8")
     monkeypatch.setattr(anon, "run_HEADLESS", lambda *_a, **_k: None)
-    monkeypatch.setattr("anonymizer.mcp.server.run_MCP", lambda **_k: None)
+    monkeypatch.setattr(anon, "run_MCP", lambda **_k: None)
 
     with pytest.raises(SystemExit) as exc_info:
         anon.dispatch_runtime(**_kwargs(config=config, mcp="127.0.0.1:8000"))
@@ -74,7 +74,8 @@ def test_bare_mcp_is_stdio(monkeypatch: pytest.MonkeyPatch) -> None:
     def _run_mcp(**kw):
         calls.append(f"mcp:{kw.get('transport')}")
 
-    monkeypatch.setattr("anonymizer.mcp.server.run_MCP", _run_mcp)
+    # Patch the binding used by dispatch_runtime (top-level import), not server.run_MCP.
+    monkeypatch.setattr(anon, "run_MCP", _run_mcp)
     monkeypatch.setattr(anon, "run_HEADLESS", lambda *_a, **_k: calls.append("headless"))
 
     anon.dispatch_runtime(**_kwargs(mcp=""))
@@ -87,7 +88,7 @@ def test_http_mcp_is_foreground(monkeypatch: pytest.MonkeyPatch) -> None:
     def _run_mcp(**kw):
         calls.append(f"mcp:{kw.get('transport')}:{kw.get('host')}:{kw.get('port')}")
 
-    monkeypatch.setattr("anonymizer.mcp.server.run_MCP", _run_mcp)
+    monkeypatch.setattr(anon, "run_MCP", _run_mcp)
     monkeypatch.setattr(anon, "run_HEADLESS", lambda *_a, **_k: calls.append("headless"))
 
     anon.dispatch_runtime(**_kwargs(mcp="127.0.0.1:8000"))
@@ -99,7 +100,7 @@ def test_config_alone_is_headless(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     config.write_text("{}", encoding="utf-8")
     calls: list[str] = []
     monkeypatch.setattr(anon, "run_HEADLESS", lambda p: calls.append(f"headless:{p}"))
-    monkeypatch.setattr("anonymizer.mcp.server.run_MCP", lambda **_k: calls.append("mcp"))
+    monkeypatch.setattr(anon, "run_MCP", lambda **_k: calls.append("mcp"))
 
     anon.dispatch_runtime(**_kwargs(config=config))
     assert calls == [f"headless:{config}"]

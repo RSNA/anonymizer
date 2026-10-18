@@ -55,10 +55,13 @@ uv run python -m docs_help --language en_US --force --only Welcome
   - **8.2** Harmonize → `CT_Head_With_Contrast` (Series View → completed results → brain prompt → segmented middle slice) + `davidson_cxr` / `us_rgb_single_frame` (planar Playbook sources)
   - **8.3** Face blur → `CT_Head_With_Contrast` (Gaussian)
   - **8.4** Batch → options + running dialog with both fixtures selected in Dataset
-- Soft-fail AI-heavy Process shots when models are missing
+- Soft View / Dashboard demos:
+  - **Metadata** → `davidson_cxr` Series View → Metadata tree; Detect PHI needs Embedded PHI models (`MetadataAssessment`, `MetadataAssessment_DetectPHI`)
+  - **Analytics** → Dashboard with studies imported; expand Analytics board (`Dashboard_Analytics`); organ-volume tiles fill after Harmonize on CT/MR
+- Soft-fail AI-heavy Process / Metadata Detect PHI shots when models are missing
 - Hard-fail Orthanc-dependent Search shots when C-ECHO fails
 - If a Windows PNG is missing, the published site falls back to the macOS image
 
 ## Priority shots (V19)
 
-Welcome; AI Features; Create project settings (+ subdialogs including Anonymizer Script Editor); Dashboard; Search; View (Dataset + series/study description edit + Projections + Series + Patient Lookup CSV); Process (Remove Pixel PHI, Harmonize, Face, batch); Send (initial → selection → sending → sent).
+Welcome; AI Features; Create project settings (+ subdialogs including Anonymizer Script Editor); Dashboard (+ Analytics when studies exist); Search; View (Dataset + series/study description edit + Projections + Series + Metadata + Patient Lookup CSV); Process (Remove Pixel PHI, Harmonize, Face, batch); Send (initial → selection → sending → sent).

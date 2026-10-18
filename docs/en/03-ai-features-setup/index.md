@@ -20,7 +20,7 @@ Close the project (or start the app) to return to Welcome if you need to downloa
 
 | Item | Needed for demo |
 | --- | --- |
-| **Embedded PHI** (OCR + English NER, one download) | Chapter 8.1 — `davidson_cxr`; report text review. Maintainers: NAME false-positive guard (whitelists + RadLex + LOINC lexicon, no `radiology_deny`) is documented in the Embedded PHI code README (`src/anonymizer/controller/ai/embedded_phi/README.md`). |
+| **Embedded PHI** (OCR + English NER, one download) | Chapter 8.1 — `davidson_cxr`; report text review; Series View [Metadata → Detect PHI](../07-view/#metadata-dicom-tags). Maintainers: NAME false-positive guard (whitelists + RadLex + LOINC lexicon, no `radiology_deny`) is documented in the Embedded PHI code README (`src/anonymizer/controller/ai/embedded_phi/README.md`). |
 | **Harmonize** CT pack + resolution (1.5 / 3 / 6 mm) | Chapter 8.2 — `CT_Head_With_Contrast` |
 | **Harmonize** XR body part (optional) | Pixel anatomy for CR/DX when DICOM body-part tags are missing or wrong |
 | **Harmonize** XR chest view (optional) | Pixel AP/PA/Lat (+ rotation QC) for chest CR/DX |
