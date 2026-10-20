@@ -11,6 +11,8 @@ from pydicom.dataset import Dataset
 from anonymizer.mcp import api as mcp_tools
 from anonymizer.mcp.session import SESSION
 from anonymizer.utils.translate import set_language_code
+from tests.mcp.job_poll import await_job
+from tests.mcp.project_create import confirm_create
 
 DAVIDSON = (
     Path(__file__).resolve().parent.parent
@@ -33,7 +35,7 @@ def _open_temp_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
     from anonymizer.model.project import ProjectModel
 
     monkeypatch.setattr(ProjectModel, "base_dir", staticmethod(lambda: tmp_path / "RSNA Anonymizer"))
-    result = mcp_tools.create_project(project_name="Phase1")
+    result = confirm_create(mcp_tools.create_project, project_name="Phase1")
     assert result["ok"] is True
     return result
 
@@ -41,15 +43,22 @@ def _open_temp_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
 def test_import_directory_davidson(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     _open_temp_project(tmp_path, monkeypatch)
     assert DAVIDSON.is_dir()
-    result = mcp_tools.import_directory(str(DAVIDSON))
+    result = await_job(mcp_tools.import_directory(str(DAVIDSON)), mcp_tools.job_status)
     assert result["ok"] is True
     assert result["files_seen"] >= 1
     assert result["succeeded"] >= 1
     assert result["failed"] == 0
+    # Slim wire contract: no per-file success samples, no duplicated path,
+    # and only the minimal post-import project summary.
+    assert "samples" not in result
+    assert "directory" not in result
+    assert result["failures"] == []
+    assert result["anon_patient_ids"]
+    assert set(result["project"]) == {"project_name", "totals", "imported_modalities"}
     assert result["project"]["totals"]["patients"] >= 1
     assert result["project"]["totals"]["instances"] >= 1
 
-    again = mcp_tools.import_directory(str(DAVIDSON))
+    again = await_job(mcp_tools.import_directory(str(DAVIDSON)), mcp_tools.job_status)
     assert again["ok"] is True
     assert again["skipped"] >= 1
     assert again["succeeded"] == 0
@@ -65,7 +74,7 @@ def test_import_file_rejects_directory(tmp_path: Path, monkeypatch: pytest.Monke
 def test_import_directory_rejects_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     _open_temp_project(tmp_path, monkeypatch)
     dcm = next(DAVIDSON.glob("*.dcm"))
-    bad = mcp_tools.import_directory(str(dcm))
+    bad = await_job(mcp_tools.import_directory(str(dcm)), mcp_tools.job_status)
     assert bad["ok"] is False
     assert "import_file" in bad["error"]
 
@@ -149,6 +158,7 @@ def test_pacs_find_serializes_allowlisted_fields(tmp_path: Path, monkeypatch: py
 
 def test_pacs_move_requires_studies(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     _open_temp_project(tmp_path, monkeypatch)
+    assert mcp_tools.configure_remote("127.0.0.1", 4242, "ORTHANC", role="QUERY")["ok"]
     empty = mcp_tools.pacs_move([])
     assert empty["ok"] is False
     assert "empty" in empty["error"].lower()

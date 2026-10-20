@@ -11,6 +11,8 @@ from anonymizer.mcp import api as mcp_tools
 from anonymizer.mcp.session import SESSION
 from anonymizer.model.project import ProjectModel
 from anonymizer.utils.translate import set_language_code
+from tests.mcp.job_poll import await_job
+from tests.mcp.project_create import confirm_create
 
 DAVIDSON = (
     Path(__file__).resolve().parent.parent
@@ -32,7 +34,11 @@ def _isolated_session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 def _open_project_with_davidson() -> dict:
-    assert mcp_tools.create_project(project_name="MVPImaging", overwrite=True)["ok"]
+    assert confirm_create(
+        mcp_tools.create_project,
+        project_name="MVPImaging",
+        overwrite=True,
+    )["ok"]
     imported = mcp_tools.import_file(str(DAVIDSON_DCM))
     assert imported["ok"] is True
     assert imported["succeeded"] == 1
@@ -117,7 +123,9 @@ def test_implicit_series_resolve_sole_inventory_for_remove_pixel_phi():
             return_value=True,
         ),
     ):
-        result = mcp_tools.remove_pixel_phi(series="cxr")
+        result = await_job(
+            mcp_tools.remove_pixel_phi(series="cxr"), mcp_tools.job_status
+        )
 
     assert result["ok"] is True
     assert result["anon_series_uid"]
@@ -150,8 +158,9 @@ def test_remove_pixel_phi_then_export_davidson(mock_ocr: MagicMock):
     fake_handle = MagicMock()
     fake_handle.reader = MagicMock()
     with patch.object(SESSION, "ensure_ocr_reader", return_value=fake_handle):
-        result = mcp_tools.remove_pixel_phi(
-            patient="1", series="1"
+        result = await_job(
+            mcp_tools.remove_pixel_phi(patient="1", series="1"),
+            mcp_tools.job_status,
         )
 
     assert result["ok"] is True
@@ -199,7 +208,10 @@ def test_remove_pixel_phi_response_omits_ocr_message_on_ok():
             return_value=True,
         ),
     ):
-        result = mcp_tools.remove_pixel_phi(patient="1", series="1")
+        result = await_job(
+            mcp_tools.remove_pixel_phi(patient="1", series="1"),
+            mcp_tools.job_status,
+        )
 
     assert result["ok"] is True
     assert "SECRET^PHI" not in str(result)

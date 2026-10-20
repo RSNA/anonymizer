@@ -7,7 +7,7 @@ import json
 import re
 
 from anonymizer.mcp.api import MCP_TOOL_NAMES, TOOL_INPUT_MODELS, ZERO_ARG_TOOLS
-from anonymizer.mcp.instructions import load_server_instructions
+from anonymizer.mcp.instructions import load_behavior_instructions, load_server_instructions
 from anonymizer.mcp.server import create_server
 
 _BANNED_SCHEMA_FIELDS = frozenset(
@@ -23,6 +23,7 @@ _BANNED_SCHEMA_FIELDS = frozenset(
 
 
 def test_instructions_asset_is_positive_api_howto() -> None:
+    load_behavior_instructions.cache_clear()
     load_server_instructions.cache_clear()
     text = load_server_instructions()
     assert "arguments" in text
@@ -39,6 +40,13 @@ def test_instructions_asset_is_positive_api_howto() -> None:
     assert "pacs_move" in text
     assert "project_settings_defaults" in text
     assert "update_project_settings" in text
+    assert "If the clinician asks how to use the Anonymizer" in text
+    assert "anonymizer_usage" in text
+    assert "first and only tool call" in text
+    assert "word for word" in text
+    assert "complete finished answer" in text
+    assert "nothing is created" in text
+    assert "reproduce" in text and "exactly" in text
     assert "DIMSE" in text
     assert "DICOMweb" in text
     assert "patient_index" in text
@@ -55,6 +63,7 @@ def test_instructions_asset_is_positive_api_howto() -> None:
 
 
 def test_instructions_lists_every_advertised_tool() -> None:
+    load_behavior_instructions.cache_clear()
     load_server_instructions.cache_clear()
     text = load_server_instructions()
     for name in MCP_TOOL_NAMES:
@@ -118,6 +127,18 @@ def test_wire_text_error_and_compact_json() -> None:
     from anonymizer.mcp.api import wire_text
 
     assert wire_text({"ok": False, "error": "no project"}) == "error: no project"
+    # Answer-only payloads go on the wire as raw finished text, not JSON.
+    assert wire_text({"ok": True, "answer": "Here is how."}) == "Here is how."
+    # Errors with context keep it as JSON instead of collapsing to
+    # a bare "error: failed".
+    contextual = wire_text(
+        {"ok": False, "status": "failed", "job_id": "job-1", "error": "disk full"}
+    )
+    assert '"job_id":"job-1"' in contextual
+    assert '"error":"disk full"' in contextual
+    assert wire_text({"ok": False, "status": "failed", "job_id": "job-2"}) != (
+        "error: failed"
+    )
     compact = wire_text({"ok": True, "project": {"project_name": "X", "storage_dir": "/nope"}})
     assert compact.startswith("{")
     assert "\n" not in compact
@@ -142,7 +163,24 @@ def test_wire_text_preview_omits_base64() -> None:
     assert "CXR" in text
 
 
+def test_progress_reporting_bridge() -> None:
+    """Progress callbacks are inert outside an MCP request, live inside one."""
+    from anonymizer.mcp import ops
+    from anonymizer.mcp.api.handlers import _progress_callback
+
+    assert _progress_callback() is None
+    calls: list = []
+    ops._notify(lambda p, t, m: calls.append((p, t, m)), 1, 2, "half")
+    assert calls == [(1, 2, "half")]
+    # A failing progress callback must never fail the operation.
+    def _boom(p, t, m):
+        raise RuntimeError("client gone")
+
+    ops._notify(_boom, 1, 2, "ignored")
+
+
 def test_create_server_uses_asset_instructions() -> None:
+    load_behavior_instructions.cache_clear()
     load_server_instructions.cache_clear()
     server = create_server()
     assert server.instructions == load_server_instructions()
@@ -154,6 +192,7 @@ def test_create_server_has_no_help_resources_or_prompts() -> None:
     async def _drive() -> None:
         tools = {t.name for t in await server.list_tools()}
         assert "read_user_manual" not in tools
+        assert "anonymizer_usage" in tools
         assert "create_project" in tools
         assert "project_settings_defaults" in tools
         assert "update_project_settings" in tools
@@ -191,14 +230,20 @@ def test_tool_input_schema_includes_field_descriptions() -> None:
         assert "language_code" in props
         assert "scp" in props
         assert "network_timeouts" in props
+        assert "anonymization_policy" in props
+        assert "confirm" in props
+        assert "revision" in props
+        assert "import_plan" not in props
 
         update = tools["update_project_settings"]
         uprops = _schema(update)["properties"]
         assert "site_id" not in uprops
         assert "uid_root" not in uprops
         assert "project_name" not in uprops
-        assert "language_code" in uprops
+        assert "language_code" not in uprops
         assert "scp" in uprops
+        assert "anonymization_policy" in uprops
+        assert "import_plan" not in uprops
 
         defaults = tools["project_settings_defaults"]
         assert defaults.annotations is not None
@@ -211,7 +256,7 @@ def test_tool_input_schema_includes_field_descriptions() -> None:
         rprops = _schema(remove)["properties"]
         assert "all" in rprops["series"]["description"]
         assert "patient_index" in rprops["patient"]["description"]
-        assert "Create a new empty anonymizer project" in (create.description or "")
+        assert "Prepare or confirm a new anonymizer project" in (create.description or "")
         assert create.annotations is not None
         assert create.annotations.title == "Create project"
 

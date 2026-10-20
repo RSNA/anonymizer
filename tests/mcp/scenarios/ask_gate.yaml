@@ -1,0 +1,47 @@
+# Optional NL scenarios: incomplete clinician utterances (ask vs call).
+# Not in the default L2 pack — tool-use training targets emit-a-call, not
+# restraint. Keep for cloud / stronger-client spot-checks only:
+#   uv run python tests/mcp/run_nl_lmstudio.py --scenarios ask_gate.yaml
+#
+# Import-gate behavior itself is locked by L1 handler tests.
+
+scenarios:
+  - id: usage_help_create_and_configure
+    utterance: >
+      How do I create a new project and change its settings later?
+      Explain the steps; do not create anything yet.
+    expected_trace:
+      - tool: anonymizer_usage
+        arguments: {}
+    forbidden_tools: [create_project, update_project_settings, import_file]
+
+  - id: ask_project_name
+    utterance: "Set up a new anonymizer project."
+    expected_trace:
+      - ask: true
+        must_mention: [project_name]
+    forbidden_tools: [create_project, import_file]
+
+  - id: import_first_must_setup
+    utterance: >
+      Import /Users/me/studies/chest.dcm — I have not created or opened
+      a project yet.
+    expected_trace:
+      - ask: true
+        note: "No project is open: ask to create/open a project before import_file"
+    forbidden_first_tools: [import_file, import_directory]
+
+  - id: pacs_ask_dimse_vs_dicomweb
+    utterance: "Connect our QUERY PACS at the hospital."
+    expected_trace:
+      - ask: true
+        must_mention: [DIMSE, DICOMweb]
+    forbidden_tools: [configure_remote]
+
+  - id: incomplete_remote_ask
+    utterance: "Add a QUERY server at 10.0.0.5."
+    requires_open_project: pacs
+    expected_trace:
+      - ask: true
+        must_mention: [DIMSE, DICOMweb]
+    forbidden_tools: [configure_remote]

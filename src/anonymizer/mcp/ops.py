@@ -7,10 +7,14 @@ Structured results have no ``{"ok": ...}`` envelopes; raise ``HeadlessOpsError``
 from __future__ import annotations
 
 import base64
+import copy
 import io
+import json
 import logging
 import time
+from collections.abc import Callable
 from enum import StrEnum
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -28,20 +32,27 @@ from anonymizer.controller.jobs.runner import RemovePixelPhiRunner
 from anonymizer.controller.project import MoveStudiesRequest, ProjectController, StudyUIDHierarchy
 from anonymizer.controller.series.series_io import load_series_frames
 from anonymizer.mcp.modality_tokens import resolve_project_modalities
-from anonymizer.mcp.session import HeadlessSessionError, ProjectSession
+from anonymizer.mcp.session import (
+    HeadlessSessionError,
+    ProjectSession,
+    packaged_default_script_path,
+)
 from anonymizer.mcp.snapshots import (
     abridged_path,
     serialize_dicom_node,
     serialize_find_study,
     serialize_inventory_series,
     serialize_move_study,
+    serialize_project_configuration,
+    serialize_project_import_summary,
     serialize_project_info,
 )
 from anonymizer.model.anonymizer import AnonymizerModel
-from anonymizer.model.project import DICOMNode, ProjectModel
+from anonymizer.model.project import AnonymizationPolicy, DICOMNode, ProjectModel
 from anonymizer.model.settings_validate import (
     SettingsValidationError,
     settings_defaults_payload,
+    validate_anonymization_policy,
     validate_language_code,
     validate_local_scp,
     validate_network_timeouts,
@@ -51,6 +62,7 @@ from anonymizer.model.settings_validate import (
     validate_transfer_syntaxes,
     validate_uid_root,
 )
+from anonymizer.utils.modalities import Modality, get_modality_catalog
 from anonymizer.utils.storage.dicom_tree import (
     get_dcm_files,
     list_import_directory_files,
@@ -60,7 +72,35 @@ from anonymizer.utils.windowing import apply_windowing
 
 logger = logging.getLogger(__name__)
 
-_MAX_IMPORT_SAMPLES = 25
+_MAX_IMPORT_FAILURES = 25
+
+# Long-running batch/AI operations report progress through this callback so
+# MCP clients that honor progress notifications can extend their request
+# timeout instead of cancelling at a fixed client-side limit.
+ProgressCallback = Callable[[float, "float | None", "str | None"], None]
+
+
+def _notify(
+    progress: ProgressCallback | None,
+    current: float,
+    total: float | None,
+    message: str,
+) -> None:
+    """
+    Invoke a progress callback, ignoring reporting failures.
+
+    Args:
+        progress: Optional progress callback supplied by the MCP handler.
+        current: Completed units of work.
+        total: Total units of work, when known.
+        message: Human-readable status for the client.
+    """
+    if progress is None:
+        return
+    try:
+        progress(current, total, message)
+    except Exception:  # Progress reporting must never fail the operation.
+        logger.debug("Progress callback failed", exc_info=True)
 
 
 class RemoteScpRole(StrEnum):
@@ -144,6 +184,249 @@ def list_projects() -> dict[str, Any]:
     }
 
 
+def _load_mcp_setup_help() -> dict[str, Any]:
+    """MCP-owned clinician help merged into project_settings_defaults."""
+    try:
+        raw = resources.files("anonymizer.mcp.assets").joinpath("setup_help.json").read_text(
+            encoding="utf-8"
+        )
+    except (FileNotFoundError, ModuleNotFoundError, TypeError, AttributeError):
+        path = Path(__file__).resolve().parent / "assets" / "setup_help.json"
+        raw = path.read_text(encoding="utf-8")
+    data = json.loads(raw)
+    return data if isinstance(data, dict) else {}
+
+
+def _set_model_modalities(
+    model: ProjectModel,
+    modalities: list[str] | str | None,
+) -> None:
+    """
+    Resolve and assign project modalities on a core model.
+
+    Args:
+        model: Project model to update.
+        modalities: DICOM codes or MCP modality text accepted by the existing
+            MCP modality resolver.
+
+    Raises:
+        SettingsValidationError: If a modality cannot be resolved.
+    """
+    if modalities is None or (
+        isinstance(modalities, str) and not modalities.strip()
+    ) or (isinstance(modalities, list) and not modalities):
+        return
+    try:
+        resolved = resolve_project_modalities(
+            modalities,
+            default_modalities=ProjectModel.default_modalities(),
+        )
+    except ValueError as exc:
+        raise SettingsValidationError(str(exc)) from exc
+    if resolved is None:
+        return
+    model.modalities = list(resolved)
+    model.set_storage_classes_from_modalities()
+
+
+def _apply_policy_to_model(
+    model: ProjectModel,
+    anonymization_policy: str | AnonymizationPolicy | None,
+) -> None:
+    """
+    Assign an anonymization policy and its model-level modality effects.
+
+    Args:
+        model: Project model to update.
+        anonymization_policy: Policy name/value, or ``None`` for no change.
+    """
+    if anonymization_policy is None or (
+        isinstance(anonymization_policy, str) and not anonymization_policy.strip()
+    ):
+        return
+    policy = AnonymizationPolicy(validate_anonymization_policy(str(anonymization_policy)))
+    model.anonymization_policy = policy
+    if policy is AnonymizationPolicy.CLINICAL:
+        catalog = get_modality_catalog()
+        for code in (Modality.SR, Modality.PDF):
+            if code in catalog and code.value not in model.modalities:
+                model.modalities.append(code.value)
+        model.ensure_storage_classes_from_modalities()
+
+
+def _build_project_model(
+    *,
+    base: ProjectModel | None,
+    project_name: str,
+    storage_dir: str | None,
+    site_id: str | None,
+    uid_root: str | None,
+    language_code: str | None,
+    modalities: list[str] | str | None,
+    transfer_syntaxes: list[str] | None,
+    scp: dict[str, Any] | None,
+    network_timeouts: dict[str, Any] | None,
+    anonymization_policy: str | AnonymizationPolicy | None,
+) -> ProjectModel:
+    """
+    Build a complete unsaved ``ProjectModel`` from defaults plus overrides.
+
+    Args:
+        base: Existing pending model to revise, or ``None`` for model defaults.
+        project_name: Clinician-supplied project name.
+        storage_dir: Optional clinician-supplied project directory.
+        site_id: Optional site identifier override.
+        uid_root: Optional DICOM UID-root override.
+        language_code: Optional language code.
+        modalities: Optional modality selection.
+        transfer_syntaxes: Optional transfer-syntax UID list.
+        scp: Optional partial local SCP fields.
+        network_timeouts: Optional partial timeout fields.
+        anonymization_policy: Optional anonymization policy.
+
+    Returns:
+        A validated, unsaved core ``ProjectModel``.
+    """
+    model = copy.deepcopy(base) if base is not None else ProjectModel()
+    model.project_name = validate_project_name(project_name)
+    model.storage_dir = resolve_project_storage(
+        project_name=model.project_name,
+        storage_dir=storage_dir,
+    )
+    model.anonymizer_script_path = packaged_default_script_path()
+    if site_id is not None and str(site_id).strip():
+        model.site_id = validate_site_id(site_id)
+    if uid_root is not None and str(uid_root).strip():
+        model.uid_root = validate_uid_root(uid_root)
+    _apply_non_modality_settings_to_model(
+        model,
+        language_code=language_code,
+        transfer_syntaxes=transfer_syntaxes,
+        scp=scp,
+        network_timeouts=network_timeouts,
+    )
+    _set_model_modalities(model, modalities)
+    if anonymization_policy is not None:
+        _apply_policy_to_model(model, anonymization_policy)
+    # Re-apply the effective policy after a modality revision so a clinical
+    # draft preview matches the modalities installed at confirmation.
+    _apply_policy_to_model(model, model.anonymization_policy)
+    return model
+
+
+def _pending_warnings(
+    session: ProjectSession,
+    model: ProjectModel,
+    *,
+    overwrite: bool,
+) -> list[str]:
+    """
+    Build clinician-facing warnings for a pending project configuration.
+
+    Args:
+        session: MCP session holding the pending model.
+        model: Pending project model.
+        overwrite: Whether confirmation may replace an existing project.
+
+    Returns:
+        Warning strings for the confirmation response.
+    """
+    warnings: list[str] = []
+    destination = Path(model.storage_dir) / ProjectController.PROJECT_MODEL_FILENAME_JSON
+    if destination.is_file():
+        if overwrite:
+            warnings.append(
+                "An existing project is at the destination; confirmation will replace it."
+            )
+        else:
+            warnings.append(
+                "An existing project is at the destination; confirmation will not replace "
+                "it unless overwrite=true is prepared and shown."
+            )
+    if session.is_open:
+        current = Path(session.controller.model.storage_dir).expanduser().resolve()
+        if current != Path(model.storage_dir).expanduser().resolve():
+            warnings.append("Confirmation will close the currently open project.")
+    return warnings
+
+
+def _confirmation_payload(
+    session: ProjectSession,
+    model: ProjectModel,
+    revision: int,
+    *,
+    warning: str | None = None,
+) -> dict[str, Any]:
+    """
+    Build the prepare/revise response for a pending project.
+
+    Args:
+        session: MCP session holding the pending model.
+        model: Pending project model.
+        revision: Current pending revision.
+        warning: Optional protocol warning to include.
+
+    Returns:
+        Confirmation response for the MCP client/LLM to present.
+    """
+    configuration = serialize_project_configuration(model)
+    supplied = set(session.pending_supplied_fields)
+    using_defaults = [
+        name
+        for name in configuration
+        if name not in supplied and name != "remote_scps"
+    ]
+    warnings = _pending_warnings(
+        session,
+        model,
+        overwrite=session.pending_overwrite,
+    )
+    if warning:
+        warnings.insert(0, warning)
+    return {
+        "status": "confirmation_required",
+        "created": False,
+        "revision": revision,
+        "configuration": configuration,
+        "supplied_by_user": sorted(supplied),
+        "using_defaults": using_defaults,
+        "overwrite": session.pending_overwrite,
+        "warnings": warnings,
+        "next_action": (
+            "Present this configuration to the user, identifying supplied values and "
+            "defaults. Do not create the project until the user explicitly confirms "
+            "this revision in a later message."
+        ),
+    }
+
+
+def _confirm_pending_project(
+    session: ProjectSession,
+    revision: int | None,
+) -> dict[str, Any]:
+    """
+    Create the pending project for one exact confirmed revision.
+
+    Args:
+        session: MCP session holding the pending model.
+        revision: Revision presented to and confirmed by the clinician.
+
+    Returns:
+        Created-project response.
+    """
+    model, overwrite = session.pending_creation(revision)
+    controller = session.create_from_model(model, overwrite=overwrite)
+    if model.anonymization_policy is AnonymizationPolicy.CLINICAL:
+        controller.apply_anonymization_policy(model.anonymization_policy)
+        controller.save_model()
+    return {
+        "status": "created",
+        "created": True,
+        "revision": revision,
+        "project": serialize_project_info(controller),
+    }
+
+
 def create_project(
     session: ProjectSession,
     project_name: str,
@@ -156,99 +439,222 @@ def create_project(
     transfer_syntaxes: list[str] | None = None,
     scp: dict[str, Any] | None = None,
     network_timeouts: dict[str, Any] | None = None,
+    anonymization_policy: str | AnonymizationPolicy | None = None,
+    confirm: bool = False,
+    revision: int | None = None,
 ) -> dict[str, Any]:
+    """
+    Prepare/revise a project configuration, or confirm its exact revision.
+
+    With ``confirm=False`` this validates supplied fields over a new or pending
+    core ``ProjectModel``, stores that unsaved model in the MCP session, and
+    returns the complete configuration for clinician confirmation. It never
+    creates a project. With ``confirm=True`` and no configuration changes, it
+    creates only the pending model at the exact ``revision``.
+
+    Args:
+        session: MCP project session.
+        project_name: Project name supplied by the clinician.
+        storage_dir: Optional absolute project directory.
+        site_id: Optional site identifier override.
+        uid_root: Optional DICOM UID-root override.
+        overwrite: Whether confirmation may replace an existing project.
+        modalities: Optional modality selection.
+        language_code: Optional language code.
+        transfer_syntaxes: Optional transfer-syntax UID list.
+        scp: Optional partial local SCP fields.
+        network_timeouts: Optional partial network timeout fields.
+        anonymization_policy: Optional anonymization policy.
+        confirm: Whether this call is the later confirmation call.
+        revision: Pending revision being confirmed.
+
+    Returns:
+        ``confirmation_required`` or ``created`` response.
+    """
     try:
         raw_name = (project_name or "").strip()
         if not raw_name:
-            raise HeadlessOpsError("project_name is required")
+            raise HeadlessOpsError(
+                "project_name is required. Ask the clinician for a short project name "
+                "(3–20 chars), then call create_project with confirm=false."
+            )
         if raw_name in {".", ".."} or "/" in raw_name or "\\" in raw_name:
             raise HeadlessOpsError("project_name must be a single path segment (no slashes)")
         name = validate_project_name(raw_name)
-        resolved_site = validate_site_id(site_id) if site_id is not None and str(site_id).strip() else None
-        resolved_uid = validate_uid_root(uid_root) if uid_root is not None and str(uid_root).strip() else None
-        storage = resolve_project_storage(project_name=name, storage_dir=storage_dir)
-        controller = session.create(
-            storage_dir=storage,
-            project_name=name,
-            site_id=resolved_site,
-            uid_root=resolved_uid,
-            overwrite=overwrite,
+
+        configuration_supplied = any(
+            value is not None
+            for value in (
+                storage_dir,
+                site_id,
+                uid_root,
+                modalities,
+                language_code,
+                transfer_syntaxes,
+                scp,
+                network_timeouts,
+                anonymization_policy,
+            )
         )
-        apply_create_settings(
-            controller,
+        pending = session.pending_project
+        if confirm and pending is not None and pending.project_name == name and not configuration_supplied:
+            if revision is not None and revision == session.pending_revision:
+                return _confirm_pending_project(session, revision)
+            return _confirmation_payload(
+                session,
+                pending,
+                int(session.pending_revision or 0),
+                warning=(
+                    "Confirmation was not accepted because the revision was missing or "
+                    "stale. Present this latest revision and wait for explicit confirmation."
+                ),
+            )
+
+        same_pending = pending is not None and pending.project_name == name
+        model = _build_project_model(
+            base=pending if same_pending else None,
+            project_name=name,
+            storage_dir=storage_dir,
+            site_id=site_id,
+            uid_root=uid_root,
             language_code=language_code,
             modalities=modalities,
             transfer_syntaxes=transfer_syntaxes,
             scp=scp,
             network_timeouts=network_timeouts,
+            anonymization_policy=anonymization_policy,
+        )
+        supplied: set[str] = (
+            set(session.pending_supplied_fields) if same_pending else set()
+        )
+        supplied.add("project_name")
+        for field_name, value in (
+            ("storage_dir", storage_dir),
+            ("site_id", site_id),
+            ("uid_root", uid_root),
+            ("language_code", language_code),
+            ("modalities", modalities),
+            ("transfer_syntaxes", transfer_syntaxes),
+            ("scp", scp),
+            ("network_timeouts", network_timeouts),
+            ("anonymization_policy", anonymization_policy),
+        ):
+            if value is not None:
+                supplied.add(field_name)
+        new_revision = session.stage_pending_project(
+            model,
+            supplied_fields=supplied,
+            overwrite=overwrite,
+        )
+        warning = None
+        if confirm:
+            warning = (
+                "confirm=true did not create a project because this call prepared or "
+                "changed the configuration. Present this revision and wait for explicit "
+                "confirmation in a later message."
+            )
+        return _confirmation_payload(
+            session,
+            model,
+            new_revision,
+            warning=warning,
         )
     except SettingsValidationError as exc:
         raise HeadlessOpsError(str(exc)) from exc
     except HeadlessSessionError as exc:
         raise HeadlessOpsError(str(exc)) from exc
-    return {"project": serialize_project_info(controller)}
 
 
 def project_settings_defaults() -> dict[str, Any]:
-    """Read-only factory defaults + DIMSE/DICOMweb help for setup wizard."""
-    return settings_defaults_payload()
+    """Factory defaults from the model plus MCP-owned clinician help/checklist."""
+    payload = dict(settings_defaults_payload())
+    help_block = dict(payload.get("help") or {})
+    help_block.update(_load_mcp_setup_help())
+    payload["help"] = help_block
+    return payload
 
 
-def apply_create_settings(
-    controller: ProjectController,
-    *,
-    language_code: str | None = None,
-    modalities: list[str] | str | None = None,
-    transfer_syntaxes: list[str] | None = None,
-    scp: dict[str, Any] | None = None,
-    network_timeouts: dict[str, Any] | None = None,
-) -> None:
-    """Validate and apply optional settings after create; mirror scp→scu."""
-    try:
-        _apply_mutable_settings(
-            controller,
-            language_code=language_code,
-            modalities=modalities,
-            transfer_syntaxes=transfer_syntaxes,
-            scp=scp,
-            network_timeouts=network_timeouts,
-            mirror_scp_to_scu=True,
-        )
-    except SettingsValidationError as exc:
-        raise HeadlessOpsError(str(exc)) from exc
+def anonymizer_usage() -> dict[str, Any]:
+    """Canonical plain-language usage instructions for clinicians.
+
+    The returned ``answer`` is a complete, ready-to-show reply — usage text
+    plus the example requests integrated as things the clinician can say —
+    so the client model does not need to compose or summarize anything.
+
+    Returns:
+        dict[str, Any]: Single ``answer`` field holding the finished text,
+            sourced from the shared MCP setup-help asset.
+    """
+    help_block = _load_mcp_setup_help()
+    usage = str(help_block.get("usage", "")).strip()
+    examples = help_block.get("example_requests") or []
+    answer = usage
+    if examples:
+        quoted = "\n".join(f"- “{request}”" for request in examples)
+        answer = f"{usage}\n\nThings you can say:\n{quoted}"
+    return {"answer": answer}
 
 
 def update_project_settings(
     controller: ProjectController,
     *,
-    language_code: str | None = None,
     modalities: list[str] | str | None = None,
     transfer_syntaxes: list[str] | None = None,
     scp: dict[str, Any] | None = None,
     network_timeouts: dict[str, Any] | None = None,
+    anonymization_policy: str | AnonymizationPolicy | None = None,
 ) -> dict[str, Any]:
-    """Update mutable settings on an open project (identity fields are not accepted)."""
+    """
+    Update mutable settings on an open project.
+
+    Args:
+        controller: Open project controller.
+        modalities: Optional modality selection.
+        transfer_syntaxes: Optional transfer-syntax UID list.
+        scp: Optional partial local SCP fields.
+        network_timeouts: Optional partial network timeout fields.
+        anonymization_policy: Optional anonymization policy.
+
+    Returns:
+        Updated-project response. Identity fields are not accepted here.
+    """
     if not any(
         x is not None
-        for x in (language_code, modalities, transfer_syntaxes, scp, network_timeouts)
+        for x in (
+            modalities,
+            transfer_syntaxes,
+            scp,
+            network_timeouts,
+            anonymization_policy,
+        )
     ):
         raise HeadlessOpsError(
-            "Provide at least one mutable setting: language_code, modalities, "
-            "transfer_syntaxes, scp, or network_timeouts"
+            "Provide at least one mutable setting: modalities, "
+            "transfer_syntaxes, scp, network_timeouts, or anonymization_policy"
         )
     try:
         _apply_mutable_settings(
             controller,
-            language_code=language_code,
             modalities=modalities,
             transfer_syntaxes=transfer_syntaxes,
             scp=scp,
             network_timeouts=network_timeouts,
             mirror_scp_to_scu=True,
         )
+        if anonymization_policy is not None and str(anonymization_policy).strip():
+            policy = validate_anonymization_policy(str(anonymization_policy))
+            controller.apply_anonymization_policy(AnonymizationPolicy(policy))
+            controller.save_model()
     except SettingsValidationError as exc:
         raise HeadlessOpsError(str(exc)) from exc
-    return {"project": serialize_project_info(controller)}
+    except HeadlessSessionError as exc:
+        raise HeadlessOpsError(str(exc)) from exc
+    except (OSError, FileNotFoundError, ValueError) as exc:
+        raise HeadlessOpsError(f"Failed to apply anonymization_policy: {exc}") from exc
+    return {
+        "status": "updated",
+        "project": serialize_project_info(controller),
+    }
 
 
 def _scp_kwargs(scp: dict[str, Any] | None) -> dict[str, Any]:
@@ -272,17 +678,30 @@ def _timeout_kwargs(timeouts: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
-def _apply_mutable_settings(
-    controller: ProjectController,
+def _apply_non_modality_settings_to_model(
+    model: ProjectModel,
     *,
     language_code: str | None,
-    modalities: list[str] | str | None,
     transfer_syntaxes: list[str] | None,
     scp: dict[str, Any] | None,
     network_timeouts: dict[str, Any] | None,
-    mirror_scp_to_scu: bool,
-) -> None:
-    model = controller.model
+    mirror_scp_to_scu: bool = True,
+) -> bool:
+    """
+    Validate and assign non-modality mutable settings on a core model.
+
+    Args:
+        model: Project model to update.
+        language_code: Optional language code.
+        transfer_syntaxes: Optional transfer-syntax UID list.
+        scp: Optional partial local SCP fields.
+        network_timeouts: Optional partial network timeout fields.
+        mirror_scp_to_scu: Whether a local SCP change also updates the SCU.
+
+    Returns:
+        ``True`` when a network-related field changed and a live controller
+        should refresh its SCP/model state.
+    """
     restart_scp = False
 
     if language_code is not None and str(language_code).strip():
@@ -315,6 +734,28 @@ def _apply_mutable_settings(
                 **{k: v for k, v in tkwargs.items() if v is not None},
             )
             restart_scp = True
+    return restart_scp
+
+
+def _apply_mutable_settings(
+    controller: ProjectController,
+    *,
+    modalities: list[str] | str | None,
+    transfer_syntaxes: list[str] | None,
+    scp: dict[str, Any] | None,
+    network_timeouts: dict[str, Any] | None,
+    mirror_scp_to_scu: bool,
+) -> None:
+    """Apply mutable settings to a live controller and persist them."""
+    model = controller.model
+    restart_scp = _apply_non_modality_settings_to_model(
+        model,
+        language_code=None,
+        transfer_syntaxes=transfer_syntaxes,
+        scp=scp,
+        network_timeouts=network_timeouts,
+        mirror_scp_to_scu=mirror_scp_to_scu,
+    )
 
     # Modalities persist via apply_project_modalities (save_model); do after other fields
     # so a restart path still includes modality changes when update_model saves.
@@ -331,8 +772,7 @@ def _apply_mutable_settings(
     if restart_scp:
         controller.update_model()
     elif any(
-        x is not None
-        for x in (language_code, transfer_syntaxes, scp, network_timeouts)
+        x is not None for x in (transfer_syntaxes, scp, network_timeouts)
     ):
         if not controller.save_model():
             raise HeadlessOpsError("Failed to save ProjectModel.json")
@@ -342,8 +782,8 @@ def project_open(
     session: ProjectSession,
     project_name: str = "",
     storage_dir: str | None = None,
-    modalities: list[str] | str | None = None,
 ) -> dict[str, Any]:
+    """Open an existing project without changing its settings."""
     try:
         if storage_dir is not None and str(storage_dir).strip():
             storage = resolve_existing_storage_dir(storage_dir)
@@ -352,7 +792,6 @@ def project_open(
         else:
             raise HeadlessOpsError("Provide project_name or storage_dir")
         controller = session.open_path(storage)
-        apply_project_modalities(controller, modalities)
     except HeadlessSessionError as exc:
         raise HeadlessOpsError(str(exc)) from exc
     return {"project": serialize_project_info(controller)}
@@ -869,6 +1308,7 @@ def remove_pixel_phi(
     patient: str = "",
     study: str = "",
     series: str = "",
+    progress: ProgressCallback | None = None,
 ) -> dict[str, Any]:
     series_sel = _norm_selector(series)
     patient_sel = _norm_selector(patient)
@@ -879,7 +1319,8 @@ def remove_pixel_phi(
             raise HeadlessOpsError("No series in inventory. Import DICOM first.")
         results: list[dict[str, Any]] = []
         failed = 0
-        for row in rows:
+        total_rows = len(rows)
+        for index, row in enumerate(rows, start=1):
             uid = str(row.get("anon_series_uid") or "").strip()
             if not uid:
                 continue
@@ -909,6 +1350,7 @@ def remove_pixel_phi(
                         "detail": str(exc),
                     }
                 )
+            _notify(progress, index, total_rows, f"Processed series {index} of {total_rows}")
         return {
             "status": "ok" if failed == 0 else "partial",
             "detail": (
@@ -1163,6 +1605,7 @@ def harmonize_studies(
     patient: str = "",
     study: str = "",
     anon_study_uids: list[str] | None = None,
+    progress: ProgressCallback | None = None,
 ) -> dict[str, Any]:
     """Harmonize study/series descriptions via ``ProjectController.harmonize_studies``.
 
@@ -1251,11 +1694,27 @@ def harmonize_studies(
     if not studies:
         raise HeadlessOpsError("No matching studies to harmonize.")
 
-    try:
-        summary = controller.harmonize_studies(studies)
-    except Exception as exc:
-        logger.exception("harmonize_studies failed")
-        raise HeadlessOpsError(str(exc)) from exc
+    # Process one study at a time so progress can be reported between
+    # studies; a single all-studies call can run for minutes (TotalSegmentator
+    # per CT series) and would outlast MCP client request timeouts silently.
+    totals = {"processed": 0, "applied": 0, "skipped": 0, "failed": 0}
+    cancelled = False
+    total_studies = len(studies)
+    for index, study_key in enumerate(studies, start=1):
+        try:
+            summary = controller.harmonize_studies([study_key])
+        except Exception as exc:
+            logger.exception("harmonize_studies failed")
+            raise HeadlessOpsError(str(exc)) from exc
+        for field_name in totals:
+            totals[field_name] += int(getattr(summary, field_name, 0) or 0)
+        cancelled = cancelled or bool(getattr(summary, "cancelled", False))
+        _notify(
+            progress,
+            index,
+            total_studies,
+            f"Harmonized study {index} of {total_studies}",
+        )
 
     # Series batch does not write StudyDescription; same follow-up as AI batch / Series View.
     study_uids = [sid for _, sid in studies]
@@ -1281,42 +1740,51 @@ def harmonize_studies(
 
     return {
         "study_count": len(studies),
-        "processed": summary.processed,
-        "applied": summary.applied,
-        "skipped": summary.skipped,
-        "failed": summary.failed,
-        "cancelled": summary.cancelled,
+        "processed": totals["processed"],
+        "applied": totals["applied"],
+        "skipped": totals["skipped"],
+        "failed": totals["failed"],
+        "cancelled": cancelled,
         "study_descriptions_applied": sum(item["studies_updated"] for item in study_applied),
         "study_description_results": study_applied,
         "project": serialize_project_info(controller),
     }
 
 
-def _import_paths(controller: ProjectController, paths: list[str], *, source: str) -> dict[str, Any]:
+def _import_paths(
+    controller: ProjectController,
+    paths: list[str],
+    *,
+    source: str,
+    progress: ProgressCallback | None = None,
+) -> dict[str, Any]:
     succeeded = 0
     skipped = 0
     failed = 0
-    samples: list[dict[str, Any]] = []
+    anon_patient_ids: list[str] = []
+    seen_patient_ids: set[str] = set()
+    failures: list[dict[str, Any]] = []
     already_stored = _("Instance already stored")
 
-    for path in paths:
+    total_files = len(paths)
+    for index, path in enumerate(paths, start=1):
         error_msg, ds = controller.anonymizer.anonymize_file(Path(path))
         anon_patient_id = str(ds.PatientID) if ds is not None and hasattr(ds, "PatientID") else None
-        entry = {
-            "path": abridged_path(path),
-            "anon_patient_id": anon_patient_id,
-            "error": error_msg,
-        }
         if error_msg is None:
             succeeded += 1
-            if len(samples) < _MAX_IMPORT_SAMPLES and anon_patient_id:
-                samples.append({**entry, "status": "ok"})
+            if anon_patient_id and anon_patient_id not in seen_patient_ids:
+                seen_patient_ids.add(anon_patient_id)
+                anon_patient_ids.append(anon_patient_id)
         elif error_msg == already_stored or already_stored in str(error_msg):
             skipped += 1
         else:
             failed += 1
-            if len(samples) < _MAX_IMPORT_SAMPLES:
-                samples.append({**entry, "status": "failed"})
+            # Only failures carry per-file detail: successes are fully
+            # described by the counts and the unique patient ids above.
+            if len(failures) < _MAX_IMPORT_FAILURES:
+                failures.append({"path": abridged_path(path), "error": error_msg})
+        if index == total_files or index % 10 == 0:
+            _notify(progress, index, total_files, f"Imported file {index} of {total_files}")
 
     return {
         "source": source,
@@ -1324,32 +1792,39 @@ def _import_paths(controller: ProjectController, paths: list[str], *, source: st
         "succeeded": succeeded,
         "skipped": skipped,
         "failed": failed,
-        "samples": samples,
-        "project": serialize_project_info(controller),
+        "anon_patient_ids": anon_patient_ids,
+        "failures": failures,
+        "project": serialize_project_import_summary(controller),
     }
 
 
-def import_directory(controller: ProjectController, directory: str) -> dict[str, Any]:
+def import_directory(
+    controller: ProjectController,
+    directory: str,
+    *,
+    progress: ProgressCallback | None = None,
+) -> dict[str, Any]:
     root = Path(directory).expanduser().resolve()
     if not root.is_dir():
         raise HeadlessOpsError(
             f"Not a directory: {root}. For a single DICOM file use import_file instead."
         )
     paths = list_import_directory_files(root)
-    result = _import_paths(controller, paths, source=str(root))
-    result["directory"] = str(root)
-    return result
+    return _import_paths(controller, paths, source=str(root), progress=progress)
 
 
-def import_file(controller: ProjectController, file_path: str) -> dict[str, Any]:
+def import_file(
+    controller: ProjectController,
+    file_path: str,
+    *,
+    progress: ProgressCallback | None = None,
+) -> dict[str, Any]:
     path = Path(file_path).expanduser().resolve()
     if not path.is_file():
         raise HeadlessOpsError(
             f"Not a file: {path}. For a folder of DICOM files use import_directory instead."
         )
-    result = _import_paths(controller, [str(path)], source=str(path))
-    result["file"] = str(path)
-    return result
+    return _import_paths(controller, [str(path)], source=str(path), progress=progress)
 
 
 def configure_remote(

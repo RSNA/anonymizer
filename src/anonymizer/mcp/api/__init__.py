@@ -21,12 +21,14 @@ from fastmcp.tools import Tool
 from anonymizer.mcp.api import handlers
 from anonymizer.mcp.api.catalog import MCP_TOOL_NAMES, TOOL_CATALOG, TOOL_INPUT_MODELS, ZERO_ARG_TOOLS
 from anonymizer.mcp.api.handlers import (
+    anonymizer_usage,
     configure_remote,
     create_project,
     export_series_preview,
     harmonize_studies,
     import_directory,
     import_file,
+    job_status,
     list_inventory,
     list_projects,
     pacs_find,
@@ -67,6 +69,8 @@ __all__ = [
     "wire_text",
     "parse_wire_text",
     "register_tools",
+    "anonymizer_usage",
+    "job_status",
     "list_projects",
     "project_settings_defaults",
     "create_project",

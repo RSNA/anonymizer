@@ -21,6 +21,7 @@ from anonymizer.mcp.api.schemas import (
     HarmonizeStudiesArgs,
     ImportDirectoryArgs,
     ImportFileArgs,
+    JobStatusArgs,
     PacsFindArgs,
     PacsMoveArgs,
     ProjectOpenArgs,
@@ -55,6 +56,37 @@ class ToolSpec:
 # Order = tools/list order. Keep in sync with assets/instructions behavior rules.
 TOOL_CATALOG: Final[tuple[ToolSpec, ...]] = (
     ToolSpec(
+        name="anonymizer_usage",
+        title="How to use the Anonymizer",
+        description=(
+            "Return the canonical plain-language instructions and example requests "
+            "for using the Anonymizer. Call with arguments {} FIRST whenever the user "
+            "asks how to use the Anonymizer, how to create or configure a project, or "
+            "what they should say — instead of deriving an explanation from the other "
+            "tool definitions. The result is a complete finished answer: reproduce "
+            "it exactly, word for word, as your entire reply. Do not summarize, "
+            "reformat, add facts, examples, headings, or a closing invitation. "
+            "Read-only; creates and changes nothing."
+        ),
+        args_model=EmptyArgs,
+        read_only_hint=True,
+        idempotent_hint=True,
+    ),
+    ToolSpec(
+        name="job_status",
+        title="Check a background job",
+        description=(
+            "Poll a background job started by a long-running tool. Call with "
+            "{job_id} copied from a result with status=pending, and keep polling "
+            "until status is completed or failed. When completed, present the "
+            "nested result as the tool's answer; when failed, report the error. "
+            "Read-only."
+        ),
+        args_model=JobStatusArgs,
+        read_only_hint=True,
+        idempotent_hint=True,
+    ),
+    ToolSpec(
         name="list_projects",
         title="List projects",
         description=(
@@ -70,9 +102,12 @@ TOOL_CATALOG: Final[tuple[ToolSpec, ...]] = (
         name="project_settings_defaults",
         title="Project settings defaults",
         description=(
-            "Return factory project-setting defaults, allowed language codes, field ranges, "
-            "and DIMSE vs DICOMweb guidance. Call with arguments {}. Read-only. "
-            "Use once when guiding interactive project setup before create_project."
+            "Return factory defaults, ranges, and clinician help for project settings. "
+            "Call with arguments {} when the user asks how to configure a project, "
+            "what settings can be changed, or what the defaults/ranges are. "
+            "Read-only. Do not call this before create_project: create_project with "
+            "confirm=false already returns the requested settings combined with defaults "
+            "for confirmation."
         ),
         args_model=EmptyArgs,
         read_only_hint=True,
@@ -82,13 +117,14 @@ TOOL_CATALOG: Final[tuple[ToolSpec, ...]] = (
         name="create_project",
         title="Create project",
         description=(
-            "Create a new empty anonymizer project and leave it open. "
-            "Call only when the user asks to create a project and has confirmed settings. "
-            "Requires project_name from the user; optional site_id, uid_root, language_code, "
-            "modalities, transfer_syntaxes, scp, network_timeouts (same ranges as the desktop GUI). "
-            "After success: the project is already open — reply in plain language and STOP. "
-            "Do not call project_open, import_directory, import_file, or any other tool next "
-            "unless the same user message explicitly asked for that next step too."
+            "Prepare or confirm a new anonymizer project. First call: pass project_name "
+            "and only settings the user supplied, with confirm=false. The server combines "
+            "them with ProjectModel defaults and returns status=confirmation_required; "
+            "nothing is created. Present that configuration and stop. If the user changes "
+            "a setting, call again with confirm=false. Only after the user explicitly "
+            "confirms in a later message, call again with project_name, confirm=true, and "
+            "the returned revision. Never set confirm=true on the first call. After "
+            "status=created the project is open — do not call project_open."
         ),
         args_model=CreateProjectArgs,
         destructive_hint=False,
@@ -100,6 +136,8 @@ TOOL_CATALOG: Final[tuple[ToolSpec, ...]] = (
         title="Open project",
         description=(
             "Open an existing anonymizer project by project_name or storage_dir. "
+            "Does not import DICOM — for a file path use import_file with file_path "
+            "on an already-open project. "
             "Do not call after create_project (create already opens). "
             "Use when the user asks to open/switch to an existing project."
         ),
@@ -110,8 +148,9 @@ TOOL_CATALOG: Final[tuple[ToolSpec, ...]] = (
         name="project_info",
         title="Project info",
         description=(
-            "Return metadata for the currently open project including language, modalities, "
+            "Return settings summary for the currently open project: language, modalities, "
             "transfer_syntaxes, network_timeouts, local_scp/local_scu, and remotes. "
+            "Not the series inventory — for the series TSV table call list_inventory. "
             "Call with arguments {}. Requires an open project. Read-only. "
             "Use before update_project_settings when editing an existing project."
         ),
@@ -123,11 +162,12 @@ TOOL_CATALOG: Final[tuple[ToolSpec, ...]] = (
         name="update_project_settings",
         title="Update project settings",
         description=(
-            "Change mutable settings on the open project: language_code, modalities, "
-            "transfer_syntaxes, local scp, network_timeouts. "
-            "project_name, storage_dir, site_id, and uid_root are fixed after create — refuse those. "
-            "Validate ranges match the desktop GUI; reject invalid values. "
-            "Call only with values the user supplied."
+            "Change mutable settings on the open project: modalities, "
+            "transfer_syntaxes, local scp, network_timeouts, anonymization_policy. "
+            "language_code is chosen once at project creation and, like project_name, "
+            "storage_dir, site_id, and uid_root, is fixed after create — refuse those. "
+            "Switching anonymization_policy replaces the packaged script — confirm first. "
+            "Call only with values the clinician supplied."
         ),
         args_model=UpdateProjectSettingsArgs,
         idempotent_hint=True,
@@ -137,10 +177,11 @@ TOOL_CATALOG: Final[tuple[ToolSpec, ...]] = (
         title="Import DICOM directory",
         description=(
             "Import DICOM files from a host directory into the open project. "
-            "Call only when the user provided a real absolute directory path in this message "
-            "(or a prior message in the same turn). "
-            "Never invent paths or use documentation placeholders. "
-            "If no absolute path was given, ask the user — do not call this tool."
+            "Requires an already-open project. "
+            "Call only with a real absolute directory path from the clinician. "
+            "Never invent paths. If no path was given, ask — do not call this tool. "
+            "Starts a background job and returns status=pending with a job_id; "
+            "poll job_status until completed before reporting counts."
         ),
         args_model=ImportDirectoryArgs,
         open_world_hint=True,
@@ -149,8 +190,9 @@ TOOL_CATALOG: Final[tuple[ToolSpec, ...]] = (
         name="import_file",
         title="Import DICOM file",
         description=(
-            "Import one DICOM file from an absolute host path into the open project. "
-            "Call only when the user provided a real absolute file path. "
+            "Import one DICOM file into the already-open project. "
+            "Argument is file_path (absolute path) — not project_open, not path. "
+            "Requires an already-open project. "
             "Never invent paths. If none given, ask — do not call this tool."
         ),
         args_model=ImportFileArgs,
@@ -161,12 +203,14 @@ TOOL_CATALOG: Final[tuple[ToolSpec, ...]] = (
         title="Configure PACS remote",
         description=(
             "Save a PACS QUERY or EXPORT remote on the open project. "
-            "Before calling: ask whether that role uses DIMSE SCP (ip, DICOM port, AET) "
-            "or DICOMweb (dicomweb=true, ip, http_port, http_path, optional HTTPS/creds) — "
-            "one port per mode. "
-            "Do not assume DICOMweb unless the user chose it or gave HTTP details. "
-            "Configure QUERY and EXPORT separately when both are needed. "
-            "Call only with values the user supplied. Never invent them."
+            "Exact args — DIMSE: ip, port, aet, role=QUERY, dicomweb=false. "
+            "DICOMweb: ip, port, aet, role=QUERY, dicomweb=true, http_port, http_path "
+            "(optional use_https/username/password). "
+            "Never invent host, hostname, address, protocol, path, aetitle, or query_type "
+            "(use ip / aet / dicomweb / http_path / role). "
+            "If the user has not said DIMSE vs DICOMweb and did not give HTTP details, "
+            "ask first — do not call yet. "
+            "Configure QUERY before pacs_find/pacs_move."
         ),
         args_model=ConfigureRemoteArgs,
         open_world_hint=True,
@@ -175,8 +219,10 @@ TOOL_CATALOG: Final[tuple[ToolSpec, ...]] = (
         name="pacs_find",
         title="PACS find (C-FIND or QIDO-RS)",
         description=(
-            "Query the configured QUERY remote for studies (DIMSE C-FIND or DICOMweb QIDO-RS). "
-            "Omit unused query keys. Requires configure_remote first when not already set."
+            "Query the open project's configured QUERY remote for studies "
+            "(DIMSE C-FIND or DICOMweb QIDO-RS). If the user supplies or changes PACS "
+            "details, call configure_remote role=QUERY first. "
+            "Omit unused query keys. Never invent PatientIDs or UIDs."
         ),
         args_model=PacsFindArgs,
         read_only_hint=True,
@@ -187,6 +233,7 @@ TOOL_CATALOG: Final[tuple[ToolSpec, ...]] = (
         title="PACS import (C-MOVE/C-GET or WADO-RS)",
         description=(
             "Import studies from PACS into the open project (DIMSE retrieve or DICOMweb WADO-RS). "
+            "Uses the open project's configured QUERY remote. "
             "studies must come from pacs_find results (study_instance_uid + patient_id). "
             "Do not invent UIDs."
         ),
@@ -197,8 +244,9 @@ TOOL_CATALOG: Final[tuple[ToolSpec, ...]] = (
         name="list_inventory",
         title="List inventory",
         description=(
-            "List series in the open project as a plain TSV table. "
-            "Call with arguments {}. Read-only. "
+            "List series in the open project as a plain TSV table (patient/study/series rows). "
+            "Use for 'what is in the project?' / inventory / series list — not project_info "
+            "(settings summary only). Call with arguments {}. Read-only. "
             "Use returned patient_index/study_index/series_index for imaging tools."
         ),
         args_model=EmptyArgs,
@@ -211,7 +259,9 @@ TOOL_CATALOG: Final[tuple[ToolSpec, ...]] = (
         description=(
             "Strip burnt-in pixel text from series in the open project. "
             "Selectors (patient/study/series) must come from list_inventory. "
-            "Example: {\"series\":\"all\"} or {\"patient\":\"1\",\"series\":\"1\"}."
+            "Example: {\"series\":\"all\"} or {\"patient\":\"1\",\"series\":\"1\"}. "
+            "Starts a background job and returns status=pending with a job_id; "
+            "poll job_status until completed before reporting counts."
         ),
         args_model=SeriesSelectorsArgs,
         destructive_hint=True,
@@ -221,7 +271,9 @@ TOOL_CATALOG: Final[tuple[ToolSpec, ...]] = (
         title="Harmonize descriptions",
         description=(
             "Harmonize study/series descriptions in the open project. "
-            "Pass {} for all, or patient/study selectors from list_inventory."
+            "Pass {} for all, or patient/study selectors from list_inventory. "
+            "Starts a background job and returns status=pending with a job_id; "
+            "poll job_status until completed before reporting counts."
         ),
         args_model=HarmonizeStudiesArgs,
         destructive_hint=True,

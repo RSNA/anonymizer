@@ -23,6 +23,7 @@ from anonymizer.model.settings_validate import (
     validate_uid_root,
 )
 from anonymizer.view.common import ux_fields
+from tests.mcp.project_create import confirm_create
 
 
 @pytest.fixture(autouse=True)
@@ -64,11 +65,59 @@ def test_project_settings_defaults_ok():
     assert "scp" in result["defaults"]
     assert "network_timeouts" in result["defaults"]
     assert "dimse_vs_dicomweb" in result["help"]
+    assert "configuration_confirmation" in result["help"]
+    assert "usage" in result["help"]
+    assert "nothing is created yet" in result["help"]["usage"].lower()
+    assert "import_gate" not in result["help"]
+    assert "setup_checklist" not in result["help"]
+    assert "anonymization_policy" in result["help"]
     assert "en_US" in result["language_codes"]
 
 
+def test_create_schema_matches_model_project_name_validation():
+    """MCP inputSchema must accept exactly what the core validator accepts."""
+    from pydantic import ValidationError
+
+    from anonymizer.mcp.api.schemas import CreateProjectArgs
+
+    for name in ("MCP TEST-1", "Demo.CXR 2", "abc", "MCP_TEST_1", "bad/name", "AB", "x" * 21):
+        try:
+            validate_project_name(name)
+            model_ok = True
+        except SettingsValidationError:
+            model_ok = False
+        try:
+            CreateProjectArgs.model_validate({"project_name": name})
+            schema_ok = True
+        except ValidationError:
+            schema_ok = False
+        assert schema_ok is model_ok, name
+
+
+def test_anonymizer_usage_is_plain_language():
+    result = mcp_tools.anonymizer_usage()
+    assert result["ok"] is True
+    answer = result["answer"]
+    assert "Create a project" in answer
+    assert "Nothing is created yet" in answer
+    assert "Things you can say:" in answer
+    assert "Create a new project named DemoCXR" in answer
+    # Clinician-facing text must not leak internal MCP function names.
+    for internal in (
+        "create_project",
+        "update_project_settings",
+        "project_settings_defaults",
+        "project_info",
+        "list_inventory",
+        "import_file",
+        "configure_remote",
+    ):
+        assert internal not in answer, internal
+
+
 def test_create_with_custom_settings():
-    result = mcp_tools.create_project(
+    result = confirm_create(
+        mcp_tools.create_project,
         project_name="Custom Setup",
         site_id="778899",
         uid_root="1.2.3.4.5",
@@ -104,29 +153,27 @@ def test_create_rejects_short_name():
     assert "project_name" in result["error"].lower()
 
 
-def test_update_project_settings_language_and_scp():
-    assert mcp_tools.create_project(project_name="Update Me")["ok"]
+def test_update_project_settings_scp_and_timeouts():
+    assert confirm_create(mcp_tools.create_project, project_name="Update Me")["ok"]
     result = mcp_tools.update_project_settings(
-        language_code="fr",
         scp={"aet": "NEWLOCAL"},
         network_timeouts={"network": 300},
     )
     assert result["ok"] is True
     project = result["project"]
-    assert project["language_code"] == "fr"
     assert project["local_scp"]["aet"] == "NEWLOCAL"
     assert project["local_scu"]["aet"] == "NEWLOCAL"
     assert project["network_timeouts"]["network"] == 300.0
 
 
 def test_update_rejects_empty_payload():
-    assert mcp_tools.create_project(project_name="Empty Upd")["ok"]
+    assert confirm_create(mcp_tools.create_project, project_name="Empty Upd")["ok"]
     result = mcp_tools.update_project_settings()
     assert result["ok"] is False
 
 
 def test_update_rejects_identity_extra_fields():
-    assert mcp_tools.create_project(project_name="No Identity")["ok"]
+    assert confirm_create(mcp_tools.create_project, project_name="No Identity")["ok"]
     # Schema forbids extras — handler/parse must reject project_name on update.
     from pydantic import ValidationError
 
@@ -134,10 +181,13 @@ def test_update_rejects_identity_extra_fields():
 
     with pytest.raises(ValidationError):
         UpdateProjectSettingsArgs.model_validate({"project_name": "Hacked"})
+    # language_code is chosen once at creation; update must not accept it.
+    with pytest.raises(ValidationError):
+        UpdateProjectSettingsArgs.model_validate({"language_code": "fr"})
 
 
 def test_configure_remote_rejects_low_port():
-    assert mcp_tools.create_project(project_name="Remote Port")["ok"]
+    assert confirm_create(mcp_tools.create_project, project_name="Remote Port")["ok"]
     result = mcp_tools.configure_remote("10.0.0.1", 80, "PACS_AE", role="QUERY")
     assert result["ok"] is False
     assert "port" in result["error"].lower()
@@ -153,7 +203,7 @@ def test_configure_remote_description_mentions_transport():
 
 
 def test_project_info_includes_settings_fields():
-    assert mcp_tools.create_project(project_name="Info Rich")["ok"]
+    assert confirm_create(mcp_tools.create_project, project_name="Info Rich")["ok"]
     info = mcp_tools.project_info()
     assert info["ok"] is True
     project = info["project"]

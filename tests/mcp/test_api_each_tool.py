@@ -6,6 +6,7 @@ so coverage tracks the advertised LLM-facing API without requiring a live HTTP s
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -18,6 +19,8 @@ from anonymizer.mcp.server import create_server
 from anonymizer.mcp.session import SESSION
 from anonymizer.model.project import ProjectModel
 from anonymizer.utils.translate import set_language_code
+from tests.mcp.job_poll import await_job
+from tests.mcp.project_create import confirm_create
 
 DAVIDSON = (
     Path(__file__).resolve().parent.parent
@@ -41,7 +44,11 @@ def _isolated_session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 def _create_open(name: str = "ApiProj") -> dict:
-    result = mcp_tools.create_project(project_name=name, overwrite=True)
+    result = confirm_create(
+        mcp_tools.create_project,
+        project_name=name,
+        overwrite=True,
+    )
     assert result["ok"] is True
     return result
 
@@ -88,7 +95,7 @@ def test_api_list_projects_after_create():
 
 
 def test_api_create_project_ok():
-    result = mcp_tools.create_project(project_name="Created")
+    result = confirm_create(mcp_tools.create_project, project_name="Created")
     assert result["ok"] is True
     assert result["project"]["project_name"] == "Created"
     assert result["project"]["totals"]["patients"] == 0
@@ -148,6 +155,9 @@ def test_api_import_file_ok():
     assert result["ok"] is True
     assert result["files_seen"] == 1
     assert result["succeeded"] == 1
+    assert "file" not in result
+    assert result["failures"] == []
+    assert len(result["anon_patient_ids"]) == 1
     assert result["project"]["totals"]["instances"] >= 1
     assert result["project"]["imported_modalities"]
 
@@ -159,7 +169,7 @@ def test_api_import_file_without_session():
 
 def test_api_import_directory_ok():
     _create_open()
-    result = mcp_tools.import_directory(str(DAVIDSON))
+    result = await_job(mcp_tools.import_directory(str(DAVIDSON)), mcp_tools.job_status)
     assert result["ok"] is True
     assert result["succeeded"] >= 1
     assert result["failed"] == 0
@@ -245,7 +255,9 @@ def test_api_remove_pixel_phi_ok_mocked():
             return_value=True,
         ),
     ):
-        result = mcp_tools.remove_pixel_phi(series="cxr")
+        result = await_job(
+            mcp_tools.remove_pixel_phi(series="cxr"), mcp_tools.job_status
+        )
 
     assert result["ok"] is True
     assert result["status"] == "complete"
@@ -275,7 +287,7 @@ def test_api_harmonize_studies_ok_mocked():
             "anonymizer.mcp.ops.auto_apply_best_study_descriptions",
             return_value=[],
         ) as mock_study:
-            result = mcp_tools.harmonize_studies()
+            result = await_job(mcp_tools.harmonize_studies(), mcp_tools.job_status)
     assert result["ok"] is True
     assert result["study_count"] == 1
     assert result["applied"] == 1
@@ -298,7 +310,9 @@ def test_api_harmonize_studies_patient_all_mocked():
         return_value=HarmonizeStudiesSummary(processed=1, applied=1, skipped=0, failed=0),
     ) as mock_h:
         with patch("anonymizer.mcp.ops.auto_apply_best_study_descriptions", return_value=[]):
-            result = mcp_tools.harmonize_studies(patient="all")
+            result = await_job(
+                mcp_tools.harmonize_studies(patient="all"), mcp_tools.job_status
+            )
     assert result["ok"] is True
     assert result["study_count"] == 1
     mock_h.assert_called_once()
@@ -315,7 +329,10 @@ def test_api_harmonize_studies_patient_selector_mocked():
         return_value=HarmonizeStudiesSummary(processed=1, applied=1, skipped=0, failed=0),
     ) as mock_h:
         with patch("anonymizer.mcp.ops.auto_apply_best_study_descriptions", return_value=[]):
-            result = mcp_tools.harmonize_studies(patient="1", study="1")
+            result = await_job(
+                mcp_tools.harmonize_studies(patient="1", study="1"),
+                mcp_tools.job_status,
+            )
     assert result["ok"] is True
     assert result["study_count"] == 1
     mock_h.assert_called_once()
@@ -324,6 +341,68 @@ def test_api_harmonize_studies_patient_selector_mocked():
 def test_api_harmonize_studies_without_session():
     result = mcp_tools.harmonize_studies()
     assert result["ok"] is False
+
+
+# --- job_status -------------------------------------------------------------
+
+
+def test_api_job_status_unknown_id():
+    result = mcp_tools.job_status("job-9999")
+    assert result["ok"] is False
+    assert "unknown" in result["error"].lower()
+
+
+def test_api_job_status_failed_job_surfaces_error():
+    def _boom(progress):
+        raise RuntimeError("kaboom")
+
+    job_id = SESSION.start_job("harmonize_studies", _boom)
+    deadline = time.monotonic() + 10
+    while True:
+        result = mcp_tools.job_status(job_id)
+        if result["status"] == "failed":
+            break
+        assert time.monotonic() < deadline
+        time.sleep(0.02)
+    assert result["ok"] is False
+    assert result["error"] == "kaboom"
+
+
+def test_api_job_completed_with_item_failures_keeps_result():
+    """Per-item failures are counts in the result, not a bare tool error."""
+    job_id = SESSION.start_job(
+        "import_directory",
+        lambda progress: {"files_seen": 3, "succeeded": 1, "failed": 2, "failures": []},
+    )
+    deadline = time.monotonic() + 10
+    while True:
+        result = mcp_tools.job_status(job_id)
+        if result["status"] == "completed":
+            break
+        assert time.monotonic() < deadline
+        time.sleep(0.02)
+    assert result["ok"] is True
+    assert result["result"]["succeeded"] == 1
+    assert result["result"]["failed"] == 2
+
+
+def test_api_second_job_rejected_while_one_running():
+    import threading
+
+    gate = threading.Event()
+
+    def _slow(progress):
+        gate.wait(timeout=10)
+        return {"done": True}
+
+    job_id = SESSION.start_job("import_directory", _slow)
+    try:
+        with pytest.raises(Exception, match="still running"):
+            SESSION.start_job("harmonize_studies", _slow)
+    finally:
+        gate.set()
+    result = await_job({"status": "pending", "job_id": job_id}, mcp_tools.job_status)
+    assert result["done"] is True
 
 
 # --- resolve_series / friendly selectors ------------------------------------
@@ -490,7 +569,13 @@ def test_api_pacs_find_requires_remote():
     SESSION.controller.model.remote_scps.clear()
     result = mcp_tools.pacs_find()
     assert result["ok"] is False
-    assert "configure_remote" in result["error"].lower() or "remote" in result["error"].lower()
+    err = result["error"].lower()
+    assert (
+        "configure_remote" in err
+        or "remote" in err
+        or "query" in err
+        or "import_plan" in err
+    )
 
 
 def test_api_pacs_find_without_session():

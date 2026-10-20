@@ -4,7 +4,7 @@
 |------|---------|--------|
 | `tests/controller/` | `src/anonymizer/controller/` | [controller/README.md](controller/README.md) |
 | `tests/model/` | `src/anonymizer/model/` | — |
-| `tests/mcp/` | `src/anonymizer/mcp/` | — |
+| `tests/mcp/` | `src/anonymizer/mcp/` | [mcp/README.md](mcp/README.md) |
 | `tests/view/` | `src/anonymizer/view/` | — (local GUI suite; not in default `testpaths`) |
 | `src/prototyping/*/tests/` | `src/prototyping/` | [prototyping/tests/README.md](../src/prototyping/tests/README.md) |
 

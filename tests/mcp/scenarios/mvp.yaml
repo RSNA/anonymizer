@@ -1,0 +1,179 @@
+# Clinician intent scenarios for the MCP project-configuration contract.
+#
+# All ten scenarios stick to project creation and settings modification:
+#   create_project(confirm=false) -> clinician reviews effective ProjectModel
+#   configuration -> optional revision -> create_project(confirm=true, revision)
+#   -> update_project_settings for mutable settings on the open project.
+# Identity fields stay fixed after creation; missing values are asked for.
+
+scenarios:
+  - id: create_defaults_then_confirm
+    utterance: "Create a new project named DemoCXR. Use defaults for everything else."
+    clarify: >
+      Yes, create it exactly as shown. Call create_project with
+      project_name DemoCXR, confirm true, revision 1.
+    expected_trace:
+      - tool: create_project
+        before_clarify: true
+        arguments:
+          project_name: DemoCXR
+          confirm: false
+      - tool: create_project
+        after_clarify: true
+        arguments:
+          project_name: DemoCXR
+          confirm: true
+          revision: 1
+    forbidden_before_create: [import_file, import_directory, pacs_find, pacs_move]
+
+  - id: create_custom_then_revise
+    utterance: >
+      Create a project named ClinicalDemo with anonymization_policy clinical
+      and modalities CT and MR.
+    clarify: >
+      Change it before creating: call create_project again with
+      project_name ClinicalDemo, modalities ["CT", "MR", "US"],
+      language_code fr, confirm false. Show the revised configuration and stop.
+    expected_trace:
+      - tool: create_project
+        before_clarify: true
+        arguments:
+          project_name: ClinicalDemo
+          anonymization_policy: clinical
+          modalities: ["CT", "MR"]
+          confirm: false
+      - tool: create_project
+        after_clarify: true
+        arguments:
+          project_name: ClinicalDemo
+          modalities: ["CT", "MR", "US"]
+          language_code: fr
+          confirm: false
+    forbidden_before_create: [import_file, import_directory, pacs_find, pacs_move]
+
+  - id: confirm_revised_configuration
+    utterance: >
+      Yes, create the revised project PendingConfig exactly as shown.
+      Call create_project with project_name PendingConfig, confirm true,
+      revision 2.
+    requires_pending_project: true
+    expected_trace:
+      - tool: create_project
+        arguments:
+          project_name: PendingConfig
+          confirm: true
+          revision: 2
+
+  - id: create_full_custom_then_confirm
+    utterance: >
+      Create a project named FullCustom with site_id 778899,
+      uid_root 1.2.3.4.5, language_code es, modalities ["CT", "MR"],
+      transfer_syntaxes ["1.2.840.10008.1.2", "1.2.840.10008.1.2.1"],
+      scp {"ip": "127.0.0.1", "port": 11112, "aet": "LOCALAE"},
+      network_timeouts {"tcp_connection": 10, "acse": 60, "dimse": 60,
+      "network": 120}. Use those exact values.
+    clarify: >
+      Yes, create it exactly as shown. Call create_project with
+      project_name FullCustom, confirm true, revision 1.
+    expected_trace:
+      - tool: create_project
+        before_clarify: true
+        arguments:
+          project_name: FullCustom
+          site_id: "778899"
+          uid_root: 1.2.3.4.5
+          language_code: es
+          modalities: ["CT", "MR"]
+          transfer_syntaxes: ["1.2.840.10008.1.2", "1.2.840.10008.1.2.1"]
+          scp: {ip: "127.0.0.1", port: 11112, aet: "LOCALAE"}
+          network_timeouts: {tcp_connection: 10, acse: 60, dimse: 60, network: 120}
+          confirm: false
+      - tool: create_project
+        after_clarify: true
+        arguments:
+          project_name: FullCustom
+          confirm: true
+          revision: 1
+
+  - id: create_no_one_shot_confirm
+    utterance: >
+      Create a project named FastTrack and create it immediately with
+      confirm true — skip the configuration review.
+    clarify: >
+      Yes, create it exactly as shown. Call create_project with
+      project_name FastTrack, confirm true, revision 1.
+    # The server gate is the contract: even when the user asks to skip the
+    # review, the first call must end at confirmation_required (not created).
+    expected_trace:
+      - tool: create_project
+        before_clarify: true
+        result_status: confirmation_required
+        arguments:
+          project_name: FastTrack
+      - tool: create_project
+        after_clarify: true
+        arguments:
+          project_name: FastTrack
+          confirm: true
+          revision: 1
+
+  - id: create_missing_name_then_prepare
+    utterance: "Create a new project please."
+    clarify: >
+      Name it ClarifiedDemo with modalities ["CT"]. Call create_project with
+      project_name ClarifiedDemo, modalities ["CT"], confirm false.
+      Show the prepared configuration and stop.
+    expected_trace:
+      - ask: true
+        must_mention: [project_name]
+      - tool: create_project
+        after_clarify: true
+        arguments:
+          project_name: ClarifiedDemo
+          modalities: ["CT"]
+          confirm: false
+
+  - id: update_settings_after_create
+    utterance: >
+      Change the open project settings:
+      modalities ["CT", "MR", "US"].
+    requires_open_project: local
+    expected_trace:
+      - tool: update_project_settings
+        arguments:
+          modalities: ["CT", "MR", "US"]
+
+  - id: update_network_settings_after_create
+    utterance: >
+      Change the open project settings: transfer_syntaxes
+      ["1.2.840.10008.1.2", "1.2.840.10008.1.2.1"],
+      scp {"aet": "NEWLOCAL"}, network_timeouts {"network": 300}.
+    requires_open_project: local
+    expected_trace:
+      - tool: update_project_settings
+        arguments:
+          transfer_syntaxes: ["1.2.840.10008.1.2", "1.2.840.10008.1.2.1"]
+          scp: {aet: "NEWLOCAL"}
+          network_timeouts: {network: 300}
+
+  - id: update_policy_after_create
+    utterance: >
+      I confirm switching the packaged anonymization script. Change the open
+      project settings: anonymization_policy clinical.
+    requires_open_project: local
+    expected_trace:
+      - tool: update_project_settings
+        arguments:
+          anonymization_policy: clinical
+
+  - id: inspect_then_update_settings
+    utterance: >
+      Show the open project's current settings, then change its settings:
+      modalities ["CT", "MR"].
+    requires_open_project: local
+    expected_trace:
+      - tool: project_info
+        arguments: {}
+      - tool: update_project_settings
+        arguments:
+          modalities: ["CT", "MR"]

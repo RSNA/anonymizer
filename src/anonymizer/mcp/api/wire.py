@@ -45,7 +45,18 @@ def wire_text(result: Any) -> str:
     if not isinstance(result, dict):
         return str(result)
     if result.get("ok") is False:
-        return f"error: {result.get('error') or 'failed'}"
+        error = str(result.get("error") or "failed")
+        extra = {k: v for k, v in result.items() if k not in {"ok", "error"}}
+        if not extra:
+            return f"error: {error}"
+        # Errors carrying context (job id, status, counts, …) keep it: a bare
+        # "error: failed" gives the client nothing to act on.
+        return json.dumps(
+            {"ok": False, "error": error, **extra},
+            ensure_ascii=False,
+            separators=(",", ":"),
+            default=str,
+        )
 
     table = result.get("table")
     if isinstance(table, str) and table.lstrip().startswith("patient_index"):
@@ -54,6 +65,10 @@ def wire_text(result: Any) -> str:
         return f"{prefix}{table}"
 
     slim = {k: v for k, v in result.items() if k != "ok"}
+    # An answer-only payload is a finished reply, not data to rework:
+    # put the raw text on the wire so the model can present it as-is.
+    if set(slim) == {"answer"} and isinstance(slim["answer"], str):
+        return slim["answer"]
     if "project" in slim:
         slim["project"] = _slim_project(slim["project"])
     if isinstance(slim.get("table"), str) and "series" in slim:

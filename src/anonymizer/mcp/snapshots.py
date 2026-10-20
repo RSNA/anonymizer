@@ -8,7 +8,7 @@ from typing import Any
 from pydicom.dataset import Dataset
 
 from anonymizer.controller.project import ProjectController, StudyUIDHierarchy
-from anonymizer.model.project import DICOMNode
+from anonymizer.model.project import DICOMNode, ProjectModel
 from anonymizer.model.settings_validate import timeouts_dict
 
 # Paths teach MCP clients to leave the tool API — omit from public project snapshots.
@@ -73,6 +73,59 @@ def public_project_info(controller: ProjectController) -> dict[str, Any]:
     """Project snapshot for MCP clients — no filesystem paths."""
     raw = serialize_project_info(controller)
     return {k: v for k, v in raw.items() if k not in _MCP_PROJECT_PATH_KEYS}
+
+
+def serialize_project_import_summary(controller: ProjectController) -> dict[str, Any]:
+    """Minimal post-import project state: identity, totals, imported modalities.
+
+    Import results are already large (per-file outcomes); the model needs the
+    cumulative effect of the import, not the full settings snapshot it can
+    request via project_info.
+
+    Args:
+        controller: Open project controller.
+
+    Returns:
+        dict[str, Any]: Project name, cumulative totals, imported modalities.
+    """
+    raw = serialize_project_info(controller)
+    return {
+        "project_name": raw["project_name"],
+        "totals": raw["totals"],
+        "imported_modalities": raw["imported_modalities"],
+    }
+
+
+def serialize_project_configuration(model: ProjectModel) -> dict[str, Any]:
+    """
+    Public create-configuration view of a core ``ProjectModel``.
+
+    Args:
+        model: Saved or unsaved project model.
+
+    Returns:
+        Allowlisted configuration fields using core model field names. Paths
+        are removed by the MCP handler's normal public-result filtering.
+    """
+    return {
+        "project_name": model.project_name,
+        "storage_dir": str(model.storage_dir),
+        "site_id": model.site_id,
+        "uid_root": model.uid_root,
+        "language_code": model.language_code,
+        "modalities": list(model.modalities),
+        "transfer_syntaxes": list(model.transfer_syntaxes),
+        "scp": serialize_dicom_node(model.scp),
+        "network_timeouts": timeouts_dict(model.network_timeouts),
+        "anonymization_policy": (
+            model.anonymization_policy.value
+            if hasattr(model.anonymization_policy, "value")
+            else str(model.anonymization_policy)
+        ),
+        "remote_scps": {
+            name: serialize_dicom_node(node) for name, node in model.remote_scps.items()
+        },
+    }
 
 
 def serialize_dicom_node(node: DICOMNode) -> dict[str, Any]:

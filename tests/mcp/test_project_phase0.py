@@ -10,6 +10,7 @@ from anonymizer.controller.project import ProjectController
 from anonymizer.mcp import api as mcp_tools
 from anonymizer.mcp.session import SESSION, ProjectSession, ProjectSessionError
 from anonymizer.model.project import ProjectModel
+from tests.mcp.project_create import confirm_create
 
 
 @pytest.fixture(autouse=True)
@@ -22,7 +23,7 @@ def _isolated_session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 def test_create_project_writes_model_and_opens_session(tmp_path: Path):
-    result = mcp_tools.create_project(project_name="Research CT Head")
+    result = confirm_create(mcp_tools.create_project, project_name="Research CT Head")
     assert result["ok"] is True
     project = result["project"]
     assert project["project_name"] == "Research CT Head"
@@ -38,9 +39,9 @@ def test_create_project_via_ops_still_accepts_site_uid(tmp_path: Path):
     """site_id/uid_root are validated and applied on create (MCP schema + ops)."""
     from anonymizer.mcp import ops as mcp_ops
 
-    payload = mcp_ops.create_project(
-        SESSION,
-        "Research CT Head",
+    payload = confirm_create(
+        lambda **kwargs: mcp_ops.create_project(SESSION, **kwargs),
+        project_name="Research CT Head",
         site_id="994681",
         uid_root="1.2.3.4.5",
     )
@@ -50,7 +51,8 @@ def test_create_project_via_ops_still_accepts_site_uid(tmp_path: Path):
 
 
 def test_create_project_mcp_exposes_site_uid(tmp_path: Path):
-    result = mcp_tools.create_project(
+    result = confirm_create(
+        mcp_tools.create_project,
         project_name="With Site",
         site_id="12345",
         uid_root="1.2.826.0.1.3680043.10.474.2",
@@ -61,15 +63,24 @@ def test_create_project_mcp_exposes_site_uid(tmp_path: Path):
 
 
 def test_create_project_requires_overwrite_to_replace():
-    first = mcp_tools.create_project(project_name="One")
+    first = confirm_create(mcp_tools.create_project, project_name="One")
     assert first["ok"] is True
     SESSION.close()
 
-    blocked = mcp_tools.create_project(project_name="One", overwrite=False)
+    prepared = mcp_tools.create_project(project_name="One", overwrite=False)
+    assert prepared["status"] == "confirmation_required"
+    assert any("existing project" in warning.lower() for warning in prepared["warnings"])
+    blocked = mcp_tools.create_project(
+        project_name="One",
+        confirm=True,
+        revision=prepared["revision"],
+    )
     assert blocked["ok"] is False
     assert "overwrite" in blocked["error"].lower()
 
-    overwritten = mcp_tools.create_project(project_name="One", overwrite=True)
+    overwritten = confirm_create(
+        mcp_tools.create_project, project_name="One", overwrite=True
+    )
     assert overwritten["ok"] is True
     assert overwritten["project"]["project_name"] == "One"
 
@@ -77,7 +88,9 @@ def test_create_project_requires_overwrite_to_replace():
 def test_create_project_with_existing_storage_dir(tmp_path: Path):
     custom = tmp_path / "custom_store" / "MyProj"
     custom.mkdir(parents=True)
-    result = mcp_tools.create_project(project_name="MyProj", storage_dir=str(custom))
+    result = confirm_create(
+        mcp_tools.create_project, project_name="MyProj", storage_dir=str(custom)
+    )
     assert result["ok"] is True
     assert result["project"]["project_name"] == "MyProj"
     assert "storage_dir" not in result["project"]
@@ -92,7 +105,7 @@ def test_create_project_rejects_missing_storage_dir(tmp_path: Path):
 
 
 def test_project_open_by_name():
-    created = mcp_tools.create_project(project_name="Open Me")
+    created = confirm_create(mcp_tools.create_project, project_name="Open Me")
     assert created["ok"] is True
     SESSION.close()
 
@@ -104,7 +117,9 @@ def test_project_open_by_name():
 def test_project_open_by_storage_dir(tmp_path: Path):
     custom = tmp_path / "open_by_path"
     custom.mkdir()
-    assert mcp_tools.create_project(project_name="PathOpen", storage_dir=str(custom))["ok"]
+    assert confirm_create(
+        mcp_tools.create_project, project_name="PathOpen", storage_dir=str(custom)
+    )["ok"]
     SESSION.close()
 
     opened = mcp_tools.project_open(storage_dir=str(custom))
@@ -121,11 +136,11 @@ def test_project_info_without_open_returns_error():
 def test_create_project_rejects_path_like_names_when_using_default_store():
     bad = mcp_tools.create_project(project_name="../escape")
     assert bad["ok"] is False
-    assert "path segment" in bad["error"].lower() or "slash" in bad["error"].lower()
+    assert "project_name" in bad["error"].lower()
 
 
 def test_project_info_after_create():
-    assert mcp_tools.create_project(project_name="Info")["ok"]
+    assert confirm_create(mcp_tools.create_project, project_name="Info")["ok"]
     info = mcp_tools.project_info()
     assert info["ok"] is True
     assert info["project"]["project_name"] == "Info"
@@ -135,9 +150,9 @@ def test_project_info_after_create():
 
 
 def test_list_projects_finds_created():
-    assert mcp_tools.create_project(project_name="Alpha")["ok"]
+    assert confirm_create(mcp_tools.create_project, project_name="Alpha")["ok"]
     SESSION.close()
-    assert mcp_tools.create_project(project_name="Beta")["ok"]
+    assert confirm_create(mcp_tools.create_project, project_name="Beta")["ok"]
     listed = mcp_tools.list_projects()
     assert listed["ok"] is True
     names = {p["project_name"] for p in listed["projects"]}

@@ -111,6 +111,48 @@ Rules:
 - Host and port must match `--mcp HOST:PORT`.
 - After changing server instructions or tools, **restart the MCP process** and start a **new** chat in the client so `initialize` reloads.
 
+### Which LLM clients can connect?
+
+The server speaks the two standard local MCP transports — stdio (client spawns the
+server) and streamable HTTP on `127.0.0.1` — so any **locally running** MCP client
+can use it. Cloud-hosted chat products cannot reach a server on your machine's
+`127.0.0.1`; they can only connect to MCP servers exposed on the public internet
+over HTTPS.
+
+| Client | Runs where | Connects to this server? |
+|---|---|---|
+| Cursor, Claude Desktop, Gemini CLI, LM Studio | Your machine | ✅ Yes — stdio spawn or `http://127.0.0.1:8000/mcp` |
+| ChatGPT (web/desktop chat) | OpenAI cloud | ⚠️ Only via a public HTTPS tunnel (see below) |
+| Gemini (web/mobile chat) | Google cloud | ❌ No generic custom-MCP option; use Gemini CLI instead |
+
+**ChatGPT:** Custom MCP connectors (Developer Mode / Apps) connect from OpenAI's
+cloud to a public HTTPS endpoint. To demo with ChatGPT you would expose the local
+server with a tunnel (for example `ngrok http 8000` or Cloudflare Tunnel) and
+register the resulting `https://…/mcp` URL as a custom connector.
+
+> **Security warning:** The MCP server can create projects and read/import local
+> DICOM files, and it has no authentication of its own. A tunnel makes that
+> endpoint internet-reachable. Only ever do this briefly, with test data and
+> tunnel-level access controls, and close the tunnel immediately afterwards.
+> **Never expose the server this way with real patient data.**
+
+**Gemini:** The consumer Gemini chat has no "add your own MCP server" option —
+its connected apps are curated integrations. Google's **Gemini CLI** (a local
+terminal agent) does support local MCP servers over stdio/HTTP and works with
+the configurations above.
+
+**Recommendation:** For real clinical work, use a local client with a local
+model (for example LM Studio) so prompts, project metadata, and preview images
+never leave the workstation. Local clients with hosted models (Cursor, Claude
+Desktop, Gemini CLI) still send conversation content to their model providers,
+so use them with test data for demos unless your organisation has approved
+that data flow.
+
+### Server logs (two different files)
+
+- **MCP server output:** When you start `rsna-anonymizer --mcp …` yourself, the server writes to that terminal's stderr. No file named `mcp_server.log` is created automatically.
+- **Application log:** Starting the executable also initializes the normal Anonymizer rotating log at `~/Documents/RSNA Anonymizer/logs/anonymizer.log`. Application records overlap with stderr.
+
 ### What the model sees
 
 Per the [MCP tools specification](https://modelcontextprotocol.io/specification/2025-11-25/server/tools):
@@ -119,17 +161,27 @@ Per the [MCP tools specification](https://modelcontextprotocol.io/specification/
 2. **`tools/list`** — each tool’s `name`, `description`, and `inputSchema`
 3. **`tools/call`** — plain text results (`list_inventory` is a TSV table; other tools return compact JSON or `error: …`)
 
-Tool groups: session (`list_projects`, `project_settings_defaults`, `create_project`, `project_open`, `project_info`, `update_project_settings`), local ingest (`import_directory`, `import_file`), PACS (`configure_remote`, `pacs_find`, `pacs_move`), inventory (`list_inventory`), process (`remove_pixel_phi`, `harmonize_studies`, `export_series_preview`). Full argument tables live in the server instructions asset shipped with the package (`anonymizer/mcp/assets/instructions.md`).
+Tool groups: guidance (`anonymizer_usage`), jobs (`job_status`), session (`list_projects`, `project_settings_defaults`, `create_project`, `project_open`, `project_info`, `update_project_settings`), local ingest (`import_directory`, `import_file`), PACS (`configure_remote`, `pacs_find`, `pacs_move`), inventory (`list_inventory`), process (`remove_pixel_phi`, `harmonize_studies`, `export_series_preview`). Full argument tables live in the server instructions asset shipped with the package (`anonymizer/mcp/assets/instructions.md`).
+
+Long-running batch/AI tools (`import_directory`, `remove_pixel_phi`, `harmonize_studies`) run as background jobs: they return `status: "pending"` with a `job_id` immediately, and the client polls `job_status` until the job completes — so multi-minute work no longer hits client request timeouts.
 
 Always pass `arguments` (use `{}` for zero-argument tools). Do not invent client result markers such as `TOOL_RESULT` / `END_TOOL_RESULT`.
+
+### How clinicians should phrase requests
+
+Local tool-trained models work best with **complete field values in one message**. Copy-ready examples (create, DIMSE/DICOMweb, import, inventory):
+
+→ **[How to talk to the Anonymizer MCP](mcp-user-instructions.md)**
 
 ### Interactive project setup (MCP)
 
 You can create and tune a project through chat (no prior GUI create required for MCP-only workflows):
 
-1. Ask for `project_name`, optionally call `project_settings_defaults`, confirm non-default choices, then `create_project` once.
-2. For PACS remotes, ask **DIMSE vs DICOMweb** per QUERY/EXPORT role before `configure_remote`.
-3. Later edits use `project_info` → `update_project_settings` (language, modalities, transfer syntaxes, local SCP, timeouts). Identity fields (`project_name`, `site_id`, `uid_root`, storage path) stay fixed after create — same as the desktop Settings dialog.
+1. Give a project name and any settings that matter. The server prepares the complete configuration (your choices combined with defaults) and returns it for review; nothing is created yet.
+2. Change any setting and review the revised configuration, or confirm the exact revision to create/open the project.
+3. For PACS remotes, give **DIMSE or DICOMweb** plus exact fields (`ip`, `port`, `aet`, …) before `configure_remote` — see the user guide above.
+4. Later edits use `project_info` → `update_project_settings` (modalities, transfer syntaxes, local SCP, timeouts, anonymization policy). Identity fields (`project_name`, `site_id`, `uid_root`, storage path) and the language chosen at creation stay fixed after create — the language is picked once, like the desktop welcome-screen selector, and is not part of the Settings dialog.
+5. To learn the workflow in chat, ask: “How do I create a new project and change its settings later? Do not create anything yet.”
 
 Field ranges match the desktop GUI (ports 104–65535, name/site/UID lengths, timeout maxes). Invalid values are rejected.
 

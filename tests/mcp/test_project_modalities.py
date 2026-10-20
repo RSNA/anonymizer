@@ -55,8 +55,8 @@ def test_create_project_with_defaults_and_ultrasound():
     controller.save_model.assert_called_once()
 
 
-def test_project_open_updates_modalities():
-    """MCP project_open uses the same modality resolver as create."""
+def test_apply_project_modalities_resolves_aliases():
+    """The live-project modality helper resolves aliases to DICOM codes."""
     controller = MagicMock()
     controller.model.modalities = list(ProjectModel.default_modalities())
     mods = apply_project_modalities(controller, ["defaults", "ultrasound"])

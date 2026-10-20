@@ -1,0 +1,192 @@
+# Clinician intent scenarios for the non-creation MCP tools:
+# discovery/open, local import, inventory, imaging, and PACS.
+# Project creation/settings dialogues live in mvp.yaml.
+
+scenarios:
+  - id: usage_instructions
+    utterance: "How do I use the Anonymizer? Explain it; do not create anything yet."
+    expected_trace:
+      - tool: anonymizer_usage
+        arguments: {}
+
+  - id: list_projects_any
+    utterance: "List the anonymizer projects."
+    expected_trace:
+      - tool: list_projects
+        arguments: {}
+
+  - id: settings_defaults_reference
+    utterance: "Show me the project defaults and ranges."
+    expected_trace:
+      - tool: project_settings_defaults
+        arguments: {}
+
+  - id: project_open_existing
+    utterance: "Open the project named OpenMeDemo."
+    requires_open_project: local
+    prepare_name: OpenMeDemo
+    prepare_in_default_store: true
+    expected_trace:
+      - tool: project_open
+        arguments:
+          project_name: OpenMeDemo
+
+  - id: import_file_after_create
+    utterance: "Import the Davidson CXR file at the absolute path I gave."
+    fixture: davidson_cxr
+    requires_open_project: local
+    expected_trace:
+      - tool: import_file
+        arguments:
+          file_path: "${DAVIDSON_DCM}"
+
+  - id: import_directory_after_create
+    utterance: "Import the DICOM directory at the absolute path I gave."
+    fixture: davidson_dir
+    requires_open_project: local
+    expected_trace:
+      - tool: import_directory
+        arguments:
+          directory: "${DAVIDSON_DIR}"
+      - tool: job_status
+        arguments: {}
+
+  - id: inventory_after_import
+    utterance: "List the series inventory for the open project (list_inventory)."
+    requires_open_project: local
+    import_davidson_first: true
+    expected_trace:
+      - tool: list_inventory
+        arguments: {}
+
+  - id: inventory_naive_then_clarify
+    utterance: "What is in the project?"
+    requires_open_project: local
+    import_davidson_first: true
+    clarify: >
+      Call list_inventory with arguments {}.
+    expected_trace:
+      - tool: list_inventory
+        arguments: {}
+
+  - id: export_preview_direct_indices
+    utterance: >
+      Show me a preview of patient 1, series 1 in the open project
+      (export_series_preview).
+    requires_open_project: local
+    import_davidson_first: true
+    expected_trace:
+      - tool: export_series_preview
+        arguments:
+          patient: "1"
+          series: "1"
+
+  - id: export_preview_via_inventory
+    utterance: "Show me a preview of one series in the open project."
+    requires_open_project: local
+    import_davidson_first: true
+    expected_trace:
+      - tool: list_inventory
+        arguments: {}
+      - tool: export_series_preview
+        arguments:
+          patient: "1"
+          series: "1"
+
+  - id: remove_pixel_phi_all_series
+    utterance: >
+      Remove pixel PHI from all series in the open project
+      (remove_pixel_phi, series all).
+    requires_open_project: local
+    import_davidson_first: true
+    expected_trace:
+      - tool: remove_pixel_phi
+        arguments:
+          series: all
+      - tool: job_status
+        arguments: {}
+
+  - id: harmonize_all_studies
+    utterance: >
+      Harmonize the study descriptions in the open project
+      (harmonize_studies, all studies).
+    requires_open_project: local
+    import_davidson_first: true
+    expected_trace:
+      - tool: harmonize_studies
+        arguments: {}
+      - tool: job_status
+        arguments: {}
+
+  - id: pacs_query_dimse_configure
+    utterance: >
+      Configure QUERY remote as DIMSE: ip 10.0.0.5, port 104, aet ORTHANC,
+      dicomweb false.
+    requires_open_project: pacs
+    expected_trace:
+      - tool: configure_remote
+        arguments:
+          ip: 10.0.0.5
+          port: 104
+          aet: ORTHANC
+          role: QUERY
+          dicomweb: false
+
+  - id: pacs_query_dicomweb_configure
+    utterance: >
+      Configure QUERY remote as DICOMweb: ip 10.0.0.5, port 104, aet ORTHANC,
+      dicomweb true, http_port 8042, http_path /dicom-web.
+    requires_open_project: pacs
+    expected_trace:
+      - tool: configure_remote
+        arguments:
+          ip: 10.0.0.5
+          role: QUERY
+          dicomweb: true
+          http_port: 8042
+          http_path: /dicom-web
+
+  - id: pacs_naive_then_clarify_dimse
+    utterance: "Connect our QUERY PACS at the hospital."
+    requires_open_project: pacs
+    clarify: >
+      It is DIMSE. Call configure_remote with ip 10.0.0.5, port 104,
+      aet ORTHANC, role QUERY, dicomweb false.
+    expected_trace:
+      - tool: configure_remote
+        arguments:
+          ip: 10.0.0.5
+          port: 104
+          aet: ORTHANC
+          role: QUERY
+          dicomweb: false
+
+  - id: pacs_find_after_configure
+    utterance: >
+      Configure QUERY remote as DIMSE: ip 10.0.0.5, port 104, aet ORTHANC,
+      dicomweb false. Then search that remote for CT studies
+      (pacs_find with modality CT).
+    requires_open_project: pacs
+    expected_trace:
+      - tool: configure_remote
+        arguments:
+          ip: 10.0.0.5
+          port: 104
+          aet: ORTHANC
+          role: QUERY
+          dicomweb: false
+      - tool: pacs_find
+        arguments:
+          modality: CT
+
+  - id: pacs_move_from_find_results
+    utterance: >
+      The QUERY find returned study_instance_uid 1.2.3.4.5.6 for
+      patient_id PAT123. Import that study from PACS (pacs_move).
+    requires_open_project: pacs
+    expected_trace:
+      - tool: pacs_move
+        arguments:
+          studies:
+            - study_instance_uid: 1.2.3.4.5.6
+              patient_id: PAT123

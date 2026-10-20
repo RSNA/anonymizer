@@ -13,7 +13,6 @@ import json
 import os
 import subprocess
 import sys
-import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -23,6 +22,9 @@ from anonymizer.mcp import api as mcp_tools
 from anonymizer.mcp.session import SESSION
 from anonymizer.model.project import ProjectModel
 from anonymizer.utils.translate import set_language_code
+from tests.mcp.http_ready import wait_for_mcp_tcp
+from tests.mcp.job_poll import await_job
+from tests.mcp.project_create import confirm_create
 
 DAVIDSON = (
     Path(__file__).resolve().parent.parent
@@ -54,7 +56,11 @@ def _fake_easyocr(_reader, pixels, *, modality=None, overrides=None):
 
 def test_mvp_create_import_strip_export_davidson(mvp_store: Path):
     """Full researcher MVP path with mocked OCR (fast, default CI)."""
-    created = mcp_tools.create_project(project_name="MVP-E2E", overwrite=True)
+    created = confirm_create(
+        mcp_tools.create_project,
+        project_name="MVP-E2E",
+        overwrite=True,
+    )
     assert created["ok"] is True
 
     imported = mcp_tools.import_file(str(DAVIDSON_DCM))
@@ -75,7 +81,9 @@ def test_mvp_create_import_strip_export_davidson(mvp_store: Path):
             side_effect=_fake_easyocr,
         ),
     ):
-        stripped = mcp_tools.remove_pixel_phi(series="all")
+        stripped = await_job(
+            mcp_tools.remove_pixel_phi(series="all"), mcp_tools.job_status
+        )
 
     assert stripped["ok"] is True
     assert stripped.get("status") in {"ok", "complete", "partial"} or stripped.get(
@@ -98,13 +106,20 @@ def test_mvp_create_import_strip_export_davidson(mvp_store: Path):
 @pytest.mark.ocr_integration
 def test_mvp_remove_pixel_phi_real_ocr_davidson(mvp_store: Path):
     """Opt-in: real EasyOCR on Davidson CXR (may download OCR weights)."""
-    assert mcp_tools.create_project(project_name="MVP-OCR", overwrite=True)["ok"]
+    assert confirm_create(
+        mcp_tools.create_project,
+        project_name="MVP-OCR",
+        overwrite=True,
+    )["ok"]
     assert mcp_tools.import_file(str(DAVIDSON_DCM))["succeeded"] == 1
-    result = mcp_tools.remove_pixel_phi(series="all")
+    result = await_job(mcp_tools.remove_pixel_phi(series="all"), mcp_tools.job_status)
     assert result["ok"] is True
-    assert result.get("pixel_phi_scanned") is True or result.get("processed")
+    # Batch wire returns status/series_count; scanned flag is on inventory/preview.
+    assert result.get("status") in {"ok", "complete", "partial"}
+    assert int(result.get("series_count") or 0) >= 1
     preview = mcp_tools.export_series_preview(patient="1", series="1")
     assert preview["ok"] is True
+    assert preview.get("pixel_phi_scanned") is True
     import base64
 
     assert len(base64.b64decode(preview["preview_base64"])) > 1000
@@ -140,10 +155,11 @@ def test_mvp_http_server_davidson(tmp_path: Path):
         text=True,
     )
     try:
-        time.sleep(2.5)
-        if proc.poll() is not None:
+        try:
+            wait_for_mcp_tcp("127.0.0.1", port, proc, timeout_s=180.0)
+        except (RuntimeError, TimeoutError) as exc:
             out = proc.stdout.read() if proc.stdout else ""
-            pytest.fail(f"MCP server exited early:\n{out}")
+            pytest.fail(f"{exc}\n{out}")
 
         async def _drive() -> None:
             async with streamable_http_client(url) as (read, write):
@@ -156,16 +172,34 @@ def test_mvp_http_server_davidson(tmp_path: Path):
 
                     proj_dir = store / "HTTP_MVP"
                     proj_dir.mkdir()
+                    # project_name: letters/digits/space/hyphen/period only (no underscore).
+                    prepared = await session.call_tool(
+                        "create_project",
+                        {
+                            "project_name": "HTTP MVP",
+                            "storage_dir": str(proj_dir),
+                            "overwrite": True,
+                            "confirm": False,
+                        },
+                    )
+                    prepared_text = "".join(
+                        getattr(b, "text", "") or "" for b in (prepared.content or [])
+                    )
+                    prepared_payload = json.loads(prepared_text)
+                    assert prepared_payload["status"] == "confirmation_required"
+                    assert prepared_payload["created"] is False
+
                     created = await session.call_tool(
                         "create_project",
                         {
-                            "project_name": "HTTP_MVP",
-                            "storage_dir": str(proj_dir),
-                            "overwrite": True,
+                            "project_name": "HTTP MVP",
+                            "confirm": True,
+                            "revision": prepared_payload["revision"],
                         },
                     )
                     text = "".join(getattr(b, "text", "") or "" for b in (created.content or []))
                     assert "ok" in text.lower()
+                    assert not text.lower().startswith("error:")
 
                     imported = await session.call_tool(
                         "import_file", {"file_path": str(DAVIDSON_DCM)}
