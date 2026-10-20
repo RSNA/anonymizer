@@ -72,7 +72,9 @@ from anonymizer.utils.windowing import apply_windowing
 
 logger = logging.getLogger(__name__)
 
-_MAX_IMPORT_FAILURES = 25
+# Cap on per-item failure details in batch results (import, harmonize):
+# counts always describe the whole batch; detail entries are a sample.
+_MAX_FAILURE_DETAILS = 25
 
 # Long-running batch/AI operations report progress through this callback so
 # MCP clients that honor progress notifications can extend their request
@@ -1694,21 +1696,68 @@ def harmonize_studies(
     if not studies:
         raise HeadlessOpsError("No matching studies to harmonize.")
 
+    # Study labels for failure reporting (modality / original description).
+    label_source = (
+        list(list_inventory(controller).get("series") or []) if wanted_uids else rows
+    )
+    study_labels: dict[tuple[str, str], dict[str, str]] = {}
+    for row in label_source:
+        key = (
+            str(row.get("anon_patient_id") or ""),
+            str(row.get("anon_study_uid") or ""),
+        )
+        if key not in study_labels:
+            study_labels[key] = {
+                "modality": str(row.get("modality") or ""),
+                "study_description": str(row.get("study_description") or ""),
+            }
+
     # Process one study at a time so progress can be reported between
     # studies; a single all-studies call can run for minutes (TotalSegmentator
     # per CT series) and would outlast MCP client request timeouts silently.
     totals = {"processed": 0, "applied": 0, "skipped": 0, "failed": 0}
     cancelled = False
+    failures: list[dict[str, Any]] = []
     total_studies = len(studies)
     for index, study_key in enumerate(studies, start=1):
+        failed_messages: list[str] = []
+
+        def _capture_outcome(
+            outcome: Any, _sink: list[str] = failed_messages
+        ) -> None:
+            if getattr(outcome, "status", "") == "failed":
+                message = str(getattr(outcome, "message", "") or "").strip()
+                _sink.append(message or "failed")
+
         try:
-            summary = controller.harmonize_studies([study_key])
+            summary = controller.harmonize_studies(
+                [study_key], on_outcome=_capture_outcome
+            )
         except Exception as exc:
             logger.exception("harmonize_studies failed")
             raise HeadlessOpsError(str(exc)) from exc
         for field_name in totals:
             totals[field_name] += int(getattr(summary, field_name, 0) or 0)
         cancelled = cancelled or bool(getattr(summary, "cancelled", False))
+        study_failed = int(getattr(summary, "failed", 0) or 0)
+        if study_failed and len(failures) < _MAX_FAILURE_DETAILS:
+            # Mirror the import failures contract: counts describe the whole
+            # batch; these entries name which studies failed and why.
+            errors: list[str] = []
+            for message in failed_messages:
+                if message not in errors:
+                    errors.append(message)
+            label = study_labels.get(study_key, {})
+            failures.append(
+                {
+                    "anon_patient_id": study_key[0],
+                    "anon_study_uid": study_key[1],
+                    "modality": label.get("modality", ""),
+                    "study_description": label.get("study_description", ""),
+                    "failed_series": study_failed,
+                    "errors": errors[:5],
+                }
+            )
         _notify(
             progress,
             index,
@@ -1745,6 +1794,7 @@ def harmonize_studies(
         "skipped": totals["skipped"],
         "failed": totals["failed"],
         "cancelled": cancelled,
+        "failures": failures,
         "study_descriptions_applied": sum(item["studies_updated"] for item in study_applied),
         "study_description_results": study_applied,
         "project": serialize_project_info(controller),
@@ -1781,7 +1831,7 @@ def _import_paths(
             failed += 1
             # Only failures carry per-file detail: successes are fully
             # described by the counts and the unique patient ids above.
-            if len(failures) < _MAX_IMPORT_FAILURES:
+            if len(failures) < _MAX_FAILURE_DETAILS:
                 failures.append({"path": abridged_path(path), "error": error_msg})
         if index == total_files or index % 10 == 0:
             _notify(progress, index, total_files, f"Imported file {index} of {total_files}")

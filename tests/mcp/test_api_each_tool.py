@@ -299,6 +299,36 @@ def test_api_harmonize_studies_ok_mocked():
     assert all(isinstance(t, tuple) and len(t) == 2 for t in studies_arg)
 
 
+def test_api_harmonize_studies_reports_failed_studies():
+    """Per-series failures surface as named failures entries, not just a count."""
+    from types import SimpleNamespace
+
+    from anonymizer.controller.ai.harmonize import HarmonizeStudiesSummary
+
+    _create_open()
+    _import_davidson()
+
+    def _fake_harmonize(studies, on_outcome=None):
+        if on_outcome is not None:
+            on_outcome(
+                SimpleNamespace(status="failed", message="No harmonize result")
+            )
+        return HarmonizeStudiesSummary(processed=1, applied=0, skipped=0, failed=1)
+
+    with (
+        patch.object(SESSION.controller, "harmonize_studies", side_effect=_fake_harmonize),
+        patch("anonymizer.mcp.ops.auto_apply_best_study_descriptions", return_value=[]),
+    ):
+        result = await_job(mcp_tools.harmonize_studies(), mcp_tools.job_status)
+    assert result["failed"] == 1
+    assert len(result["failures"]) == 1
+    failure = result["failures"][0]
+    assert failure["anon_patient_id"]
+    assert failure["anon_study_uid"]
+    assert failure["failed_series"] == 1
+    assert failure["errors"] == ["No harmonize result"]
+
+
 def test_api_harmonize_studies_patient_all_mocked():
     from anonymizer.controller.ai.harmonize import HarmonizeStudiesSummary
 
