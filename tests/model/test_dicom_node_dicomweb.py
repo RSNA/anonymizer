@@ -1,7 +1,5 @@
 """DICOMNode DICOMweb fields and ProjectModel version."""
 
-from __future__ import annotations
-
 from anonymizer.model.project import DICOMNode, ProjectModel
 
 

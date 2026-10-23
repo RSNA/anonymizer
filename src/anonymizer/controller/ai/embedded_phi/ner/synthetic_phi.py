@@ -1,22 +1,13 @@
 """Deterministic synthetic PHI from offline locale pools (HMAC-seeded).
-
-Pools live under ``ner/pools/<locale>/`` (``first_names.txt``, ``last_names.txt``,
-``streets.txt``, ``cities.txt`` with ``city|state|zip`` rows). Unknown labels
-yield ``\"REDACTED\"``. Same ``project_id`` / ``anon_ptid`` / ``label`` /
-``ordinal`` / ``source_fragment`` → same replacement.
+Pools live under ner/pools/<locale>/ (first_names.txt, last_names.txt,
+streets.txt, cities.txt with city|state|zip rows). Unknown labels
+yield "REDACTED". Same project_id / anon_ptid / label /
 
 Public API
 ----------
-``generate_synthetic_phi(label, *, project_id, anon_ptid, locale, ordinal,
-source_fragment)``
-    Synthetic replacement string for a product PHI ``label``
-    (``NAME``, ``LOCATION``, ``ID``, ``PHONE``, ``EMAIL``, ``DATE``, …).
-
-Used by ``ner.replace_entities(..., mode=\"synth\")``.
+generate_synthetic_phi(label: str, *, project_id: str='default', anon_ptid: str='ANON0000', locale: str='en_US', ordinal: int=0, source_fragment: str='') -> str
+    Return a synthetic replacement string for a PHI label.
 """
-
-from __future__ import annotations
-
 import hashlib
 import hmac
 import re
@@ -63,17 +54,17 @@ def generate_synthetic_phi(
     source_fragment: str = "",
 ) -> str:
     """
-    Return a synthetic replacement string for a PHI ``label``.
+    Return a synthetic replacement string for a PHI label.
 
-    Values are deterministic for the same ``project_id``, ``anon_ptid``,
-    ``label``, ``ordinal``, and ``source_fragment`` (shape hint).
+    Values are deterministic for the same project_id, anon_ptid,
+    label, ordinal, and source_fragment (shape hint).
 
     Args:
-        label: Product PHI label (``NAME``, ``LOCATION``, ``ID``, ``PHONE``,
-            ``EMAIL``, ``DATE``, …).
+        label: Product PHI label (FIRST_NAME, LAST_NAME, LOCATION,
+            ID, PHONE, EMAIL, DATE, …).
         project_id: Project / site seed namespace.
         anon_ptid: Anonymized patient id seed.
-        locale: Pool locale directory name (falls back to ``en_US``).
+        locale: Pool locale directory name (falls back to en_US).
         ordinal: Occurrence index among same-label entities in one text.
         source_fragment: Original span text used as a formatting shape hint.
 
@@ -92,8 +83,10 @@ def generate_synthetic_phi(
         str(ordinal),
         source_fragment.casefold()[:32],
     )
-    if label == "NAME":
-        return _synth_name(first, last, a, b, source_fragment)
+    if label == "FIRST_NAME":
+        return first[a % len(first)]
+    if label == "LAST_NAME":
+        return last[b % len(last)]
     if label == "LOCATION":
         return _synth_location(streets, cities, a, b, c, d, source_fragment)
     if label == "ID":
@@ -114,11 +107,11 @@ def generate_synthetic_phi(
 
 def _load_lines(locale: str, name: str) -> tuple[str, ...]:
     """
-    Load non-comment lines from a pool file (falls back to ``en_US``).
+    Load non-comment lines from a pool file (falls back to en_US).
 
     Args:
         locale: Pool locale directory name.
-        name: File name under ``pools/<locale>/``.
+        name: File name under pools/<locale>/.
 
     Returns:
         Tuple of stripped non-comment lines (may be empty).
@@ -129,11 +122,11 @@ def _load_lines(locale: str, name: str) -> tuple[str, ...]:
 @lru_cache(maxsize=8)
 def _cached_load_lines(locale: str, name: str) -> tuple[str, ...]:
     """
-    Cached pool file read for ``locale`` / ``name``.
+    Cached pool file read for locale / name.
 
     Args:
         locale: Pool locale directory name.
-        name: File name under ``pools/<locale>/``.
+        name: File name under pools/<locale>/.
 
     Returns:
         Tuple of stripped non-comment lines (may be empty).
@@ -152,13 +145,13 @@ def _cached_load_lines(locale: str, name: str) -> tuple[str, ...]:
 
 def _load_cities(locale: str) -> tuple[tuple[str, str, str], ...]:
     """
-    Load ``city|state|zip`` rows for ``locale``.
+    Load city|state|zip rows for locale.
 
     Args:
         locale: Pool locale directory name.
 
     Returns:
-        Tuple of ``(city, state, zip)`` triples.
+        Tuple of (city, state, zip) triples.
     """
     return _cached_load_cities(locale)
 
@@ -166,13 +159,13 @@ def _load_cities(locale: str) -> tuple[tuple[str, str, str], ...]:
 @lru_cache(maxsize=8)
 def _cached_load_cities(locale: str) -> tuple[tuple[str, str, str], ...]:
     """
-    Cached city/state/zip triples for ``locale``.
+    Cached city/state/zip triples for locale.
 
     Args:
         locale: Pool locale directory name.
 
     Returns:
-        Tuple of ``(city, state, zip)`` triples.
+        Tuple of (city, state, zip) triples.
     """
     rows: list[tuple[str, str, str]] = []
     for line in _cached_load_lines(locale, "cities.txt"):
@@ -184,15 +177,15 @@ def _cached_load_cities(locale: str) -> tuple[tuple[str, str, str], ...]:
 
 def _seed_ints(project_id: str, *parts: str, n: int = 4) -> list[int]:
     """
-    HMAC-derive ``n`` unsigned 32-bit ints from project id and seed parts.
+    HMAC-derive n unsigned 32-bit ints from project id and seed parts.
 
     Args:
         project_id: Outer HMAC key material.
-        *parts: Additional message fragments joined with ``|``.
+        *parts: Additional message fragments joined with |.
         n: Number of 32-bit integers to return (default 4).
 
     Returns:
-        List of ``n`` integers in ``[0, 2**32)``.
+        List of n integers in [0, 2**32).
     """
     msg = "|".join(parts).encode("utf-8")
     key = hmac.new(_SECRET, project_id.encode("utf-8"), hashlib.sha256).digest()
@@ -202,13 +195,13 @@ def _seed_ints(project_id: str, *parts: str, n: int = 4) -> list[int]:
 
 def _phone_shape(source: str) -> str:
     """
-    Classify phone formatting of ``source`` for shape-preserving synth.
+    Classify phone formatting of source for shape-preserving synth.
 
     Args:
         source: Original phone span text.
 
     Returns:
-        One of ``plus1``, ``paren``, ``dashed``, ``digits``.
+        One of plus1, paren, dashed, digits.
     """
     s = source.strip()
     if s.startswith("+1"):
@@ -224,13 +217,13 @@ def _phone_shape(source: str) -> str:
 
 def _location_shape(source: str) -> str:
     """
-    Classify address/zip formatting of ``source`` for shape-preserving synth.
+    Classify address/zip formatting of source for shape-preserving synth.
 
     Args:
         source: Original location span text.
 
     Returns:
-        One of ``zip4``, ``zip_only``, ``city_state_zip``, ``full``.
+        One of zip4, zip_only, city_state_zip, full.
     """
     s = source.strip()
     if re.search(r"\d{5}-\d{4}\b", s):
@@ -240,35 +233,6 @@ def _location_shape(source: str) -> str:
     if re.search(r",\s*[A-Z]{2}\s+\d{5}", s) and not re.search(r"^\d+\s", s):
         return "city_state_zip"
     return "full"
-
-
-def _synth_name(
-    first: tuple[str, ...],
-    last: tuple[str, ...],
-    a: int,
-    b: int,
-    source_fragment: str,
-) -> str:
-    """
-    Build a synthetic NAME matching DICOM ``^`` or ``,`` layout when present.
-
-    Args:
-        first: Given-name pool.
-        last: Family-name pool.
-        a: Seed index into ``first``.
-        b: Seed index into ``last``.
-        source_fragment: Original name span (layout hint).
-
-    Returns:
-        Synthetic person name string.
-    """
-    given = first[a % len(first)]
-    family = last[b % len(last)]
-    if "^" in source_fragment:
-        return f"{family}^{given}"
-    if "," in source_fragment:
-        return f"{family}, {given}"
-    return f"{given} {family}"
 
 
 def _synth_location(
@@ -285,11 +249,11 @@ def _synth_location(
 
     Args:
         streets: Street-name pool.
-        cities: ``(city, state, zip)`` pool.
+        cities: (city, state, zip) pool.
         a: Seed for house number / zip+4.
-        b: Seed index into ``streets``.
+        b: Seed index into streets.
         c: Seed index into street suffixes.
-        d: Seed index into ``cities``.
+        d: Seed index into cities.
         source_fragment: Original location span (shape hint).
 
     Returns:
@@ -311,7 +275,7 @@ def _synth_location(
 
 def _synth_phone(a: int, b: int, c: int, source_fragment: str) -> str:
     """
-    Build a synthetic PHONE matching the punctuation style of ``source_fragment``.
+    Build a synthetic PHONE matching the punctuation style of source_fragment.
 
     Args:
         a: Seed index into area-code pool.
@@ -349,8 +313,8 @@ def _synth_email(
     Args:
         first: Given-name pool.
         last: Family-name pool.
-        a: Seed index into ``first``.
-        b: Seed index into ``last``.
+        a: Seed index into first.
+        b: Seed index into last.
         c: Seed index into email domains.
         d: Numeric suffix seed.
 
@@ -365,7 +329,7 @@ def _synth_email(
 
 def _synth_date(a: int, b: int, c: int, source_fragment: str) -> str:
     """
-    Build a synthetic DATE as ``YYYYMMDD`` or ``MM/DD/YYYY`` to match source shape.
+    Build a synthetic DATE as YYYYMMDD or MM/DD/YYYY to match source shape.
 
     Args:
         a: Seed for year.

@@ -1,7 +1,13 @@
-"""WADO-RS retrieve helpers → pydicom Dataset iterators."""
+"""WADO-RS retrieve helpers → pydicom Dataset iterators.
 
-from __future__ import annotations
+Public API
+----------
+RetrieveLevel
+    Retrievelevel.
 
+iter_instances(session: DicomWebSession, *, study_uid: str, series_uid: str | None=None, instance_uid: str | None=None, abort_check: Callable[[], bool] | None=None) -> Iterator[Dataset]
+    WADO-RS retrieve of study, series, or instance; yields decoded Datasets.
+"""
 import email
 import logging
 from email.policy import default as email_policy

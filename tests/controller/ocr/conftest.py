@@ -1,7 +1,5 @@
 """Helpers for tests that use checked-in DICOM fixtures under assets/test_dcm_files."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest

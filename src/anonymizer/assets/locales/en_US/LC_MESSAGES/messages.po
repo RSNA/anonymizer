@@ -2345,6 +2345,9 @@ msgstr "Standardize SeriesDescription (CT/MR)."
 msgid "Optional CT Head detail after total anatomy (academic license)."
 msgstr "Optional CT Head detail after total anatomy (academic license)."
 
+msgid "Harmonize Series Description using RadLex playbook and Study Description using LOINC dictionary."
+msgstr "Harmonize Series Description using RadLex playbook and Study Description using LOINC dictionary."
+
 msgid "Blur face on head CT/MR (academic license)."
 msgstr "Blur face on head CT/MR (academic license)."
 
@@ -2735,3 +2738,87 @@ msgstr "Lookup date offset"
 
 msgid "Round age"
 msgstr "Round age"
+
+msgid "Basic Application Confidentiality Profile"
+msgstr "Basic Application Confidentiality Profile"
+
+msgid "Clean Pixel Data Option"
+msgstr "Clean Pixel Data Option"
+
+msgid "Clean Recognizable Visual Features Option"
+msgstr "Clean Recognizable Visual Features Option"
+
+msgid "Clean Graphics Option"
+msgstr "Clean Graphics Option"
+
+msgid "Clean Structured Content Option"
+msgstr "Clean Structured Content Option"
+
+msgid "Clean Descriptors Option"
+msgstr "Clean Descriptors Option"
+
+msgid "Retain Longitudinal Temporal Information Full Dates Option"
+msgstr "Retain Longitudinal Temporal Information Full Dates Option"
+
+msgid "Retain Longitudinal Temporal Information Modified Dates Option"
+msgstr "Retain Longitudinal Temporal Information Modified Dates Option"
+
+msgid "Retain Patient Characteristics Option"
+msgstr "Retain Patient Characteristics Option"
+
+msgid "Retain Device Identity Option"
+msgstr "Retain Device Identity Option"
+
+msgid "Retain UIDs Option"
+msgstr "Retain UIDs Option"
+
+msgid "Retain Safe Private Option"
+msgstr "Retain Safe Private Option"
+
+msgid "Retain Institution Identity Option"
+msgstr "Retain Institution Identity Option"
+
+msgid "De-identification Options"
+msgstr "De-identification Options"
+
+msgid "This option is not available yet."
+msgstr "This option is not available yet."
+
+msgid "This option is not ready (models or license missing)."
+msgstr "This option is not ready (models or license missing)."
+
+msgid "Models for this option are not installed. Download now?"
+msgstr "Models for this option are not installed. Download now?"
+
+msgid "Another download is already in progress."
+msgstr "Another download is already in progress."
+
+msgid "Failed to apply de-identification options"
+msgstr "Failed to apply de-identification options"
+
+msgid "Import CTP Script"
+msgstr "Import CTP Script"
+
+msgid "Script Files"
+msgstr "Script Files"
+
+msgid "Unsupported script:"
+msgstr "Unsupported script:"
+
+msgid "Date rules must match the StudyDate operation."
+msgstr "Date rules must match the StudyDate operation."
+
+msgid "Apply the StudyDate operation to all date fields?"
+msgstr "Apply the StudyDate operation to all date fields?"
+
+msgid "Record these de-identification options for the imported script?"
+msgstr "Record these de-identification options for the imported script?"
+
+msgid "Apply these de-identification options? This replaces your project anonymizer script with a script compiled from the selected options. Custom script edits will be lost.\n\nWhat does not change:\n• Already anonymized data is not re-processed.\n\nSelecting Clean Structured Content or Clean Descriptors enables SR and PDF modalities if they are not already selected."
+msgstr "Apply these de-identification options? This replaces your project anonymizer script with a script compiled from the selected options. Custom script edits will be lost.\n\nWhat does not change:\n• Already anonymized data is not re-processed.\n\nSelecting Clean Structured Content or Clean Descriptors enables SR and PDF modalities if they are not already selected."
+
+msgid "Retain Safe Private kept private and clinical tags at ingest. This step is OCR on burnt-in image pixels."
+msgstr "Retain Safe Private kept private and clinical tags at ingest. This step is OCR on burnt-in image pixels."
+
+msgid "Basic Profile already removed most private and clinical text at ingest. This step is OCR on burnt-in image pixels."
+msgstr "Basic Profile already removed most private and clinical text at ingest. This step is OCR on burnt-in image pixels."

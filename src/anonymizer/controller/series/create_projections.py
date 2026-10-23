@@ -1,22 +1,47 @@
 """View Index projection thumbnails (Projection.pkl).
 
-Builds min/mean/max or CLAHE/edge preview images for the PHI Index.
-Series pixel I/O lives in ``series_io``; this module lazy-imports ``load_series_frames``
-when building uncached projections.
+Public API
+----------
+cache_loaded_series(series_path: Path, loaded: LoadedSeries) -> None
+    Cache loaded series.
+
+take_loaded_series_cache(series_path: Path) -> LoadedSeries | None
+    Pop a LoadedSeries cached while building projection thumbnails (Projection View handoff).
+
+PROJECTION_FILENAME
+    Projection filename (default 'Projection.pkl').
+
+invalidate_projection_cache(series_path: Path) -> None
+    Remove stale PHI Index projection cache after on-disk series changes.
+
+Projection
+    Projection type.
+
+ProjectionImageSizeConfig
+    ProjectionImageSizeConfig type.
+
+ProjectionImageSize
+    ProjectionImageSize type.
+
+normalize_uint8(image: ndarray)
+    Normalize and convert an image to uint8.
+
+cache_projection(projection: Projection, projection_file_path: Path) -> None
+    Cache projection.
+
+create_projection_from_single_frame(ds: Dataset, frame: ndarray) -> Projection
+    Create projection from single frame.
+
+create_projection_from_series(series_path: Path) -> Projection
+    Check series_path for "Projection.pkl" file.
 """
-
-from __future__ import annotations
-
 import logging
 import pickle
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
 from pprint import pformat
-from typing import TYPE_CHECKING, List, Optional
-
-if TYPE_CHECKING:
-    from anonymizer.controller.series.series_io import LoadedSeries
+from typing import List, Optional
 
 import numpy as np
 from cv2 import (
@@ -35,7 +60,7 @@ from numpy import ndarray
 from PIL import Image
 from pydicom import Dataset
 
-from anonymizer.controller.series.series_io import load_series_frames
+from anonymizer.controller.series.series_io import LoadedSeries, load_series_frames
 from anonymizer.controller.series.series_overlay import OCRText
 from anonymizer.utils.dicom import get_wl_ww
 from anonymizer.utils.windowing import apply_windowing
@@ -176,10 +201,10 @@ def cache_projection(projection: Projection, projection_file_path: Path) -> None
 
 
 def _single_frame_to_uint8_gray(frame: ndarray) -> ndarray:
-    """Window a single frame to ``uint8`` grayscale for CLAHE / Canny.
+    """Window a single frame to uint8 grayscale for CLAHE / Canny.
 
-    Color ultrasound frames from ``load_series_frames`` are RGB ``(H, W, 3)``;
-    OpenCV CLAHE requires ``CV_8UC1`` or ``CV_16UC1``.
+    Color ultrasound frames from load_series_frames are RGB (H, W, 3);
+    OpenCV CLAHE requires CV_8UC1 or CV_16UC1.
     """
     frame_float = frame.astype(np.float32)
     min_val, max_val = float(np.min(frame_float)), float(np.max(frame_float))

@@ -1,7 +1,5 @@
 """Analytics preferences persistence (real app_state file; no mocks)."""
 
-from __future__ import annotations
-
 import json
 from pathlib import Path
 

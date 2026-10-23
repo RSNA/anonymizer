@@ -1,25 +1,38 @@
-"""SOP Class → IOD allow-list for unexpected public text/date tags."""
+"""SOP Class → IOD allow-list for unexpected public text/date tags.
 
-from __future__ import annotations
+Public API
+----------
+BUNDLED_DICOM_EDITION
+    Bundled dicom edition (default '2025e').
 
+normalize_iod_tag_key(key: str) -> str | None
+    Normalize dicom-validator tag keys (GGGG,EEEE) / GGGGEEEE → 8 hex.
+
+load_dicom_info(edition: str | None=None) -> DicomInfo
+    Load DICOM standard JSON via dicom-validator EditionReader.
+
+allowed_tags_for_sop_class(dicom_info: DicomInfo, sop_class_uid: str) -> frozenset[str] | None
+    Return the set of public tags allowed by the IOD for sop_class_uid.
+
+mark_iod_unexpected(rows: list[MetadataPhiRow], sop_class_uid: str, *, dicom_info: DicomInfo | None=None, edition: str | None=None) -> list[MetadataPhiRow]
+    Set iod_unexpected on public text / SEQ(text) / DA/DT rows whose tag
+"""
 import logging
 import re
 from dataclasses import replace
 from functools import lru_cache
-from typing import TYPE_CHECKING
+from pathlib import Path
+
+from dicom_validator.spec_reader.edition_reader import EditionReader
+from dicom_validator.validator.dicom_info import DicomInfo
 
 from anonymizer.controller.ai.embedded_phi.metadata.extract import MetadataPhiRow
-from anonymizer.utils.package_paths import ASSETS_DIR
-
-if TYPE_CHECKING:
-    from dicom_validator.validator.dicom_info import DicomInfo
-from dicom_validator.spec_reader.edition_reader import EditionReader
 
 logger = logging.getLogger(__name__)
 
 # Bundled under assets/dicom_standard/<edition>/json/ — see SOURCE.md there.
 BUNDLED_DICOM_EDITION = "2025e"
-_DICOM_STANDARD_ASSETS = ASSETS_DIR / "dicom_standard"
+_DICOM_STANDARD_ASSETS = Path("assets/dicom_standard")
 
 _TAG_KEY = re.compile(
     r"^\(?(?P<g>[0-9A-Fa-f]{4}),?(?P<e>[0-9A-Fa-f]{4})\)?$"
@@ -28,7 +41,7 @@ _SKIP_ATTR_KEYS = frozenset({"modules", "items", "group_macros", "cond", "type",
 
 
 def normalize_iod_tag_key(key: str) -> str | None:
-    """Normalize dicom-validator tag keys ``(GGGG,EEEE)`` / ``GGGGEEEE`` → 8 hex."""
+    """Normalize dicom-validator tag keys (GGGG,EEEE) / GGGGEEEE → 8 hex."""
     text = str(key or "").strip().upper().replace(" ", "")
     m = _TAG_KEY.match(text)
     if m is None:
@@ -39,12 +52,12 @@ def normalize_iod_tag_key(key: str) -> str | None:
 @lru_cache(maxsize=2)
 def load_dicom_info(edition: str | None = None) -> DicomInfo:
     """
-    Load DICOM standard JSON via dicom-validator ``EditionReader``.
+    Load DICOM standard JSON via dicom-validator EditionReader.
 
-    Default ``edition`` is the bundled tree under
-    ``assets/dicom_standard/`` (``BUNDLED_DICOM_EDITION``, ~2.4 MiB JSON).
-    Pass another edition id only when that edition's ``json/`` exists under
-    the same assets root (or set ``path`` via tests).
+    Default edition is the bundled tree under
+    assets/dicom_standard/ (BUNDLED_DICOM_EDITION, ~2.4 MiB JSON).
+    Pass another edition id only when that edition's json/ exists under
+    the same assets root (or set path via tests).
     """
 
     ed = (edition or BUNDLED_DICOM_EDITION).strip() or BUNDLED_DICOM_EDITION
@@ -65,9 +78,9 @@ def allowed_tags_for_sop_class(
     sop_class_uid: str,
 ) -> frozenset[str] | None:
     """
-    Return the set of public tags allowed by the IOD for ``sop_class_uid``.
+    Return the set of public tags allowed by the IOD for sop_class_uid.
 
-    Returns ``None`` when the SOP Class is unknown (caller should not flag).
+    Returns None when the SOP Class is unknown (caller should not flag).
     """
     uid = str(sop_class_uid or "").strip()
     if not uid or uid not in dicom_info.iods:
@@ -95,7 +108,7 @@ def mark_iod_unexpected(
     edition: str | None = None,
 ) -> list[MetadataPhiRow]:
     """
-    Set ``iod_unexpected`` on public text / ``SEQ(text)`` / DA/DT rows whose tag
+    Set iod_unexpected on public text / SEQ(text) / DA/DT rows whose tag
     is absent from the SOP Class IOD allow-list. Private rows are never flagged.
     """
     info = dicom_info if dicom_info is not None else load_dicom_info(edition)

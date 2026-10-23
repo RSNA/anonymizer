@@ -1,7 +1,5 @@
 """EasyOCR + OpenMed pixel PHI removal via product remove_pixel_phi."""
 
-from __future__ import annotations
-
 import logging
 from pathlib import Path
 

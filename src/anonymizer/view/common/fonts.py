@@ -1,15 +1,13 @@
 """Centralized app-lifetime font registry for the view layer.
 
-All CTkFont objects are created once at startup via ``create_app_fonts()`` and
+All CTkFont objects are created once at startup via create_app_fonts() and
 live for the process — no per-view allocation or teardown required.  Widgets
 that use the theme default font (San Francisco 13 / Tahoma 13) need no
-``font=`` parameter at all; CustomTkinter applies it automatically.
+font= parameter at all; CustomTkinter applies it automatically.
 
-For ``tk.Canvas.create_text`` use ``canvas_label_font()`` which returns a plain
+For tk.Canvas.create_text use canvas_label_font() which returns a plain
 tuple — no Tcl Font object is allocated.
 """
-
-from __future__ import annotations
 
 import logging
 import platform
@@ -59,7 +57,7 @@ def _mono_font_family() -> str:
 class AppFonts:
     """App-lifetime font variants created once at startup from the loaded theme.
 
-    Most CTk widgets need no ``font=`` parameter — the theme default applies
+    Most CTk widgets need no font= parameter — the theme default applies
     automatically.  Use these named variants only where a non-default size or
     weight is required.
     """
@@ -121,5 +119,5 @@ def default_char_width_px() -> int:
 
 
 def canvas_label_font(size: int = 10) -> tuple[str, int]:
-    """Return a tuple font for ``tk.Canvas.create_text`` (no Tcl Font object)."""
+    """Return a tuple font for tk.Canvas.create_text (no Tcl Font object)."""
     return (theme_font_family(), size)

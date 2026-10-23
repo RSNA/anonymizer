@@ -8,8 +8,6 @@ Does not invent values, does not restore over-blanked tokens (those need
 ``@safe()`` / script policy), and does not touch private creators.
 """
 
-from __future__ import annotations
-
 import logging
 import re
 

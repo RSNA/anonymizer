@@ -16,8 +16,8 @@ from anonymizer.utils.translate import _
 from anonymizer.utils.windowing import apply_windowing
 from anonymizer.view.common.ctk_safe import dispose_photo_image
 from anonymizer.view.common.tk_mouse import pointer_buttons
-from anonymizer.view.common.tooltip import MotionTooltipController
-from anonymizer.view.reports.entity_colors import entity_color_bgr, entity_label_display
+from anonymizer.view.common.tooltip import MotionTooltipController, TooltipContent
+from anonymizer.view.reports.entity_colors import ENTITY_COLORS_HEX, entity_color_bgr
 from anonymizer.view.series.anatomy_overlay import bgr_to_hex, latch_button_width_px, structure_button_label
 from anonymizer.view.series.histogram import Histogram
 from anonymizer.view.series.series_overlay import render_segmentations_overlay
@@ -1195,8 +1195,8 @@ class ImageViewer(ctk.CTkFrame):
             width=1,
         )
 
-    def _ocr_hover_text(self, event: tk.Event) -> str | None:
-        """Tooltip for OCR boxes: text plus NER class when labeled."""
+    def _ocr_hover_text(self, event: tk.Event) -> str | TooltipContent | None:
+        """Tooltip for OCR boxes: entity chip for PHI, plain text otherwise."""
         if not self._interaction_allowed() or not self.enable_interactive_editing:
             return None
         if self._annotate_mode == "annotate" or self.playing or self.drawing_rect:
@@ -1211,9 +1211,22 @@ class ImageViewer(ctk.CTkFrame):
         if ndx is None:
             return None
         hit = texts[ndx]
+        if hit.phi_entities:
+            label = hit.phi_entities[0][0]
+            return TooltipContent(
+                text=label,
+                bg=ENTITY_COLORS_HEX.get(label, "#666666"),
+                fg="#ffffff",
+                bold=True,
+            )
         label = (hit.phi_label or "").strip()
         if label:
-            return f"{hit.text} — {entity_label_display(label)}"
+            return TooltipContent(
+                text=label,
+                bg=ENTITY_COLORS_HEX.get(label, "#666666"),
+                fg="#ffffff",
+                bold=True,
+            )
         return hit.text or None
 
     def _on_canvas_motion(self, event) -> None:

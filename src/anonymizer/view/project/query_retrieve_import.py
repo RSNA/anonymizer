@@ -7,7 +7,9 @@ from tkinter import filedialog, messagebox, ttk
 import customtkinter as ctk
 from pydicom import Dataset
 
-from anonymizer.controller.project import FindStudyRequest, FindStudyResponse, ProjectController, StudyUIDHierarchy
+from anonymizer.controller.dicom.hierarchies import StudyUIDHierarchy
+from anonymizer.controller.dicom.requests import FindStudyRequest, FindStudyResponse
+from anonymizer.controller.project import ProjectController
 from anonymizer.utils.dicom import C_FAILURE, C_PENDING_A, C_PENDING_B, C_SUCCESS
 from anonymizer.utils.storage.dicom_tree import count_study_images
 from anonymizer.utils.translate import _

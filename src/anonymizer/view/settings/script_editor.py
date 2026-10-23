@@ -26,8 +26,6 @@ infer_options_from_script, confidentiality_options_changed
 available_operands, operands_for_tag, operand_tag_incompatibility
     Operand pickers for the editor.
 """
-from __future__ import annotations
-
 import re
 from enum import Enum
 

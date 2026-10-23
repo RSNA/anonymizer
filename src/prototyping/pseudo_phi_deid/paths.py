@@ -1,12 +1,18 @@
 """Pseudo-PHI dataset defaults and results roots."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 RESULTS_DIR = PACKAGE_DIR / "results"
 SCRIPTS_DIR = PACKAGE_DIR / "scripts"
+# Packaged product script (prototyping does not rely on install-dir chdir).
+PACKAGED_DEFAULT_SCRIPT = (
+    Path(__file__).resolve().parents[2]
+    / "anonymizer"
+    / "assets"
+    / "scripts"
+    / "default-anonymizer.script"
+)
 
 DEFAULT_PSEUDO_PHI_ROOT = Path("/Users/michaelevans/DATA/Pseudo-PHI-DICOM-Dataset")
 DEFAULT_EVAL_DIR = (

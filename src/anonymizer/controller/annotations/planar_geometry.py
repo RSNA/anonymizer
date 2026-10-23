@@ -1,7 +1,28 @@
-"""Pixel-space annotation grids for planar CR/DX/US/MG (no stackable IOP/IPP)."""
+"""Pixel-space annotation grids for planar CR/DX/US/MG (no stackable IOP/IPP).
 
-from __future__ import annotations
+Public API
+----------
+PLANAR_PIXEL_SPACE
+    Planar pixel space (default 'planar_pixel_space').
 
+GRID_KEY
+    Grid key (default 'grid').
+
+frames_to_grayscale_zyx(frames: np.ndarray) -> np.ndarray
+    Convert Series View frames to a grayscale (Z, Y, X) array for SITK volume.
+
+build_planar_sitk_volume(metadata: Dataset, frames: np.ndarray) -> sitk.Image
+    Build a pixel-space SimpleITK volume aligned to Series View frame stack.
+
+write_planar_annotation_geometry(cache_dir: Path, volume: sitk.Image) -> Path
+    Persist volume.nii.gz and mask_geometry.json marked as planar pixel space.
+
+is_planar_pixel_space_geometry(cache_dir: Path) -> bool
+    True when mask_geometry.json was created for planar CR/DX/US/MG annotation.
+
+annotation_source_dicom_paths(series_dir: Path) -> list[Path]
+    DICOM paths in Series View frame order (one entry per display frame).
+"""
 import json
 import logging
 from pathlib import Path
@@ -26,7 +47,7 @@ GRID_KEY = "grid"
 
 
 def frames_to_grayscale_zyx(frames: np.ndarray) -> np.ndarray:
-    """Convert Series View frames to a grayscale ``(Z, Y, X)`` array for SITK volume."""
+    """Convert Series View frames to a grayscale (Z, Y, X) array for SITK volume."""
     arr = np.asarray(frames)
     if arr.ndim == 3:
         return arr.astype(np.float32, copy=False)
@@ -114,7 +135,7 @@ def build_planar_sitk_volume(metadata: Dataset, frames: np.ndarray) -> sitk.Imag
 
 
 def write_planar_annotation_geometry(cache_dir: Path, volume: sitk.Image) -> Path:
-    """Persist ``volume.nii.gz`` and ``mask_geometry.json`` marked as planar pixel space."""
+    """Persist volume.nii.gz and mask_geometry.json marked as planar pixel space."""
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
     sitk.WriteImage(volume, str(cache_dir / "volume.nii.gz"), True)
@@ -126,7 +147,7 @@ def write_planar_annotation_geometry(cache_dir: Path, volume: sitk.Image) -> Pat
 
 
 def is_planar_pixel_space_geometry(cache_dir: Path) -> bool:
-    """True when ``mask_geometry.json`` was created for planar CR/DX/US/MG annotation."""
+    """True when mask_geometry.json was created for planar CR/DX/US/MG annotation."""
 
     geometry = read_mask_geometry(Path(cache_dir))
     if not geometry:
@@ -146,7 +167,7 @@ def annotation_source_dicom_paths(series_dir: Path) -> list[Path]:
     """DICOM paths in Series View frame order (one entry per display frame).
 
     Prefers stackable slice listing when available; otherwise expands multi-frame
-    instances the same way ``load_series_frames`` does.
+    instances the same way load_series_frames does.
     """
 
     series_dir = Path(series_dir)

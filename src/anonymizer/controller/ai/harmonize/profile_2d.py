@@ -1,11 +1,40 @@
 """Metadata-only Harmonize profiles for 2D modalities (CR/DX, US, MG).
 
-Isolated from :mod:`anonymizer.controller.ai.tseg.modality_profile` — never uses
-TotalSegmentator.
+Public API
+----------
+Profile2D
+    Frozen strategy for one 2D Harmonize playbook.
+
+xr_profile() -> Profile2D
+    CR/DX shared XR playbook.
+
+us_profile() -> Profile2D
+    Ultrasound playbook.
+
+mg_profile() -> Profile2D
+    Mammography playbook.
+
+profile_2d_for_modality(value: str | Modality | None) -> Profile2D | None
+    Resolve a 2D Harmonize profile, or None when not a 2D playbook modality.
+
+profile_2d_from_dataset(ds: object | None) -> Profile2D | None
+    Resolve a 2D profile from a DICOM dataset Modality tag.
+
+resolve_profile_2d_for_series(series_directory: object) -> Profile2D | None
+    Load the first DICOM header and resolve a 2D profile.
+
+loinc_prefix_for_2d_profile(profile: Profile2D, *, doppler: bool=False, dbt: bool=False, ffd: bool=False) -> str
+    LOINC LongCommonName prefix for a 2D study.
+
+loinc_prefix_for_2d_modality(value: str | Modality | None, *, doppler: bool=False, dbt: bool=False, ffd: bool=False) -> str
+    LOINC prefix for a 2D modality code.
+
+normalize_2d_modality_label(value: str | Modality | None) -> str
+    Uppercase modality label for logging; map CR/DX → XR.
+
+is_2d_harmonize_modality(value: str | Modality | None) -> bool
+    True when modality has a 2D Harmonize playbook (CR/DX/US/MG).
 """
-
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 from anonymizer.controller.ai.tseg.modality_profile import load_series_header_dataset

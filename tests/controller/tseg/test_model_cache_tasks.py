@@ -1,8 +1,5 @@
 """Tests for harmonize TotalSegmentator task selection."""
 
-from __future__ import annotations
-
-import sys
 import types
 from pathlib import Path
 from unittest.mock import MagicMock, patch

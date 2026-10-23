@@ -1,12 +1,30 @@
-"""JSON configuration for headless AI batch processing."""
+"""JSON configuration for headless AI batch processing.
 
-from __future__ import annotations
+Public API
+----------
+AiBatchConfigError
+    Invalid AI batch configuration or prerequisites.
 
+AiBatchStudyRef
+    AiBatchStudyRef type.
+
+AiBatchConfig
+    AiBatchConfig type.
+
+validate_ai_batch_config_gates(config: AiBatchConfig) -> None
+    Validate ai batch config gates.
+
+enumerate_studies_from_images_dir(images_dir: Path) -> list[tuple[str, str]]
+    Enumerate studies from images dir.
+
+resolve_ai_batch_studies(config: AiBatchConfig, *, images_dir: Path, anon_model: AnonymizerModel) -> list[tuple[str, str]]
+    Resolve ai batch studies.
+"""
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 from anonymizer.controller.ai.batch_process import AiBatchAlgorithm, AiBatchProcessOptions
 from anonymizer.controller.ai.blur_face import FaceBlurMode
@@ -116,7 +134,7 @@ class AiBatchConfig:
         return json.dumps(self.to_dict(), indent=indent) + "\n"
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> AiBatchConfig:
+    def from_dict(cls, data: dict[str, Any]) -> Self:
         if not isinstance(data, dict):
             raise AiBatchConfigError("AI batch config must be a JSON object")
 
@@ -157,7 +175,7 @@ class AiBatchConfig:
         )
 
     @classmethod
-    def from_json(cls, text: str) -> AiBatchConfig:
+    def from_json(cls, text: str) -> Self:
         try:
             data = json.loads(text)
         except json.JSONDecodeError as exc:
@@ -165,7 +183,7 @@ class AiBatchConfig:
         return cls.from_dict(data)
 
     @classmethod
-    def from_path(cls, path: Path) -> AiBatchConfig:
+    def from_path(cls, path: Path) -> Self:
         try:
             text = path.read_text(encoding="utf-8")
         except OSError as exc:

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,4 +18,3 @@ class FaceVolumeData:
     volume_img: sitk.Image
 
 
-__all__ = ["FaceVolumeData", "QaStats"]

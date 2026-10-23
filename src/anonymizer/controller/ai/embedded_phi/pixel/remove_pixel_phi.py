@@ -1,11 +1,37 @@
-"""Remove burnt-in PHI from DICOM pixel data."""
+"""Remove burnt-in PHI from DICOM pixel data.
 
-from __future__ import annotations
+Public API
+----------
+blackout_ocr_text_areas(pixels: ndarray, ocr_texts: list[OCRText]) -> None
+    Zero-fill OCR bounding boxes on the source pixel array (in-place).
 
+remove_text(pixels: ndarray, windowed_frame: NDArray[np.uint8], ocr_texts: list[OCRText]) -> ndarray
+    Remove the PHI in the pixel data of the supplied pixels 2D frame using the suplied ocr_text rectangles
+
+remove_ocr_text_from_frame(raw_pixels: ndarray, windowed_frame: NDArray[np.uint8], ocr_texts: list[OCRText], *, removal_mode: PixelPhiRemovalMode) -> ndarray
+    Remove OCR text from one frame using blackout or inpaint (Series View).
+
+blackout_rectangular_areas(pixels: ndarray, user_rects: list[UserRectangle])
+    Blacks out rectangular areas defined in user_rects on the input image.
+
+remove_pixel_phi(dcm_path: Path, ocr_reader: Reader, downscale_dimension_threshold: int=800, border_size: int=20, *, removal_mode: PixelPhiRemovalMode=PixelPhiRemovalMode.BLACKOUT, project_dir: Path | None=None, modality: str | None=None, whitelist: Sequence[str] | None=None, whitelist_match_settings: OcrWhitelistMatchSettings | None=None, apply_phi_ner_filter: bool=False, exclude_rects: Sequence[UserRectangle] | None=None, use_exclude_areas: bool=False) -> tuple[bool, list[str], int]
+    Description:
+
+apply_instance_embedded_phi(anon_model: AnonymizerModel, anon_sop_instance_uid: str, texts: Sequence[str]) -> bool
+    Apply instance embedded phi.
+
+apply_instance_embedded_phi_for_dcm(anon_model: AnonymizerModel, dcm_path: Path, texts: Sequence[str]) -> bool
+    Apply instance embedded phi for dcm.
+
+collect_series_view_embedded_phi_texts(image_viewer) -> dict[int, list[str]]
+    Collect OCR text strings from a Series View image viewer overlay, keyed by frame index.
+
+apply_series_view_embedded_phi(anon_model: AnonymizerModel, slice_paths: Sequence[Path], texts_by_frame: Mapping[int, Sequence[str]], *, projection_frame_count: int=0, anon_series_uid: str | None=None) -> int
+    Persist pixel PHI metadata for series slices that have overlay OCR text.
+"""
 import logging
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
@@ -18,9 +44,6 @@ from pydicom import Dataset, dcmread
 from pydicom.encaps import encapsulate
 from pydicom.pixels.processing import apply_color_lut, convert_color_space
 from pydicom.uid import JPEG2000Lossless
-
-if TYPE_CHECKING:
-    from anonymizer.model.anonymizer import AnonymizerModel
 
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     OcrWhitelistMatchSettings,
@@ -40,7 +63,8 @@ from anonymizer.controller.series.series_io import (
     stored_monochrome_to_series_buffer,
 )
 from anonymizer.controller.series.series_overlay import OCRText, UserRectangle
-from anonymizer.utils.dicom import SUPPORTED_PHOTOMETRIC_INTERPRETATIONS
+from anonymizer.model.anonymizer import AnonymizerModel
+from anonymizer.utils.dicom import SUPPORTED_PHOTOMETRIC_INTERPRETATIONS, DeidMethodCode, record_deid_method_codes
 
 logging.getLogger("openjpeg").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -282,9 +306,9 @@ def remove_pixel_phi(
          border_size: size in pixels added to the pixel frame to enable text detection at the edges
 
     Returns:
-        Tuple of (modified, detected_texts, pixels_changed). ``modified`` is True when pixel data was changed.
-        ``detected_texts`` is a deduplicated list of OCR strings found across all frames.
-        ``pixels_changed`` counts source-image pixels altered by the removal mask.
+        Tuple of (modified, detected_texts, pixels_changed). modified is True when pixel data was changed.
+        detected_texts is a deduplicated list of OCR strings found across all frames.
+        pixels_changed counts source-image pixels altered by the removal mask.
 
     Raises:
         InvalidDicomError: if dcm_path not a valid DICOM file
@@ -610,6 +634,7 @@ def remove_pixel_phi(
     else:
         ds.PixelData = np.stack(source_pixels_deid_stack, axis=0).tobytes()
 
+    record_deid_method_codes(ds, {DeidMethodCode.CLEAN_PIXEL_DATA})
     ds.save_as(dcm_path)
 
     invalidate_projection_cache(dcm_path.parent)
@@ -659,7 +684,7 @@ def apply_series_view_embedded_phi(
 ) -> int:
     """Persist pixel PHI metadata for series slices that have overlay OCR text.
 
-    Multi-frame files reuse the same path once per frame in ``slice_paths``. Texts from
+    Multi-frame files reuse the same path once per frame in slice_paths. Texts from
     those frames are merged (deduped, first-seen order) before writing so one Instance row
     keeps the full comma-delimited digest instead of being overwritten by the last frame.
     """

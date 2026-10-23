@@ -1,7 +1,115 @@
-"""IV contrast phase analysis via TotalSegmentator organ HU statistics and XGBoost."""
+"""IV contrast phase analysis via TotalSegmentator organ HU statistics and XGBoost.
 
-from __future__ import annotations
+Public API
+----------
+ContrastProgressCallback
+    Contrastprogresscallback.
 
+PHASES_WITH_CONTRAST
+    Phases with contrast.
+
+CONTRAST_ORGANS
+    Contrast organs.
+
+CONTRAST_ORGANS_HN
+    Contrast organs hn.
+
+ContrastResult
+    ContrastResult type.
+
+phase_to_iv_contrast(phase: str) -> bool
+    Map TS phase label to binary iv_contrast (native=False, else True).
+
+verify_xgboost_runtime() -> None
+    Raise RuntimeError when XGBoost (or its platform OpenMP runtime) cannot load.
+
+release_accelerator_memory() -> None
+    Release PyTorch accelerator memory after a heavy inference step.
+
+log_memory_usage(stage: str) -> None
+    Log process RSS at a pipeline stage (best-effort).
+
+release_working_memory(*, stage: str='', preserve_accelerator: bool=False) -> None
+    Release accelerator caches and run GC between harmonize pipeline stages.
+
+release_before_contrast(*, stage: str='before_contrast') -> None
+    Release anatomy-segmentation RAM and nnU-Net/PyTorch caches before contrast inference.
+
+resolve_device(device: str | None=None) -> str
+    Resolve device.
+
+resolve_contrast_device(device: str | None=None) -> str
+    Device for contrast statistics inference (defaults to same as resolve_device).
+
+load_contrast_statistics(stats_path: Path) -> dict
+    Load per-series organ statistics JSON written during segmentation.
+
+save_contrast_statistics(stats: dict, stats_path: Path) -> None
+    Persist TotalSegmentator organ statistics JSON for reuse on later runs.
+
+load_contrast_stats_hn(stats_hn_path: Path) -> dict
+    Load contrast stats hn.
+
+save_contrast_stats_hn(stats_hn: dict, stats_hn_path: Path) -> None
+    Save contrast stats hn.
+
+contrast_phase_cache_is_valid(phase_cache_path: Path, stats_path: Path, *, stats_hn_path: Path | None=None, require_stats_hn: bool=False) -> bool
+    Return True when cached XGBoost output is at least as new as its statistics inputs.
+
+load_contrast_phase_cache(phase_cache_path: Path) -> dict
+    Load contrast phase cache.
+
+save_contrast_phase_cache(result: dict, *, hu_medians: dict[str, float], phase_cache_path: Path) -> None
+    Save contrast phase cache.
+
+estimate_contrast_remaining_sec(*, stats_cached: bool, stats_hn_cached: bool, phase_cached: bool, needs_head_neck: bool) -> float | None
+    Rough ETA for UI progress based on which contrast cache layers are already present.
+
+format_contrast_hu_summary(stats: dict, *, organs: tuple[str, ...], labels: dict[str, str] | None=None) -> str
+    Compact organ=NN HU list for organs with non-trivial segmented volume.
+
+format_contrast_organ_hu_summary(stats: dict) -> str
+    Format contrast organ hu summary.
+
+format_contrast_vessel_hu_summary(stats_hn: dict) -> str
+    Format contrast vessel hu summary.
+
+format_dominant_organ_hu_summary(stats: dict, stats_hn: dict | None, *, dominant_region: str) -> str
+    HU range and per-organ medians for contrast organs in the dominant anatomy region.
+
+format_cached_organ_hu_message(stats: dict) -> str
+    Format cached organ hu message.
+
+format_cached_vessel_hu_message(stats_hn: dict) -> str
+    Format cached vessel hu message.
+
+format_cached_contrast_phase_message(cached: dict) -> str
+    Format cached contrast phase message.
+
+structure_voxels_from_organ_stats(stats: dict) -> dict[str, int]
+    Map TotalSegmentator organ statistics volumes (mm³) to a temporary mass proxy.
+
+truncal_fov_present(stats: dict) -> bool
+    True when chest/abdomen contrast organs are segmented with non-trivial volume.
+
+truncal_anatomy_present(body_parts_present: str) -> bool
+    True when ROI anatomy includes chest or abdomen (not a head-only FOV).
+
+head_dominant_limited_fov(stats: dict) -> bool
+    Head CT without truncal organs in FOV — XGBoost contrast features are mostly zero.
+
+needs_head_neck_vessel_stats(stats: dict, *, body_parts_present: str | None=None) -> bool
+    Whether the head/neck TotalSegmentator statistics pass is required.
+
+hu_gate_iv_contrast(stats: dict, stats_hn: dict) -> bool | None
+    Organ-HU gate for binary IV contrast.
+
+predict_contrast_phase(nifti_path: Path, *, device: str | None=None, existing_stats: dict | None=None, stats_output_path: Path | None=None, stats_hn_output_path: Path | None=None, phase_cache_path: Path | None=None, body_parts_present: str | None=None, progress: ContrastProgressCallback | None=None) -> tuple[dict, float, dict[str, float]]
+    Run TotalSegmentator contrast-phase (organ median HU + XGBoost).
+
+analyze_contrast_phase(nifti_path: Path, *, device: str | None=None, existing_stats: dict | None=None, stats_output_path: Path | None=None, stats_hn_output_path: Path | None=None, phase_cache_path: Path | None=None, body_parts_present: str | None=None, progress: ContrastProgressCallback | None=None) -> ContrastResult
+    Derive IV contrast phase; thin wrapper around predict_contrast_phase.
+"""
 import importlib.resources
 import json
 import logging
@@ -150,7 +258,7 @@ def verify_xgboost_runtime() -> None:
     Raise RuntimeError when XGBoost (or its platform OpenMP runtime) cannot load.
 
     TotalSegmentator ships the contrast classifier pickles but does not declare xgboost
-    as a dependency; the ``tseg`` extra adds it. On macOS, XGBoost may still require
+    as a dependency; the tseg extra adds it. On macOS, XGBoost may still require
     the system OpenMP library (libomp) that pip cannot install.
     """
     try:
@@ -242,7 +350,7 @@ def resolve_device(device: str | None = None) -> str:
 
 
 def resolve_contrast_device(device: str | None = None) -> str:
-    """Device for contrast statistics inference (defaults to same as ``resolve_device``)."""
+    """Device for contrast statistics inference (defaults to same as resolve_device)."""
     return resolve_device(device)
 
 
@@ -363,7 +471,7 @@ def format_contrast_hu_summary(
     organs: tuple[str, ...],
     labels: dict[str, str] | None = None,
 ) -> str:
-    """Compact ``organ=NN HU`` list for organs with non-trivial segmented volume."""
+    """Compact organ=NN HU list for organs with non-trivial segmented volume."""
     parts: list[str] = []
     for organ in organs:
         entry = stats.get(organ)
@@ -478,10 +586,10 @@ def structure_voxels_from_organ_stats(stats: dict) -> dict[str, int]:
     Map TotalSegmentator organ statistics volumes (mm³) to a temporary mass proxy.
 
     Values are **mm³**, not voxel counts. Callers must run
-    ``reconcile_structure_voxels_from_masks`` after exporting binary masks (and
-    before ``finalize_seg_cache`` / Dataset analytics) so sidecars store true
+    reconcile_structure_voxels_from_masks after exporting binary masks (and
+    before finalize_seg_cache / Dataset analytics) so sidecars store true
     voxel counts. Until then, ratios remain meaningful for
-    ``dominant_region_from_voxels`` / ``body_parts_present``.
+    dominant_region_from_voxels / body_parts_present.
     """
 
     counts: dict[str, int] = {}
@@ -527,7 +635,7 @@ def hu_gate_iv_contrast(stats: dict, stats_hn: dict) -> bool | None:
 
     Truncal FOV: aorta/IVC/liver medians. Head-only FOV: head/neck vessel medians
     (XGBoost features are mostly zero without truncal organs).
-    Returns ``None`` when inconclusive (defer to XGBoost).
+    Returns None when inconclusive (defer to XGBoost).
     """
     aorta = _organ_stat(stats, "aorta", "intensity")
     ivc = _organ_stat(stats, "inferior_vena_cava", "intensity")
@@ -617,14 +725,14 @@ def predict_contrast_phase(
     """
     Run TotalSegmentator contrast-phase (organ median HU + XGBoost).
 
-    When ``existing_stats`` is provided, the main organ-statistics TotalSegmentator run is
-    skipped. Cached stats must come from a prior ``ml=True, fast=True, statistics=True``
-    pass (full ``total`` task, not the ROI anatomy subset).
+    When existing_stats is provided, the main organ-statistics TotalSegmentator run is
+    skipped. Cached stats must come from a prior ml=True, fast=True, statistics=True
+    pass (full total task, not the ROI anatomy subset).
 
-    When ``phase_cache_path`` is valid relative to the statistics cache files, the
+    When phase_cache_path is valid relative to the statistics cache files, the
     head/neck statistics pass, XGBoost ensemble, and NIfTI reload are skipped.
 
-    Returns ``(result dict, inference_sec, hu_medians for all classifier organs)``.
+    Returns (result dict, inference_sec, hu_medians for all classifier organs).
     """
     started = time.perf_counter()
     stats_path = Path(stats_output_path) if stats_output_path is not None else None
@@ -851,7 +959,7 @@ def analyze_contrast_phase(
     body_parts_present: str | None = None,
     progress: ContrastProgressCallback | None = None,
 ) -> ContrastResult:
-    """Derive IV contrast phase; thin wrapper around ``predict_contrast_phase``."""
+    """Derive IV contrast phase; thin wrapper around predict_contrast_phase."""
     classified, _, _ = predict_contrast_phase(
         nifti_path,
         device=device,

@@ -1,7 +1,5 @@
 """Orthanc dicom_integration: QIDO-RS / WADO-RS / STOW-RS with managed Orthanc."""
 
-from __future__ import annotations
-
 import os
 
 import pytest

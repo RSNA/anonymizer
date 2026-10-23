@@ -1,7 +1,16 @@
-"""Minimal EfficientNet-B4 multi-label head matching MedicalAILabo MultiNet."""
+"""Minimal EfficientNet-B4 multi-label head matching MedicalAILabo MultiNet.
 
-from __future__ import annotations
+Public API
+----------
+XpBodypartNet
+    EfficientNet-B4 backbone + single 7-class body-part head (1-channel input).
 
+build_xp_bodypart_net() -> XpBodypartNet
+    Build xp bodypart net.
+
+load_xp_bodypart_weights(weight_path: Path, *, device: torch.device | None=None) -> XpBodypartNet
+    Build network and load xp_bodypart.pt state dict (HF Space checkpoint).
+"""
 import logging
 from pathlib import Path
 
@@ -58,7 +67,7 @@ def build_xp_bodypart_net() -> XpBodypartNet:
 
 
 def load_xp_bodypart_weights(weight_path: Path, *, device: torch.device | None = None) -> XpBodypartNet:
-    """Build network and load ``xp_bodypart.pt`` state dict (HF Space checkpoint)."""
+    """Build network and load xp_bodypart.pt state dict (HF Space checkpoint)."""
     device = device or torch.device("cpu")
     net = build_xp_bodypart_net()
     try:

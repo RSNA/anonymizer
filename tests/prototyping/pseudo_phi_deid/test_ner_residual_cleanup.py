@@ -1,7 +1,5 @@
 """Unit tests for step-6 NER residual text cleanup."""
 
-from __future__ import annotations
-
 from pydicom.dataset import Dataset
 
 from prototyping.pseudo_phi_deid.pipeline.ner_residual_cleanup import (

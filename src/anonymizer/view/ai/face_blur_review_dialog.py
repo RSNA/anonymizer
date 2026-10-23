@@ -1,7 +1,5 @@
 """Modal face blur preview and review dialog."""
 
-from __future__ import annotations
-
 import contextlib
 import copy
 import logging
@@ -19,6 +17,8 @@ from anonymizer.controller.ai.blur_face import (
     FaceBlurPreviewResult,
     SeriesVolumeContext,
     apply_series_face_blur_metadata,
+    face_blur_mode_display_label,
+    format_face_blur_progress_status,
     mask_slice_segmentations,
     preview_blurred_slice_frames,
     preview_face_blur,
@@ -38,9 +38,7 @@ from anonymizer.utils.translate import _
 from anonymizer.view.ai.blur_face_results import (
     FACE_MASK_OVERLAY_ALPHA,
     FACE_MASK_OVERLAY_COLOR,
-    face_blur_mode_display_label,
     face_review_wl_ww,
-    format_face_blur_progress_status,
     format_face_blur_qa_summary,
     proposed_face_blur_companion_label,
 )

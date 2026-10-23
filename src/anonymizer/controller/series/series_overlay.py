@@ -1,11 +1,25 @@
 """Ephemeral series-view overlay payloads produced by controllers.
 
-Not ORM/persistence — canvas annotation data for the current session.
-Views render these via ``anonymizer.view.series.series_overlay``.
+Public API
+----------
+LayerType
+    LayerType type.
+
+OCRText
+    OCRText type.
+
+UserRectangle
+    UserRectangle type.
+
+PolygonPoint
+    PolygonPoint type.
+
+Segmentation
+    Segmentation type.
+
+OverlayData
+    OverlayData type.
 """
-
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
@@ -23,7 +37,9 @@ class OCRText:
     top_left: tuple[int, int]
     bottom_right: tuple[int, int]
     prob: float
-    phi_label: str | None = None  # NER class when classified (NAME, DATE, …)
+    phi_label: str | None = None  # Best pixel category in this box (NAME, DATE, …)
+    # (label, span text) for every entity the model detected inside this box.
+    phi_entities: tuple[tuple[str, str], ...] = ()
 
     def get_bounding_box(self) -> tuple[int, int, int, int]:
         """Returns the bounding box as (x1, y1, x2, y2)."""

@@ -1,7 +1,10 @@
-"""Millilitre volumes for user annotation labels (shared voxels_to_ml path)."""
+"""Millilitre volumes for user annotation labels (shared voxels_to_ml path).
 
-from __future__ import annotations
-
+Public API
+----------
+user_annotation_volumes_ml(cache_dir: Path) -> dict[str, float]
+    Return analytics organ keys → ml for user labels with voxels.
+"""
 import logging
 from pathlib import Path
 
@@ -34,7 +37,7 @@ def _spacing_for_cache(cache_dir: Path, labels_img: sitk.Image | None = None) ->
 def user_annotation_volumes_ml(cache_dir: Path) -> dict[str, float]:
     """Return analytics organ keys → ml for user labels with voxels.
 
-    Matched labels use ``normative_organ``; custom use ``user:<slug>``.
+    Matched labels use normative_organ; custom use user:<slug>.
     When several labels map to the same key, volumes are summed.
 
     Planar pixel-space grids (CR/DX/US/MG without patient geometry) return empty —

@@ -1,7 +1,5 @@
 """Load Open-i / Indiana University NLMCXR de-identified radiology reports."""
 
-from __future__ import annotations
-
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path

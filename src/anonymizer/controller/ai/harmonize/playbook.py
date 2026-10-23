@@ -1,7 +1,193 @@
-"""RadLex Playbook CT series description: codes, TS/geometry mappers, and Harmonize UI text."""
+"""RadLex Playbook CT series description: codes, TS/geometry mappers, and Harmonize UI text.
 
-from __future__ import annotations
+Public API
+----------
+BODY_PART_PLAYBOOK_CODES
+    Body part playbook codes.
 
+LATERALITY_PLAYBOOK_CODES
+    Laterality playbook codes.
+
+ANATOMIC_PLANE_PLAYBOOK_CODES
+    Anatomic plane playbook codes.
+
+IV_CONTRAST_PLAYBOOK_CODES
+    Iv contrast playbook codes.
+
+LUMINAL_CONTRAST_PLAYBOOK_CODES
+    Luminal contrast playbook codes.
+
+SERIES_TYPE_PLAYBOOK_CODES
+    Series type playbook codes.
+
+SLICE_THICKNESS_PLAYBOOK_CODES
+    Slice thickness playbook codes.
+
+SLICE_THICKNESS_EMITTED_CODES
+    Slice thickness emitted codes.
+
+SERIES_TYPE_MODIFIER_PLAYBOOK_CODES
+    Series type modifier playbook codes.
+
+KERNEL_PLAYBOOK_CODES
+    Kernel playbook codes.
+
+VIEW_PLAYBOOK_CODES
+    View playbook codes.
+
+METADATA_HARMONIZE_SERIES_TYPES
+    Metadata harmonize series types.
+
+STRUCTURED_REPORT_SOP_PREFIX
+    Structured report sop prefix.
+
+MetadataHarmonizeRoute
+    Build a Playbook description from DICOM metadata without TS anatomy regions.
+
+PlaybookHarmonizeAttributes
+    PlaybookHarmonizeAttributes type.
+
+body_part_label(code: str) -> str
+    Body part label.
+
+laterality_label(code: str) -> str
+    Laterality label.
+
+anatomic_plane_label(code: str) -> str
+    Anatomic plane label.
+
+iv_contrast_label(code: str) -> str
+    Iv contrast label.
+
+luminal_contrast_label(code: str) -> str
+    Luminal contrast label.
+
+kernel_label(code: str) -> str
+    Kernel label.
+
+view_label(code: str) -> str
+    View label.
+
+series_type_label(code: str) -> str
+    Series type label.
+
+series_type_modifier_label(code: str) -> str
+    Series type modifier label.
+
+slice_thickness_label(code: str) -> str
+    Slice thickness label.
+
+playbook_component_code_label(field_key: str, code: str) -> str
+    Full Playbook gloss for a Compose field code (existing msgid lookup tables).
+
+playbook_component_code_tooltip(field_key: str, code: str) -> str | None
+    Structured hover text CODE — full name when the code is abbreviated.
+
+map_series_type_code(ds: Dataset | None, geometry: SeriesGeometryResult) -> str
+    Map DICOM metadata and geometry to a Playbook Series Type code.
+
+map_series_type_modifier_code(ds: Dataset | None, geometry: SeriesGeometryResult, *, series_type_code: str) -> str
+    Map DICOM metadata and geometry to a Playbook Series Type Modifier code.
+
+should_emit_series_type_modifier(code: str) -> bool
+    Return whether a series-type modifier token belongs in the SeriesDescription string.
+
+map_body_part_code(body_parts_present: str, structures_present: dict[str, int] | None=None) -> str
+    Map TS body_parts_present (Head, Chest+Abdomen, …) to Playbook code(s).
+
+is_localizer_geometry(geometry: SeriesGeometryResult) -> bool
+    Is localizer geometry.
+
+map_slice_thickness_bucket(mm: float) -> str
+    Map effective through-plane thickness (mm) to a Playbook slice-thickness bucket.
+
+effective_slice_thickness_mm(geometry: SeriesGeometryResult, ds: Dataset | None=None) -> float | None
+    Effective through-plane thickness (mm) for Playbook bucketing.
+
+should_emit_slice_thickness(bucket: str, geometry: SeriesGeometryResult, series_type_code: str) -> bool
+    Return whether a slice-thickness token belongs in the SeriesDescription string.
+
+resolve_slice_thickness_for_playbook(geometry: SeriesGeometryResult, ds: Dataset | None, *, series_type_code: str) -> tuple[str, float | None, str]
+    Return (emitted_code, mm, bucket) for harmonize.
+
+resolve_metadata_harmonize_route(ds: Dataset, geometry: SeriesGeometryResult, *, tseg: TS_result | None=None) -> MetadataHarmonizeRoute | None
+    Return a metadata-only harmonize route, or None when TS anatomy merge is required.
+
+map_body_part_from_dicom(ds: Dataset) -> str
+    Map DICOM metadata to a Playbook body-part code for localizer/scout series.
+
+build_metadata_playbook_attributes(ds: Dataset, geometry: SeriesGeometryResult, route: MetadataHarmonizeRoute) -> PlaybookHarmonizeAttributes
+    Build metadata playbook attributes.
+
+build_metadata_harmonized_series_description(ds: Dataset, geometry: SeriesGeometryResult, route: MetadataHarmonizeRoute) -> tuple[str, PlaybookHarmonizeAttributes]
+    Build metadata harmonized series description.
+
+build_localizer_playbook_attributes(ds: Dataset, geometry: SeriesGeometryResult) -> PlaybookHarmonizeAttributes
+    Build localizer playbook attributes.
+
+build_localizer_harmonized_series_description(ds: Dataset, geometry: SeriesGeometryResult) -> tuple[str, PlaybookHarmonizeAttributes]
+    Build localizer harmonized series description.
+
+build_postprocess_playbook_attributes(ds: Dataset, geometry: SeriesGeometryResult) -> PlaybookHarmonizeAttributes
+    Build postprocess playbook attributes.
+
+build_postprocess_harmonized_series_description(ds: Dataset, geometry: SeriesGeometryResult) -> tuple[str, PlaybookHarmonizeAttributes]
+    Build postprocess harmonized series description.
+
+map_anatomic_plane_code(geometry: SeriesGeometryResult) -> str
+    Map geometry to a Playbook anatomic-plane code.
+
+map_mr_iv_contrast_from_dicom(ds: Dataset) -> tuple[str, str]
+    Infer Playbook W / WO for MR from DICOM headers only.
+
+map_iv_contrast_code(tseg: TS_result) -> str
+    Map TS contrast phase to a Playbook IV contrast code from IV_CONTRAST_PLAYBOOK_CODES.
+
+build_playbook_attributes(tseg: TS_result, geometry: SeriesGeometryResult, *, ds: Dataset | None=None) -> PlaybookHarmonizeAttributes
+    Build playbook attributes.
+
+playbook_series_description_elements(attributes: PlaybookHarmonizeAttributes, geometry: SeriesGeometryResult, *, include_modality: bool=False) -> list[str]
+    Ordered Playbook CT series-name elements implemented by harmonize.
+
+format_playbook_series_description(attributes: PlaybookHarmonizeAttributes, geometry: SeriesGeometryResult, *, include_modality: bool=False) -> str
+    Build the Playbook-compliant CT series description string.
+
+build_harmonized_series_description(tseg: TS_result, geometry: SeriesGeometryResult, *, include_modality: bool=False, ds: Dataset | None=None) -> tuple[str, PlaybookHarmonizeAttributes]
+    Build harmonized series description.
+
+harmonize_dicom_rows(ds: Dataset) -> list[tuple[str, str, str]]
+    DICOM tags used by RadLex/Playbook Harmonize for this series' modality.
+
+playbook_body_part_row_values(attributes: PlaybookHarmonizeAttributes | None=None, *, tseg: TS_result | None=None, geometry: SeriesGeometryResult | None=None, ds: Dataset | None=None) -> tuple[str, str, str, str, str]
+    Playbook body part row values.
+
+playbook_plane_row_values(geometry: SeriesGeometryResult | None, anatomic_plane_code: str | None=None) -> tuple[str, str, str, str, str]
+    Playbook plane row values.
+
+playbook_iv_contrast_row_values(attributes: PlaybookHarmonizeAttributes | None=None, contrast_phase: str='', iv_evidence: str | None=None, *, tseg: TS_result | None=None, geometry: SeriesGeometryResult | None=None, ds: Dataset | None=None) -> tuple[str, str, str, str, str]
+    Playbook table row for IV contrast (CT phase classifier or MR DICOM headers).
+
+playbook_slice_thickness_row_values(attributes: PlaybookHarmonizeAttributes | None=None, *, geometry: SeriesGeometryResult | None=None, ds: Dataset | None=None) -> tuple[str, str, str, str, str]
+    Playbook slice thickness row values.
+
+playbook_series_type_row_values(series_type_code: str='', attributes: PlaybookHarmonizeAttributes | None=None, *, ds: Dataset | None=None, geometry: SeriesGeometryResult | None=None) -> tuple[str, str, str, str, str]
+    Playbook series type row values.
+
+playbook_series_type_modifier_row_values(attributes: PlaybookHarmonizeAttributes | None=None, *, ds: Dataset | None=None, geometry: SeriesGeometryResult | None=None) -> tuple[str, str, str, str, str]
+    Playbook series type modifier row values.
+
+PLAYBOOK_TREE_IIDS
+    Playbook tree iids.
+
+harmonize_analysis_rows(attributes: PlaybookHarmonizeAttributes, *, geometry: SeriesGeometryResult | None=None, ds: Dataset | None=None, tseg: TS_result | None=None) -> list[tuple[str, str, str, str, str]]
+    Return (element, code, value, evidence, source) rows for harmonize results UI.
+
+format_playbook_analysis_log_lines(attributes: PlaybookHarmonizeAttributes, *, geometry: SeriesGeometryResult | None=None, ds: Dataset | None=None, tseg: TS_result | None=None) -> list[str]
+    One line per Playbook row, aligned with the harmonize results table.
+
+format_harmonize_analysis_section(attributes: PlaybookHarmonizeAttributes | None, *, tseg: TS_result | None=None, geometry: SeriesGeometryResult | None=None) -> str
+    Compact text summary (tests and logging).
+"""
 import logging
 from dataclasses import dataclass, replace
 
@@ -179,7 +365,7 @@ _TSEG_REGION_TO_BODY_PART_CODE: dict[str, str] = {
     "Abdomen": "Abd",
 }
 
-# DICOM ``BodyPartExamined`` (uppercase) → Playbook body-part code for localizer/scout series.
+# DICOM BodyPartExamined (uppercase) → Playbook body-part code for localizer/scout series.
 _DICOM_BODY_PART_EXACT: dict[str, str] = {
     "HEAD": "Brain",
     "BRAIN": "Brain",
@@ -206,7 +392,7 @@ _DICOM_BODY_PART_EXACT: dict[str, str] = {
     "MAMM": "Breast",
 }
 
-# Keyword groups searched in DICOM text fields when ``BodyPartExamined`` is absent.
+# Keyword groups searched in DICOM text fields when BodyPartExamined is absent.
 _DICOM_BODY_PART_KEYWORDS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("BRAIN", "HEAD"), "Brain"),
     (("CHEST", "THORAX", "CHST", "LUNG"), "Ch"),
@@ -694,7 +880,7 @@ def playbook_component_code_label(field_key: str, code: str) -> str:
 
 
 def playbook_component_code_tooltip(field_key: str, code: str) -> str | None:
-    """Structured hover text ``CODE — full name`` when the code is abbreviated."""
+    """Structured hover text CODE — full name when the code is abbreviated."""
     raw = "" if code is None else str(code).strip()
     if not raw:
         return None
@@ -886,10 +1072,10 @@ def map_body_part_code(
     structures_present: dict[str, int] | None = None,
 ) -> str:
     """
-    Map TS ``body_parts_present`` (``Head``, ``Chest+Abdomen``, …) to Playbook code(s).
+    Map TS body_parts_present (Head, Chest+Abdomen, …) to Playbook code(s).
 
-    The internal TS region label ``Head`` is not a Playbook series-description token.
-    When brain parenchyma is segmented, the Playbook body-part code is ``Brain``.
+    The internal TS region label Head is not a Playbook series-description token.
+    When brain parenchyma is segmented, the Playbook body-part code is Brain.
     """
     if not body_parts_present.strip():
         raise ValueError("body_parts_present is required for Playbook body part")
@@ -1012,9 +1198,9 @@ def resolve_slice_thickness_for_playbook(
     series_type_code: str,
 ) -> tuple[str, float | None, str]:
     """
-    Return ``(emitted_code, mm, bucket)`` for harmonize.
+    Return (emitted_code, mm, bucket) for harmonize.
 
-    ``emitted_code`` is empty when the bucket is omitted from SeriesNameV4 (Med/Std).
+    emitted_code is empty when the bucket is omitted from SeriesNameV4 (Med/Std).
     """
     mm = effective_slice_thickness_mm(geometry, ds)
     if mm is None:
@@ -1079,12 +1265,12 @@ def resolve_metadata_harmonize_route(
     tseg: TS_result | None = None,
 ) -> MetadataHarmonizeRoute | None:
     """
-    Return a metadata-only harmonize route, or ``None`` when TS anatomy merge is required.
+    Return a metadata-only harmonize route, or None when TS anatomy merge is required.
 
     Localizers are handled separately (optional TS fallback) in the harmonize pipeline.
-    Single-slice CT/MR (and other ``METADATA_DIAGNOSTIC_SKIP_CATEGORIES``) skip
+    Single-slice CT/MR (and other METADATA_DIAGNOSTIC_SKIP_CATEGORIES) skip
     TotalSegmentator but still get a Playbook guess from DICOM study/series text.
-    When ``tseg`` is passed, anatomy analysis may have run but produced no Playbook body
+    When tseg is passed, anatomy analysis may have run but produced no Playbook body
     regions; DICOM metadata is used as a fallback when a body part can be inferred.
     """
     if is_localizer_geometry(geometry):
@@ -1224,7 +1410,7 @@ def map_anatomic_plane_code(geometry: SeriesGeometryResult) -> str:
     """
     Map geometry to a Playbook anatomic-plane code.
 
-    Oblique acquisitions use the nearest cardinal plane with an ``_Obl`` suffix (e.g. ``Ax_Obl``).
+    Oblique acquisitions use the nearest cardinal plane with an _Obl suffix (e.g. Ax_Obl).
     """
     plane = geometry.plane
     if plane == "unknown":
@@ -1250,10 +1436,10 @@ def map_anatomic_plane_code(geometry: SeriesGeometryResult) -> str:
 
 def map_mr_iv_contrast_from_dicom(ds: Dataset) -> tuple[str, str]:
     """
-    Infer Playbook ``W`` / ``WO`` for MR from DICOM headers only.
+    Infer Playbook W / WO for MR from DICOM headers only.
 
-    Returns ``(iv_contrast_code, evidence)``. Prefer explicit without-contrast text,
-    then bolus tags, then with-contrast text; default ``WO`` when none are present.
+    Returns (iv_contrast_code, evidence). Prefer explicit without-contrast text,
+    then bolus tags, then with-contrast text; default WO when none are present.
     """
     agent = str(ds.get("ContrastBolusAgent") or "").strip()
     route = str(ds.get("ContrastBolusRoute") or "").strip()
@@ -1287,7 +1473,7 @@ def map_mr_iv_contrast_from_dicom(ds: Dataset) -> tuple[str, str]:
 
 
 def map_iv_contrast_code(tseg: TS_result) -> str:
-    """Map TS contrast phase to a Playbook IV contrast code from ``IV_CONTRAST_PLAYBOOK_CODES``."""
+    """Map TS contrast phase to a Playbook IV contrast code from IV_CONTRAST_PLAYBOOK_CODES."""
     phase = (tseg.contrast_phase or "").strip().lower()
     if phase:
         code = _TS_CONTRAST_PHASE_TO_CODE.get(phase)
@@ -1371,7 +1557,7 @@ def playbook_series_description_elements(
     (Sub1/Thin/Thick when non-default) → Series Type (when applicable). Compose supports
     Laterality, Luminal, Kernel, and View as well.
 
-    For single-modality CT exams the ``CT`` modality prefix is omitted per Playbook rules.
+    For single-modality CT exams the CT modality prefix is omitted per Playbook rules.
     """
     elements: list[str] = []
     if include_modality:
@@ -1402,9 +1588,9 @@ def format_playbook_series_description(
     """
     Build the Playbook-compliant CT series description string.
 
-    Element order: ``{BodyPart[+…]} {AnatomicPlane} {IVContrastPhase} [{Sub1|Thin|Thick}]
-    {SeriesType}``. Medium-range thickness (Med/Std) and Soft kernel are omitted per
-    SeriesNameV4. ``WO`` is emitted for native series.
+    Element order: {BodyPart[+…]} {AnatomicPlane} {IVContrastPhase} [{Sub1|Thin|Thick}]
+    {SeriesType}. Medium-range thickness (Med/Std) and Soft kernel are omitted per
+    SeriesNameV4. WO is emitted for native series.
     """
     elements = playbook_series_description_elements(
         attributes,
@@ -1814,7 +2000,7 @@ def harmonize_analysis_rows(
     ds: Dataset | None = None,
     tseg: TS_result | None = None,
 ) -> list[tuple[str, str, str, str, str]]:
-    """Return ``(element, code, value, evidence, source)`` rows for harmonize results UI."""
+    """Return (element, code, value, evidence, source) rows for harmonize results UI."""
     return [
         playbook_body_part_row_values(attributes, geometry=geometry, tseg=tseg, ds=ds),
         playbook_plane_row_values(geometry, attributes.anatomic_plane_code),

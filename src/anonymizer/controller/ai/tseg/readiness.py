@@ -1,7 +1,52 @@
-"""TotalSegmentator readiness: package/license probes and on-disk weight checks (no cached state)."""
+"""TotalSegmentator readiness: package/license probes and on-disk weight checks (no cached state).
 
-from __future__ import annotations
+Public API
+----------
+ts_academic_license_url() -> str
+    Ts academic license url.
 
+xgboost_available() -> bool
+    Xgboost available.
+
+get_stored_face_license() -> str
+    Get stored face license.
+
+face_license_available() -> bool
+    Face license available.
+
+apply_face_license(license_number: str) -> tuple[bool, str]
+    Apply face license.
+
+resolve_model_folder(task_id: int, trainer: str, model: str=_MODEL) -> Path | None
+    Resolve model folder.
+
+anatomy_ct_ready(mode: str | None=None) -> bool
+    True when all CT Harmonize weight files for mode exist on disk.
+
+anatomy_mr_ready(mode: str | None=None) -> bool
+    Anatomy mr ready.
+
+face_ct_ready() -> bool
+    Face ct ready.
+
+face_mr_ready() -> bool
+    Face mr ready.
+
+brain_structures_ready() -> bool
+    Brain structures ready.
+
+weight_kind_ready(kind: TsWeightKind, *, mode: str | None=None) -> bool
+    Weight kind ready.
+
+download_segmentation_model(kind: TsWeightKind, *, on_complete: Callable[[bool], None] | None=None) -> bool
+    Download weights for kind. Returns True when files exist afterward. No status cache.
+
+remove_segmentation_model(kind: TsWeightKind) -> bool
+    Delete on-disk TotalSegmentator weights for one model kind.
+
+log_runtime_status() -> None
+    Log a concise file-based readiness summary (no cached status object).
+"""
 import json
 import logging
 import shutil
@@ -174,7 +219,7 @@ def _all_tasks_ready(task_ids: tuple[int, ...], *, resolve_folder) -> bool:
 
 
 def anatomy_ct_ready(mode: str | None = None) -> bool:
-    """True when all CT Harmonize weight files for ``mode`` exist on disk."""
+    """True when all CT Harmonize weight files for mode exist on disk."""
     if not totalsegmentator_available():
         return False
 
@@ -234,7 +279,7 @@ def download_segmentation_model(
     *,
     on_complete: Callable[[bool], None] | None = None,
 ) -> bool:
-    """Download weights for ``kind``. Returns True when files exist afterward. No status cache."""
+    """Download weights for kind. Returns True when files exist afterward. No status cache."""
 
     if weight_kind_ready(kind):
         logger.info("Segmentation models: %s already installed", kind.value)

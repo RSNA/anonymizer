@@ -19,8 +19,6 @@ apply_study_date_operation_to_rules(document) -> list[str]
 rules_for_incrementdate_bulk(document, selected_tag=None) -> list[ScriptRule]
     Rules that must share one DATEINC when @incrementdate is chosen.
 """
-from __future__ import annotations
-
 from anonymizer.controller.dates import is_date_delta_operation
 from anonymizer.controller.script.document import ScriptDocument, ScriptRule
 

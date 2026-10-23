@@ -1,7 +1,5 @@
 """Simulator tests: prefer C-GET when negotiated; fall back to C-MOVE."""
 
-from __future__ import annotations
-
 import os
 import time
 

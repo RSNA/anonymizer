@@ -1,7 +1,5 @@
 """Tests for shared series overlay DTOs and segmentation rendering."""
 
-from __future__ import annotations
-
 from anonymizer.controller.series.series_overlay import (
     LayerType,
     OCRText,
@@ -10,6 +8,9 @@ from anonymizer.controller.series.series_overlay import (
     Segmentation,
     UserRectangle,
 )
+from anonymizer.view.common.tooltip import TooltipContent
+from anonymizer.view.reports.entity_colors import ENTITY_COLORS_HEX
+from anonymizer.view.series.image import ImageViewer
 from anonymizer.view.series.series_overlay import (
     COLORED_SEGMENTATION_OUTLINE_THICKNESS,
     render_segmentations_overlay,
@@ -38,6 +39,43 @@ def test_ocr_text_box_helpers() -> None:
     text = OCRText(text="A", top_left=(1, 2), bottom_right=(11, 12), prob=0.5)
     assert text.get_bounding_box() == (1, 2, 11, 12)
     assert text.box_area() == 100
+    assert text.phi_entities == ()
+
+
+def test_ocr_hover_shows_only_category_chip_for_phi_box() -> None:
+    """Hover on a PHI box shows just the NER category (bold caps, class color)."""
+    viewer = ImageViewer.__new__(ImageViewer)
+    dob = OCRText(
+        text="DOB: 06.16.1976",
+        top_left=(0, 0),
+        bottom_right=(100, 20),
+        prob=0.95,
+        phi_label="DATE",
+        phi_entities=(("DATE", "06.16.1976"),),
+    )
+    plain = OCRText(text="Portable", top_left=(0, 30), bottom_right=(80, 50), prob=0.95)
+    viewer._interaction_allowed = lambda: True
+    viewer.enable_interactive_editing = True
+    viewer._annotate_mode = "view"
+    viewer.playing = False
+    viewer.drawing_rect = False
+    viewer.active_layers = {LayerType.TEXT}
+    viewer.current_image_index = 0
+    viewer.overlay_data = {0: OverlayData(ocr_texts=[dob, plain])}
+    viewer._find_hit_object = lambda _x, _y, _texts: 0
+
+    class _Event:
+        x = 5
+        y = 5
+
+    hover = ImageViewer._ocr_hover_text(viewer, _Event())
+    assert isinstance(hover, TooltipContent)
+    assert hover.text == "DATE"
+    assert hover.bg == ENTITY_COLORS_HEX["DATE"]
+    assert hover.fg == "#ffffff"
+    assert hover.bold is True
+    viewer._find_hit_object = lambda _x, _y, _texts: 1
+    assert ImageViewer._ocr_hover_text(viewer, _Event()) == "Portable"
 
 
 def test_user_rectangle_bounding_box() -> None:

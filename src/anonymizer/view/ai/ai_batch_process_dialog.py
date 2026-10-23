@@ -1,7 +1,5 @@
 """AI batch process progress dialog for PHI Index study selection."""
 
-from __future__ import annotations
-
 import contextlib
 import logging
 import queue

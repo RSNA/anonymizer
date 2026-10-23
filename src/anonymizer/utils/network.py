@@ -1,9 +1,19 @@
-"""
-This module provides utility functions related to network operations.
-"""
+"""This module provides utility functions related to network operations.
 
-from __future__ import annotations
+Public API
+----------
+ensure_ssl_certifi() -> str
+    Point Python's default HTTPS context at certifi's CA bundle.
 
+get_local_ip_addresses() -> list[str]
+    Get the list of local IP addresses.
+
+dns_lookup(domain_name) -> str
+    Performs a DNS lookup for the given domain name.
+
+is_valid_ip(ip_str) -> bool
+    Check if the given IP address is valid.
+"""
 import ipaddress
 import logging
 import os
@@ -20,9 +30,9 @@ def ensure_ssl_certifi() -> str:
     """
     Point Python's default HTTPS context at certifi's CA bundle.
 
-    EasyOCR downloads models with ``urllib.request.urlretrieve``, which uses the
+    EasyOCR downloads models with urllib.request.urlretrieve, which uses the
     default SSL context. On some Windows Python installs that trust store is
-    incomplete and raises ``SSLCertVerificationError``. Certifi ships a Mozilla
+    incomplete and raises SSLCertVerificationError. Certifi ships a Mozilla
     CA bundle that works reliably across platforms.
     """
 

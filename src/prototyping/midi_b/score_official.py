@@ -1,7 +1,5 @@
 """Invoke CBIIT ``MIDI_validation_script`` against our candidates + mappings."""
 
-from __future__ import annotations
-
 import json
 import logging
 import os

@@ -1,7 +1,5 @@
 """Tests for PHI Index batch harmonize helpers."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 

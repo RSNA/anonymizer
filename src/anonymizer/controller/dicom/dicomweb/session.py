@@ -1,7 +1,16 @@
-"""DICOMweb HTTP session factory (transport peer to association._connect_to_scp)."""
+"""DICOMweb HTTP session factory (transport peer to association._connect_to_scp).
 
-from __future__ import annotations
+Public API
+----------
+DicomWebSession
+    Authenticated HTTP session bound to a DICOMweb root URL.
 
+open_session(node: DICOMNode, timeouts: NetworkTimeouts) -> DicomWebSession
+    Open a requests session for node using Basic Auth when credentials are set.
+
+probe_connection(node: DICOMNode, timeouts: NetworkTimeouts) -> tuple[bool, str]
+    Verify DICOMweb reachability and auth via QIDO-RS studies?limit=1.
+"""
 import logging
 from dataclasses import dataclass
 from types import TracebackType
@@ -49,7 +58,7 @@ class DicomWebSession:
 
 
 def open_session(node: DICOMNode, timeouts: NetworkTimeouts) -> DicomWebSession:
-    """Open a requests session for ``node`` using Basic Auth when credentials are set."""
+    """Open a requests session for node using Basic Auth when credentials are set."""
     if not node.dicomweb:
         raise ValueError(f"Remote {node} does not have DICOMweb enabled")
     root = node.dicomweb_root()
@@ -69,8 +78,8 @@ def open_session(node: DICOMNode, timeouts: NetworkTimeouts) -> DicomWebSession:
 def probe_connection(node: DICOMNode, timeouts: NetworkTimeouts) -> tuple[bool, str]:
     """Verify DICOMweb reachability and auth via QIDO-RS studies?limit=1.
 
-    Returns ``(success, message)``. HTTP 200/204 count as success; 401/403 as auth failure.
-    Honors ``NetworkTimeouts.tcp_connection`` / ``network`` on the HTTP request.
+    Returns (success, message). HTTP 200/204 count as success; 401/403 as auth failure.
+    Honors NetworkTimeouts.tcp_connection / network on the HTTP request.
     """
 
     if not node.dicomweb:

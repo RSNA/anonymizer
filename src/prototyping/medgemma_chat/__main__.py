@@ -1,7 +1,5 @@
 """``python -m prototyping.medgemma_chat --model /path/to/weights``."""
 
-from __future__ import annotations
-
 import asyncio
 import sys
 

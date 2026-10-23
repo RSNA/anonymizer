@@ -1,7 +1,5 @@
 """End-to-end pixel PHI tests using synthetic CT with burnt-in sample annotations."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 

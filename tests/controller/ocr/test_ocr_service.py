@@ -1,7 +1,5 @@
 """Tests for RemovePixelPhiRunner model lifecycle (replaces OcrService)."""
 
-from __future__ import annotations
-
 from unittest.mock import MagicMock, patch
 
 from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import _ocr_use_gpu

@@ -1,13 +1,88 @@
-"""Paths and IO for ``0_TS_SEG/annotations/`` label volumes."""
+"""Paths and IO for 0_TS_SEG/annotations/ label volumes.
 
-from __future__ import annotations
+Public API
+----------
+LABELS_FILENAME
+    Labels filename (default 'labels.nii.gz').
 
+LABEL_MAP_FILENAME
+    Label map filename (default 'label_map.json').
+
+EDITS_DIRNAME
+    Edits dirname (default 'edits').
+
+PaintTargetKind
+    Painttargetkind.
+
+annotations_dir(cache_dir: Path) -> Path
+    Annotations dir.
+
+labels_path(cache_dir: Path) -> Path
+    Labels path.
+
+label_map_path(cache_dir: Path) -> Path
+    Label map path.
+
+edits_dir(cache_dir: Path) -> Path
+    Edits dir.
+
+edit_mask_path(cache_dir: Path, structure_name: str) -> Path
+    Edit mask path.
+
+annotations_exist(cache_dir: Path) -> bool
+    Annotations exist.
+
+LabelEntry
+    LabelEntry type.
+
+normalize_label_name(name: str) -> str
+    Canonical form for case-insensitive uniqueness checks.
+
+resolve_normative_organ(name: str) -> str | None
+    Map a free-text segment name to a normative organ key, or None if custom.
+
+user_organ_slug(name: str) -> str
+    Stable slug for custom analytics keys (user:<slug>).
+
+analytics_organ_key(entry: LabelEntry) -> str
+    Ledger / histogram key for one user label.
+
+StrokeUndo
+    StrokeUndo type.
+
+AnnotateSession
+    In-memory annotation state for one Series View session.
+
+read_label_map(cache_dir: Path) -> dict[int, LabelEntry]
+    Load label_map.json for a series cache (empty if missing).
+
+load_annotate_session(cache_dir: Path) -> AnnotateSession | None
+    Load or create an annotation session when a volume grid is available.
+
+next_label_id(label_map: dict[int, LabelEntry]) -> int
+    Next label id.
+
+next_label_color(label_map: dict[int, LabelEntry]) -> tuple[int, int, int]
+    Next label color.
+
+label_name_taken(label_map: dict[int, LabelEntry] | AnnotateSession, name: str, *, exclude_label_id: int | None=None) -> bool
+    True when name matches an existing label (case-insensitive, trimmed).
+
+add_user_label(session: AnnotateSession, name: str, *, normative_organ: str | None | object=...) -> LabelEntry
+    Add user label.
+
+ensure_ts_edit(session: AnnotateSession, structure_name: str, *, source_mask: np.ndarray) -> np.ndarray
+    Return editable binary mask; seed from source_mask on first edit.
+
+save_annotate_session(session: AnnotateSession) -> None
+    Write labels, label map, and TS edit masks to disk.
+"""
 import json
 import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 import numpy as np
 import SimpleITK as sitk
@@ -83,7 +158,7 @@ class LabelEntry:
         return payload
 
     @classmethod
-    def from_json(cls, label_id: int, raw: dict[str, Any]) -> LabelEntry:
+    def from_json(cls, label_id: int, raw: dict[str, Any]) -> Self:
         color = raw.get("color_bgr") or [0, 165, 255]
         normative = raw.get("normative_organ")
         normative_organ = (str(normative).strip() or None) if normative is not None else None
@@ -111,7 +186,7 @@ def _normalize_organ_token(text: str) -> str:
 def resolve_normative_organ(name: str) -> str | None:
     """Map a free-text segment name to a normative organ key, or None if custom.
 
-    Matches exact ``PRIMARY_SEGMENT_ORDER`` keys and display labels
+    Matches exact PRIMARY_SEGMENT_ORDER keys and display labels
     (case-insensitive; spaces/underscores interchangeable).
     """
 
@@ -126,7 +201,7 @@ def resolve_normative_organ(name: str) -> str | None:
 
 
 def user_organ_slug(name: str) -> str:
-    """Stable slug for custom analytics keys (``user:<slug>``)."""
+    """Stable slug for custom analytics keys (user:<slug>)."""
     return (_normalize_organ_token(name) or "segment")[:64]
 
 
@@ -202,7 +277,7 @@ def _write_label_map(path: Path, label_map: dict[int, LabelEntry]) -> None:
 
 
 def read_label_map(cache_dir: Path) -> dict[int, LabelEntry]:
-    """Load ``label_map.json`` for a series cache (empty if missing)."""
+    """Load label_map.json for a series cache (empty if missing)."""
     return _read_label_map(label_map_path(Path(cache_dir)))
 
 
@@ -306,7 +381,7 @@ def label_name_taken(
     *,
     exclude_label_id: int | None = None,
 ) -> bool:
-    """True when ``name`` matches an existing label (case-insensitive, trimmed)."""
+    """True when name matches an existing label (case-insensitive, trimmed)."""
     needle = normalize_label_name(name)
     if not needle:
         return False
@@ -351,7 +426,7 @@ def ensure_ts_edit(
     *,
     source_mask: np.ndarray,
 ) -> np.ndarray:
-    """Return editable binary mask; seed from ``source_mask`` on first edit."""
+    """Return editable binary mask; seed from source_mask on first edit."""
     existing = session.ts_edits.get(structure_name)
     if existing is not None:
         return existing

@@ -1,7 +1,5 @@
 """Manifest chapter order and language sequence for help screenshot capture."""
 
-from __future__ import annotations
-
 from docs_help.manifest import EXPECTED_CHAPTERS, chapter_sort_key, load_manifest
 
 

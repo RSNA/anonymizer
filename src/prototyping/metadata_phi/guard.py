@@ -1,7 +1,5 @@
 """Radiology-context guard: suppress false positives for English (locale-keyed)."""
 
-from __future__ import annotations
-
 import re
 
 from prototyping.metadata_phi.locale_registry import get_locale_pack, load_ocr_whitelist_terms

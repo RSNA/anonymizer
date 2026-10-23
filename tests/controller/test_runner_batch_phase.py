@@ -1,7 +1,5 @@
 """Tests for HarmonizeRunner and FaceBlurRunner batch phase lifecycle."""
 
-from __future__ import annotations
-
 from unittest.mock import MagicMock, patch
 
 from anonymizer.controller.jobs.runner import FaceBlurRunner, HarmonizeRunner

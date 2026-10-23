@@ -1,7 +1,5 @@
 """Series metadata PHI index: unique texts, interning, load wiring."""
 
-from __future__ import annotations
-
 import shutil
 import sys
 from pathlib import Path
@@ -11,13 +9,13 @@ from pydicom import dcmread
 from pydicom.dataset import Dataset, FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian, SecondaryCaptureImageStorage, generate_uid
 
-from anonymizer.controller.series import series_io
 from anonymizer.controller.ai.embedded_phi.metadata.extract import MetadataPhiRow
 from anonymizer.controller.ai.embedded_phi.metadata.series_index import (
     extract_sop_metadata_rows,
     metadata_text_occurrence_count,
     unique_metadata_texts,
 )
+from anonymizer.controller.series import series_io
 
 _REPO = Path(__file__).resolve().parents[5]
 _TEST_DCM = _REPO / "tests/controller/assets/test_dcm_files"

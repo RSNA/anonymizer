@@ -1,13 +1,130 @@
 """CT face de-identification: segment face mask, blur in-mask HU voxels, export derived DICOM.
 
-Planned batch pipeline (PHI Index, not implemented here):
-  iter studies/series → optional remove_pixel_phi → harmonize description → blur face
-  with project prefs; log dialog like ImportFilesDialog; no per-series review modal.
-  Manual preview runs in Series View with a companion image stack beside the primary viewer.
+Public API
+----------
+DEFAULT_FACE_BLUR_OUTPUT_DIRNAME
+    Default face blur output dirname (default 'face_blurred').
+
+DEFAULT_FACE_BLUR_SIGMA_MM
+    Default face blur sigma mm (8.0).
+
+MIN_FACE_BLUR_SIGMA_PX
+    Min face blur sigma px (0.5).
+
+FACE_MASK_SMOOTH_SIGMA_PX
+    Face mask smooth sigma px (1.5).
+
+QA_OUTSIDE_HU_TOLERANCE
+    Qa outside hu tolerance (0.5).
+
+MAX_MEDIAN_KERNEL_PX
+    Max median kernel px (15).
+
+FACE_BLUR_NOISE_HU_MIN
+    Face blur noise hu min (20.0).
+
+FACE_BLUR_NOISE_HU_MAX
+    Face blur noise hu max (60.0).
+
+FaceBlurMode
+    FaceBlurMode type.
+
+DEFAULT_FACE_BLUR_MODE
+    Default face blur mode.
+
+face_blur_status_applicable(eligibility: FaceBlurEligibility, *, already_applied: bool) -> bool
+    Return whether Series View should show the Face blur segment in processing status.
+
+face_blur_context_hint(eligibility: FaceBlurEligibility, geometry: SeriesGeometryResult | None) -> str | None
+    Optional geometry-line suffix when the block reason is not already covered there.
+
+evaluate_face_blur_eligibility(series_directory: Path, *, ds: Dataset | None=None, geometry: SeriesGeometryResult | None=None, modality: str | None=None, enable_tseg_face: bool=True, face_blur_already_applied: bool=False) -> FaceBlurEligibility
+    Decide whether Blur Face should run, prompt for confirmation, or stay disabled.
+
+QaStats
+    QaStats type.
+
+FaceBlurResult
+    FaceBlurResult type.
+
+SeriesVolumeContext
+    Preloaded Series View slice stack (same order and processing as load_series_frames).
+
+FaceBlurPreviewResult
+    In-memory face blur preview; does not write DICOM.
+
+FaceBlurProgress
+    FaceBlurProgress type.
+
+FaceBlurProgressCallback
+    Faceblurprogresscallback.
+
+resolve_face_mask_path(series_directory: Path, *, run_if_missing: bool=True, force_segmentation: bool=False, profile=None) -> Path
+    Return the face mask NIfTI for series_directory.
+
+hu_stack_from_series_frames(frames: np.ndarray) -> np.ndarray
+    Return HU values from a load_series_frames grayscale stack.
+
+load_series_volume_for_blur(series_directory: Path) -> tuple[sitk.Image, np.ndarray, tuple[Path, ...]]
+    Load CT volume + HU stack via load_series_frames (Series View loader).
+
+read_reference_volume(series_directory: Path) -> tuple[sitk.Image, tuple[Path, ...]]
+    Build 3D SimpleITK volume using the Series View DICOM loader.
+
+align_mask_to_volume(mask_path: Path, volume: sitk.Image) -> sitk.Image
+    Align mask to volume.
+
+mask_array_from_volume(mask_image: sitk.Image) -> np.ndarray
+    Mask array from volume.
+
+load_hu_stack(slice_paths: tuple[Path, ...]) -> np.ndarray
+    Load per-slice HU in the same order as readable stackable DICOM paths.
+
+smooth_face_mask_slice(slice_mask: np.ndarray, *, smooth_sigma: float=FACE_MASK_SMOOTH_SIGMA_PX) -> np.ndarray
+    Return float32 blend weights in [0, 1] with softened mask edges (one axial slice).
+
+face_mask_blend_weights(mask: np.ndarray, *, smooth_sigma: float=FACE_MASK_SMOOTH_SIGMA_PX) -> np.ndarray
+    Return per-voxel blend weights for face blur (Z, Y, X), same smoothing as overlay contours.
+
+blur_face_hu_volume(hu: np.ndarray, mask: np.ndarray, *, sigma_mm: float=DEFAULT_FACE_BLUR_SIGMA_MM, blur_mode: FaceBlurMode | str=DEFAULT_FACE_BLUR_MODE, pixel_spacing_mm: tuple[float, float]=(1.0, 1.0), min_sigma_px: float=MIN_FACE_BLUR_SIGMA_PX, mask_smooth_sigma_px: float=FACE_MASK_SMOOTH_SIGMA_PX) -> np.ndarray
+    In-plane face de-identification inside mask, feathered at the boundary.
+
+blur_face_intensity_volume(volume: np.ndarray, mask: np.ndarray, *, low_percentile: float=20.0, high_percentile: float=40.0, mask_smooth_sigma_px: float=FACE_MASK_SMOOTH_SIGMA_PX) -> np.ndarray
+    MR-safe face fill: replace in-mask voxels with intensities sampled from non-face percentiles.
+
+blur_face_volume_for_profile(volume: np.ndarray, mask: np.ndarray, *, profile, sigma_mm: float=DEFAULT_FACE_BLUR_SIGMA_MM, blur_mode: FaceBlurMode | str=DEFAULT_FACE_BLUR_MODE, pixel_spacing_mm: tuple[float, float]=(1.0, 1.0)) -> np.ndarray
+    Dispatch face fill by modality profile; CT path keeps blur_face_hu_volume.
+
+compute_qa_stats(hu_before: np.ndarray, hu_after: np.ndarray, mask: np.ndarray, *, mask_smooth_sigma_px: float=FACE_MASK_SMOOTH_SIGMA_PX) -> QaStats
+    Quantify whether voxels outside the feathered face mask changed.
+
+mask_slice_segmentations(mask: np.ndarray, slice_index: int, *, smooth_sigma: float=FACE_MASK_SMOOTH_SIGMA_PX, contour_epsilon_ratio: float=0.002) -> list[Segmentation]
+    Extract smoothed face-mask contours for one axial slice (viewer overlay polygons).
+
+hu_stack_to_viewer_frames(hu: np.ndarray, slice_paths: tuple[Path, ...], *, reference_ds: Dataset | None=None, frame_dtype: np.dtype | None=None) -> np.ndarray
+    Convert an HU stack to per-slice frames for ImageViewer / save_series_frames.
+
+preview_blurred_slice_frames(preview: FaceBlurPreviewResult, *, reference_ds: Dataset | None=None, frame_dtype: np.dtype | None=None) -> np.ndarray
+    Return the blurred slice stack from a face blur preview result.
+
+apply_face_blur_preview_to_series_frames(frames: np.ndarray, preview: FaceBlurPreviewResult, *, single_frame: bool, reference_ds: Dataset | None=None, frame_dtype: np.dtype | None=None) -> np.ndarray
+    Merge accepted blur preview into a SeriesView frame stack (slices only; projections unchanged).
+
+preview_face_blur(series_directory: Path, *, sigma_mm: float=DEFAULT_FACE_BLUR_SIGMA_MM, blur_mode: FaceBlurMode | str=DEFAULT_FACE_BLUR_MODE, run_segmentation_if_missing: bool=True, force_segmentation: bool=False, volume_context: SeriesVolumeContext | None=None, progress: FaceBlurProgressCallback | None=None) -> FaceBlurPreviewResult
+    Segment face (when needed), blur in-mask HU voxels, and return an in-memory preview.
+
+hu_slice_to_stored_pixels(hu_slice: np.ndarray, *, rescale_slope: float, rescale_intercept: float, dtype: np.dtype) -> np.ndarray
+    Convert HU back to stored DICOM pixels using the source slice rescale tags.
+
+write_blurred_dicom_series(hu: np.ndarray, slice_paths: tuple[Path, ...], output_directory: Path, *, series_description_suffix: str=' — face blurred') -> tuple[Path, ...]
+    Write hu as a DICOM series in the same patient space as slice_paths.
+
+blur_face_series(series_directory: Path, *, output_directory: Path | None=None, sigma_mm: float=DEFAULT_FACE_BLUR_SIGMA_MM, blur_mode: FaceBlurMode | str=DEFAULT_FACE_BLUR_MODE, run_segmentation_if_missing: bool=True, force_segmentation: bool=False, progress: FaceBlurProgressCallback | None=None) -> FaceBlurResult
+    Segment face (when needed), blur in-mask HU voxels, and write derived DICOM.
+
+apply_series_face_blur_metadata(anon_model, anon_series_uid: str, algorithm: str) -> bool
+    Record the face blur algorithm applied to a series in the project database.
 """
-
-from __future__ import annotations
-
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -43,6 +160,7 @@ from anonymizer.controller.ai.tseg.segment import (
 )
 from anonymizer.controller.series.series_io import load_series_frames
 from anonymizer.controller.series.series_overlay import PolygonPoint, Segmentation
+from anonymizer.utils.dicom import DeidMethodCode, record_deid_method_codes
 from anonymizer.utils.modalities import Modality
 
 logger = logging.getLogger(__name__)
@@ -68,7 +186,7 @@ QA_OUTSIDE_HU_TOLERANCE = 0.5
 # Maximum in-plane median kernel (pixels). Larger effective radii use downsample → median → upsample.
 MAX_MEDIAN_KERNEL_PX = 15
 
-# Soft-tissue HU band for ``fill_noise`` mode.
+# Soft-tissue HU band for fill_noise mode.
 FACE_BLUR_NOISE_HU_MIN = 20.0
 FACE_BLUR_NOISE_HU_MAX = 60.0
 
@@ -250,7 +368,7 @@ class FaceBlurResult:
 
 @dataclass(frozen=True)
 class SeriesVolumeContext:
-    """Preloaded Series View slice stack (same order and processing as ``load_series_frames``)."""
+    """Preloaded Series View slice stack (same order and processing as load_series_frames)."""
 
     reference_ds: Dataset
     slice_frames: np.ndarray
@@ -263,9 +381,9 @@ class FaceBlurPreviewResult:
     """In-memory face blur preview; does not write DICOM.
 
     Memory layout:
-    - ``mask``: kept for review overlay only; released on teardown.
-    - ``blurred_slice_frames``: stored-pixel blurred stack for Series View (when precomputed).
-    - ``hu_after``: float HU stack retained only for batch DICOM export paths.
+    - mask: kept for review overlay only; released on teardown.
+    - blurred_slice_frames: stored-pixel blurred stack for Series View (when precomputed).
+    - hu_after: float HU stack retained only for batch DICOM export paths.
     Neither stack is written to disk until the user saves pixel changes.
     """
 
@@ -304,10 +422,10 @@ def resolve_face_mask_path(
     profile=None,
 ) -> Path:
     """
-    Return the face mask NIfTI for ``series_directory``.
+    Return the face mask NIfTI for series_directory.
 
-    Uses ``<series>/0_TS_SEG/seg/face.nii.gz`` (CT) or ``face_mr.nii.gz`` (MR).
-    When no mask exists and ``run_if_missing`` is true, run ``analyze_tseg_face``.
+    Uses <series>/0_TS_SEG/seg/face.nii.gz (CT) or face_mr.nii.gz (MR).
+    When no mask exists and run_if_missing is true, run analyze_tseg_face.
     """
 
     series_directory = Path(series_directory).resolve()
@@ -368,7 +486,7 @@ def resolve_face_mask_path(
 
 
 def hu_stack_from_series_frames(frames: np.ndarray) -> np.ndarray:
-    """Return HU values from a ``load_series_frames`` grayscale stack."""
+    """Return HU values from a load_series_frames grayscale stack."""
     if frames.ndim != 3:
         raise ValueError(f"Face blur requires grayscale slice stack (Z, Y, X), got shape {frames.shape}")
     hu = np.asarray(frames, dtype=np.float32)
@@ -382,7 +500,7 @@ def hu_stack_from_series_frames(frames: np.ndarray) -> np.ndarray:
 
 
 def load_series_volume_for_blur(series_directory: Path) -> tuple[sitk.Image, np.ndarray, tuple[Path, ...]]:
-    """Load CT volume + HU stack via ``load_series_frames`` (Series View loader)."""
+    """Load CT volume + HU stack via load_series_frames (Series View loader)."""
     series_directory = Path(series_directory).resolve()
     loaded = load_series_frames(series_directory)
     reference_ds, frames, slice_paths = loaded.metadata, loaded.frames, loaded.slice_paths
@@ -574,13 +692,13 @@ def blur_face_hu_volume(
     mask_smooth_sigma_px: float = FACE_MASK_SMOOTH_SIGMA_PX,
 ) -> np.ndarray:
     """
-    In-plane face de-identification inside ``mask``, feathered at the boundary.
+    In-plane face de-identification inside mask, feathered at the boundary.
 
     For each slice: apply the selected de-id operator, then blend into the original
-    using smoothed mask weights from ``smooth_face_mask_slice`` (same feathering as
+    using smoothed mask weights from smooth_face_mask_slice (same feathering as
     the Series View face overlay, avoiding jagged segmentation edges).
 
-    ``hu`` and ``mask`` shape: (Z, Y, X).
+    hu and mask shape: (Z, Y, X).
     """
     if hu.shape != mask.shape:
         raise ValueError(f"HU shape {hu.shape} != mask shape {mask.shape}")
@@ -640,7 +758,7 @@ def blur_face_intensity_volume(
     """
     MR-safe face fill: replace in-mask voxels with intensities sampled from non-face percentiles.
 
-    CT callers should continue to use ``blur_face_hu_volume`` unchanged.
+    CT callers should continue to use blur_face_hu_volume unchanged.
     """
     if volume.shape != mask.shape:
         raise ValueError(f"Volume shape {volume.shape} != mask shape {mask.shape}")
@@ -685,7 +803,7 @@ def blur_face_volume_for_profile(
     blur_mode: FaceBlurMode | str = DEFAULT_FACE_BLUR_MODE,
     pixel_spacing_mm: tuple[float, float] = (1.0, 1.0),
 ) -> np.ndarray:
-    """Dispatch face fill by modality profile; CT path keeps ``blur_face_hu_volume``."""
+    """Dispatch face fill by modality profile; CT path keeps blur_face_hu_volume."""
     mode = FaceBlurMode(blur_mode)
     if profile.face_fill == "intensity_percentile" and mode == FaceBlurMode.FILL_NOISE:
         return blur_face_intensity_volume(volume, mask)
@@ -768,10 +886,10 @@ def hu_stack_to_viewer_frames(
     reference_ds: Dataset | None = None,
     frame_dtype: np.dtype | None = None,
 ) -> np.ndarray:
-    """Convert an HU stack to per-slice frames for ``ImageViewer`` / ``save_series_frames``.
+    """Convert an HU stack to per-slice frames for ImageViewer / save_series_frames.
 
-    Integer ``frame_dtype`` returns stored pixels (DICOM encoding). Floating ``frame_dtype``
-    returns HU values in the same space as ``load_series_frames`` (post-modality-LUT floats).
+    Integer frame_dtype returns stored pixels (DICOM encoding). Floating frame_dtype
+    returns HU values in the same space as load_series_frames (post-modality-LUT floats).
     """
     if hu.shape[0] != len(slice_paths):
         raise ValueError(f"HU stack depth {hu.shape[0]} != slice count {len(slice_paths)}")
@@ -911,7 +1029,7 @@ def preview_face_blur(
     """
     Segment face (when needed), blur in-mask HU voxels, and return an in-memory preview.
 
-    Does not write DICOM. Use ``apply_face_blur_preview_to_series_frames`` after user accept.
+    Does not write DICOM. Use apply_face_blur_preview_to_series_frames after user accept.
     """
     series_directory = Path(series_directory).resolve()
 
@@ -1099,10 +1217,10 @@ def write_blurred_dicom_series(
     series_description_suffix: str = " — face blurred",
 ) -> tuple[Path, ...]:
     """
-    Write ``hu`` as a DICOM series in the same patient space as ``slice_paths``.
+    Write hu as a DICOM series in the same patient space as slice_paths.
 
     Each output slice copies geometry and pixel encoding from the matching source slice,
-    assigns new Series/SOP Instance UIDs, and updates ``SeriesDescription``.
+    assigns new Series/SOP Instance UIDs, and updates SeriesDescription.
     """
     if hu.shape[0] != len(slice_paths):
         raise ValueError(f"HU stack depth {hu.shape[0]} != slice count {len(slice_paths)}")
@@ -1150,6 +1268,7 @@ def write_blurred_dicom_series(
         ds.PixelData = stored.tobytes()
         _ensure_utf8_character_set(ds)
         out_path = output_directory / f"{ds.SOPInstanceUID}.dcm"
+        record_deid_method_codes(ds, {DeidMethodCode.CLEAN_VISUAL_FEATURES})
         ds.save_as(str(out_path))
         written.append(out_path)
 
@@ -1186,7 +1305,7 @@ def blur_face_series(
     """
     Segment face (when needed), blur in-mask HU voxels, and write derived DICOM.
 
-    Reads/writes under ``series_directory``; default output is ``face_blurred/``.
+    Reads/writes under series_directory; default output is face_blurred/.
     """
     series_directory = Path(series_directory).resolve()
     out_dir = (

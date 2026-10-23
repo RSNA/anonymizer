@@ -1,12 +1,9 @@
 """Project create/open modalities (codes, aliases, natural language)."""
 
-from __future__ import annotations
-
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
-
-from unittest.mock import MagicMock
 
 from anonymizer.mcp.modality_tokens import (
     extract_modality_tokens_from_text,

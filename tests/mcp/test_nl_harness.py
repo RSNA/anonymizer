@@ -4,8 +4,6 @@ Does not modify prototyping.medgemma_chat. When MedGemma weights / MCP server ar
 unavailable, tests skip. Contract validation of the scenario pack always runs.
 """
 
-from __future__ import annotations
-
 import importlib.util
 import shutil
 import tempfile

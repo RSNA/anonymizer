@@ -8,13 +8,11 @@ the X11 numbering (middle=2, right=3). Series View binds pan to middle and
 window/level to right — without this mapping those roles swap when the
 interpreter ships Tk 8.6 (e.g. uv Python 3.13/3.14) vs Tk 9 (e.g. 3.12).
 
-MouseWheel ``event.delta`` also differs: Win32 uses multiples of 120; classic
+MouseWheel event.delta also differs: Win32 uses multiples of 120; classic
 Aqua Tk 8 usually reports ±1 per notch; Aqua Tk 9 / high-res trackpads can
 report larger magnitudes for the same gesture. Normalize to notch counts so
 analytics (and other) scroll speed stays consistent across Python builds.
 """
-
-from __future__ import annotations
 
 import sys
 import tkinter as tk
@@ -79,14 +77,14 @@ def aqua_middle_right_swapped(widget: tk.Misc) -> bool:
 
 
 def pointer_buttons(widget: tk.Misc) -> PointerButtons:
-    """Return middle/right Tk button numbers for ``widget``'s Tk runtime."""
+    """Return middle/right Tk button numbers for widget's Tk runtime."""
     if aqua_middle_right_swapped(widget):
         return PointerButtons(middle=3, right=2)
     return PointerButtons(middle=2, right=3)
 
 
 def mouse_wheel_notches(delta: int, widget: tk.Misc | None = None) -> int:
-    """Map a MouseWheel ``delta`` to a signed notch count (±1…3).
+    """Map a MouseWheel delta to a signed notch count (±1…3).
 
     * Win32 (and any |delta| ≥ 120): classic 120-unit notches.
     * Aqua Tk 8 (Python 3.13/3.14 on macOS): delta is usually ±1 — boost to

@@ -143,17 +143,17 @@ workflows:
         severity: soft
         deps: [project]
         recipe:
-          policy: clinical
+          options: retain
         ux_elements:
-          - Anonymization Policy Clinical
-          - Provenance clinical-anonymizer.script (project)
+          - De-identification Options Retain
+          - Script default-anonymizer.script
           - Applicable Standard
           - Active / Removed / All view
           - Search and Operand filter
-          - Tag / Name / Operand list (clinical keep rules)
+          - Tag / Name / Operand list (Retain keep rules)
           - Operand help panel / Load Patient Lookup Table
           - Accept / Revert / Cancel
-        caption: "Anonymizer Script Editor under Clinical policy — policy chrome, clinical packaged script provenance, Active rules."
+        caption: "Anonymizer Script Editor under Retain options — option chrome, script path, Active rules."
       - id: LookupTable
         file: LookupTable.png
         window: LookupTableDialog

@@ -11,8 +11,6 @@ Opt-in (excluded from default suite)::
       --override-ini='addopts='
 """
 
-from __future__ import annotations
-
 from collections import Counter
 from pathlib import Path
 
@@ -25,8 +23,8 @@ from prototyping.pseudo_phi_deid.paths import (
     DEFAULT_PATID_CROSSWALK,
     DEFAULT_UID_CROSSWALK,
 )
-from prototyping.pseudo_phi_deid.pipeline.clinical import ensure_experiment_script_copy
 from prototyping.pseudo_phi_deid.pipeline.run import RunConfig, run_pairs
+from prototyping.pseudo_phi_deid.pipeline.script_session import ensure_experiment_script_copy
 from prototyping.pseudo_phi_deid.score import score_pairs
 
 # Interim core-stack gate (no Sep1999 NER-prep exceptions). Raise to 99.9 when long-tail cleared.

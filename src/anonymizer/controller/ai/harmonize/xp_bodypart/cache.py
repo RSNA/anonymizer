@@ -1,10 +1,43 @@
-"""Download / probe / remove XR body-part weights under ``assets/ai/xp_bodypart``.
+"""Download / probe / remove XR body-part weights under assets/ai/xp_bodypart.
 
-Upstream: MedicalAILabo Xp-Bodypart-Mislabel-Checker. Product: **XR body part**.
+Public API
+----------
+XP_BODYPART_DIR
+    Xp bodypart dir.
+
+XP_BODYPART_WEIGHT_NAME
+    Xp bodypart weight name (default 'xp_bodypart.pt').
+
+XP_BODYPART_WEIGHT_PATH
+    Xp bodypart weight path.
+
+XP_BODYPART_PARAMS_PATH
+    Xp bodypart params path.
+
+DOWNLOAD_ID
+    Download id.
+
+MODEL_SLOT
+    Model slot.
+
+clear_model_cache() -> None
+    Drop in-memory weights (after remove/download).
+
+XpBodypartModelStatus
+    XpBodypartModelStatus type.
+
+probe_xp_bodypart_models() -> tuple[XpBodypartModelStatus, str]
+    Return cache status under assets/ai/xp_bodypart.
+
+xp_bodypart_ready() -> bool
+    Xp bodypart ready.
+
+download_xp_bodypart_models(*, verbose: bool=False) -> tuple[bool, str]
+    Download Xp-Bodypart-Checker weights into assets/ai/xp_bodypart.
+
+remove_xp_bodypart_models() -> None
+    Delete cached Xp bodypart weights.
 """
-
-from __future__ import annotations
-
 import logging
 import shutil
 from enum import StrEnum
@@ -14,12 +47,11 @@ import requests
 
 from anonymizer.controller.ai.harmonize.model_slot import ModelSlot
 from anonymizer.controller.ai.model_download import update_model_download
-from anonymizer.utils.package_paths import ai_feature_dir
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 
-XP_BODYPART_DIR = ai_feature_dir("xp_bodypart")
+XP_BODYPART_DIR = Path("assets/ai/xp_bodypart")
 XP_BODYPART_WEIGHT_NAME = "xp_bodypart.pt"
 XP_BODYPART_WEIGHT_PATH = XP_BODYPART_DIR / XP_BODYPART_WEIGHT_NAME
 XP_BODYPART_PARAMS_PATH = XP_BODYPART_DIR / "parameters.json"
@@ -34,7 +66,7 @@ DOWNLOAD_ID = "harmonize_xr_bodypart"
 
 _downloading = False
 
-# Loaded weights live here (not in ``predict``) so download/remove can clear without importing inference.
+# Loaded weights live here (not in predict) so download/remove can clear without importing inference.
 MODEL_SLOT: ModelSlot = ModelSlot(label="Xp bodypart")
 
 

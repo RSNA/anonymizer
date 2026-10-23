@@ -1,7 +1,5 @@
 """Tests for headless AiBatchConfig JSON."""
 
-from __future__ import annotations
-
 import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -22,6 +20,7 @@ from anonymizer.controller.ai.batch_process import AiBatchProcessOptions, AiBatc
 from anonymizer.controller.ai.blur_face import FaceBlurMode
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import PixelPhiRemovalMode
 from anonymizer.controller.jobs.runner import OcrRemoveMode
+from tests.paths import REPO_ROOT
 
 
 def test_round_trip_json_to_options() -> None:
@@ -57,7 +56,9 @@ def test_round_trip_json_to_options() -> None:
 
 def test_from_dict_parses_plan_example() -> None:
     data = json.loads(
-        Path("docs/en/10-headless/AiBatchConfig.example.json").read_text(encoding="utf-8")
+        (REPO_ROOT / "docs/en/10-headless/AiBatchConfig.example.json").read_text(
+            encoding="utf-8"
+        )
     )
     config = AiBatchConfig.from_dict(data)
 

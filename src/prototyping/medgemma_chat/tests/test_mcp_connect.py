@@ -1,7 +1,5 @@
 """Tests for MCP connect-error detection (ExceptionGroup / httpx)."""
 
-from __future__ import annotations
-
 from prototyping.medgemma_chat.mcp_client import (
     McpConnectionError,
     is_mcp_connect_error,

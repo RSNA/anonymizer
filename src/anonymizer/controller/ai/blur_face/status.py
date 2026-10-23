@@ -1,7 +1,16 @@
-"""Face blur batch and progress status strings (controller layer)."""
+"""Face blur batch and progress status strings (controller layer).
 
-from __future__ import annotations
+Public API
+----------
+FACE_BLUR_MODE_LABELS
+    Face blur mode labels.
 
+face_blur_mode_display_label(mode: FaceBlurMode) -> str
+    Face blur mode display label.
+
+format_face_blur_progress_status(progress: FaceBlurProgress, *, include_pct: bool=True) -> str
+    Format face blur progress status.
+"""
 from anonymizer.controller.ai.blur_face.pipeline import FaceBlurMode, FaceBlurProgress
 from anonymizer.utils.translate import _
 

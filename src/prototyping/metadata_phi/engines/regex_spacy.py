@@ -1,7 +1,5 @@
 """Hybrid baseline: locale regex packs + optional spaCy NER."""
 
-from __future__ import annotations
-
 import os
 import re
 

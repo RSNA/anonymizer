@@ -5,8 +5,6 @@ visible reply (after MedGemma thought blocks); falls back to scanning thoughts
 when the model only constructed the call inside ``thought``.
 """
 
-from __future__ import annotations
-
 import json
 import re
 from typing import Any

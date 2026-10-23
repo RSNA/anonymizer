@@ -7,8 +7,6 @@ that whitelist and inflates removed-text / pixel counts.
 Workflow log lines never include OCR/PHI strings — only Series View wording and counts.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR

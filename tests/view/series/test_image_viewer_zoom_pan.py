@@ -1,7 +1,5 @@
 """Tests for ImageViewer zoom/pan transforms and Shift+LMB pan vs paint."""
 
-from __future__ import annotations
-
 import tkinter as tk
 from types import SimpleNamespace
 from unittest.mock import MagicMock

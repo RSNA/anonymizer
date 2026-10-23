@@ -1,7 +1,5 @@
 """Tests for TotalSegmentator face segmentation API (mocked inference)."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 

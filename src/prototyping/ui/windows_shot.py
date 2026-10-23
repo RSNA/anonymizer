@@ -10,8 +10,6 @@ black resize margin, no edge-color trim.
 PNGs + report.txt land in ``docs/.capture_work/windows_shot_proto/``.
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 import sys

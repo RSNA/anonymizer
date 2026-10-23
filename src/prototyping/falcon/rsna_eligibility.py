@@ -1,7 +1,5 @@
 """FALCON RSNA CT series eligibility scan (preprocessing only, no model inference)."""
 
-from __future__ import annotations
-
 import csv
 import gc
 import logging

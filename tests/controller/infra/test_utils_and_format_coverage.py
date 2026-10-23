@@ -1,7 +1,5 @@
 """Pure-ish coverage for utils + pipeline format helpers (under controller testpaths)."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import numpy as np

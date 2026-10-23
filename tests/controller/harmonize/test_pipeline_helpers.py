@@ -1,7 +1,5 @@
 """Non-GPU pipeline helpers: classify, format, apply descriptions, enumerations."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest
@@ -123,7 +121,7 @@ def test_enumerate_and_apply_series_descriptions(anon_model: AnonymizerModel, tm
     ds.StudyDescription = "Chest XR"
     ds.SeriesDescription = "Chest AP"
     ds.StudyDate = "20230101"
-    anon_model.capture_phi(source="pytest", ds=ds, date_offset_from_hash=0)
+    anon_model.capture_phi(source="pytest", ds=ds, date_delta=0)
 
     assert study_root_for_series(series_dir) == images / patient / study
     enumerated = enumerate_planar_series_for_studies(images, [(patient, study)])

@@ -1,7 +1,5 @@
 """Tests for harmonize_series Playbook merge logic and sequential pipeline."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 

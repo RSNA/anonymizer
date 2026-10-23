@@ -1,7 +1,5 @@
 """Unit tests for Dataset analytics bucketing and organ volumes."""
 
-from __future__ import annotations
-
 import json
 from collections import Counter
 from dataclasses import replace

@@ -1,7 +1,5 @@
 """Tests for series-grain Patient Lookup CSV rows."""
 
-from __future__ import annotations
-
 from anonymizer.controller.phi.phi_io import PHI_IndexRecord, PHI_SeriesIndexRecord
 
 

@@ -1,7 +1,5 @@
 """Unit tests for XR pixel body-part preprocess, fusion, and cache probe."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import numpy as np

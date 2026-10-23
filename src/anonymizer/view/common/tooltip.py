@@ -1,14 +1,13 @@
 """Shared hover tooltip helpers for tkinter / customtkinter widgets.
 
-Colors and spacing come from ``ThemeManager.theme["Tooltip"]`` (rsna_theme.json)
+Colors and spacing come from ThemeManager.theme["Tooltip"] (rsna_theme.json)
 so Dataset, Analytics, Series View, and settings dialogs share one look.
-Callers may override ``bg``/``fg`` via ``TooltipContent`` (e.g. entity-class chips).
+Callers may override bg/fg/bold via TooltipContent (e.g. entity-class chips).
 """
-
-from __future__ import annotations
 
 import contextlib
 import tkinter as tk
+import tkinter.font as tkfont
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -20,11 +19,12 @@ TooltipText = str | Callable[[], str]
 
 @dataclass(frozen=True, slots=True)
 class TooltipContent:
-    """Tooltip payload; optional ``bg``/``fg`` override theme colors."""
+    """Tooltip payload; optional bg/fg/bold override theme styling."""
 
     text: str
     bg: str | None = None
     fg: str | None = None
+    bold: bool = False
 
 # Fallbacks only if theme JSON is incomplete (keep in sync with rsna_theme Tooltip).
 _FALLBACK_FG = ("gray90", "gray20")
@@ -72,6 +72,14 @@ def _resolve_tooltip_text(text: TooltipText) -> str:
     return text() if callable(text) else text
 
 
+def _bold_font_spec() -> tuple[str, int, str] | None:
+    """(family, size, "bold") for the default font, or None if unavailable."""
+    with contextlib.suppress(tk.TclError):
+        base = tkfont.nametofont("TkDefaultFont")
+        return (str(base.cget("family")), int(base.cget("size")), "bold")
+    return None
+
+
 def show_tooltip(
     parent: tk.Misc,
     x_root: int,
@@ -80,6 +88,7 @@ def show_tooltip(
     *,
     bg: str | None = None,
     fg: str | None = None,
+    bold: bool = False,
 ) -> tk.Toplevel:
     """Show a borderless tooltip window at screen coordinates (theme-styled)."""
     style = tooltip_style()
@@ -103,6 +112,7 @@ def show_tooltip(
         text=text,
         bg=bg_color,
         fg=fg_color,
+        font=_bold_font_spec() if bold else None,
         padx=style["padx"],
         pady=style["pady"],
         wraplength=style["wraplength"],
@@ -161,7 +171,7 @@ def bind_hover_tooltip(
     *,
     parent: tk.Misc | None = None,
 ) -> HoverTooltipBinding:
-    """Attach a hover tooltip to ``widget``; ``text`` may be a callable for dynamic content."""
+    """Attach a hover tooltip to widget; text may be a callable for dynamic content."""
     binding = HoverTooltipBinding(widget, text, parent=parent)
     binding.bind()
     return binding
@@ -218,6 +228,7 @@ class MotionTooltipController:
             content.text,
             bg=content.bg,
             fg=content.fg,
+            bold=content.bold,
         )
 
     def on_motion(self, event: tk.Event) -> None:

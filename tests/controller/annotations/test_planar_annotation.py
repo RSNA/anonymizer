@@ -1,7 +1,5 @@
 """Planar CR/DX/US/MG annotation geometry (pixel-space fallback)."""
 
-from __future__ import annotations
-
 import shutil
 from pathlib import Path
 

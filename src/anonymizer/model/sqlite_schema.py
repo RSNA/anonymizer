@@ -1,14 +1,12 @@
-"""Additive SQLite schema sync for existing project ``anonymizer.db`` files.
+"""Additive SQLite schema sync for existing project anonymizer.db files.
 
-After ``Base.metadata.create_all``, call :func:`ensure_sqlite_columns` so older
+After Base.metadata.create_all, call :func:`ensure_sqlite_columns` so older
 released databases (e.g. PyPI / master 19.0.10) gain newly mapped columns and
 the pixel→embedded renames. Non-SQLite URLs are a no-op.
 
-Data moves for the retired ``lookup_patient`` table use connection SQL (that
+Data moves for the retired lookup_patient table use connection SQL (that
 table is no longer an ORM class). Unreleased intermediate formats are not handled.
 """
-
-from __future__ import annotations
 
 import logging
 from typing import Any
@@ -47,7 +45,7 @@ def _sqlite_column_type(column: Column[Any]) -> str | None:
 
 
 def _sqlite_add_column_sql(table_name: str, column: Column[Any]) -> str | None:
-    """Build ``ALTER TABLE … ADD COLUMN`` from an ORM column, or None if unsupported."""
+    """Build ALTER TABLE … ADD COLUMN from an ORM column, or None if unsupported."""
     sqlite_type = _sqlite_column_type(column)
     if sqlite_type is None:
         return None
@@ -74,7 +72,7 @@ def _column_names(conn: Any, table_name: str) -> set[str]:
 
 
 def _fold_lookup_patient_into_phi(conn: Any) -> None:
-    """Copy released ``lookup_patient`` rows onto ``phi``, then drop the table."""
+    """Copy released lookup_patient rows onto phi, then drop the table."""
     if not _table_exists(conn, _LOOKUP_PATIENT_TABLE):
         return
     if not _table_exists(conn, "phi"):
@@ -121,12 +119,12 @@ def ensure_sqlite_columns(engine: Engine, metadata: MetaData, *, db_url: str) ->
     Add any ORM-mapped columns missing from an existing SQLite database.
 
     Also applies the finite 19.0.10 pixel→embedded renames and folds
-    ``lookup_patient`` into ``phi`` when that legacy table is present.
+    lookup_patient into phi when that legacy table is present.
 
     Args:
         engine: SQLAlchemy engine bound to the project database.
-        metadata: Declarative metadata (typically ``Base.metadata``).
-        db_url: Database URL; non-``sqlite`` URLs are skipped.
+        metadata: Declarative metadata (typically Base.metadata).
+        db_url: Database URL; non-sqlite URLs are skipped.
     """
     if not db_url.startswith("sqlite"):
         logger.debug("SQLite schema sync skipped for non-sqlite database URL.")

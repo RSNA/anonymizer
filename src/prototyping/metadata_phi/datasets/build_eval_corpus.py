@@ -4,8 +4,6 @@ Outputs under fixtures/en_US/corpus/ (local data paths; not committed bulky dump
 unless small). See metadata_phi_EXPERIMENT.md § Evaluation plan.
 """
 
-from __future__ import annotations
-
 import argparse
 import csv
 import json

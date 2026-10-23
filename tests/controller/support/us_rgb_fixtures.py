@@ -1,7 +1,5 @@
 """Shared RGB US single-frame fixture paths and OCR expectations for Series View vs batch."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from openjpeg.utils import encode_array

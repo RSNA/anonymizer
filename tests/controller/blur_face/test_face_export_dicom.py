@@ -1,7 +1,5 @@
 """Tests for blurred face DICOM export."""
 
-from __future__ import annotations
-
 import shutil
 import warnings
 from pathlib import Path

@@ -1,7 +1,28 @@
-"""Request / response dataclasses for ProjectController DICOM / export UX."""
+"""Request / response dataclasses for ProjectController DICOM / export UX.
 
-from __future__ import annotations
+Public API
+----------
+EchoRequest
+    EchoRequest type.
 
+EchoResponse
+    EchoResponse type.
+
+FindStudyRequest
+    FindStudyRequest type.
+
+FindStudyResponse
+    FindStudyResponse type.
+
+MoveStudiesRequest
+    MoveStudiesRequest type.
+
+ExportPatientsRequest
+    ExportPatientsRequest type.
+
+ExportPatientsResponse
+    ExportPatientsResponse type.
+"""
 from dataclasses import dataclass
 from queue import Queue
 

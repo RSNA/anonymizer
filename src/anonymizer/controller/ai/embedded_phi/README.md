@@ -14,9 +14,9 @@ Burnt-in pixel OCR (`pixel/`) and free-text NER (`ner/`) for post-ingest de-iden
 | [`pixel/remove_pixel_phi.py`](pixel/remove_pixel_phi.py) | Frame blackout / inpaint |
 | [`metadata/iod_allowlist.py`](metadata/iod_allowlist.py) | SOP Class IOD allow-list → `iod_unexpected` on public text/dates |
 | [`metadata/series_index.py`](metadata/series_index.py) | Per-SOP rows + interned unique free-text index for series load / Detect |
-| [`metadata/process_private_tags_tcia.py`](metadata/process_private_tags_tcia.py) | Creator-aware TCIA Private KB apply + disposition helpers |
+| [`controller/private_tags/`](../../private_tags/) | TCIA Private KB (`lookup_private_tag`, `private_tag_operation`) |
 
-**PseudoPHI header path (no pixels / no regex):** (1) Clinical anonymizer script → (2) `process_private_tags_tcia` → (3–6) extract / prepare NER / bulk detect / scrub.
+**PseudoPHI header path (no pixels / no regex):** (1) Default anonymizer script with SAFE_PRIVATE / Retain options walk → (2–5) extract / prepare NER / bulk detect / scrub.
 
 IOD JSON is vendored at [`assets/dicom_standard/2025e/json/`](../../../assets/dicom_standard/2025e/json/) (~**2.4 MiB** total; see [`SOURCE.md`](../../../assets/dicom_standard/SOURCE.md)).
 
@@ -76,7 +76,7 @@ during detect**, so NER always sees the original body (never anonymized strings)
 | **Detect — NER** | Run `detect_entities` on the **same original** text. Spans that overlap a metadata hit are **dropped** (metadata wins — e.g. NER `ID` on a PatientID string is discarded). |
 | **Remove** | Metadata entities **always** write `replacement` (anon DICOM value), in both blank and synth modes. NER entities blank or synthesize as usual. |
 
-UI hover shows the entity `label` (DICOM keyword for metadata, product label for NER). Metadata highlights reuse the scored color family (`PatientID` → ID blue, `PatientName` → NAME, dates → DATE).
+UI hover shows the entity `label` (DICOM keyword for metadata, product label for NER). Metadata highlights reuse the scored color family (`PatientID` → ID blue, `PatientName` → FIRST_NAME, dates → DATE).
 
 ## Modalities (`process_report_text`)
 
@@ -97,13 +97,14 @@ Write-back: always builds a **Basic Text SR** (ML/labelling). Also de-ids the so
 
 ## NER rules
 
-- **Model only** (OpenMed ClinicalE5 token-classification). No radiology lexicon, view-code lists, or phone regex.
-- Product labels: `NAME`, `LOCATION`, `ID`, `PHONE`, `DATE`, `EMAIL`.
+- **Model only** (OpenMed ClinicalE5 token-classification), used exactly as published — no suppressed output classes, no radiology lexicon, view-code lists, or phone regex. Model spans are returned as classified — no merging, and OCR boxes never re-label neighbouring boxes.
+- Pixel path calls the model **once per frame** on all OCR box texts in reading order, joined as a comma list (boxes are distinct fields; comma boundaries return more dates as single spans than a space join) (the model is a text model; isolated fragments deny it context), then maps entities back to the boxes they fall in. The OCR box is the display/removal unit: a labelled box is removed whole, including prefixes/markers the model did not tag (`DOB:`, `[M]`). Hover shows only the entities detected inside that box. At the pixel boundary, `FIRST_NAME`/`LAST_NAME` collapse to the category `NAME` (pixel removal does not distinguish them, and burned-in DICOM-order names would otherwise appear reversed); report NER keeps the distinction for synthetic replacement.
+- Product labels: `FIRST_NAME`, `LAST_NAME`, `LOCATION`, `ID`, `PHONE`, `DATE`, `EMAIL`.
 - Report metadata entities use DICOM keywords as `label` (not product labels); see table above.
 - Feature gate: `report_text_phi_ready()` ≡ NER ready; Series View / batch also need OCR.
 
 ### Scores and threshold
 
-- Each Hugging Face span carries a **softmax confidence** for the model’s **fine-grained** label (e.g. `first_name`, `medical_record_number`, `customer_id`), not for the product super-category (`NAME`, `ID`, …) after `_TO_SCORED` mapping.
+- Each Hugging Face span carries a **softmax confidence** for the model’s **fine-grained** label (e.g. `first_name`, `medical_record_number`, `customer_id`), not for the product super-category (`FIRST_NAME`, `ID`, …) after `_TO_SCORED` mapping.
 - Aggregation uses `aggregation_strategy="max"` (merge WordPieces). **No score threshold is configured** — the pipeline keeps all aggregated spans (Hugging Face default `threshold=0.0`). Product code does not drop low-score entities.
 - Report View hover shows the entity `label` only (product or DICOM keyword; not the fine-grained score).

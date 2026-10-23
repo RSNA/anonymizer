@@ -36,19 +36,24 @@ from anonymizer.controller.ai.embedded_phi.pixel.cache import OCR_MODEL_DIR, Ocr
 from anonymizer.controller.ai.tseg.config import apply_ai_features_preferences, merge_ai_features_into_state
 from anonymizer.controller.ai.tseg.readiness import log_runtime_status
 from anonymizer.controller.analytics.prefs import apply_analytics_preferences, merge_analytics_into_state
+from anonymizer.controller.ctp_lookup import commit_ctp_lookup
 from anonymizer.controller.headless import create_headless_controller, load_model
-from anonymizer.controller.ingest.process_ctp_lookup import commit_ctp_lookup
 from anonymizer.controller.project import ProjectController
 from anonymizer.mcp.server import MCP_HTTP_PATH, run_MCP
 from anonymizer.model.project import DICOMRuntimeError, ProjectModel
 from anonymizer.utils.app_state import ai_features_from_state, analytics_from_state, get_app_state_path
 from anonymizer.utils.logging import init_logging
-from anonymizer.utils.package_paths import ai_feature_dir
 from anonymizer.utils.storage.dicom_tree import (
     is_hidden_path,
     list_import_directory_files,
 )
-from anonymizer.utils.translate import _, get_current_language, get_current_language_code, set_language
+from anonymizer.utils.translate import (
+    _,
+    get_current_language,
+    get_current_language_code,
+    set_language,
+    set_language_code,
+)
 from anonymizer.utils.version import get_version
 from anonymizer.view.ai.ai_features_dialog import show_ai_features_setup_dialog
 from anonymizer.view.common.app_window import (
@@ -546,8 +551,20 @@ class Anonymizer(ctk.CTk):
             if not self.controller:
                 raise RuntimeError(_("Fatal Internal Error, Project Controller not created"))
 
-            # Install Strict/Clinical packaged script beside ProjectModel.json.
-            self.controller.apply_anonymization_policy(model.anonymization_policy)
+            # Compile when still on the packaged default; keep a staged project script.
+            project_script = Path(model.storage_dir) / f"{model.site_id}-anonymizer.script"
+            try:
+                keep_staged = (
+                    Path(model.anonymizer_script_path).resolve() == project_script.resolve()
+                    and project_script.is_file()
+                )
+            except OSError:
+                keep_staged = (
+                    Path(model.anonymizer_script_path) == project_script
+                    and project_script.is_file()
+                )
+            if not keep_staged:
+                self.controller.apply_confidentiality_options(model.confidentiality_options)
 
             if java_phi_studies:
                 self.controller.import_java_phi_studies(java_phi_studies)
@@ -1768,8 +1785,10 @@ def main(
     # path[0]=="" resolves to install_dir and can shadow venv packages (e.g. totalsegmentator).
     if sys.path and sys.path[0] in ("", "."):
         sys.path.pop(0)
+    # Locales and other assets/ paths are install-dir relative.
+    set_language_code("en_US")
 
-    tseg_home = ai_feature_dir("tseg")
+    tseg_home = Path("assets/ai/tseg")
     tseg_weights = tseg_home / "nnunet" / "results"
     OCR_MODEL_DIR.mkdir(parents=True, exist_ok=True)
     tseg_home.mkdir(parents=True, exist_ok=True)
@@ -1820,7 +1839,7 @@ def main(
 
 
 def parse_mcp_bind(addr: str) -> tuple[str, int]:
-    """Parse ``HOST:PORT`` for ``--mcp``. Raises ``ValueError`` if invalid."""
+    """Parse HOST:PORT for --mcp. Raises ValueError if invalid."""
     host, sep, port_s = addr.rpartition(":")
     if not sep or not host or not port_s:
         raise ValueError(f"expected HOST:PORT, got {addr!r}")
@@ -1843,8 +1862,8 @@ def dispatch_runtime(
 ) -> None:
     """Choose GUI / headless receive / MCP after shared bootstrap.
 
-    ``-c`` and ``--mcp`` are mutually exclusive.
-    ``mcp`` is ``None`` (off), ``""`` (stdio), or ``HOST:PORT`` (HTTP).
+    -c and --mcp are mutually exclusive.
+    mcp is None (off), "" (stdio), or HOST:PORT (HTTP).
     """
     if config is not None and mcp is not None:
         logger.error("-c/--config and --mcp are mutually exclusive")

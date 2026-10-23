@@ -1,7 +1,5 @@
 """Glossary-first SCORECARD and FINAL_REPORT."""
 
-from __future__ import annotations
-
 import json
 from collections.abc import Sequence
 from pathlib import Path
@@ -281,7 +279,7 @@ def write_final_report(results_dir: Path | None = None) -> Path:
 SECTION_12_HEADING = "## 12. PseudoPHI-eval residual errors — sources and fixes"
 
 SECTION_12_BODY = """
-Baseline (pre gold-keep): **PseudoPHI-eval** at **98.7209%** — **3430** mismatches. Goal **≥99.5%** (needs ≈ **2090** additional matches). **Levers: Clinical script + OpenMed NER only** (no free-text regex scrubs).
+Baseline (pre gold-keep): **PseudoPHI-eval** at **98.7209%** — **3430** mismatches. Goal **≥99.5%** (needs ≈ **2090** additional matches). **Levers: anonymizer script + OpenMed NER only** (no free-text regex scrubs).
 
 ### 12.1 How failures break down (pre-fix)
 
@@ -296,8 +294,8 @@ Baseline (pre gold-keep): **PseudoPHI-eval** at **98.7209%** — **3430** mismat
 
 | Cluster | Rows | Root cause | Lever | Fix |
 | --- | ---: | --- | --- | --- |
-| Occupation, ImageComments, Time/DateOfLastCalibration, DerivationDescription, SPSID, PatientComments, PatientState | ~2135 | Website Table 1 `@remove()`; **gold keeps** | Script | Clinical script fine-tune (keep vs Table 1 `@remove`) |
-| Private creators (GEIIS/STENTOR `…,0010`) | ~413 | Clinical deleted creator IDs | Script | Keep `is_private_creator` under Retain Safe |
+| Occupation, ImageComments, Time/DateOfLastCalibration, DerivationDescription, SPSID, PatientComments, PatientState | ~2135 | Website Table 1 `@remove()`; **gold keeps** | Script | anonymizer script fine-tune (keep vs Table 1 `@remove`) |
+| Private creators (GEIIS/STENTOR `…,0010`) | ~413 | script deleted creator IDs | Script | Keep `is_private_creator` under Retain Safe |
 | StudyDescription / CodeMeaning (`for <name>`, `FORFILE`) | ~396 | OpenMed miss / wrap context | NER | Single bulk chunked pass after script; person blank absorbs adjacent ` for` |
 | SecondaryCaptureDeviceID | 145 | Not in Table 1; gold empties | Script | PS3.15-style keyword empty |
 | SeriesDescription `Sep1999` | 152 | OpenMed does not tag DATE | NER | Only if model labels it — **no** month-year regex |
@@ -310,7 +308,7 @@ Gold-keep list alone ≈ **2135** rows → clears **99.5%**. Stack private-creat
 ### 12.4 Implemented (script + NER only)
 
 1. Script: keep vs Table 1 `@remove` where DeIdentified gold retains.
-2. Script: keep private creator elements under Clinical.
+2. Script: keep private creator elements under Retain options.
 3. Script: empty `SecondaryCaptureDeviceID` (keyword empty).
 4. NER: one bulk pass after script — all remaining text VRs joined, chunked to model char limit (~1600); no bare-value re-detect.
 5. NER: person-span blank extends over immediate ` for` / ` for ` (span completion).

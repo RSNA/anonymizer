@@ -1,7 +1,5 @@
 """Load TCIA DICOM-SR-Breast-Clinical (wgllssg1) Structured Reports."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from pathlib import Path
 

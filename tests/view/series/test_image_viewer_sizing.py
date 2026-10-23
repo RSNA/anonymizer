@@ -5,8 +5,6 @@ Widget-level invariants only. Window-driven resize behaviour lives in
 directly invoked layout call here would not prove the handler ever runs.
 """
 
-from __future__ import annotations
-
 import tkinter as tk
 from unittest.mock import MagicMock
 

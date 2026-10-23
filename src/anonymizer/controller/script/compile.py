@@ -11,8 +11,6 @@ INSTITUTION_IDENTITY_TAGS
 KEEP_DEVICE_TAGS
     Tag lists used by compile overlays and option inference.
 """
-from __future__ import annotations
-
 import logging
 from pathlib import Path
 

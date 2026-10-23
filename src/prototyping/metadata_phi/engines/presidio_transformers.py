@@ -5,8 +5,6 @@ Presidio DATE_TIME and phone stay on for report-like text; DICOM UID tags are
 not scanned, and UID-shaped spans are dropped after analysis.
 """
 
-from __future__ import annotations
-
 import os
 
 from prototyping.metadata_phi.engines.label_map import to_scored_label

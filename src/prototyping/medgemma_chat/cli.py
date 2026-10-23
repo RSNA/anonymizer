@@ -1,7 +1,5 @@
 """CLI REPL for MedGemma + Anonymizer MCP."""
 
-from __future__ import annotations
-
 import argparse
 import asyncio
 import logging

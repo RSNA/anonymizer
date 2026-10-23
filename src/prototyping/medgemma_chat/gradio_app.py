@@ -1,7 +1,5 @@
 """Gradio UI for MedGemma + Anonymizer MCP (lazy-imports gradio)."""
 
-from __future__ import annotations
-
 import asyncio
 import concurrent.futures
 import logging

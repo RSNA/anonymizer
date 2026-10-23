@@ -5,8 +5,6 @@ Public API
 ProjectController
     DICOM Application Entity (pynetdicom.ae sub-class) for the Anonymizer.
 """
-from __future__ import annotations
-
 import logging
 import os
 import shutil
@@ -712,7 +710,7 @@ class ProjectController(
         threading.Thread(
             target=self._manage_export,
             name="ManageExport",
-            args=(er),
+            args=(er,),
             daemon=True,  # daemon threads are abruptly stopped at shutdown
         ).start()
 

@@ -1,7 +1,5 @@
 """Tests for anonymizer script editor controller helpers."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest

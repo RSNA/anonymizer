@@ -20,8 +20,6 @@ PRIVATE_KB_FALLBACK
 Consumers look up via tcia_kb.lookup_private_tag; do not edit by hand.
 """
 
-from __future__ import annotations
-
 from enum import StrEnum
 from typing import NamedTuple
 

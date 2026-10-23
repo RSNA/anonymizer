@@ -1,7 +1,16 @@
-"""DICOM UID hierarchy trees used by Find / retrieve (C-MOVE / C-GET)."""
+"""DICOM UID hierarchy trees used by Find / retrieve (C-MOVE / C-GET).
 
-from __future__ import annotations
+Public API
+----------
+InstanceUIDHierarchy
+    InstanceUIDHierarchy type.
 
+SeriesUIDHierarchy
+    SeriesUIDHierarchy type.
+
+StudyUIDHierarchy
+    StudyUIDHierarchy type.
+"""
 from typing import Dict, List, Optional
 
 from pydicom import Dataset

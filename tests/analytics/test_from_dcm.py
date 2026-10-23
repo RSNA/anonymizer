@@ -4,8 +4,6 @@ Imports CT + CR (+ optional MR) headers via ``capture_phi``, writes a minimal
 images tree, and verifies the resulting widget selection matches layout rules.
 """
 
-from __future__ import annotations
-
 import json
 from pathlib import Path
 
@@ -83,8 +81,8 @@ def test_analytics_from_ct_and_cr_fixtures(analytics_model) -> None:
     ct_ds = dcmread(ct_dcm, stop_before_pixels=True, force=True)
     cr_ds = dcmread(cr_dcm, stop_before_pixels=True, force=True)
 
-    model.capture_phi(source="pytest", ds=ct_ds, date_offset_from_hash=0)
-    model.capture_phi(source="pytest", ds=cr_ds, date_offset_from_hash=0)
+    model.capture_phi(source="pytest", ds=ct_ds, date_delta=0)
+    model.capture_phi(source="pytest", ds=cr_ds, date_delta=0)
 
     # Minimal public tree so tseg scan is a no-op (or seeded below).
     phi_rows = model.load_phi_with_studies_series_no_instances()
@@ -118,7 +116,7 @@ def test_analytics_organ_widget_from_seeded_tseg_cache(analytics_model) -> None:
         pytest.skip("No CT fixture directory available")
 
     ds = dcmread(_first_dcm(ct_root), stop_before_pixels=True, force=True)
-    model.capture_phi(source="pytest", ds=ds, date_offset_from_hash=0)
+    model.capture_phi(source="pytest", ds=ds, date_delta=0)
     default_pk = getattr(model, "DEFAULT_PHI_PATIENT_ID_PK_VALUE", None)
     phi_rows = [
         row

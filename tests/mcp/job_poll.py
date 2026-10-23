@@ -1,7 +1,5 @@
 """Shared helper: drive an async MCP tool (pending + job_status) to completion."""
 
-from __future__ import annotations
-
 import time
 from collections.abc import Callable
 from typing import Any

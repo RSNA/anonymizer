@@ -9,8 +9,6 @@ Exit 0 when the welcome window keeps its target width after layout; exit 1 other
 Use ``--interactive`` to keep the window open for visual inspection.
 """
 
-from __future__ import annotations
-
 import argparse
 import os
 import sys

@@ -1,7 +1,5 @@
 """Slow integration smoke tests for ct_eval (requires TotalSegmentator extra)."""
 
-from __future__ import annotations
-
 import csv
 import json
 import shutil

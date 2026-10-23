@@ -1,7 +1,5 @@
 """CLI for Encapsulated PDF report PHI EasyOCR × OpenMed experiment."""
 
-from __future__ import annotations
-
 import argparse
 import json
 import os

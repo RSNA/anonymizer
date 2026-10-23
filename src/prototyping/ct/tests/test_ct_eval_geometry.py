@@ -1,7 +1,5 @@
 """Unit tests for ct_eval geometry columns."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest

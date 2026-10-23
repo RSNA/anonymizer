@@ -1,9 +1,8 @@
 """Accuracy and confusion-matrix evaluation for phi_text_eval.jsonl."""
 
-from __future__ import annotations
-
 import time
 from dataclasses import dataclass
+from typing import Self
 
 from prototyping.metadata_phi.dataset_schema import SCORED_LABELS, load_dataset
 from prototyping.metadata_phi.engines.base import get_engine
@@ -39,7 +38,7 @@ class BinaryCM:
     def accuracy(self) -> float:
         return (self.tp + self.tn) / self.n if self.n else 0.0
 
-    def merge(self, other: BinaryCM) -> None:
+    def merge(self, other: Self) -> None:
         self.tp += other.tp
         self.fp += other.fp
         self.fn += other.fn

@@ -1,16 +1,17 @@
 """AI Features catalog: IDs, slim specs, titles, and frozen registry."""
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 
+from anonymizer.controller.ai import feature_availability as feature_gates
 from anonymizer.controller.ai.embedded_phi.ner.cache import download_ner_models, remove_ner_models
 from anonymizer.controller.ai.embedded_phi.pixel.cache import download_ocr_models, remove_ocr_models
 from anonymizer.controller.ai.harmonize.xp_bodypart import download_xp_bodypart_models, remove_xp_bodypart_models
 from anonymizer.controller.ai.harmonize.xr_chest_view import download_xr_chest_view_models, remove_xr_chest_view_models
 from anonymizer.controller.ai.tseg.readiness import TsWeightKind, download_segmentation_model, remove_segmentation_model
+from anonymizer.model.project import AT_INGEST
+from anonymizer.utils.dicom import DeidMethodCode
 from anonymizer.utils.translate import _
 
 
@@ -253,3 +254,54 @@ def group_by_download_id(download_id: str) -> AiModelGroupSpec | None:
 
 def all_model_groups() -> tuple[AiModelGroupSpec, ...]:
     return tuple(_MODEL_GROUPS[gid] for gid in _MODEL_GROUPS)
+
+
+# De-identification option → AI feature that executes it. Ingest options and
+# CLEAN_GRAPHICS have no feature (CLEAN_GRAPHICS is never executed yet);
+# Harmonize and Brain Structures execute no de-identification option.
+DEID_OPTION_FEATURES: dict[DeidMethodCode, AiFeatureId | None] = {
+    DeidMethodCode.CLEAN_PIXEL_DATA: AiFeatureId.EMBEDDED_PHI,
+    DeidMethodCode.CLEAN_STRUCTURED_CONTENT: AiFeatureId.EMBEDDED_PHI,
+    DeidMethodCode.CLEAN_DESCRIPTORS: AiFeatureId.EMBEDDED_PHI,
+    DeidMethodCode.CLEAN_VISUAL_FEATURES: AiFeatureId.FACE_BLUR,
+    DeidMethodCode.CLEAN_GRAPHICS: None,
+}
+
+
+def ai_feature_for_deid_option(code: DeidMethodCode) -> AiFeatureId | None:
+    """
+    AI feature that executes a de-identification option.
+
+    Args:
+        code: De-identification option code.
+
+    Returns:
+        The executing feature, or None for ingest options and options no
+        feature executes.
+    """
+    return DEID_OPTION_FEATURES.get(DeidMethodCode(code))
+
+
+def deid_option_ready(code: DeidMethodCode) -> bool:
+    """
+    Whether the option can be selected: its AI feature reports ready.
+
+    Ingest options need no download and are always ready; options no task
+    executes are never ready.
+
+    Args:
+        code: De-identification option code.
+
+    Returns:
+        True when the option may be selected.
+    """
+    code = DeidMethodCode(code)
+    if code in AT_INGEST:
+        return True
+    if code is DeidMethodCode.CLEAN_PIXEL_DATA:
+        return feature_gates.embedded_phi_allowed()
+    if code in (DeidMethodCode.CLEAN_STRUCTURED_CONTENT, DeidMethodCode.CLEAN_DESCRIPTORS):
+        return feature_gates.report_text_phi_ready()
+    if code is DeidMethodCode.CLEAN_VISUAL_FEATURES:
+        return feature_gates.face_blur_allowed()
+    return False

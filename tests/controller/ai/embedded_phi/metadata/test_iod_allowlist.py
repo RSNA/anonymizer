@@ -1,7 +1,5 @@
 """Unit tests: IOD unexpected flags for public text/date metadata rows."""
 
-from __future__ import annotations
-
 from dicom_validator.validator.dicom_info import DicomInfo
 from pydicom.dataset import Dataset, FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian, SecondaryCaptureImageStorage, generate_uid

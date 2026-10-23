@@ -1,15 +1,15 @@
 """Non-GUI tests for Embedded PHI synth, classify, clinical script, private KB."""
 
-from __future__ import annotations
-
 import xml.etree.ElementTree as ET
+from pathlib import Path
+
 from pydicom.dataset import Dataset
 
 from anonymizer.controller.ai.embedded_phi.classify_series import SeriesKind, classify_series
 from anonymizer.controller.ai.embedded_phi.ner.synthetic_phi import generate_synthetic_phi
 from anonymizer.controller.private_tags import private_tag_operation
 from anonymizer.model.anonymizer import AnonymizerModel
-from anonymizer.model.project import RETAIN_OPTIONS, BASIC_OPTIONS, ProjectModel
+from anonymizer.model.project import BASIC_OPTIONS, RETAIN_OPTIONS, ProjectModel
 from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
 
 _DEFAULT = DEFAULT_ANONYMIZER_SCRIPT

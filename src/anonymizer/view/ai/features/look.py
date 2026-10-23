@@ -1,9 +1,7 @@
 """Shared chrome for AI Features Setup and AI Batch Process dialogs.
 
-Spacing is shared. Colors, borders, and fonts come from ``rsna_theme.json``.
+Spacing is shared. Colors, borders, and fonts come from rsna_theme.json.
 """
-
-from __future__ import annotations
 
 import customtkinter as ctk
 

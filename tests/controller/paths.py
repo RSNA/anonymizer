@@ -1,7 +1,5 @@
 """Stable paths to shared controller test assets."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 CONTROLLER_TESTS_ROOT = Path(__file__).resolve().parent

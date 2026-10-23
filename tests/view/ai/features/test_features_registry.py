@@ -1,7 +1,5 @@
 """Tests for AI Features catalog, labels, inventory, and download manager."""
 
-from __future__ import annotations
-
 import threading
 from unittest.mock import patch
 

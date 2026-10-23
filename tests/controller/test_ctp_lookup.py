@@ -1,13 +1,10 @@
 """Tests for controller/ctp_lookup.py."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, text
 
-from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
 from anonymizer.controller.ctp_lookup import (
     LookupPropertiesError,
     apply_ctp_lookup_preview,
@@ -17,6 +14,7 @@ from anonymizer.controller.ctp_lookup import (
 )
 from anonymizer.model.anonymizer import AnonymizerModel
 from tests.opened_anonymizer_model import opened_anonymizer_model
+from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
 
 
 def _write_properties(path: Path, lines: list[str]) -> None:
@@ -402,9 +400,9 @@ def test_apply_ctp_lookup_preview_preserves_custom_rules(tmp_path: Path) -> None
 
 
 def test_lookup_table_context_and_operands(tmp_path: Path, controller) -> None:
+    from anonymizer.controller.ctp_lookup import LookupTableContext
     from anonymizer.controller.script.operands import OPERANDS
     from anonymizer.view.settings.script_editor import operands_for_tag
-    from anonymizer.controller.ctp_lookup import LookupTableContext
 
     # Lookup / rebase stay in the catalog; the view prompts to load a table on Apply.
     ids = {s.id for s in OPERANDS}

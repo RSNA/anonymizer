@@ -12,16 +12,6 @@ from prototyping.falcon.predict import (
     extract_contrast_model_input_slice,
 )
 
-__all__ = (
-    "BODY_PART_MODEL_INPUT_Z_INDEX",
-    "contrast_model_input_z_index",
-    "render_body_part_model_input_thumbnail",
-    "render_model_input_slice_thumbnail",
-    "save_body_part_model_input_png",
-    "save_contrast_model_input_png",
-    "save_model_input_slice_png",
-)
-
 
 def contrast_model_input_z_index(body_part: str) -> int:
     """Absolute z index in a preprocessed volume for the contrast model's 2D input."""

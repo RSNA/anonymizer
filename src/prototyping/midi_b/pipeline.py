@@ -1,7 +1,5 @@
 """MIDI-B de-id run — same steps 1–7 as PseudoPHI, no gold pairs."""
 
-from __future__ import annotations
-
 import json
 import logging
 import shutil
@@ -12,12 +10,9 @@ from pathlib import Path
 
 import pydicom
 
-from anonymizer.controller.ai.embedded_phi.metadata.process_private_tags_tcia import (
-    process_private_tags_tcia,
-)
 from prototyping.midi_b.inventory import MidiInstance
 from prototyping.midi_b.mappings import write_patid_mapping, write_uid_mapping
-from prototyping.pseudo_phi_deid.pipeline.clinical import ClinicalSession
+from prototyping.pseudo_phi_deid.pipeline.script_session import AnonymizerSession, operation_resolver
 from prototyping.pseudo_phi_deid.pipeline.metadata_ner import scrub_dataset
 from prototyping.pseudo_phi_deid.pipeline.ner_residual_cleanup import (
     cleanup_dataset_residuals,
@@ -43,7 +38,7 @@ def run_instances(
     out_dir: Path,
     config: RunConfig,
 ) -> MidiRunResult:
-    """Run Clinical + private KB + NER + residual cleanup; emit mapping CSVs."""
+    """Run script + private KB + NER + residual cleanup; emit mapping CSVs."""
     out_dir.mkdir(parents=True, exist_ok=True)
     candidate_dir = out_dir / "candidates"
     # Refresh candidates/mappings only — keep inventory.json and logs beside them.
@@ -59,10 +54,10 @@ def run_instances(
 
     hist: Counter[str] = Counter()
     samples: list[dict] = []
-    session: ClinicalSession | None = None
+    session: AnonymizerSession | None = None
     try:
         if config.use_script:
-            session = ClinicalSession(config.script_path)
+            session = AnonymizerSession(config.script_path)
             session.__enter__()
 
         total = len(instances)
@@ -81,19 +76,15 @@ def run_instances(
                 logger.warning("skip no SOPInstanceUID: %s", inst.path)
                 continue
 
-            # Step 1 — Clinical script (public tags; privates left for step 2).
+            # Step 1 — anonymizer script (public + SAFE_PRIVATE KB walk).
             if config.use_script:
                 assert session is not None
                 ds = session.apply(ds)
 
-            # Step 2 — TCIA Private Tag KB.
-            if config.use_script or config.use_openmed:
-                process_private_tags_tcia(ds)
-
-            # Steps 3–5 — extract / prepare / bulk NER + taxonomy scrub.
+            # Steps 2–4 — extract / prepare / bulk NER + taxonomy scrub.
             if config.use_openmed:
                 resolve = (
-                    session.anon.model.resolve_tag_keep
+                    operation_resolver(session.anon)
                     if session is not None and session.anon is not None
                     else None
                 )
@@ -104,7 +95,7 @@ def run_instances(
                     caret_space=config.caret_space,
                     anon_ptid=anon_ptid,
                     project_id="midi_b",
-                    resolve_tag_keep=resolve,
+                    operation_for_tag=resolve,
                 )
                 hist.update(h)
                 for s in samp:
@@ -122,7 +113,7 @@ def run_instances(
             dest.parent.mkdir(parents=True, exist_ok=True)
             ds.save_as(str(dest), enforce_file_format=False)
 
-        # Mappings must be dumped before ClinicalSession tears down the temp DB.
+        # Mappings must be dumped before AnonymizerSession tears down the temp DB.
         if session is not None and session.anon is not None:
             write_uid_mapping(session.anon.model, uid_path)
             write_patid_mapping(session.anon.model, patid_path)

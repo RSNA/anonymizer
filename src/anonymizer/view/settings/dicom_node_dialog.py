@@ -1,7 +1,5 @@
 """DICOM node settings: local SCP, or remote Query/Export (DIMSE SCP vs DICOMweb)."""
 
-from __future__ import annotations
-
 import contextlib
 import logging
 import string
@@ -9,11 +7,13 @@ import threading
 import tkinter as tk
 from dataclasses import dataclass
 from queue import Queue
-from typing import TYPE_CHECKING, Union
+from typing import Union
 
 import customtkinter as ctk
 
+from anonymizer.controller.dicom import dicomweb as dicomweb_api
 from anonymizer.controller.dicom.requests import EchoResponse
+from anonymizer.controller.project import ProjectController
 from anonymizer.model.project import DICOMNode
 from anonymizer.utils.network import dns_lookup, get_local_ip_addresses
 from anonymizer.utils.translate import _
@@ -30,10 +30,6 @@ from anonymizer.view.common.ux_fields import (
     ip_port_min,
     str_entry,
 )
-
-if TYPE_CHECKING:
-    from anonymizer.controller.project import ProjectController
-from anonymizer.controller.dicom import dicomweb as dicomweb_api
 
 logger = logging.getLogger(__name__)
 

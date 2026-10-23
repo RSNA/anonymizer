@@ -1,7 +1,106 @@
-"""LOINC StudyDescription ranking from Harmonized Playbook series descriptions."""
+"""LOINC StudyDescription ranking from Harmonized Playbook series descriptions.
 
-from __future__ import annotations
+Public API
+----------
+LOINC_STUDY_DESCRIPTION_FILENAME
+    Loinc study description filename.
 
+DEFAULT_TOP_N
+    Default top n (8).
+
+DOMINANT_FRACTION_THRESHOLD
+    Dominant fraction threshold (0.65).
+
+CLEAR_WINNER_SCORE_GAP
+    Clear winner score gap (80.0).
+
+MIN_MATCH_SCORE
+    Min match score (100.0).
+
+LoincStudyMatch
+    LoincStudyMatch type.
+
+StudyDescriptionAggregate
+    Aggregated study-level signals from Playbook series strings (+ optional TS fractions).
+
+StudyDescriptionOffer
+    Payload for Study Description auto-apply or dialog after Harmonize completes.
+
+loinc_study_description_csv_path(*, language_code: str | None=None) -> Path
+    Loinc study description csv path.
+
+load_loinc_study_descriptions(csv_path: str | None=None) -> tuple[tuple[str, str], ...]
+    Return (LoincNumber, LongCommonName) rows (CT and all modalities).
+
+long_common_name_for_loinc(loinc_number: str, *, csv_path: str | None=None) -> str | None
+    Resolve a LOINC number to its LongCommonName from the study catalog.
+
+load_ct_loinc_study_descriptions(csv_path: str | None=None) -> tuple[tuple[str, str], ...]
+    Load ct loinc study descriptions.
+
+load_loinc_study_descriptions_for_prefix(loinc_prefix: str, csv_path: str | None=None) -> tuple[tuple[str, str], ...]
+    Return LOINC rows whose LongCommonName starts with loinc_prefix (e.g. CT  / MR ).
+
+study_series_description_fingerprint(descriptions: list[str] | tuple[str, ...]) -> tuple[str, ...]
+    Sorted multiset of non-empty series Playbook descriptions.
+
+fingerprint_for_harmonized_study(anon_model, anon_study_uid: str) -> tuple[str, ...]
+    Fingerprint of harmonized CT|MR series descriptions stored for a study.
+
+fingerprint_for_planar_harmonized_study(anon_model, anon_study_uid: str) -> tuple[str, ...]
+    Fingerprint of harmonized XR/US/MG series descriptions stored for a study.
+
+parse_playbook_series_description(description: str) -> dict[str, object]
+    Parse a Playbook series string into SeriesNameV4 component codes.
+
+series_region_voxel_counts(series_path: Path) -> dict[str, int]
+    Return TS region voxel counts from the series seg cache, or empty if unavailable.
+
+aggregate_region_fractions(series_paths: Sequence[Path]) -> dict[str, float]
+    Sum TS region voxels across series and return LOINC anatomy fractions.
+
+preferred_anatomy_from_fractions(anatomy_parts: Sequence[str], fractions: Mapping[str, float], *, dominant_threshold: float=DOMINANT_FRACTION_THRESHOLD) -> tuple[str, ...]
+    Prefer dominant-only anatomy when one region clearly dominates.
+
+aggregate_study_from_series_descriptions(series_descriptions: list[str] | tuple[str, ...], *, region_fractions: Mapping[str, float] | None=None) -> StudyDescriptionAggregate
+    Aggregate Playbook series descriptions into study-level anatomy + contrast.
+
+build_canonical_loinc_phrases(aggregate: StudyDescriptionAggregate, *, loinc_prefix: str='CT ') -> list[str]
+    Build preferred then full-union LongCommonName candidates for loinc_prefix.
+
+anatomy_tokens_in_loinc_name(name: str) -> frozenset[str]
+    Anatomy tokens in loinc name.
+
+ranking_is_ambiguous(matches: Sequence[LoincStudyMatch], aggregate: StudyDescriptionAggregate, *, score_gap: float=CLEAR_WINNER_SCORE_GAP) -> bool
+    Return True when the user should choose among competing LOINC names.
+
+rank_loinc_study_descriptions(series_descriptions: list[str] | tuple[str, ...], *, top_n: int=DEFAULT_TOP_N, csv_path: str | None=None, region_fractions: Mapping[str, float] | None=None, series_paths: Sequence[Path] | None=None, loinc_prefix: str='CT ') -> list[LoincStudyMatch]
+    Rank LOINC StudyDescription rows for the given Playbook series descriptions.
+
+build_study_description_ranking(series_descriptions: list[str] | tuple[str, ...], *, top_n: int=DEFAULT_TOP_N, csv_path: str | None=None, region_fractions: Mapping[str, float] | None=None, series_paths: Sequence[Path] | None=None, loinc_prefix: str='CT ') -> tuple[StudyDescriptionAggregate, list[LoincStudyMatch], bool]
+    Return aggregate, ranked matches, and whether ranking is ambiguous.
+
+loinc_declared_view_count(long_common_name: str) -> int | None
+    Return the view count declared in a LOINC LongCommonName, if any.
+
+count_planar_series_images(series_directory: Path) -> int
+    Count image instances in a series folder (files × NumberOfFrames when set).
+
+count_planar_study_images(series_directories: Sequence[Path]) -> int
+    Sum image instances across planar series directories (CXR view estimate).
+
+rank_planar_loinc_study_descriptions(series_descriptions: list[str] | tuple[str, ...], *, loinc_prefix: str, top_n: int=DEFAULT_TOP_N, csv_path: str | None=None, image_count: int | None=None) -> list[LoincStudyMatch]
+    Rank LOINC rows for planar Harmonize series strings (no CT Playbook parse).
+
+infer_loinc_anatomy_from_text(text: str) -> tuple[str, ...]
+    Extract preferred LOINC anatomy parts from free-text study/series PHI.
+
+infer_contrast_family_from_text(text: str) -> str
+    Best-effort WO / W / WO_AND_W from free-text study description.
+
+rank_loinc_study_descriptions_from_hint(hint: str, *, loinc_prefix: str, top_n: int=DEFAULT_TOP_N, csv_path: str | None=None) -> list[LoincStudyMatch]
+    Rank modality-prefix LOINC rows using free-text study description hints.
+"""
 import csv
 import logging
 import re
@@ -221,21 +320,20 @@ class StudyDescriptionOffer:
 
 
 def loinc_study_description_csv_path(*, language_code: str | None = None) -> Path:
-    lang = language_code or get_current_language_code() or "en_US"
-    package_locales = Path(__file__).resolve().parents[3] / "assets" / "locales"
-    for root in (Path("assets") / "locales", package_locales):
-        candidate = root / lang / LOINC_STUDY_DESCRIPTION_FILENAME
-        if candidate.is_file():
-            return candidate
-        fallback = root / "en_US" / LOINC_STUDY_DESCRIPTION_FILENAME
-        if fallback.is_file():
-            return fallback
-    return package_locales / "en_US" / LOINC_STUDY_DESCRIPTION_FILENAME
+    lang = language_code or get_current_language_code()
+    root = Path("assets/locales")
+    candidate = root / lang / LOINC_STUDY_DESCRIPTION_FILENAME
+    if candidate.is_file():
+        return candidate
+    fallback = root / "en_US" / LOINC_STUDY_DESCRIPTION_FILENAME
+    if fallback.is_file():
+        return fallback
+    return fallback
 
 
 @lru_cache(maxsize=4)
 def load_loinc_study_descriptions(csv_path: str | None = None) -> tuple[tuple[str, str], ...]:
-    """Return ``(LoincNumber, LongCommonName)`` rows (CT and all modalities)."""
+    """Return (LoincNumber, LongCommonName) rows (CT and all modalities)."""
     path = Path(csv_path) if csv_path else loinc_study_description_csv_path()
     if not path.is_file():
         logger.warning("LOINC StudyDescription CSV not found: %s", path)
@@ -256,7 +354,7 @@ def long_common_name_for_loinc(loinc_number: str, *, csv_path: str | None = None
     Resolve a LOINC number to its LongCommonName from the study catalog.
 
     Args:
-        loinc_number: LOINC code (e.g. ``41806-1``).
+        loinc_number: LOINC code (e.g. 41806-1).
         csv_path: Optional override path for the LOINC StudyDescription CSV.
 
     Returns:
@@ -279,7 +377,7 @@ def load_loinc_study_descriptions_for_prefix(
     loinc_prefix: str,
     csv_path: str | None = None,
 ) -> tuple[tuple[str, str], ...]:
-    """Return LOINC rows whose LongCommonName starts with ``loinc_prefix`` (e.g. ``CT `` / ``MR ``)."""
+    """Return LOINC rows whose LongCommonName starts with loinc_prefix (e.g. CT  / MR )."""
     return tuple(
         (code, name)
         for code, name in load_loinc_study_descriptions(csv_path)
@@ -562,7 +660,7 @@ def build_canonical_loinc_phrases(
     *,
     loinc_prefix: str = "CT ",
 ) -> list[str]:
-    """Build preferred then full-union LongCommonName candidates for ``loinc_prefix``."""
+    """Build preferred then full-union LongCommonName candidates for loinc_prefix."""
     suffixes = _contrast_suffixes(aggregate.contrast_family)
     phrases: list[str] = []
     seen: set[str] = set()
@@ -825,7 +923,7 @@ def ranking_is_ambiguous(
     """
     Return True when the user should choose among competing LOINC names.
 
-    Clear (False) when the top score leads by ``score_gap``, or preferred single-region
+    Clear (False) when the top score leads by score_gap, or preferred single-region
     anatomy matches the top name (and contrast family).
     """
     if len(matches) < 2:
@@ -1032,7 +1130,7 @@ def _strip_radial_head(text: str) -> str:
 
 
 def _planar_token_in_loinc_text(token: str, name_l: str) -> bool:
-    """True when ``token`` appears as a LOINC anatomy word (not nested in radial head)."""
+    """True when token appears as a LOINC anatomy word (not nested in radial head)."""
     tok = token.lower().strip()
     if not tok:
         return False
@@ -1076,7 +1174,7 @@ _LOINC_BARE_PROJECTION_RE = re.compile(
     r"\b(ap|pa|lateral|oblique|decubitus|mlo|cc)\b",
     re.IGNORECASE,
 )
-# Hyphenated LOINC compounds (e.g. lateral-decubitus) — ``\blateral\b`` alone must not match.
+# Hyphenated LOINC compounds (e.g. lateral-decubitus) — \blateral\b alone must not match.
 _LOINC_LATERAL_DECUBITUS_RE = re.compile(r"\blateral-decubitus\b", re.IGNORECASE)
 # Patient-position / technique tokens that must be evidenced in series text.
 _LOINC_FOREIGN_VIEW_TOKENS: tuple[str, ...] = (
@@ -1236,7 +1334,7 @@ _LOINC_BILATERAL_RE = re.compile(r"\bbilateral\b", re.IGNORECASE)
 
 
 def _planar_laterality_from_descriptions(series_descriptions: Sequence[str]) -> str:
-    """Return ``R``, ``L``, ``Bilat``, or ``""`` from Playbook series strings."""
+    """Return R, L, Bilat, or "" from Playbook series strings."""
     codes: set[str] = set()
     for description in series_descriptions:
         text = str(description).strip()
@@ -1318,11 +1416,11 @@ def rank_planar_loinc_study_descriptions(
     """Rank LOINC rows for planar Harmonize series strings (no CT Playbook parse).
 
     Best-guess scoring prefers anatomy, laterality (R/L/Bilat), view tokens,
-    near-exact Playbook matches, concise names, and — for CXR — LOINC ``N Views`` /
-    ``Single view`` aligned with how many images are in the series (or study).
+    near-exact Playbook matches, concise names, and — for CXR — LOINC N Views /
+    Single view aligned with how many images are in the series (or study).
 
     Only LongCommonName values from the LOINC StudyDescription list (filtered by
-    ``loinc_prefix``) are returned — nothing is synthesized.
+    loinc_prefix) are returned — nothing is synthesized.
     """
     cleaned = [str(d).strip() for d in series_descriptions if str(d).strip()]
     anatomy = _planar_anatomy_from_descriptions(cleaned)
@@ -1349,7 +1447,7 @@ def rank_planar_loinc_study_descriptions(
         )
         if re.search(rf"\b{re.escape(token)}\b", desc_l)
     )
-    # Playbook emits ``Lat`` for lateral XR; treat as the LOINC ``lateral`` token.
+    # Playbook emits Lat for lateral XR; treat as the LOINC lateral token.
     if "lateral" not in view_tokens and re.search(r"\blat\b", desc_l):
         view_tokens = (*view_tokens, "lateral")
     single_region = len(anatomy) <= 1
@@ -1530,7 +1628,7 @@ def rank_loinc_study_descriptions_from_hint(
     Rank modality-prefix LOINC rows using free-text study description hints.
 
     Used when series are not yet Playbook-harmonized so Dataset edit does not fall
-    back to alphabetical noise (e.g. MR Abdomen for ``MRI HEAD WITHOUT CON``).
+    back to alphabetical noise (e.g. MR Abdomen for MRI HEAD WITHOUT CON).
     """
     text = (hint or "").strip()
     if not text:

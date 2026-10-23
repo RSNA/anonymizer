@@ -2,27 +2,24 @@ import logging
 import tkinter as tk
 from math import ceil
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import customtkinter as ctk
 from PIL import Image, ImageDraw, ImageTk
 
 from anonymizer.controller.phi.phi_io import PHI_IndexRecord
+from anonymizer.controller.project import ProjectController
 from anonymizer.controller.series.create_projections import (
     Projection,
     ProjectionImageSize,
     ProjectionImageSizeConfig,
     create_projection_from_series,
 )
+from anonymizer.utils.modalities import ContentClass, Modality, get_modality_catalog
 from anonymizer.utils.translate import _
 from anonymizer.view.common.app_window import AppToplevel, refresh_app_window_menu
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.tooltip import bind_hover_tooltip
 from anonymizer.view.reports.open_workspace import open_series_workspace
-
-if TYPE_CHECKING:
-    from anonymizer.controller.project import ProjectController
-from anonymizer.utils.modalities import ContentClass, Modality, get_modality_catalog
 
 logger = logging.getLogger(__name__)
 

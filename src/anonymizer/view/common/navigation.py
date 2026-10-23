@@ -1,7 +1,5 @@
 """Shared Tk navigation helpers for returning focus to Dataset view."""
 
-from __future__ import annotations
-
 import contextlib
 import tkinter as tk
 

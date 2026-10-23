@@ -1,7 +1,5 @@
 """MCP InitializeResult.instructions + typed tool JSON Schema."""
 
-from __future__ import annotations
-
 import asyncio
 import json
 import re
@@ -230,7 +228,7 @@ def test_tool_input_schema_includes_field_descriptions() -> None:
         assert "language_code" in props
         assert "scp" in props
         assert "network_timeouts" in props
-        assert "anonymization_policy" in props
+        assert "confidentiality_options" in props
         assert "confirm" in props
         assert "revision" in props
         assert "import_plan" not in props
@@ -242,7 +240,7 @@ def test_tool_input_schema_includes_field_descriptions() -> None:
         assert "project_name" not in uprops
         assert "language_code" not in uprops
         assert "scp" in uprops
-        assert "anonymization_policy" in uprops
+        assert "confidentiality_options" in uprops
         assert "import_plan" not in uprops
 
         defaults = tools["project_settings_defaults"]

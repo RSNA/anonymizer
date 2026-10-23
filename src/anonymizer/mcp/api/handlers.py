@@ -1,10 +1,8 @@
-"""MCP tool handlers — behavior only; schemas/descriptions live in ``catalog`` / ``schemas``.
+"""MCP tool handlers — behavior only; schemas/descriptions live in catalog / schemas.
 
-Signatures stay flat (one MCP argument per parameter). ``register_tools`` overlays
-Pydantic ``inputSchema`` from the catalog so Field text is not duplicated here.
+Signatures stay flat (one MCP argument per parameter). register_tools overlays
+Pydantic inputSchema from the catalog so Field text is not duplicated here.
 """
-
-from __future__ import annotations
 
 import asyncio
 from typing import Any
@@ -71,7 +69,7 @@ def _progress_callback() -> ops.ProgressCallback | None:
     handler calls) there is no context and reporting is disabled.
 
     Returns:
-        Sync progress callback, or ``None`` when no MCP context is active.
+        Sync progress callback, or None when no MCP context is active.
     """
     try:
         ctx = get_context()
@@ -93,7 +91,7 @@ def _progress_callback() -> ops.ProgressCallback | None:
 
 def _start_job_pending(operation: str, work: Any) -> dict[str, Any]:
     """
-    Start a background job and return the standard ``pending`` payload.
+    Start a background job and return the standard pending payload.
 
     Args:
         operation: Tool name, echoed so the client knows what is running.
@@ -101,7 +99,7 @@ def _start_job_pending(operation: str, work: Any) -> dict[str, Any]:
             result dict; executed on the session's background job thread.
 
     Returns:
-        ``{ok, status: "pending", job_id, operation, next_action}``.
+        {ok, status: "pending", job_id, operation, next_action}.
     """
     job_id = SESSION.start_job(operation, work)
     return {
@@ -141,7 +139,7 @@ def anonymizer_usage() -> dict[str, Any]:
 
 
 def job_status(job_id: str) -> dict[str, Any]:
-    """Poll one background job (see ``SESSION.start_job``)."""
+    """Poll one background job (see SESSION.start_job)."""
     args, err = _parse(JobStatusArgs, {"job_id": job_id})
     if err is not None:
         return err
@@ -176,7 +174,7 @@ def job_status(job_id: str) -> dict[str, Any]:
         # minimal import summaries pass through untouched.
         result = _with_public_project(result)
     # The job completed: per-item failures (e.g. files that failed to import)
-    # are counts inside ``result``, not a tool-level failure. Reporting them
+    # are counts inside result, not a tool-level failure. Reporting them
     # must not collapse the whole payload into a bare error.
     return {**base, "status": "completed", "result": strip_path_fields(result)}
 
@@ -202,7 +200,7 @@ def create_project(
     transfer_syntaxes: list[str] | None = None,
     scp: dict[str, Any] | None = None,
     network_timeouts: dict[str, Any] | None = None,
-    anonymization_policy: str | None = None,
+    confidentiality_options: list[int] | None = None,
     confirm: bool = False,
     revision: int | None = None,
 ) -> dict[str, Any]:
@@ -219,7 +217,7 @@ def create_project(
             "transfer_syntaxes": transfer_syntaxes,
             "scp": scp,
             "network_timeouts": network_timeouts,
-            "anonymization_policy": anonymization_policy,
+            "confidentiality_options": confidentiality_options,
             "confirm": confirm,
             "revision": revision,
         },
@@ -247,7 +245,7 @@ def create_project(
                     transfer_syntaxes=args.transfer_syntaxes,
                     scp=scp_dict,
                     network_timeouts=timeouts_dict,
-                    anonymization_policy=args.anonymization_policy,
+                    confidentiality_options=args.confidentiality_options,
                     confirm=args.confirm,
                     revision=args.revision,
                 )
@@ -297,7 +295,7 @@ def update_project_settings(
     transfer_syntaxes: list[str] | None = None,
     scp: dict[str, Any] | None = None,
     network_timeouts: dict[str, Any] | None = None,
-    anonymization_policy: str | None = None,
+    confidentiality_options: list[int] | None = None,
 ) -> dict[str, Any]:
     args, err = _parse(
         UpdateProjectSettingsArgs,
@@ -306,7 +304,7 @@ def update_project_settings(
             "transfer_syntaxes": transfer_syntaxes,
             "scp": scp,
             "network_timeouts": network_timeouts,
-            "anonymization_policy": anonymization_policy,
+            "confidentiality_options": confidentiality_options,
         },
     )
     if err is not None:
@@ -326,7 +324,7 @@ def update_project_settings(
                     transfer_syntaxes=args.transfer_syntaxes,
                     scp=scp_dict,
                     network_timeouts=timeouts_payload,
-                    anonymization_policy=args.anonymization_policy,
+                    confidentiality_options=args.confidentiality_options,
                 )
             )
         )

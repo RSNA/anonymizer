@@ -55,8 +55,6 @@ error) and a per-series table with an acquisition **plane** column.
 Email-friendly HTML copy of this reference: ``src/prototyping/ct/ct_eval_cli.html``.
 """
 
-from __future__ import annotations
-
 # Running as ``python src/prototyping/ct/ct_eval.py`` puts ``ct/`` on sys.path; avoid
 # prepending ``prototyping/`` on sys.path before stdlib imports (see ct_eval shim).
 import os

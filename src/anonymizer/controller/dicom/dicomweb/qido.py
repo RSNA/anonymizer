@@ -1,7 +1,28 @@
-"""QIDO-RS query helpers → pydicom Datasets."""
+"""QIDO-RS query helpers → pydicom Datasets.
 
-from __future__ import annotations
+Public API
+----------
+STUDY_INCLUDEFIELDS
+    Study includefields.
 
+SERIES_INCLUDEFIELDS
+    Series includefields.
+
+INSTANCE_INCLUDEFIELDS
+    Instance includefields.
+
+qido_json_to_dataset(item: dict[str, Any]) -> Dataset
+    Map one QIDO-RS DICOM JSON object to a pydicom Dataset.
+
+find_studies(session: DicomWebSession, *, patient_name: str='', patient_id: str='', accession: str='', study_date: str='', modality: str='', abort_check: Callable[[], bool] | None=None) -> list[Dataset]
+    QIDO-RS study search matching FindMixin find_studies filters.
+
+find_series(session: DicomWebSession, study_uid: str, *, abort_check: Callable[[], bool] | None=None) -> list[Dataset]
+    QIDO-RS series for a study.
+
+find_instances(session: DicomWebSession, study_uid: str, series_uid: str, *, abort_check: Callable[[], bool] | None=None) -> list[Dataset]
+    QIDO-RS instances for a series.
+"""
 import logging
 from typing import Any, Callable
 from urllib.parse import quote

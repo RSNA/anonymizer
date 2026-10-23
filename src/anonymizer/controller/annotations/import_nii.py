@@ -1,7 +1,58 @@
-"""Import researcher NIfTI/NRRD segmentations into the annotation store."""
+"""Import researcher NIfTI/NRRD segmentations into the annotation store.
 
-from __future__ import annotations
+Public API
+----------
+VOLUME_EXTENSIONS
+    Volume extensions.
 
+ImportProfile
+    ImportProfile type.
+
+ImportResult
+    ImportResult type.
+
+is_volume_path(path: Path) -> bool
+    Is volume path.
+
+list_volume_paths(directory: Path) -> list[Path]
+    List volume paths.
+
+parse_anonymizer_label_map(path: Path) -> dict[int, _ResolvedLabel]
+    Parse our label_map.json (id → {name, color_bgr}).
+
+parse_itk_snap_label_file(path: Path) -> dict[int, _ResolvedLabel]
+    Parse ITK-SNAP Label Descriptions (.label / .txt).
+
+parse_nnunet_dataset_json(path: Path) -> dict[int, _ResolvedLabel]
+    Parse nnU-Net dataset.json labels (v2 name→int) or MSD-style (int→name).
+
+parse_int_to_name_json(path: Path) -> dict[int, _ResolvedLabel]
+    TotalSegmentator-style / generic { "1": "liver", ... } or nested maps.
+
+resolve_label_names(volume_path: Path, *, profile: ImportProfile, present_ids: set[int]) -> tuple[dict[int, _ResolvedLabel], ImportProfile, tuple[str, ...]]
+    Pick the best sidecar for multi-label name resolution.
+
+AnnotationGeometryUnsupported
+    Series cannot host annotation volumes (unsupported modality or unloadable frames).
+
+ensure_series_annotation_geometry(series_dir: Path, cache_dir: Path, *, reference_frames: np.ndarray | None=None) -> AnnotateSession
+    Load or create an annotate session with volume + mask geometry for series_dir.
+
+align_label_image_to_reference(source: sitk.Image, reference: sitk.Image) -> tuple[sitk.Image, bool, str | None]
+    Return label image on reference grid; nearest-neighbor when resampling.
+
+import_binary_masks(session: AnnotateSession, paths: list[Path], *, names: list[str] | None=None) -> ImportResult
+    Import one or more binary masks; non-zero voxels become a new user label each.
+
+import_label_nifti(session: AnnotateSession, path: Path, *, profile: ImportProfile=ImportProfile.AUTO, label_names: dict[int, _ResolvedLabel] | None=None) -> ImportResult
+    Import a multi-class integer label volume into the annotate session.
+
+import_folder_binary_masks(session: AnnotateSession, directory: Path) -> ImportResult
+    TotalSegmentator-style folder: each *.nii.gz (etc.) is one binary structure.
+
+detect_and_import(session: AnnotateSession, *, paths: list[Path] | None=None, folder: Path | None=None, profile: ImportProfile=ImportProfile.AUTO) -> ImportResult
+    High-level import used by Series View (files and/or folder).
+"""
 import json
 import logging
 import re
@@ -90,7 +141,7 @@ def list_volume_paths(directory: Path) -> list[Path]:
 
 
 def parse_anonymizer_label_map(path: Path) -> dict[int, _ResolvedLabel]:
-    """Parse our ``label_map.json`` (id → {name, color_bgr})."""
+    """Parse our label_map.json (id → {name, color_bgr})."""
     path = Path(path)
     if not path.is_file():
         return {}
@@ -119,9 +170,9 @@ def parse_anonymizer_label_map(path: Path) -> dict[int, _ResolvedLabel]:
 
 
 def parse_itk_snap_label_file(path: Path) -> dict[int, _ResolvedLabel]:
-    """Parse ITK-SNAP Label Descriptions (``.label`` / ``.txt``).
+    """Parse ITK-SNAP Label Descriptions (.label / .txt).
 
-    Format: ``IDX R G B A VIS MSH "LABEL"``
+    Format: IDX R G B A VIS MSH "LABEL"
     """
     path = Path(path)
     if not path.is_file():
@@ -152,7 +203,7 @@ def parse_itk_snap_label_file(path: Path) -> dict[int, _ResolvedLabel]:
 
 
 def parse_nnunet_dataset_json(path: Path) -> dict[int, _ResolvedLabel]:
-    """Parse nnU-Net ``dataset.json`` labels (v2 name→int) or MSD-style (int→name)."""
+    """Parse nnU-Net dataset.json labels (v2 name→int) or MSD-style (int→name)."""
     path = Path(path)
     if not path.is_file():
         return {}
@@ -192,7 +243,7 @@ def parse_nnunet_dataset_json(path: Path) -> dict[int, _ResolvedLabel]:
 
 
 def parse_int_to_name_json(path: Path) -> dict[int, _ResolvedLabel]:
-    """TotalSegmentator-style / generic ``{ "1": "liver", ... }`` or nested maps."""
+    """TotalSegmentator-style / generic { "1": "liver", ... } or nested maps."""
     path = Path(path)
     if not path.is_file():
         return {}
@@ -310,14 +361,14 @@ def ensure_series_annotation_geometry(
     *,
     reference_frames: np.ndarray | None = None,
 ) -> AnnotateSession:
-    """Load or create an annotate session with volume + mask geometry for ``series_dir``.
+    """Load or create an annotate session with volume + mask geometry for series_dir.
 
-    Prefers the same stackable patient geometry as TSeg (``ImageOrientationPatient`` +
-    ``ImagePositionPatient``). For planar CR/DX/US/MG without those tags, builds a
+    Prefers the same stackable patient geometry as TSeg (ImageOrientationPatient +
+    ImagePositionPatient). For planar CR/DX/US/MG without those tags, builds a
     pixel-space grid aligned to Series View frames (does not loosen TSeg stackable rules).
 
-    When ``reference_frames`` is provided (Series View stack), an existing cache whose
-    label grid does not match the displayed ``(Z,Y,X)`` size is rebuilt so brush
+    When reference_frames is provided (Series View stack), an existing cache whose
+    label grid does not match the displayed (Z,Y,X) size is rebuilt so brush
     coordinates stay aligned with on-screen pixels.
     """
     cache_dir = Path(cache_dir)
@@ -414,7 +465,7 @@ def align_label_image_to_reference(
     source: sitk.Image,
     reference: sitk.Image,
 ) -> tuple[sitk.Image, bool, str | None]:
-    """Return label image on ``reference`` grid; nearest-neighbor when resampling."""
+    """Return label image on reference grid; nearest-neighbor when resampling."""
     if _geometry_matches(source, reference):
         return source, False, None
     if source.GetSize() == reference.GetSize():
@@ -570,7 +621,7 @@ def import_label_nifti(
 
 
 def import_folder_binary_masks(session: AnnotateSession, directory: Path) -> ImportResult:
-    """TotalSegmentator-style folder: each ``*.nii.gz`` (etc.) is one binary structure."""
+    """TotalSegmentator-style folder: each *.nii.gz (etc.) is one binary structure."""
     paths = list_volume_paths(directory)
     if not paths:
         raise ValueError(f"No NIfTI/NRRD masks found in {directory}")

@@ -1,7 +1,28 @@
-"""Anatomy region helpers: mask voxel counts and dominant body-region summaries (leaf; no pipeline deps)."""
+"""Anatomy region helpers: mask voxel counts and dominant body-region summaries (leaf; no pipeline deps).
 
-from __future__ import annotations
+Public API
+----------
+RegionResult
+    RegionResult type.
 
+count_mask_voxels(mask_path: Path) -> int
+    Count mask voxels.
+
+collect_structure_voxels_from_masks(segmentation_dir: Path, structures: list[str]) -> dict[str, int]
+    Collect structure voxels from masks.
+
+region_from_structure(name: str, *, structure_to_region: dict[str, str] | None=None) -> str | None
+    Region from structure.
+
+dominant_region_from_voxels(structure_voxels: dict[str, int], *, min_voxels: int=MIN_STRUCTURE_VOXELS, structure_to_region: dict[str, str] | None=None) -> RegionResult
+    Pick the region with the largest summed structure voxel count.
+
+body_parts_present(region_voxels: dict[str, int], *, min_fraction: float=MIN_REGION_FRACTION, min_voxels: int=MIN_STRUCTURE_VOXELS) -> str
+    Regions with substantial voxel mass, joined as e.g. Chest+Abdomen.
+
+is_multi_region(body_parts_present_label: str) -> bool
+    Is multi region.
+"""
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -103,7 +124,7 @@ def body_parts_present(
     min_fraction: float = MIN_REGION_FRACTION,
     min_voxels: int = MIN_STRUCTURE_VOXELS,
 ) -> str:
-    """Regions with substantial voxel mass, joined as e.g. ``Chest+Abdomen``."""
+    """Regions with substantial voxel mass, joined as e.g. Chest+Abdomen."""
     total = sum(region_voxels.values())
     if total == 0:
         return ""

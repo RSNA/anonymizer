@@ -41,8 +41,6 @@ scrub_span_in_row(ds: Dataset, row: MetadataPhiRow, start: int, end: int, replac
 element_display_name(ds: Dataset, elem: DataElement) -> str
     Public Name column label (TCIA / creator / dictionary); never bare Private.
 """
-from __future__ import annotations
-
 import logging
 import re
 from collections.abc import Callable, Iterator, Sequence

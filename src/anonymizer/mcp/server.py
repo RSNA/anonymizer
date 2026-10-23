@@ -1,12 +1,10 @@
 """stdio / HTTP MCP server bootstrap for RSNA Anonymizer (FastMCP).
 
-``create_server`` wires:
-  - ``middleware.default_middleware()`` — request/response logging
-  - ``api.register_tools`` — tool contract from ``api.catalog.TOOL_CATALOG``
-  - ``instructions.load_server_instructions()`` — initialize howto
+create_server wires:
+  - middleware.default_middleware() — request/response logging
+  - api.register_tools — tool contract from api.catalog.TOOL_CATALOG
+  - instructions.load_server_instructions() — initialize howto
 """
-
-from __future__ import annotations
 
 import logging
 
@@ -27,7 +25,7 @@ MCP_HTTP_PATH = "/mcp"
 
 
 def _preserve_logging_across_uvicorn() -> None:
-    """Keep ``init_logging`` handlers when FastMCP starts uvicorn."""
+    """Keep init_logging handlers when FastMCP starts uvicorn."""
 
     if getattr(uvicorn.Config.__init__, "_anonymizer_mcp_log_patch", False):
         return

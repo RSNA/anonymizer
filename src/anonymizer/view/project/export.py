@@ -12,7 +12,8 @@ from tkinter import messagebox, ttk
 import customtkinter as ctk
 
 from anonymizer.controller.annotations import count_patient_exportable_segment_labels
-from anonymizer.controller.project import ExportPatientsRequest, ExportPatientsResponse, ProjectController
+from anonymizer.controller.dicom.requests import ExportPatientsRequest, ExportPatientsResponse
+from anonymizer.controller.project import ProjectController
 from anonymizer.model.project import ProjectModel
 from anonymizer.utils.storage.dicom_tree import (
     DICOM_FILE_SUFFIX,

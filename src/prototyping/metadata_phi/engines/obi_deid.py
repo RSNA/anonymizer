@@ -4,8 +4,6 @@ Default locale model: OpenMed ClinicalE5-Small (~33M). Override with
 ``METADATA_PHI_DEID_MODEL`` (e.g. ``obi/deid_roberta_i2b2``).
 """
 
-from __future__ import annotations
-
 import os
 
 from prototyping.metadata_phi.engines.label_map import to_scored_label

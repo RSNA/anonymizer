@@ -1,7 +1,5 @@
 """Tests for Query/Export DICOM node form mapping and DICOMweb probe."""
 
-from __future__ import annotations
-
 from unittest.mock import MagicMock, patch
 
 from anonymizer.controller.dicom.dicomweb.session import probe_connection

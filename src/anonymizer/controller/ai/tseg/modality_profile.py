@@ -1,11 +1,64 @@
 """Modality profiles for TotalSegmentator Harmonize / Face Blur (CT vs MR).
 
-CT profile constants match today's production values exactly so existing CT
-call sites that omit ``profile`` keep identical behavior.
+Public API
+----------
+FaceFillMode
+    Facefillmode.
+
+ROI_SUBSET_MR
+    Roi subset mr.
+
+STRUCTURE_TO_REGION_MR_EXTRA
+    Structure to region mr extra.
+
+FACE_TASK_MR
+    Face task mr (default 'face_mr').
+
+FACE_MASK_FILENAME_MR
+    Face mask filename mr (default 'face_mr.nii.gz').
+
+TsegModalityProfile
+    Frozen strategy for one TSEG-supported modality.
+
+harmonize_metadata_text(ds: Dataset | None) -> str
+    Harmonize metadata text.
+
+infer_mr_vertebrae_region(ds: Dataset | None) -> str
+    Map MR total_mr combined vertebrae mask to a Playbook body region.
+
+mr_structure_to_region_for_series(ds: Dataset | None) -> dict[str, str]
+    MR structure→region map including metadata-aware combined vertebrae.
+
+ct_modality_profile() -> TsegModalityProfile
+    Return the production CT profile (must stay bit-identical to pre-MR defaults).
+
+mr_modality_profile() -> TsegModalityProfile
+    Mr modality profile.
+
+profile_for_modality(value: str | Modality | None) -> TsegModalityProfile | None
+    Resolve a TSEG modality profile.
+
+profile_from_dataset(ds: object | None) -> TsegModalityProfile | None
+    Profile from dataset.
+
+resolve_profile_for_series(series_directory: object) -> TsegModalityProfile | None
+    Load the first DICOM in series_directory and resolve its modality profile.
+
+load_series_header_dataset(series_directory: object) -> Dataset | None
+    Read the first stackable DICOM header in a series directory.
+
+CT_FACE_TASK_ID
+    Ct face task id.
+
+MR_FACE_TASK_ID
+    Mr face task id.
+
+MR_ANATOMY_TASK_IDS_3MM
+    Mr anatomy task ids 3mm.
+
+CT_ANATOMY_TASK_IDS_3MM
+    Ct anatomy task ids 3mm.
 """
-
-from __future__ import annotations
-
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -19,7 +72,7 @@ from anonymizer.utils.modalities import Modality
 
 FaceFillMode = Literal["hu_band", "intensity_percentile"]
 
-# MR ``total_mr`` class names used for region analysis (open task Dataset852 @ 3mm).
+# MR total_mr class names used for region analysis (open task Dataset852 @ 3mm).
 ROI_SUBSET_MR: tuple[str, ...] = (
     "brain",
     "spinal_cord",
@@ -39,8 +92,8 @@ ROI_SUBSET_MR: tuple[str, ...] = (
 )
 
 # Overlay on CT STRUCTURE_TO_REGION for MR-only class names.
-# Combined ``vertebrae`` is mapped per-series via :func:`mr_structure_to_region_for_series`
-# (DICOM metadata + Chest default) so ``total_mr`` spine masks can drive Harmonize regions.
+# Combined vertebrae is mapped per-series via :func:`mr_structure_to_region_for_series`
+# (DICOM metadata + Chest default) so total_mr spine masks can drive Harmonize regions.
 STRUCTURE_TO_REGION_MR_EXTRA: dict[str, str] = {
     "lung_left": "Chest",
     "lung_right": "Chest",
@@ -134,7 +187,7 @@ def harmonize_metadata_text(ds: Dataset | None) -> str:
 
 
 def infer_mr_vertebrae_region(ds: Dataset | None) -> str:
-    """Map MR ``total_mr`` combined ``vertebrae`` mask to a Playbook body region."""
+    """Map MR total_mr combined vertebrae mask to a Playbook body region."""
     text = harmonize_metadata_text(ds)
     if not text:
         return "Chest"
@@ -162,7 +215,7 @@ def infer_mr_vertebrae_region(ds: Dataset | None) -> str:
 
 
 def mr_structure_to_region_for_series(ds: Dataset | None) -> dict[str, str]:
-    """MR structure→region map including metadata-aware combined ``vertebrae``."""
+    """MR structure→region map including metadata-aware combined vertebrae."""
     mapping = _mr_structure_to_region()
     mapping["vertebrae"] = infer_mr_vertebrae_region(ds)
     return mapping
@@ -223,7 +276,7 @@ def profile_from_dataset(ds: object | None) -> TsegModalityProfile | None:
 
 
 def resolve_profile_for_series(series_directory: object) -> TsegModalityProfile | None:
-    """Load the first DICOM in ``series_directory`` and resolve its modality profile."""
+    """Load the first DICOM in series_directory and resolve its modality profile."""
     ds = load_series_header_dataset(series_directory)
     if ds is None:
         return None

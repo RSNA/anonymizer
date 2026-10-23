@@ -180,7 +180,7 @@ You can create and tune a project through chat (no prior GUI create required for
 1. Give a project name and any settings that matter. The server prepares the complete configuration (your choices combined with defaults) and returns it for review; nothing is created yet.
 2. Change any setting and review the revised configuration, or confirm the exact revision to create/open the project.
 3. For PACS remotes, give **DIMSE or DICOMweb** plus exact fields (`ip`, `port`, `aet`, …) before `configure_remote` — see the user guide above.
-4. Later edits use `project_info` → `update_project_settings` (modalities, transfer syntaxes, local SCP, timeouts, anonymization policy). Identity fields (`project_name`, `site_id`, `uid_root`, storage path) and the language chosen at creation stay fixed after create — the language is picked once, like the desktop welcome-screen selector, and is not part of the Settings dialog.
+4. Later edits use `project_info` → `update_project_settings` (modalities, transfer syntaxes, local SCP, timeouts, confidentiality_options). Identity fields (`project_name`, `site_id`, `uid_root`, storage path) and the language chosen at creation stay fixed after create — the language is picked once, like the desktop welcome-screen selector, and is not part of the Settings dialog.
 5. To learn the workflow in chat, ask: “How do I create a new project and change its settings later? Do not create anything yet.”
 
 Field ranges match the desktop GUI (ports 104–65535, name/site/UID lengths, timeout maxes). Invalid values are rejected.

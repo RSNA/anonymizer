@@ -1,7 +1,5 @@
 """Tests for logical mouse-button and wheel mapping across Tk Aqua / X11."""
 
-from __future__ import annotations
-
 from types import SimpleNamespace
 
 from anonymizer.view.common.tk_mouse import (

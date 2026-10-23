@@ -1,7 +1,5 @@
 """Tests that batch OCR uses the same preprocessing as Series View Detect Text."""
 
-from __future__ import annotations
-
 from unittest.mock import MagicMock, patch
 
 import numpy as np

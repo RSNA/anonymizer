@@ -1,18 +1,40 @@
+"""This module provides functions for initializing and configuring logging in the application.
+
+Public API
+----------
+LOG_FILENAME
+    Log filename (default 'anonymizer.log').
+
+LOG_SIZE
+    Log size.
+
+LOG_BACKUP_COUNT
+    Log backup count (10).
+
+LOG_DEFAULT_LEVEL
+    Log default level.
+
+LOG_FORMAT
+    Log format.
+
+init_logging(file_handler: bool=True) -> str | None
+    Initializes the logging configuration for the application.
+
+set_logging_levels(levels: LoggingLevels)
+    Set logging levels.
+
+set_anonymizer_log_level(level: int) -> None
+    Set the log level for the anonymizer.
+
+set_pynetdicom_log_level(level: int) -> None
+    Set the log level for pynetdicom.
+
+enable_pydicom_debug() -> None
+    Enable debug mode for pydicom.
+
+disable_pydicom_debug() -> None
+    Disable debug mode for pydicom.
 """
-This module provides functions for initializing and configuring logging in the application.
-
-Functions:
-- _get_logs_dir(run_as_exe: bool, install_dir: str) -> str: Returns the directory path where logs should be stored based on the platform and execution mode.
-- init_logging(install_dir: str, run_as_exe: bool, file_handler: bool = True) -> str: Initializes the logging configuration for the application.
-- set_logging_levels(levels: LoggingLevels): Sets the logging levels for different components of the application.
-- set_anonymizer_log_level(level: int) -> None: Sets the log level for the anonymizer.
-- set_pynetdicom_log_level(level: int) -> None: Sets the log level for pynetdicom.
-- enable_pydicom_debug() -> None: Enables debug mode for pydicom.
-- disable_pydicom_debug() -> None: Disables debug mode for pydicom.
-"""
-
-from __future__ import annotations
-
 import contextlib
 import logging
 import os

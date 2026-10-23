@@ -1,16 +1,14 @@
 """Pure-function coverage for modalities helpers (no mocks)."""
 
-from __future__ import annotations
-
 import pytest
 
 import anonymizer.utils.modalities as modalities_module
 from anonymizer.mcp.modality_tokens import resolve_modality_code, resolve_project_modalities
 from anonymizer.utils.modalities import (
-    ContentClass,
     DEFAULT_PROJECT_MODALITIES,
-    Modality,
     XR_MODALITIES,
+    ContentClass,
+    Modality,
     get_modality_catalog,
 )
 
@@ -52,7 +50,7 @@ def test_get_modality_catalog():
     }
     assert set(data.keys()) == expected
     sr_uids = data[Modality.SR].sop_class_uids
-    # Clinical profile enables SR → must accept all …88.* storage classes (dose SRs included).
+    # Retain profile enables SR → must accept all …88.* storage classes (dose SRs included).
     assert "1.2.840.10008.5.1.4.1.1.88.67" in sr_uids  # X-Ray Radiation Dose SR
     assert "1.2.840.10008.5.1.4.1.1.88.68" in sr_uids  # Radiopharmaceutical Radiation Dose SR
     assert "1.2.840.10008.5.1.4.1.1.88.73" in sr_uids  # Patient Radiation Dose SR

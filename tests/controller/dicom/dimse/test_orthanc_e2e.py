@@ -1,7 +1,5 @@
 """Orthanc dicom_integration: DIMSE C-STORE / C-FIND / C-GET / C-MOVE with managed Orthanc."""
 
-from __future__ import annotations
-
 import os
 
 import pytest

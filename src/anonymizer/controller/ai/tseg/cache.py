@@ -1,7 +1,22 @@
-"""TotalSegmentator / harmonize per-series cache directory helpers."""
+"""Cache helpers for the anonymizer.
 
-from __future__ import annotations
+Public API
+----------
+resolve_series_cache_dir(series_directory: Path) -> Path
+    Return the TS cache directory for a series (0_TS_SEG/ at the series root).
 
+TsegCacheSummary
+    TsegCacheSummary type.
+
+tseg_cache_summary(series_directory: Path) -> TsegCacheSummary
+    Summarize the on-disk TS cache for a series.
+
+clear_tseg_series_cache(series_directory: Path, *, also_clear_annotations: bool=False) -> bool
+    Remove harmonize / TotalSegmentator cache for a series.
+
+clear_series_tseg_cache(series_directory: Path, *, anon_model=None, anon_series_uid: str | None=None, also_clear_annotations: bool=False) -> bool
+    Remove on-disk TS cache and clear harmonize metadata in the project database.
+"""
 import logging
 import shutil
 from dataclasses import dataclass
@@ -13,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 def resolve_series_cache_dir(series_directory: Path) -> Path:
-    """Return the TS cache directory for a series (``0_TS_SEG/`` at the series root)."""
+    """Return the TS cache directory for a series (0_TS_SEG/ at the series root)."""
     return Path(series_directory).resolve() / TSEG_CACHE_DIRNAME
 
 
@@ -65,8 +80,8 @@ def clear_tseg_series_cache(
     """
     Remove harmonize / TotalSegmentator cache for a series.
 
-    By default preserves ``annotations/`` (user ROI labels and TS edits). Pass
-    ``also_clear_annotations=True`` to delete the entire cache tree.
+    By default preserves annotations/ (user ROI labels and TS edits). Pass
+    also_clear_annotations=True to delete the entire cache tree.
 
     Does not modify DICOM images or series metadata. Returns True when anything was removed.
     """
@@ -107,7 +122,7 @@ def clear_series_tseg_cache(
     Remove on-disk TS cache and clear harmonize metadata in the project database.
 
     Face blur records and pixel PHI instance metadata are not changed.
-    User ROI ``annotations/`` are preserved unless ``also_clear_annotations`` is True.
+    User ROI annotations/ are preserved unless also_clear_annotations is True.
     """
     removed = clear_tseg_series_cache(
         series_directory, also_clear_annotations=also_clear_annotations

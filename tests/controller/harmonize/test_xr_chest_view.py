@@ -1,7 +1,5 @@
 """Unit tests for XR chest view (projection/rotation; historically cxp_view)."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock
 

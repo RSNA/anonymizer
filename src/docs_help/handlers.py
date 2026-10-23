@@ -1,7 +1,5 @@
 """Shot handlers for MkDocs help screenshot capture."""
 
-from __future__ import annotations
-
 import contextlib
 import logging
 from pathlib import Path
@@ -149,19 +147,19 @@ def shot_logging_levels(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
 
 
 def shot_anonymizer_script_editor(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
-    """Clinical policy script editor: policy chrome, clinical packaged rules, full toolbar."""
-    from anonymizer.model.project import AnonymizationPolicy
+    """Retain-options script editor: option chrome, packaged rules, full toolbar."""
+    from anonymizer.model.project import RETAIN_OPTIONS
     from anonymizer.view.settings.anonymizer_script_dialog import AnonymizerScriptDialog
 
     _ensure_project(ctx)
     controller = ctx.app.controller
     model = controller.model
-    # Install Clinical packaged script so the shot shows policy + provenance UX.
-    controller.apply_anonymization_policy(AnonymizationPolicy.CLINICAL)
+    # Install Retain options so the shot shows option chrome + provenance UX.
+    controller.apply_confidentiality_options(RETAIN_OPTIONS)
     controller.save_model()
     script_path = Path(model.anonymizer_script_path)
     if not script_path.is_file():
-        raise RuntimeError(f"Clinical project script missing after policy apply: {script_path}")
+        raise RuntimeError(f"Project script missing after Retain options apply: {script_path}")
     parent = ctx.app.dashboard or ctx.app
     dlg = AnonymizerScriptDialog(
         parent,
@@ -175,7 +173,7 @@ def shot_anonymizer_script_editor(ctx: CaptureContext, shot: ShotSpec) -> ShotRe
         with contextlib.suppress(Exception):
             dlg._view_var.set("active")
             dlg._on_view_changed()
-        # PatientID + @lookup_ptid: operand help + Load Lookup Table (clinical UX).
+        # PatientID + @lookup_ptid: operand help + Load Lookup Table.
         with contextlib.suppress(Exception):
             dlg._search_var.set("PatientID")
             settle(dlg, 200)
@@ -211,7 +209,7 @@ def shot_anonymizer_script_editor(ctx: CaptureContext, shot: ShotSpec) -> ShotRe
             dlg.attributes("-topmost", False)
         except Exception:
             pass
-        return ShotResult(shot.id, "ok", f"clinical:{script_path.name}", dest)
+        return ShotResult(shot.id, "ok", f"retain:{script_path.name}", dest)
     finally:
         close_toplevel(dlg)
 

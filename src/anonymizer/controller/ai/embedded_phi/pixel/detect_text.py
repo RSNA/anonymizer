@@ -1,13 +1,135 @@
-# For Burnt-IN Pixel PHI Removal:
-from __future__ import annotations
+"""Burnt-in pixel OCR: EasyOCR detection, whitelist match, and PHI entity labeling.
 
+Public API
+----------
+OcrWhitelistMatchMode
+    OcrWhitelistMatchMode type.
+
+OcrWhitelistMatchSettings
+    OcrWhitelistMatchSettings type.
+
+WhitelistMatchResult
+    WhitelistMatchResult type.
+
+default_whitelist_match_settings() -> OcrWhitelistMatchSettings
+    Default whitelist match settings.
+
+load_modality_whitelist_match_settings(project_dir: Path | None, modality_code: str | None) -> OcrWhitelistMatchSettings
+    Load per-modality OCR whitelist match settings from sidecar JSON.
+
+save_modality_whitelist_match_settings(project_dir: Path, modality_code: str, settings: OcrWhitelistMatchSettings) -> Path
+    Persist per-modality OCR whitelist match settings to sidecar JSON.
+
+resolve_whitelist_match(settings: OcrWhitelistMatchSettings | None) -> tuple[float, float]
+    Return (similarity_threshold, min_length_ratio) for filtering.
+
+describe_match_settings(settings: OcrWhitelistMatchSettings | None) -> str
+    User-facing label for logs and batch preview.
+
+match_mode_menu_labels() -> dict[str, OcrWhitelistMatchMode]
+    Map translated menu label -> mode (for Series View OptionMenu).
+
+match_mode_menu_label(mode: OcrWhitelistMatchMode) -> str
+    Match mode menu label.
+
+match_mode_description(mode: OcrWhitelistMatchMode) -> str
+    Match mode description.
+
+ocr_image_for_frame(ds: Dataset, frame: np.ndarray) -> NDArray[np.uint8]
+    Apply DICOM WL/WW to a processed frame for EasyOCR (Series View and batch).
+
+build_series_view_ocr_pixels(images: np.ndarray, ds: Dataset) -> NDArray[np.uint8]
+    Snapshot per-frame EasyOCR inputs for Series View (DICOM WL only; no viewer WL).
+
+ocr_text_from_easyocr_result(result, img_width: int, img_height: int) -> OCRText
+    Create an OCRText from an EasyOCR result tuple (box, text, prob).
+
+OCR_MIN_PROB
+    Ocr min prob (0.49).
+
+OCR_MIN_TEXT_LEN
+    Ocr min text len (2).
+
+OCR_MIN_BOX_PX
+    Ocr min box px (10).
+
+OCR_MIN_BOX_AREA
+    Ocr min box area (200).
+
+OCR_MIN_BOX_AREA_PER_CHAR
+    Ocr min box area per char (80).
+
+OCR_SHORT_NUMERIC_MAX_LEN
+    Ocr short numeric max len (4).
+
+OCR_SHORT_NUMERIC_MIN_AREA
+    Ocr short numeric min area (600).
+
+OCR_WHITELIST_SIMILARITY
+    Ocr whitelist similarity (0.75).
+
+OCR_WHITELIST_MIN_LENGTH_RATIO
+    Ocr whitelist min length ratio (0.7).
+
+OCR_CANVAS_SIZE_THRESHOLD
+    Ocr canvas size threshold (1200).
+
+REPORT_PIXEL_EASYOCR_OVERRIDES
+    Report pixel easyocr overrides.
+
+PixelPhiRemovalMode
+    PixelPhiRemovalMode type.
+
+pixel_phi_removal_mode_menu_values() -> tuple[PixelPhiRemovalMode, ...]
+    Language-agnostic internal codes for removal-mode picker state.
+
+pixel_phi_removal_mode_option_label(mode: PixelPhiRemovalMode) -> str
+    Translated combobox label for a removal mode (not used for menu state).
+
+pixel_phi_removal_mode_menu_labels() -> tuple[str, ...]
+    Translated combobox labels in canonical order.
+
+normalize_pixel_phi_removal_mode(value: object | None, *, default: PixelPhiRemovalMode=PixelPhiRemovalMode.BLACKOUT) -> PixelPhiRemovalMode
+    Resolve combobox text or internal code to PixelPhiRemovalMode.
+
+pixel_phi_removal_mode_from_menu_label(label: str) -> PixelPhiRemovalMode
+    Pixel phi removal mode from menu label.
+
+find_whitelist_match(text: str, whitelist: Sequence[str], similarity_threshold: float, min_length_ratio: float=...) -> WhitelistMatchResult
+    Find whitelist match.
+
+filter_ocr_detections(detections: Sequence[OCRText], *, whitelist: Sequence[str] | None=None, min_prob: float=OCR_MIN_PROB, min_text_len: int=OCR_MIN_TEXT_LEN, min_box_px: int=OCR_MIN_BOX_PX, min_box_area: int=OCR_MIN_BOX_AREA, min_box_area_per_char: float=OCR_MIN_BOX_AREA_PER_CHAR, short_numeric_min_area: int=OCR_SHORT_NUMERIC_MIN_AREA, whitelist_similarity: float=OCR_WHITELIST_SIMILARITY, whitelist_min_length_ratio: float=..., whitelist_match_settings: OcrWhitelistMatchSettings | None=None) -> list[OCRText]
+    Drop OCR noise and optional whitelist-matched overlay terms.
+
+filter_ocr_phi_ner(detections: Sequence[OCRText], *, locale: str='en_US') -> list[OCRText]
+    NER-primary keep/remove: retain detections that contain PHI for blackout.
+
+annotate_ocr_phi_labels(detections: Sequence[OCRText], *, locale: str='en_US', detect_fn=None) -> list[OCRText]
+    Attach phi_label/phi_entities from NER without dropping detections.
+
+filter_ocr_whitelist_only(detections: Sequence[OCRText], whitelist: Sequence[str] | None, *, whitelist_similarity: float=OCR_WHITELIST_SIMILARITY, whitelist_min_length_ratio: float=..., whitelist_match_settings: OcrWhitelistMatchSettings | None=None, log_steps: bool=True) -> list[OCRText]
+    Drop whitelist-matched overlay terms only (Series View detect; no noise filter).
+
+rects_intersect(a: tuple[int, int, int, int] | OCRText | UserRectangle, b: tuple[int, int, int, int] | OCRText | UserRectangle) -> bool
+    Return True when two axis-aligned boxes overlap (inclusive edges count as overlap).
+
+filter_ocr_outside_exclude_rects(detections: Sequence[OCRText], exclude_rects: Sequence[UserRectangle] | None) -> list[OCRText]
+    Drop OCR boxes that intersect any exclude rectangle (spatial keepers).
+
+load_modality_whitelist(project_dir: Path | None, modality: str | None) -> list[str]
+    Load the effective modality whitelist for batch OCR filtering.
+
+detect_text(pixels: NDArray[np.uint8], ocr_reader: Reader, draw_boxes_and_text: bool=False, *, whitelist: Sequence[str] | None=None, modality: str | None=None, apply_noise_filter: bool=True, whitelist_match_settings: OcrWhitelistMatchSettings | None=None, phi_ner_locale: str='en_US', apply_phi_ner_filter: bool=False, annotate_phi_labels: bool=False, exclude_rects: Sequence[UserRectangle] | None=None, log_steps: bool=True, easyocr_overrides: Mapping[str, Any] | None=None) -> list[OCRText] | None
+    Detect text in a 2D uint8 frame.
+"""
+# For Burnt-IN Pixel PHI Removal:
 import json
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any, Self
 
 import numpy as np
 from cv2 import (
@@ -29,9 +151,6 @@ from easyocr import Reader
 from numpy import ndarray
 from numpy.typing import NDArray
 from pydicom import Dataset
-
-if TYPE_CHECKING:
-    pass
 
 from anonymizer.controller.ai.embedded_phi.ner.cache import ner_ready
 from anonymizer.controller.ai.embedded_phi.ner.engine import detect_entities, detect_locale_supported
@@ -75,8 +194,8 @@ class OcrWhitelistMatchSettings:
             "min_length_ratio": self.min_length_ratio,
         }
 
-    @staticmethod
-    def from_dict(data: dict[str, Any] | None) -> OcrWhitelistMatchSettings:
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> Self:
         if not data:
             return default_whitelist_match_settings()
         mode_raw = str(data.get("match_mode", OcrWhitelistMatchMode.STANDARD.value))
@@ -84,7 +203,7 @@ class OcrWhitelistMatchSettings:
             match_mode = OcrWhitelistMatchMode(mode_raw)
         except ValueError:
             match_mode = OcrWhitelistMatchMode.STANDARD
-        return OcrWhitelistMatchSettings(
+        return cls(
             match_mode=match_mode,
             similarity=float(data.get("similarity", 0.75)),
             min_length_ratio=float(data.get("min_length_ratio", 0.7)),
@@ -281,7 +400,7 @@ def _draw_text_contours_on_mask(
         top_left: The top-left coordinates of the region to extract.
         bottom_right: The bottom-right coordinates of the region to extract.
         mask: The mask that will be modified by drawing contours. [*Mutable*]
-        is_bgr: When True, ``image`` is BGR (EasyOCR path); otherwise RGB.
+        is_bgr: When True, image is BGR (EasyOCR path); otherwise RGB.
     """
     # Sub-image contour masking:
     # Extracting coordinates
@@ -362,7 +481,7 @@ def normalize_pixel_phi_removal_mode(
     *,
     default: PixelPhiRemovalMode = PixelPhiRemovalMode.BLACKOUT,
 ) -> PixelPhiRemovalMode:
-    """Resolve combobox text or internal code to ``PixelPhiRemovalMode``."""
+    """Resolve combobox text or internal code to PixelPhiRemovalMode."""
     text = str(value or "").strip()
     if not text:
         return default
@@ -396,9 +515,9 @@ def _easyocr_readtext(
     overrides: Mapping[str, Any] | None = None,
 ) -> list:
     """
-    Run EasyOCR with Series View defaults; optional ``overrides`` for report pixels.
+    Run EasyOCR with Series View defaults; optional overrides for report pixels.
 
-    Same entry used by ``remove_pixel_phi`` / Series View and Report View rasters.
+    Same entry used by remove_pixel_phi / Series View and Report View rasters.
     """
     canvas_size = min(max(pixels.shape[0], pixels.shape[1]), OCR_CANVAS_SIZE_THRESHOLD)
     kwargs: dict[str, Any] = {
@@ -590,128 +709,154 @@ def filter_ocr_detections(
     return filtered
 
 
-def _ocr_copy(item: OCRText, *, phi_label: str | None) -> OCRText:
+def _ocr_copy(
+    item: OCRText,
+    *,
+    phi_label: str | None,
+    phi_entities: tuple[tuple[str, str], ...] | None = None,
+) -> OCRText:
+    """
+    Copy an OCR box with a new PHI label (and optionally new box entities).
+
+    Args:
+        item: Source OCR box.
+        phi_label: Product label to stamp on the copy.
+        phi_entities: (label, span text) pairs detected in this box;
+            None preserves item.phi_entities.
+
+    Returns:
+        A new OCRText with the same geometry/text/probability.
+    """
     return OCRText(
         text=item.text,
         top_left=item.top_left,
         bottom_right=item.bottom_right,
         prob=item.prob,
         phi_label=phi_label,
+        phi_entities=item.phi_entities if phi_entities is None else phi_entities,
     )
 
 
-def _best_phi_label(ents: Sequence) -> str | None:
-    if not ents:
-        return None
-    return max(ents, key=lambda e: e.score).label
+def _frame_reading_order(detections: Sequence[OCRText]) -> list[int]:
+    """
+    Indices of detections in reading order (lines top-to-bottom, left-to-right).
+
+    Boxes belong to the same line when their vertical ranges overlap by at
+    least half the shorter box height. Used only to order the frame context
+    string for the NER call — never to label boxes.
+
+    Args:
+        detections: OCR boxes of one frame (any order).
+
+    Returns:
+        Detection indices in reading order.
+    """
+    by_top = sorted(
+        range(len(detections)),
+        key=lambda i: (detections[i].top_left[1], detections[i].top_left[0]),
+    )
+    lines: list[list[int]] = []
+    for idx in by_top:
+        item = detections[idx]
+        for line in lines:
+            first = detections[line[0]]
+            overlap = min(item.bottom_right[1], first.bottom_right[1]) - max(
+                item.top_left[1], first.top_left[1]
+            )
+            min_height = max(
+                1,
+                min(
+                    item.bottom_right[1] - item.top_left[1],
+                    first.bottom_right[1] - first.top_left[1],
+                ),
+            )
+            if overlap >= 0.5 * min_height:
+                line.append(idx)
+                break
+        else:
+            lines.append([idx])
+    ordered: list[int] = []
+    for line in lines:
+        ordered.extend(sorted(line, key=lambda i: detections[i].top_left[0]))
+    return ordered
 
 
-def _ocr_box_height(item: OCRText) -> int:
-    _x1, y1, _x2, y2 = item.get_bounding_box()
-    return max(1, y2 - y1)
+# OCR boxes are distinct fields, so the frame context presents them as a
+# comma list: the separator acts as a field boundary for the model, which
+# measurably returns more dates as single spans than a space join (pixel
+# path only; report NER receives natural text unchanged).
+_FRAME_CONTEXT_SEPARATOR = ", "
 
 
-def _same_ocr_line(a: OCRText, b: OCRText) -> bool:
-    _ax1, ay1, _ax2, ay2 = a.get_bounding_box()
-    _bx1, by1, _bx2, by2 = b.get_bounding_box()
-    overlap = min(ay2, by2) - max(ay1, by1)
-    return overlap >= 0.5 * min(_ocr_box_height(a), _ocr_box_height(b))
+def _joined_frame_context(
+    detections: Sequence[OCRText], ordered: Sequence[int]
+) -> tuple[str, dict[int, tuple[int, int]]]:
+    """
+    Join box texts (reading order) with ", "; track each box's span.
 
+    Args:
+        detections: OCR boxes of one frame.
+        ordered: Box indices in reading order (see _frame_reading_order).
 
-def _horizontally_adjacent(left: OCRText, right: OCRText) -> bool:
-    gap = right.top_left[0] - left.bottom_right[0]
-    max_h = max(_ocr_box_height(left), _ocr_box_height(right))
-    return -int(0.25 * max_h) <= gap <= max(8, int(1.25 * max_h))
-
-
-def _name_token_candidate(text: str) -> bool:
-    token = (text or "").strip()
-    if len(token) < 2 or len(token) > 24:
-        return False
-    if any(ch.isdigit() for ch in token):
-        return False
-    letters = [ch for ch in token if ch.isalpha()]
-    return len(letters) >= 2
-
-
-def _joined_token_spans(texts: Sequence[str]) -> tuple[str, list[tuple[int, int]]]:
-    spans: list[tuple[int, int]] = []
-    pos = 0
+    Returns:
+        (joined_text, spans) where spans maps a detection index to
+        its [start, end) character range in joined_text.
+    """
     parts: list[str] = []
-    for i, raw in enumerate(texts):
-        token = raw.strip()
-        if i:
-            pos += 1
-        spans.append((pos, pos + len(token)))
-        pos += len(token)
-        parts.append(token)
-    return " ".join(parts), spans
+    spans: dict[int, tuple[int, int]] = {}
+    pos = 0
+    for n, idx in enumerate(ordered):
+        if n:
+            pos += len(_FRAME_CONTEXT_SEPARATOR)
+        text = detections[idx].text or ""
+        spans[idx] = (pos, pos + len(text))
+        parts.append(text)
+        pos += len(text)
+    return _FRAME_CONTEXT_SEPARATOR.join(parts), spans
 
 
-def _span_covers_token(span_start: int, span_end: int, token_start: int, token_end: int) -> bool:
-    overlap = min(span_end, token_end) - max(span_start, token_start)
-    length = max(1, token_end - token_start)
-    return overlap / length >= 0.5
+def _entities_in_box(
+    entities: Sequence, joined: str, span: tuple[int, int]
+) -> list[tuple[str, str, float]]:
+    """
+    Entities overlapping one box's span in the joined frame text.
 
+    Args:
+        entities: Model entities with offsets into joined.
+        joined: The joined frame context string.
+        span: The box's [start, end) range in joined.
 
-def _ocr_line_groups(items: Sequence[OCRText]) -> list[list[int]]:
-    unused = set(range(len(items)))
-    groups: list[list[int]] = []
-    while unused:
-        seed = min(unused, key=lambda i: (items[i].top_left[1], items[i].top_left[0]))
-        line = [i for i in unused if i == seed or _same_ocr_line(items[seed], items[i])]
-        unused.difference_update(line)
-        line.sort(key=lambda i: items[i].top_left[0])
-        groups.append(line)
-    return groups
-
-
-def _propagate_adjacent_name_labels(
-    detections: Sequence[OCRText],
-    *,
-    detect_fn,
-    locale: str,
-) -> list[OCRText]:
-    """Re-run NER on a NAME box plus an adjacent unlabeled neighbor (split OCR names)."""
-    out = [
-        _ocr_copy(item, phi_label=item.phi_label) for item in detections
-    ]
-    for _round in range(3):
-        changed = False
-        for line in _ocr_line_groups(out):
-            for pos, idx in enumerate(line):
-                item = out[idx]
-                if (item.phi_label or "").strip() != "NAME":
-                    continue
-                for neighbor_pos in (pos - 1, pos + 1):
-                    if neighbor_pos < 0 or neighbor_pos >= len(line):
-                        continue
-                    nidx = line[neighbor_pos]
-                    neighbor = out[nidx]
-                    if (neighbor.phi_label or "").strip():
-                        continue
-                    if not _name_token_candidate(neighbor.text):
-                        continue
-                    left, right = (item, neighbor) if item.top_left[0] <= neighbor.top_left[0] else (neighbor, item)
-                    if not _horizontally_adjacent(left, right):
-                        continue
-                    joined, spans = _joined_token_spans([left.text, right.text])
-                    ents = detect_fn(joined, locale=locale)
-                    name_ents = [e for e in ents if e.label == "NAME"]
-                    if not name_ents:
-                        continue
-                    neighbor_is_right = neighbor is right
-                    token_start, token_end = spans[1 if neighbor_is_right else 0]
-                    if not any(_span_covers_token(e.start, e.end, token_start, token_end) for e in name_ents):
-                        continue
-                    logger.debug(
-                        "OCR→NER adjacent NAME propagated to unlabeled neighbor (no PHI text logged)"
-                    )
-                    out[nidx] = _ocr_copy(neighbor, phi_label="NAME")
-                    changed = True
-        if not changed:
-            break
+    Returns:
+        (label, clipped span text, score) per overlapping entity, in
+        entity order. Span text is clipped to the box's own characters.
+    """
+    box_start, box_end = span
+    out: list[tuple[str, str, float]] = []
+    for ent in entities:
+        if ent.start < box_end and ent.end > box_start:
+            clipped = joined[max(ent.start, box_start) : min(ent.end, box_end)]
+            out.append((ent.label, clipped, float(ent.score)))
     return out
+
+
+# Pixel removal only needs "contains a name", not first vs last: DICOM-order
+# burned-in names (Family Given) would otherwise show the model's natural-order
+# classes reversed. Report NER keeps FIRST_NAME/LAST_NAME (synthetic pools);
+# this collapse applies only at the pixel box boundary.
+_PIXEL_NAME_LABELS = frozenset({"FIRST_NAME", "LAST_NAME"})
+
+
+def _pixel_phi_label(model_label: str) -> str:
+    """
+    Map a model entity label onto the pixel category for a box.
+
+    Args:
+        model_label: Product label returned by detect_entities.
+
+    Returns:
+        NAME for first/last-name classes; any other label unchanged.
+    """
+    return "NAME" if model_label in _PIXEL_NAME_LABELS else model_label
 
 
 def filter_ocr_phi_ner(
@@ -722,8 +867,8 @@ def filter_ocr_phi_ner(
     """
     NER-primary keep/remove: retain detections that contain PHI for blackout.
 
-    Used by batch ``remove_pixel_phi``. Series View detect does **not** use this —
-    it keeps OCR hits and annotates labels via ``annotate_ocr_phi_labels``.
+    Used by batch remove_pixel_phi. Series View detect does **not** use this —
+    it keeps OCR hits and annotates labels via annotate_ocr_phi_labels.
     """
     ready = ner_ready()
     if not ready or not detect_locale_supported(locale):
@@ -744,36 +889,58 @@ def annotate_ocr_phi_labels(
     detections: Sequence[OCRText],
     *,
     locale: str = "en_US",
+    detect_fn=None,
 ) -> list[OCRText]:
-    """Attach ``phi_label`` from NER without dropping non-PHI detections (Series View)."""
+    """
+    Attach phi_label/phi_entities from NER without dropping detections.
+
+    The model is called **once per frame** on all box texts in reading
+    order, joined as a comma list (_FRAME_CONTEXT_SEPARATOR — the model
+    is a text model; isolated fragments deny it context, and fields are
+    distinct), and its entities are mapped back to the boxes they fall in.
+    A box's label is the highest-scoring entity inside it; boxes are the
+    display/removal unit, so a labelled box is removed whole (including
+    prefixes or markers the model did not tag, e.g. DOB: / [M]).
+    First/last-name entities collapse to the pixel category NAME (report
+    NER keeps the distinction for synthetic replacement). No labelling is
+    ever propagated between boxes.
+
+    Args:
+        detections: OCR boxes of one frame.
+        locale: NER locale pack.
+        detect_fn: text → list[Entity] override (tests); defaults to
+            detect_entities with locale.
+
+    Returns:
+        Copies of the input boxes, in input order, with PHI labels/entities.
+    """
     ready = ner_ready()
     if not ready or not detect_locale_supported(locale):
         logger.info(
-            "OCR→NER classify skipped (ner_ready=%s locale=%s); %d text(s) unlabeled",
-            ready,
-            locale,
-            len(detections),
+            f"OCR→NER classify skipped (ner_ready={ready} locale={locale}); "
+            f"{len(detections)} text(s) unlabeled"
         )
         return list(detections)
+    scan = detect_fn or (lambda body: detect_entities(body, locale=locale))
+    ordered = _frame_reading_order(detections)
+    joined, spans = _joined_frame_context(detections, ordered)
+    logger.info(f"OCR→NER frame context ({len(detections)} box(es)): {joined!r}")
+    entities = scan(joined) if joined.strip() else []
     out: list[OCRText] = []
-    for ocr_text in detections:
-        text = (ocr_text.text or "").strip()
-        label: str | None = None
-        if text:
-            ents = detect_entities(text, locale=locale)
-            if ents:
-                label = _best_phi_label(ents)
-                logger.debug("OCR→NER classify → %s", label)
-            else:
-                logger.debug("OCR→NER classify → overlay / not PHI")
-        out.append(_ocr_copy(ocr_text, phi_label=label))
-    out = _propagate_adjacent_name_labels(out, detect_fn=detect_entities, locale=locale)
+    for idx, ocr_text in enumerate(detections):
+        in_box = _entities_in_box(entities, joined, spans[idx])
+        # Pixel category: first/last name collapse to NAME (see _PIXEL_NAME_LABELS);
+        # the log detail below keeps the model's own classes for diagnosis.
+        label = _pixel_phi_label(max(in_box, key=lambda row: row[2])[0]) if in_box else None
+        box_entities = tuple((_pixel_phi_label(lab), txt) for lab, txt, _score in in_box)
+        if in_box:
+            detail = ", ".join(f"{lab} {txt!r} ({score:.2f})" for lab, txt, score in in_box)
+            logger.info(f"OCR→NER box {ocr_text.text!r} → {label} [{detail}]")
+        else:
+            logger.info(f"OCR→NER box {ocr_text.text!r} → unlabelled")
+        out.append(_ocr_copy(ocr_text, phi_label=label, phi_entities=box_entities))
     labeled = sum(1 for item in out if (item.phi_label or "").strip())
-    logger.info(
-        "OCR→NER classify: %d labeled / %d text(s)",
-        labeled,
-        len(detections),
-    )
+    logger.info(f"OCR→NER classify: {labeled} labeled / {len(detections)} text(s)")
     return out
 
 def filter_ocr_whitelist_only(
@@ -915,15 +1082,15 @@ def detect_text(
     Detect text in a 2D uint8 frame.
 
     Batch removal uses noise + optional whitelist (remove survivors). Opt-in
-    ``apply_phi_ner_filter=True`` further keeps only NER-confirmed PHI.
-    Series View detect passes ``apply_noise_filter=False``, ``apply_phi_ner_filter=False``,
-    and ``annotate_phi_labels=True`` (whitelist applied later in the view; boxes colored by class).
+    apply_phi_ner_filter=True further keeps only NER-confirmed PHI.
+    Series View detect passes apply_noise_filter=False, apply_phi_ner_filter=False,
+    and annotate_phi_labels=True (whitelist applied later in the view; boxes colored by class).
 
-    Report pixel paths pass ``easyocr_overrides=REPORT_PIXEL_EASYOCR_OVERRIDES`` (wider
-    box merge). Series View / ``remove_pixel_phi`` omit overrides (word-level defaults).
+    Report pixel paths pass easyocr_overrides=REPORT_PIXEL_EASYOCR_OVERRIDES (wider
+    box merge). Series View / remove_pixel_phi omit overrides (word-level defaults).
 
-    Pass ``log_steps=False`` when a caller (e.g. Report PDF OCR arm) owns the workflow log
-    so this helper does not emit misleading ``OCR→NER: skipped`` lines.
+    Pass log_steps=False when a caller (e.g. Report PDF OCR arm) owns the workflow log
+    so this helper does not emit misleading OCR→NER: skipped lines.
     """
     if pixels.ndim == 3:
         img_height, img_width = pixels.shape[:2]

@@ -2,4 +2,3 @@
 
 from prototyping.ffr.face.pipeline import run_face_viz_poc
 
-__all__ = ["run_face_viz_poc"]

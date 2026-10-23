@@ -1,7 +1,5 @@
 """AI Features availability: status, inventory, download manager, license UX."""
 
-from __future__ import annotations
-
 import logging
 import threading
 from collections.abc import Callable
@@ -276,7 +274,7 @@ def _ready_harmonize_mr_task_ids() -> tuple[int, ...]:
 
 
 def installed_task_ids(group: AiModelGroupId) -> tuple[int, ...]:
-    """Return on-disk TotalSegmentator task IDs for ``group`` (empty for OCR)."""
+    """Return on-disk TotalSegmentator task IDs for group (empty for OCR)."""
     if group == AiModelGroupId.HARMONIZE_CT:
         return _ready_harmonize_ct_task_ids()
     if group == AiModelGroupId.HARMONIZE_MR:
@@ -291,7 +289,7 @@ def installed_task_ids(group: AiModelGroupId) -> tuple[int, ...]:
 
 
 def installed_model_inventory(group: AiModelGroupId) -> tuple[str, ...]:
-    """Friendly inventory lines for models currently installed for ``group``."""
+    """Friendly inventory lines for models currently installed for group."""
     if group == AiModelGroupId.EMBEDDED_PHI:
         lines: list[str] = []
         if ocr_models_ready():

@@ -1,7 +1,5 @@
 """Tests for CustomTkinter scaling tracker safety helpers."""
 
-from __future__ import annotations
-
 from unittest.mock import MagicMock, patch
 
 from anonymizer.view.common.ctk_safe import (
@@ -224,7 +222,8 @@ def test_teardown_ctk_toplevel_destroys_and_schedules_gc() -> None:
     parent = MagicMock()
     with (
         patch("anonymizer.view.common.ctk_safe.mark_ctk_window_destroyed") as mark_destroyed,
-        patch("anonymizer.utils.memory.schedule_collect_garbage_on_tk") as schedule_gc,
+        # Bound name in ctk_safe (imported at module load), not memory's attribute.
+        patch("anonymizer.view.common.ctk_safe.schedule_collect_garbage_on_tk") as schedule_gc,
     ):
         teardown_ctk_toplevel(window, parent=parent)
     mark_destroyed.assert_called_once_with(window)

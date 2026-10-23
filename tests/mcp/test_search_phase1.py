@@ -1,7 +1,5 @@
 """Phase 1 MCP search tool tests."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock
 

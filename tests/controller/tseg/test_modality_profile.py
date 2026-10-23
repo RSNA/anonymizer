@@ -1,7 +1,5 @@
 """Tests for modality profile resolution."""
 
-from __future__ import annotations
-
 from anonymizer.utils.modalities import ContentClass, Modality, get_modality_catalog
 
 

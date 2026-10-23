@@ -1,7 +1,5 @@
 """Unit tests for nested PHI Index tree helpers."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from anonymizer.controller.phi.phi_io import PHI_IndexRecord, PHI_SeriesIndexRecord

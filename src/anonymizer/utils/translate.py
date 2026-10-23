@@ -1,17 +1,28 @@
+"""Application gettext catalog and language selection.
+
+Public API
+----------
+locales_dir() -> Path
+    Install-dir-relative path to packaged gettext locales (assets/locales).
+
+set_language_code(lang_code: str)
+    Sets the language code for the application.
+
+set_language(language: str)
+    Sets the language for the application.
+
+get_current_language_code() -> str
+    Current locale code. Raises if set_language_code has not run.
+
+get_current_language() -> str
+    Returns the language for the current locale.
+
+insert_spaces_between_cases(input_string)
+    Inserts spaces between lowercase and uppercase letters in a string.
+
+insert_space_after_codes(input_string, codes)
+    Inserts a space after each occurrence of the specified codes in the input string.
 """
-translate.py: Application gettext catalog and language selection.
-
-Does not use the Python locale module for UI language. Numerics and dates stay
-en_US / DICOM-style for all languages.
-
-Catalog files live under the installed package tree
-``anonymizer/assets/locales/<lang>/LC_MESSAGES/messages.mo``. Loading is always
-resolved from this package path — never from process CWD — so UI translation
-does not depend on platform launch directory or ``os.chdir``.
-"""
-
-from __future__ import annotations
-
 import gettext
 import logging
 import re
@@ -22,24 +33,19 @@ from pprint import pformat
 language_to_code: dict[str, str] = {"English": "en_US", "Deutsch": "de", "Español": "es", "Français": "fr"}
 code_to_language: dict[str, str] = {v: k for k, v in language_to_code.items()}
 
-# ``utils/translate.py`` → package root ``anonymizer/``
-_PACKAGE_ROOT = Path(__file__).resolve().parent.parent
-_LOCALES_DIR = _PACKAGE_ROOT / "assets" / "locales"
-
 _current_language_code: str | None = None
-_current_translations: gettext.NullTranslations | None = None
+# Identity until set_language_code runs after install-dir chdir (main / tests).
+_current_translations: gettext.NullTranslations = gettext.NullTranslations()
 
 logger = logging.getLogger(__name__)
 
 
 def locales_dir() -> Path:
-    """Absolute path to packaged gettext locales (platform- and CWD-independent)."""
-    return _LOCALES_DIR
+    """Install-dir-relative path to packaged gettext locales (assets/locales)."""
+    return Path("assets/locales")
 
 
 def _(msg: str) -> str:
-    if not _current_translations:
-        raise ValueError("Language not set")
     return _current_translations.gettext(msg)
 
 
@@ -85,10 +91,6 @@ def set_language_code(lang_code: str):
     )
 
 
-# Default to US English: en_US
-set_language_code("en_US")
-
-
 def set_language(language: str):
     """
     Sets the language for the application.
@@ -104,10 +106,16 @@ def set_language(language: str):
 
 def get_current_language_code() -> str:
     """
-    Returns the language code for the current locale.
+    Return the current locale code.
+
+    Language must be set via set_language_code (app main after install-dir
+    chdir, or test session setup) before this is called.
 
     Returns:
-        str: The language code for the current locale.
+        Locale subdirectory name (for example en_US).
+
+    Raises:
+        ValueError: When language has not been set.
     """
     if not _current_language_code:
         raise ValueError("Language not set")

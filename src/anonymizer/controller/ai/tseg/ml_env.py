@@ -1,7 +1,34 @@
-"""ML execution environment: thread limits and sequential TotalSegmentator/nnUNet context."""
+"""ML execution environment: thread limits and sequential TotalSegmentator/nnUNet context.
 
-from __future__ import annotations
+Public API
+----------
+SESSION_LOCK
+    Session lock.
 
+session_active() -> bool
+    Return True while a harmonize batch session keeps TS predictors resident.
+
+preserve_accelerator_memory() -> bool
+    When True, skip torch cache clears so loaded TS weights stay resident.
+
+enter_session() -> bool
+    Increment session depth; return True when this call started the outermost session.
+
+exit_session() -> bool
+    Decrement session depth; return True when the outermost session just ended.
+
+resolve_device(device: str | None) -> str
+    Resolve device.
+
+configure_macos_subprocess_env() -> None
+    Clear malloc debug env vars before TotalSegmentator spawns worker processes.
+
+log_active_threads(stage: str) -> None
+    Log active threads.
+
+sequential_ml_context(stage: str) -> Iterator[None]
+    Force single-threaded native backends and exclusive ML entry for a stage.
+"""
 import logging
 import os
 import threading
@@ -18,7 +45,7 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-# Batch harmonize session: predictors stay resident while depth > 0 (see ``tseg_batch_session``).
+# Batch harmonize session: predictors stay resident while depth > 0 (see tseg_batch_session).
 SESSION_LOCK = threading.Lock()
 _session_depth = 0
 

@@ -1,7 +1,5 @@
 """AI batch removal must match UX workflow logs for the three standard fixtures."""
 
-from __future__ import annotations
-
 import shutil
 from pathlib import Path
 

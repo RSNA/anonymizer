@@ -1,13 +1,12 @@
 """Allowlisted non-PHI snapshots for MCP tool results."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from typing import Any
 
 from pydicom.dataset import Dataset
 
-from anonymizer.controller.project import ProjectController, StudyUIDHierarchy
+from anonymizer.controller.dicom.hierarchies import StudyUIDHierarchy
+from anonymizer.controller.project import ProjectController
 from anonymizer.model.project import DICOMNode, ProjectModel
 from anonymizer.model.settings_validate import timeouts_dict
 
@@ -98,7 +97,7 @@ def serialize_project_import_summary(controller: ProjectController) -> dict[str,
 
 def serialize_project_configuration(model: ProjectModel) -> dict[str, Any]:
     """
-    Public create-configuration view of a core ``ProjectModel``.
+    Public create-configuration view of a core ProjectModel.
 
     Args:
         model: Saved or unsaved project model.
@@ -117,10 +116,8 @@ def serialize_project_configuration(model: ProjectModel) -> dict[str, Any]:
         "transfer_syntaxes": list(model.transfer_syntaxes),
         "scp": serialize_dicom_node(model.scp),
         "network_timeouts": timeouts_dict(model.network_timeouts),
-        "anonymization_policy": (
-            model.anonymization_policy.value
-            if hasattr(model.anonymization_policy, "value")
-            else str(model.anonymization_policy)
+        "confidentiality_options": sorted(
+            int(code) for code in model.confidentiality_options
         ),
         "remote_scps": {
             name: serialize_dicom_node(node) for name, node in model.remote_scps.items()
@@ -177,7 +174,7 @@ def serialize_inventory_series(
 ) -> dict[str, Any]:
     """Allowlisted inventory row — indices + anon patient id (no filesystem paths).
 
-    UIDs are kept for internal resolve/path rebuild; strip via ``public_inventory_row``
+    UIDs are kept for internal resolve/path rebuild; strip via public_inventory_row
     before returning from MCP tools.
     """
     return {

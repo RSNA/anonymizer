@@ -1,7 +1,5 @@
 """Tests for Series View OCR text removal helper."""
 
-from __future__ import annotations
-
 from unittest.mock import MagicMock, patch
 
 import numpy as np

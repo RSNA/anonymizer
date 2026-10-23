@@ -1,7 +1,5 @@
 """Asset-DICOM series_io roundtrips using checked-in fixtures."""
 
-from __future__ import annotations
-
 import shutil
 from pathlib import Path
 

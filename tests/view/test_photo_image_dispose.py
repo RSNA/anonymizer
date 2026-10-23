@@ -4,8 +4,6 @@ Reproduces the macOS bus error seen when ``PIL.ImageTk.PhotoImage.__del__``
 runs on a pynetdicom worker after analytics charts / series images are dropped.
 """
 
-from __future__ import annotations
-
 import contextlib
 import gc
 import os

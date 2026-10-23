@@ -28,11 +28,15 @@ from tests.controller.dicom.support.test_nodes import (
     PACSSimulatorSCP,
     RemoteSCPDict,
 )
-from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
+from tests.paths import DEFAULT_ANONYMIZER_SCRIPT, REPO_ROOT
+
+# Same install dir as anonymizer.main (relative assets/ paths resolve here).
+_INSTALL_DIR = REPO_ROOT / "src" / "anonymizer"
 
 
 def pytest_sessionstart(session):
     """Runs before the test session begins."""
+    os.chdir(_INSTALL_DIR)
     # Initialise logging without file handler:
     init_logging(file_handler=False)
     set_language_code("en_US")

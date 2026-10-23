@@ -1,7 +1,5 @@
 """Series-view segmentation overlay rendering."""
 
-from __future__ import annotations
-
 import cv2
 import numpy as np
 
@@ -9,7 +7,7 @@ from anonymizer.controller.series.series_overlay import Segmentation
 
 # Single-pixel opaque color stroke (no dark understroke — that exaggerates contour jaggedness).
 COLORED_SEGMENTATION_OUTLINE_THICKNESS = 1
-# Optional fill blend when ``Segmentation.filled`` is True (Series View uses outline-only).
+# Optional fill blend when Segmentation.filled is True (Series View uses outline-only).
 ACTIVE_LABEL_FILL_BLEND = 0.35
 
 
@@ -22,8 +20,8 @@ def render_segmentations_overlay(
 ) -> np.ndarray:
     """Draw segmentations into a BGR overlay buffer.
 
-    When ``Segmentation.color_bgr`` is set: opaque 1px outline (optional light fill when
-    ``filled``). When unset: solid ``fillPoly`` with ``default_color_bgr`` (Face Blur path).
+    When Segmentation.color_bgr is set: opaque 1px outline (optional light fill when
+    filled). When unset: solid fillPoly with default_color_bgr (Face Blur path).
     """
     combined = np.zeros((height, width, 3), dtype=np.uint8)
     if not segmentations:

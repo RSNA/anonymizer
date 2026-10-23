@@ -1,7 +1,5 @@
 """Tests for PHI Index navigation helpers."""
 
-from __future__ import annotations
-
 from unittest.mock import MagicMock
 
 from anonymizer.view.common.navigation import find_dataset_view_parent, return_to_dataset_view

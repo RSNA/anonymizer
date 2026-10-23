@@ -1,7 +1,121 @@
-"""Session-scoped TotalSegmentator nnUNet predictor cache for batch harmonize."""
+"""Session-scoped TotalSegmentator nnUNet predictor cache for batch harmonize.
 
-from __future__ import annotations
+Public API
+----------
+clear_predictor_cache() -> None
+    Drop cached nnUNet predictors (e.g. on application shutdown).
 
+harmonize_anatomy_task_ids() -> tuple[int, ...]
+    TotalSegmentator task IDs for CT harmonize anatomy at the selected resolution.
+
+ct_anatomy_task_ids_for_mode(mode: object | None) -> tuple[int, ...]
+    Ct anatomy task ids for mode.
+
+mr_anatomy_task_ids() -> tuple[int, ...]
+    MR total_mr task IDs for the selected resolution.
+
+mr_anatomy_task_ids_for_mode(mode: object | None) -> tuple[int, ...]
+    Mr anatomy task ids for mode.
+
+installed_ct_segmentation_modes() -> tuple[str, ...]
+    Return CT resolutions whose full anatomy (+contrast) packs are on disk.
+
+installed_mr_segmentation_modes() -> tuple[str, ...]
+    Return MR resolutions whose full anatomy packs are on disk.
+
+mr_face_task_id() -> int
+    Mr face task id.
+
+face_task_ids() -> tuple[int, ...]
+    CT face task IDs for Face Blur (CT download group).
+
+mr_face_task_ids() -> tuple[int, ...]
+    MR face_mr task IDs for Face Blur (MR download group).
+
+harmonize_contrast_task_ids() -> tuple[int, ...]
+    TotalSegmentator task IDs for harmonize IV contrast (head/neck vessel statistics).
+
+harmonize_ts_task_ids() -> tuple[int, ...]
+    CT TotalSegmentator weight tasks required for CT harmonize (segmentation + contrast).
+
+harmonize_feature_task_ids() -> tuple[int, ...]
+    CT Harmonize AI Feature download group (anatomy + contrast). MR is a separate kind.
+
+trainer_for_harmonize_task(task_id: int) -> str
+    Trainer for harmonize task.
+
+model_for_harmonize_task(task_id: int) -> str
+    Model for harmonize task.
+
+trainer_for_anatomy_task(task_id: int) -> str
+    Trainer for anatomy task.
+
+resolve_harmonize_model_folder(task_id: int) -> Path | None
+    Resolve harmonize model folder.
+
+resolve_anatomy_model_folder(task_id: int) -> Path | None
+    Resolve anatomy model folder.
+
+missing_harmonize_ts_task_ids() -> tuple[int, ...]
+    Missing CT-only harmonize tasks (segmentation + contrast).
+
+missing_anatomy_task_ids() -> tuple[int, ...]
+    Missing anatomy task ids.
+
+missing_mr_anatomy_task_ids() -> tuple[int, ...]
+    Missing mr anatomy task ids.
+
+missing_harmonize_feature_task_ids() -> tuple[int, ...]
+    Missing CT Harmonize AI Feature tasks (anatomy + contrast).
+
+missing_face_feature_task_ids() -> tuple[int, ...]
+    Missing CT face tasks for the Face Blur CT download group.
+
+missing_mr_face_task_ids() -> tuple[int, ...]
+    Missing MR face_mr tasks for the Face Blur MR download group.
+
+anatomy_models_ready() -> bool
+    CT anatomy+contrast weights ready (per-series CT path).
+
+mr_anatomy_models_ready() -> bool
+    Mr anatomy models ready.
+
+ct_face_models_ready() -> bool
+    Ct face models ready.
+
+mr_face_models_ready() -> bool
+    Mr face models ready.
+
+harmonize_feature_models_ready() -> bool
+    True when at least one Harmonize modality group (CT or MR) is installed.
+
+face_feature_models_ready() -> bool
+    True when at least one Face Blur modality group (CT or MR) is installed.
+
+profile_anatomy_weights_ready(profile) -> bool
+    Return whether anatomy weights for profile are on disk.
+
+profile_face_weights_ready(profile) -> bool
+    Return whether face-segmentation weights for profile are on disk.
+
+mr_face_model_ready() -> bool
+    Mr face model ready.
+
+ts_task_download_label(task_id: int) -> str
+    Technical label for download progress (clinician copy lives in the view layer).
+
+download_segmentation_model_weights(kind: TsWeightKind) -> None
+    Download TotalSegmentator weights for anatomy or face segmentation (no predictor preload).
+
+preload_face_models(*, device: str | None=None) -> None
+    Eager-load TotalSegmentator face segmentation weights.
+
+preload_harmonize_models(*, device: str | None=None) -> None
+    Eager-load installed TotalSegmentator harmonize weights (CT and/or MR).
+
+tseg_batch_session(*, preload: bool=True) -> Iterator[None]
+    Keep TotalSegmentator nnUNet predictors loaded across multiple harmonize series.
+"""
 import logging
 import shutil
 from contextlib import contextmanager
@@ -304,7 +418,7 @@ def harmonize_anatomy_task_ids() -> tuple[int, ...]:
     """
     TotalSegmentator task IDs for CT harmonize anatomy at the selected resolution.
 
-    With ``roi_subset`` + ``body_seg`` (see ``run_segmentation``), TotalSegmentator
+    With roi_subset + body_seg (see run_segmentation), TotalSegmentator
     downloads the main task (3mm/6mm/1.5mm) plus task 298 for rough ROI cropping on CT.
     """
 
@@ -323,7 +437,7 @@ def ct_anatomy_task_ids_for_mode(mode: object | None) -> tuple[int, ...]:
 
 def mr_anatomy_task_ids() -> tuple[int, ...]:
     """
-    MR ``total_mr`` task IDs for the selected resolution.
+    MR total_mr task IDs for the selected resolution.
 
     1.5 mm includes crop companion task 852 (same pattern as CT including 298).
     """
@@ -374,12 +488,12 @@ def mr_face_task_id() -> int:
 
 
 def face_task_ids() -> tuple[int, ...]:
-    """CT ``face`` task IDs for Face Blur (CT download group)."""
+    """CT face task IDs for Face Blur (CT download group)."""
     return (_FACE_TASK_ID,)
 
 
 def mr_face_task_ids() -> tuple[int, ...]:
-    """MR ``face_mr`` task IDs for Face Blur (MR download group)."""
+    """MR face_mr task IDs for Face Blur (MR download group)."""
     return (mr_face_task_id(),)
 
 
@@ -387,7 +501,7 @@ def harmonize_contrast_task_ids() -> tuple[int, ...]:
     """
     TotalSegmentator task IDs for harmonize IV contrast (head/neck vessel statistics).
 
-    ``predict_contrast_phase`` runs ``task=headneck_bones_vessels`` (task 776) when brain
+    predict_contrast_phase runs task=headneck_bones_vessels (task 776) when brain
     volume is present in organ statistics. CT-only — never used for MR.
     """
 
@@ -510,14 +624,14 @@ def face_feature_models_ready() -> bool:
     return ct_face_models_ready() or mr_face_models_ready()
 
 def profile_anatomy_weights_ready(profile) -> bool:
-    """Return whether anatomy weights for ``profile`` are on disk."""
+    """Return whether anatomy weights for profile are on disk."""
     if profile.modality == "CT":
         return anatomy_models_ready()
     return all(_harmonize_task_checkpoint_ready(task_id) for task_id in profile.anatomy_task_ids)
 
 
 def profile_face_weights_ready(profile) -> bool:
-    """Return whether face-segmentation weights for ``profile`` are on disk."""
+    """Return whether face-segmentation weights for profile are on disk."""
     if profile.modality == "CT":
         return _face_task_checkpoint_ready()
     return _task_checkpoint_ready(
@@ -892,7 +1006,7 @@ def tseg_batch_session(*, preload: bool = True) -> Iterator[None]:
     Keep TotalSegmentator nnUNet predictors loaded across multiple harmonize series.
 
     Predictors remain cached after the context exits so a later batch in the same GUI
-    session can reuse them. Call ``clear_predictor_cache()`` on shutdown if needed.
+    session can reuse them. Call clear_predictor_cache() on shutdown if needed.
     """
     _install_predictor_cache_patch()
     entering = enter_session()

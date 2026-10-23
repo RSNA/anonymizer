@@ -1,7 +1,5 @@
 """AI Features Setup dialog (Welcome view)."""
 
-from __future__ import annotations
-
 from collections.abc import Callable
 
 import customtkinter as ctk

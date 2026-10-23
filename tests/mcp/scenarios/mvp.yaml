@@ -28,7 +28,7 @@ scenarios:
 
   - id: create_custom_then_revise
     utterance: >
-      Create a project named ClinicalDemo with anonymization_policy clinical
+      Create a project named ClinicalDemo with confidentiality_options [113100, 113107, 113108, 113111]
       and modalities CT and MR.
     clarify: >
       Change it before creating: call create_project again with
@@ -39,7 +39,7 @@ scenarios:
         before_clarify: true
         arguments:
           project_name: ClinicalDemo
-          anonymization_policy: clinical
+          confidentiality_options: [113100, 113107, 113108, 113111]
           modalities: ["CT", "MR"]
           confirm: false
       - tool: create_project
@@ -159,12 +159,12 @@ scenarios:
   - id: update_policy_after_create
     utterance: >
       I confirm switching the packaged anonymization script. Change the open
-      project settings: anonymization_policy clinical.
+      project settings: confidentiality_options clinical preset.
     requires_open_project: local
     expected_trace:
       - tool: update_project_settings
         arguments:
-          anonymization_policy: clinical
+          confidentiality_options: [113100, 113107, 113108, 113111]
 
   - id: inspect_then_update_settings
     utterance: >

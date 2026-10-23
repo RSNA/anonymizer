@@ -1,7 +1,5 @@
 """MCP project session — owns at most one headless ProjectController."""
 
-from __future__ import annotations
-
 import logging
 import shutil
 import threading
@@ -26,16 +24,12 @@ class ProjectSessionError(Exception):
 HeadlessSessionError = ProjectSessionError
 
 
-_PACKAGED_DEFAULT_SCRIPT = (
-    Path(__file__).resolve().parents[1] / "assets" / "scripts" / "default-anonymizer.script"
-)
-
-
 def packaged_default_script_path() -> Path:
-    """Absolute path to the shipped default anonymizer script."""
-    if not _PACKAGED_DEFAULT_SCRIPT.is_file():
-        raise ProjectSessionError(f"Packaged anonymizer script missing: {_PACKAGED_DEFAULT_SCRIPT}")
-    return _PACKAGED_DEFAULT_SCRIPT
+    """Path to the shipped default anonymizer script (install-dir relative)."""
+    path = Path("assets/scripts/default-anonymizer.script")
+    if not path.is_file():
+        raise ProjectSessionError(f"Packaged anonymizer script missing: {path}")
+    return path
 
 
 def resolve_project_model_path(project_path: Path) -> Path:
@@ -77,7 +71,7 @@ def shutdown_controller(controller: ProjectController) -> None:
 
 
 def open_controller(project_path: str | Path) -> ProjectController:
-    """Open an existing project via ``create_headless_controller``."""
+    """Open an existing project via create_headless_controller."""
     model_path = resolve_project_model_path(Path(project_path))
     controller = create_headless_controller(model_path)
     if controller is None:
@@ -116,7 +110,7 @@ def create_controller_from_model(
     overwrite: bool = False,
 ) -> ProjectController:
     """
-    Create a project on disk from an already-built core ``ProjectModel``.
+    Create a project on disk from an already-built core ProjectModel.
 
     Args:
         model: Complete project model to persist.
@@ -128,7 +122,7 @@ def create_controller_from_model(
 
     Raises:
         ProjectSessionError: If the model has no name, the destination exists
-            without ``overwrite``, or project creation fails.
+            without overwrite, or project creation fails.
     """
     storage = Path(model.storage_dir).expanduser().resolve()
     if not str(model.project_name or "").strip():
@@ -188,12 +182,12 @@ class ProjectSession:
 
     @property
     def pending_project(self) -> ProjectModel | None:
-        """Unsaved ``ProjectModel`` awaiting confirmation, if any."""
+        """Unsaved ProjectModel awaiting confirmation, if any."""
         return self._pending_project
 
     @property
     def pending_revision(self) -> int | None:
-        """Current pending-project revision, or ``None`` when no draft exists."""
+        """Current pending-project revision, or None when no draft exists."""
         return self._pending_revision if self._pending_project is not None else None
 
     @property
@@ -217,7 +211,7 @@ class ProjectSession:
         Store an unsaved project configuration for clinician confirmation.
 
         Args:
-            model: Complete validated core ``ProjectModel``.
+            model: Complete validated core ProjectModel.
             supplied_fields: Model field names explicitly supplied by the user.
             overwrite: Whether confirmation may replace an existing project.
 
@@ -245,7 +239,7 @@ class ProjectSession:
             revision: Revision previously returned to the clinician.
 
         Returns:
-            ``(model, overwrite)`` for the pending project.
+            (model, overwrite) for the pending project.
 
         Raises:
             ProjectSessionError: If no draft exists or the revision is stale.
@@ -267,16 +261,16 @@ class ProjectSession:
         work: Callable[[Callable[[float, "float | None", "str | None"], None]], dict[str, Any]],
     ) -> str:
         """
-        Run ``work`` on a background thread as the session's one active job.
+        Run work on a background thread as the session's one active job.
 
         Args:
             operation: Tool name the job belongs to (for status reporting).
             work: Callable receiving a progress callback and returning the
                 tool result dict. Runs off the request thread so the initial
-                tool call can return ``pending`` immediately.
+                tool call can return pending immediately.
 
         Returns:
-            The new job id (``job-N``).
+            The new job id (job-N).
 
         Raises:
             ProjectSessionError: If another job is still running.
@@ -342,7 +336,7 @@ class ProjectSession:
         Return a snapshot of one background job for client polling.
 
         Args:
-            job_id: Id previously returned with a ``pending`` tool result.
+            job_id: Id previously returned with a pending tool result.
 
         Returns:
             Job record copy including status, progress, and the result or
@@ -411,7 +405,7 @@ class ProjectSession:
         overwrite: bool = False,
     ) -> ProjectController:
         """
-        Persist/open a project from a complete core ``ProjectModel``.
+        Persist/open a project from a complete core ProjectModel.
 
         Args:
             model: Project model to create.
@@ -460,16 +454,3 @@ HeadlessProjectSession = ProjectSession
 
 SESSION = ProjectSession()
 
-__all__ = [
-    "SESSION",
-    "ProjectSession",
-    "ProjectSessionError",
-    "HeadlessProjectSession",
-    "HeadlessSessionError",
-    "packaged_default_script_path",
-    "resolve_project_model_path",
-    "shutdown_controller",
-    "open_controller",
-    "create_controller",
-    "create_controller_from_model",
-]

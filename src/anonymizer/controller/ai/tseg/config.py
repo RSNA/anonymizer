@@ -1,7 +1,187 @@
-"""Configuration for TotalSegmentator anatomy analysis."""
+"""Configuration for TotalSegmentator anatomy analysis.
 
-from __future__ import annotations
+Public API
+----------
+MIN_DICOM_SLICES
+    Min dicom slices (4).
 
+MIN_STRUCTURE_VOXELS
+    Min structure voxels (1000).
+
+MIN_REGION_FRACTION
+    Min region fraction (0.15).
+
+TSEG_CACHE_DIRNAME
+    Tseg cache dirname (default '0_TS_SEG').
+
+ANNOTATIONS_DIRNAME
+    Annotations dirname (default 'annotations').
+
+GEOMETRY_CACHE_FILENAME
+    Geometry cache filename (default 'geometry.json').
+
+GEOMETRY_CACHE_VERSION
+    Geometry cache version (3).
+
+ROI_SUBSET_MANIFEST_FILENAME
+    Roi subset manifest filename (default 'roi_subset.json').
+
+CONTRAST_STATS_FILENAME
+    Contrast stats filename.
+
+CONTRAST_STATS_HN_FILENAME
+    Contrast stats hn filename.
+
+CONTRAST_PHASE_CACHE_FILENAME
+    Contrast phase cache filename.
+
+STRUCTURE_VOXELS_FILENAME
+    Structure voxels filename.
+
+PRIMARY_SEGMENT_VOXELS_FILENAME
+    Primary segment voxels filename.
+
+MASK_GEOMETRY_FILENAME
+    Mask geometry filename (default 'mask_geometry.json').
+
+LOCALIZER_MAX_SLICES
+    Localizer max slices (10).
+
+MIN_THROUGH_PLANE_EXTENT_MM
+    Min through plane extent mm (30.0).
+
+SURVEY_MIN_SLICE_SPACING_MM
+    Survey min slice spacing mm (6.0).
+
+OBLIQUE_DOT_THRESHOLD
+    Oblique dot threshold (0.866).
+
+PLANE_AMBIGUITY_DOT_DELTA
+    Plane ambiguity dot delta (0.05).
+
+ENABLE_TS_CONTRAST
+    Enable ts contrast (True).
+
+ENABLE_CT_HARMONIZE_SINGLE_PASS
+    Enable ct harmonize single pass (True).
+
+FACE_TASK
+    Face task (default 'face').
+
+FACE_MASK_FILENAME
+    Face mask filename (default 'face.nii.gz').
+
+ENABLE_TSEG_FACE
+    Enable tseg face (True).
+
+BRAIN_STRUCTURES_TASK
+    Brain structures task (default 'brain_structures').
+
+ENABLE_TSEG_BRAIN_STRUCTURES
+    Enable tseg brain structures (True).
+
+RELEASE_ANATOMY_PREDICTORS_BEFORE_CONTRAST
+    Release anatomy predictors before contrast (False).
+
+BATCH_MEMORY_POLL_INTERVAL_SEC
+    Batch memory poll interval sec (2.0).
+
+BODY_PARTS
+    Body parts.
+
+STRUCTURE_TO_REGION
+    Structure to region.
+
+BRAIN_STRUCTURE_FILES
+    Brain structure files.
+
+ROI_SUBSET_HEAD
+    Roi subset head.
+
+ROI_SUBSET_CHEST
+    Roi subset chest.
+
+ROI_SUBSET
+    Roi subset.
+
+ROI_SUBSET_FULL
+    Roi subset full.
+
+ROI_TIER_HEAD
+    Roi tier head (default 'HEAD').
+
+ROI_TIER_CHEST
+    Roi tier chest (default 'CHEST').
+
+ROI_TIER_FULL
+    Roi tier full (default 'FULL').
+
+PRIMARY_SEGMENT_GROUPS
+    Primary segment groups.
+
+PRIMARY_SEGMENT_ORDER
+    Primary segment order.
+
+PRIMARY_SEGMENT_PREFERRED_FILES
+    Primary segment preferred files.
+
+DEFAULT_SEGMENTATION_MODE
+    Default segmentation mode (default '3mm').
+
+SegmentationMode
+    Segmentationmode.
+
+SEGMENTATION_MODES
+    Segmentation modes.
+
+normalize_segmentation_mode(value: object | None) -> SegmentationMode
+    Normalize segmentation mode.
+
+segmentation_mode_display(mode: object | None) -> str
+    Human-readable spacing for status lines (not used for menu state).
+
+segmentation_mode_menu_values() -> tuple[SegmentationMode, ...]
+    Internal mode codes for resolution pickers (language-agnostic).
+
+installed_segmentation_mode_menu_values(modes: tuple[str, ...] | list[str]) -> tuple[SegmentationMode, ...]
+    Installed subset of segmentation_mode_menu_values() in canonical order.
+
+default_installed_segmentation_mode(modes: tuple[str, ...] | list[str]) -> SegmentationMode
+    Prefer 3 mm when installed; otherwise the first installed mode.
+
+get_ct_segmentation_mode() -> SegmentationMode
+    Get ct segmentation mode.
+
+get_mr_segmentation_mode() -> SegmentationMode
+    Get mr segmentation mode.
+
+set_ct_segmentation_mode(mode: object | None) -> SegmentationMode
+    Set ct segmentation mode.
+
+set_mr_segmentation_mode(mode: object | None) -> SegmentationMode
+    Set mr segmentation mode.
+
+clear_segmentation_mode_cache() -> None
+    Reset CT/MR modes to the default (tests / process cleanup).
+
+segmentation_mode_for_modality(modality: str | Modality | None) -> SegmentationMode
+    Return the active segmentation mode for a DICOM modality code.
+
+is_multi_model_segmentation_mode(mode: object | None) -> bool
+    1.5 mm uses multiple nnUNet tasks; predictor preload is skipped.
+
+current_ai_features_preferences() -> dict[str, str]
+    Current ai features preferences.
+
+apply_ai_features_preferences(prefs: dict[str, Any] | None=None) -> None
+    Load CT/MR Harmonize resolution preferences into the runtime config module.
+
+persist_ai_features_preferences() -> None
+    Merge current CT/MR segmentation modes into .anonymizer_state.json.
+
+merge_ai_features_into_state(state: dict[str, Any]) -> dict[str, Any]
+    Merge ai features into state.
+"""
 import logging
 from typing import Any, Literal
 
@@ -50,12 +230,12 @@ ENABLE_TS_CONTRAST = True
 # Set False to force the legacy ROI anatomy pass then a separate contrast statistics pass.
 ENABLE_CT_HARMONIZE_SINGLE_PASS = True
 
-# Licensed TotalSegmentator ``face`` task (Dataset303; academic ``aca_*`` license).
+# Licensed TotalSegmentator face task (Dataset303; academic aca_* license).
 FACE_TASK = "face"
 FACE_MASK_FILENAME = "face.nii.gz"
 ENABLE_TSEG_FACE = True
 
-# Licensed TotalSegmentator ``brain_structures`` task (Dataset409; same academic license).
+# Licensed TotalSegmentator brain_structures task (Dataset409; same academic license).
 BRAIN_STRUCTURES_TASK = "brain_structures"
 ENABLE_TSEG_BRAIN_STRUCTURES = True
 
@@ -121,7 +301,7 @@ STRUCTURE_TO_REGION: dict[str, str] = {
     "sacrum": "Abdomen",
 }
 
-# TotalSegmentator ``total`` filenames used for region analysis + overlay groups.
+# TotalSegmentator total filenames used for region analysis + overlay groups.
 _LUNG_LOBE_FILES: tuple[str, ...] = (
     "lung_upper_lobe_left",
     "lung_lower_lobe_left",
@@ -135,7 +315,7 @@ _VERTEBRAE_FILES: tuple[str, ...] = tuple(
     + [f"vertebrae_L{i}" for i in range(1, 6)]
     + ["vertebrae_S1", "sacrum"]
 )
-# Licensed ``vertebrae_body`` task super-segment (not part of ``total`` / ROI_SUBSET).
+# Licensed vertebrae_body task super-segment (not part of total / ROI_SUBSET).
 _SPINE_SUPER_SEGMENT_FILES: tuple[str, ...] = ("vertebrae_body",)
 _RIB_FILES: tuple[str, ...] = tuple(
     [f"rib_left_{i}" for i in range(1, 13)] + [f"rib_right_{i}" for i in range(1, 13)]
@@ -146,7 +326,7 @@ _HEAD_BRAIN_FILES: tuple[str, ...] = ("brain",)
 _HEAD_SKULL_FILES: tuple[str, ...] = ("skull",)
 _HEAD_SPINAL_CORD_FILES: tuple[str, ...] = ("spinal_cord",)
 
-# Licensed TotalSegmentator ``brain_structures`` task (Dataset409; same ``aca_*`` license as face).
+# Licensed TotalSegmentator brain_structures task (Dataset409; same aca_* license as face).
 # Order matches TotalSegmentator's class map presentation.
 BRAIN_STRUCTURE_FILES: tuple[str, ...] = (
     "brainstem",
@@ -167,7 +347,7 @@ BRAIN_STRUCTURE_FILES: tuple[str, ...] = (
     "thalamus",
 )
 
-# Files requested from TotalSegmentator ``total`` task (must be real class names).
+# Files requested from TotalSegmentator total task (must be real class names).
 ROI_SUBSET_HEAD: tuple[str, ...] = (
     *_HEAD_BRAIN_FILES,
     *_HEAD_SKULL_FILES,
@@ -271,7 +451,7 @@ def segmentation_mode_menu_values() -> tuple[SegmentationMode, ...]:
 
 
 def installed_segmentation_mode_menu_values(modes: tuple[str, ...] | list[str]) -> tuple[SegmentationMode, ...]:
-    """Installed subset of ``segmentation_mode_menu_values()`` in canonical order."""
+    """Installed subset of segmentation_mode_menu_values() in canonical order."""
     installed = {normalize_segmentation_mode(mode) for mode in modes}
     return tuple(mode for mode in SEGMENTATION_MODES if mode in installed)
 
@@ -344,7 +524,7 @@ def apply_ai_features_preferences(prefs: dict[str, Any] | None = None) -> None:
 
 
 def persist_ai_features_preferences() -> None:
-    """Merge current CT/MR segmentation modes into ``.anonymizer_state.json``."""
+    """Merge current CT/MR segmentation modes into .anonymizer_state.json."""
     state = read_app_state()
     state[AI_FEATURES_SECTION] = current_ai_features_preferences()
     write_app_state(state)

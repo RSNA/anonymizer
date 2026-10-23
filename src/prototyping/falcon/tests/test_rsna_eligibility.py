@@ -1,7 +1,5 @@
 """Tests for FALCON RSNA eligibility scan (local RSNA data required)."""
 
-from __future__ import annotations
-
 import shutil
 from pathlib import Path
 

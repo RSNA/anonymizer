@@ -1,7 +1,5 @@
 """OCR integration tests on real burnt-in PHI CXR fixture (Davidson)."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest
@@ -12,8 +10,8 @@ from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     load_modality_whitelist_match_settings,
 )
 from anonymizer.controller.jobs.runner import OcrEditContext, RemovePixelPhiRunner, RunOptions
-from anonymizer.controller.series.series_io import load_series_frames
 from anonymizer.controller.jobs.work_state import WorkState
+from anonymizer.controller.series.series_io import load_series_frames
 from tests.controller.ocr.conftest import assert_dcm
 from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
 
@@ -70,9 +68,24 @@ def test_davidson_cxr_ocr_finds_burned_in_text(davidson_loaded) -> None:
     assert portable.phi_label is None, f"Portable must not be classified as PHI, got {portable.phi_label}"
     if ner_ready():
         assert any(t.phi_label in {"NAME", "DATE"} for t in ws.result[0]), (
-            f"Expected NER NAME/DATE labels on Davidson PHI, got "
+            f"Expected pixel NAME or DATE labels on Davidson PHI, got "
             f"{[(t.text, t.phi_label) for t in ws.result[0]]}"
         )
+        # Frame-context gate: name and DOB boxes labelled from one contextual
+        # call; hover entities recorded per box (entity only, no "DOB:" prefix).
+        dob_box = next(t for t in ws.result[0] if "DOB" in t.text)
+        assert dob_box.phi_label == "DATE", (
+            f"DOB box must be DATE-labelled, got {[(t.text, t.phi_label) for t in ws.result[0]]}"
+        )
+        assert dob_box.phi_entities, "DOB box must record its detected entities for hover"
+        assert all(label == "DATE" for label, _text in dob_box.phi_entities)
+        # The model may fragment this date (e.g. '.' + '.1976'); the box is
+        # still DATE-labelled/removed whole, and the date must be among them.
+        assert any("1976" in text or "06" in text for _label, text in dob_box.phi_entities)
+        name_boxes = [t for t in ws.result[0] if "DAVIDSON" in t.text or "DOUGLAS" in t.text]
+        assert name_boxes and all(
+            t.phi_label == "NAME" for t in name_boxes
+        ), f"Name boxes mislabelled: {[(t.text, t.phi_label) for t in name_boxes]}"
 
 
 @pytest.mark.ocr_integration
@@ -175,8 +188,8 @@ def test_davidson_overlay_draw_includes_portable_when_project_whitelist_omits_it
 
 def test_davidson_default_cr_whitelist_hides_portable_and_semi_upright() -> None:
     """Packaged CR/DX defaults must hide common Davidson overlay markers."""
-    from anonymizer.controller.series.series_overlay import OCRText
     from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_default_whitelist
+    from anonymizer.controller.series.series_overlay import OCRText
 
     detections = [
         OCRText(text="DAVIDSON DOUGLAS [M]", top_left=(0, 0), bottom_right=(10, 10), prob=0.9),

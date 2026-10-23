@@ -33,10 +33,10 @@ Start with a name and any important choices:
 Create a new project named DemoCXR. Use defaults for everything else.
 ```
 
-Clinical example:
+Retain-options example:
 
 ```text
-Create a project named ClinicalDemo with anonymization_policy clinical
+Create a project named RetainDemo with confidentiality_options [113100, 113107, 113108, 113111]
 and modalities CT and MR.
 ```
 
@@ -67,7 +67,7 @@ Only then is the project created and opened. Do not ask to open the same project
 You only need to mention the ones you care about:
 
 - `project_name` — required;
-- `anonymization_policy` — `strict` or `clinical`;
+- `confidentiality_options` — DICOM CID 7050 code values (default `[113100]`; clinical preset `[113100, 113107, 113108, 113111]`);
 - `modalities` — for example `["CT", "MR", "US"]`;
 - `language_code` — chosen once at creation, like the desktop welcome-screen language selector; it cannot be changed afterwards;
 - `site_id` and `uid_root` — normally generated/defaulted;
@@ -91,7 +91,7 @@ Mutable settings are:
 - `transfer_syntaxes`
 - local `scp`
 - `network_timeouts`
-- `anonymization_policy`
+- `confidentiality_options`
 
 `project_name`, `storage_dir`, `site_id`, `uid_root`, and `language_code` are fixed after creation. The language is chosen once when the project is created (like the desktop welcome screen) and is not part of the project settings that can be edited later.
 
@@ -145,7 +145,7 @@ Use inventory for “what series/patients are in the project?” For settings, a
 |---|---|
 | Learn the workflow | “How do I create a new project and change its settings later? Do not create anything yet.” |
 | Create with defaults | “Create a new project named DemoCXR. Use defaults for everything else.” |
-| Create with choices | “Create a clinical project named ClinicalDemo with CT and MR.” |
+| Create with choices | “Create a project with Retain options named RetainDemo with CT and MR.” |
 | Revise before creation | “Add US and change the language to fr. Show me the revised configuration.” |
 | Confirm creation | “Yes, create it exactly as shown.” |
 | See defaults | “Show me the project defaults and ranges.” |

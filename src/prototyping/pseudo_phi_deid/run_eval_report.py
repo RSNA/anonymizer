@@ -1,9 +1,7 @@
 """Full PseudoPHI-eval → ``results/<HHMM>/report.md`` (1301-style, gate 99.9%).
 
-Stack: Clinical script → Private KB → OpenMed NER → residual. No OCR.
+Stack: anonymizer script → Private KB → OpenMed NER → residual. No OCR.
 """
-
-from __future__ import annotations
 
 import logging
 import shutil
@@ -13,7 +11,7 @@ from pathlib import Path
 
 from prototyping.pseudo_phi_deid.pairs import pair_all
 from prototyping.pseudo_phi_deid.paths import RESULTS_DIR
-from prototyping.pseudo_phi_deid.pipeline.clinical import ensure_experiment_script_copy
+from prototyping.pseudo_phi_deid.pipeline.script_session import ensure_experiment_script_copy
 from prototyping.pseudo_phi_deid.pipeline.run import RunConfig, run_pairs
 from prototyping.pseudo_phi_deid.score import score_pairs
 
@@ -31,7 +29,7 @@ def _classify(f) -> tuple[str, str]:
         return "n/a (pixel score; OCR not run)", "burn-in / pixel (out of phase)"
     if leaf.startswith("(") and len(leaf) >= 9 and leaf[1:5].isalnum():
         if cv and gv and cv != gv and ev and cv != ev:
-            return "1 Clinical script (DATEINC/private path) or 2 Private KB", "private value mismatch"
+            return "1 anonymizer script (DATEINC/private path) or 2 Private KB", "private value mismatch"
         if (ev or cv) and not gv:
             return "2 Private KB", "KB keep vs gold remove"
         if not cv and gv:
@@ -51,14 +49,14 @@ def _classify(f) -> tuple[str, str]:
     }
     if leaf in script_leaves:
         if (ev or cv) and not gv:
-            return "1 Clinical script", "script keep vs gold empty"
+            return "1 anonymizer script", "script keep vs gold empty"
         if not cv and gv:
-            return "1 Clinical script", "script blank vs gold keep"
-        return "1 Clinical script", "script vs gold mismatch"
+            return "1 anonymizer script", "script blank vs gold keep"
+        return "1 anonymizer script", "script vs gold mismatch"
     if leaf.endswith("Sequence"):
         if not ev and not cv and gv:
-            return "1 Clinical script", "blanked vs gold keep"
-        return "1 Clinical script", "sequence mismatch"
+            return "1 anonymizer script", "blanked vs gold keep"
+        return "1 anonymizer script", "sequence mismatch"
     textish = {
         "StudyDescription",
         "SeriesDescription",
@@ -72,11 +70,11 @@ def _classify(f) -> tuple[str, str]:
             return "5 NER scrub or 6 residual", "NER over-scrub / residue"
         return "5 NER detect/scrub (miss) or 6 residual", "NER under-scrub / residue"
     if (ev or cv) and not gv:
-        return "1 Clinical script", "script keep vs gold empty"
+        return "1 anonymizer script", "script keep vs gold empty"
     if not ev and not cv and gv:
-        return "1 Clinical script", "blanked vs gold keep"
+        return "1 anonymizer script", "blanked vs gold keep"
     if not cv and gv:
-        return "1 Clinical script", "script blank vs gold keep"
+        return "1 anonymizer script", "script blank vs gold keep"
     return "unknown", "value mismatch"
 
 
@@ -114,7 +112,7 @@ def write_report(*, hhmm: str, metrics) -> Path:
     lines = [
         f"# PseudoPHI-eval report `{hhmm}`",
         "",
-        "**Stack:** 1 Clinical script → 2 Private KB → 3–5 OpenMed NER → 6 residual cleanup. No OCR.",
+        "**Stack:** 1 anonymizer script → 2 Private KB → 3–5 OpenMed NER → 6 residual cleanup. No OCR.",
         "",
         "| | |",
         "| --- | --- |",

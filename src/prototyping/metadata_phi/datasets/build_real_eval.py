@@ -7,8 +7,6 @@ Outputs under fixtures/en_US/real/:
   tcia_sr_fp_negatives.jsonl — study/series descriptions + narratives (FP check)
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 import random

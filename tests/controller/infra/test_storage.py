@@ -345,3 +345,20 @@ def test_list_import_directory_files_skips_hidden_files_and_directories(temp_dir
     assert list_import_directory_files(temp_dir) == [visible_file]
     assert is_hidden_path(os.path.join(temp_dir, "study", ".hidden_series", "instance.dcm"))
     assert not is_hidden_path(visible_file)
+
+
+def test_list_import_directory_files_skips_non_dicom_sidecars(temp_dir: str) -> None:
+    series_dir = os.path.join(temp_dir, "study", "series")
+    cache_dir = os.path.join(series_dir, "0_TS_SEG")
+    os.makedirs(cache_dir)
+
+    dicom_file = os.path.join(series_dir, "instance.dcm")
+    extensionless = os.path.join(series_dir, "IM0001")
+    nifti = os.path.join(cache_dir, "volume.nii.gz")
+    geometry = os.path.join(cache_dir, "mask_geometry.json")
+    sidecar_json = os.path.join(series_dir, "notes.json")
+    for path in (dicom_file, extensionless, nifti, geometry, sidecar_json):
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write("x")
+
+    assert sorted(list_import_directory_files(temp_dir)) == sorted([dicom_file, extensionless])

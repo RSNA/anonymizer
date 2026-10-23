@@ -1,7 +1,22 @@
-"""CXp projection + rotation class labels for chest XR Harmonize."""
+"""CXp projection + rotation class labels for chest XR Harmonize.
 
-from __future__ import annotations
+Public API
+----------
+CXP_PROJECTION_LABELS
+    Cxp projection labels.
 
+CXP_ROTATION_LABELS
+    Cxp rotation labels.
+
+map_projection_to_playbook_view(projection: str) -> str
+    Map model projection class to planar view_code (Lateral → Lat).
+
+is_dicom_multiview(view_code: str | None) -> bool
+    Is dicom multiview.
+
+normalize_rotation_label(label: str) -> str
+    Normalize alternate spellings to canonical rotation labels.
+"""
 # Order must match MedicalAILabo CXp-Projection-Rotation-Mislabel-Checker heads.
 CXP_PROJECTION_LABELS: tuple[str, ...] = ("AP", "PA", "Lateral")
 CXP_ROTATION_LABELS: tuple[str, ...] = (
@@ -16,7 +31,7 @@ _DICOM_MULTIVIEW_CODES: frozenset[str] = frozenset({"2V", "3V"})
 
 
 def map_projection_to_playbook_view(projection: str) -> str:
-    """Map model projection class to planar ``view_code`` (Lateral → Lat)."""
+    """Map model projection class to planar view_code (Lateral → Lat)."""
     if projection == "Lateral":
         return "Lat"
     return projection

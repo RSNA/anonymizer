@@ -8,8 +8,6 @@ Run:
     uv run python src/prototyping/harmonize_cancel_smoke.py
 """
 
-from __future__ import annotations
-
 import threading
 import time
 from pathlib import Path

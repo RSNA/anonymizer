@@ -10,8 +10,6 @@ Example (do not commit PHI paths into defaults):
     --series "/path/to/series" --label post
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 import logging

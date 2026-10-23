@@ -30,7 +30,7 @@ from anonymizer.view.common.fonts import default_char_width_px
 
 
 def _focus_entry_cursor_at_end(entry: ctk.CTkEntry) -> None:
-    """Focus ``entry`` and place the insert cursor after the last character."""
+    """Focus entry and place the insert cursor after the last character."""
 
     def _place() -> None:
         with contextlib.suppress(tk.TclError):
@@ -102,11 +102,11 @@ def _validatecommand(
     allowed_chars: str,
     max_chars: int | None,
 ) -> tuple:
-    """Tk validatecommand that only substitutes ``%P``.
+    """Tk validatecommand that only substitutes %P.
 
     Charset / max are closed over in Python — never passed as Tcl words. That
-    avoids breakage when ``allowed_chars`` contains spaces or Tcl metacharacters
-    (e.g. ``string.printable`` used for username/password fields).
+    avoids breakage when allowed_chars contains spaces or Tcl metacharacters
+    (e.g. string.printable used for username/password fields).
     """
     max_s: str | None = None if max_chars is None else str(max_chars)
 
@@ -302,7 +302,7 @@ def int_entry(
     int_var = ctk.IntVar(view, value=initial_value)
     text_var = ctk.StringVar(view, value=str(initial_value))
     allow_negative = min < 0
-    # ``min``/``max`` shadow builtins — compute char width without calling ``max()``.
+    # min/max shadow builtins — compute char width without calling max().
     hi_chars = len(str(max))
     lo_chars = len(str(min))
     max_chars = hi_chars if hi_chars >= lo_chars else lo_chars
@@ -344,7 +344,7 @@ def int_entry(
             int_var.set(value)
 
     def _sync_text_from_int(*_args) -> None:
-        """Keep the entry text in sync when code calls ``int_var.set``."""
+        """Keep the entry text in sync when code calls int_var.set."""
         try:
             value = int_var.get()
         except Exception:

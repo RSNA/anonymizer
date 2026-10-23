@@ -13,7 +13,7 @@ Short glossary for clinicians. When IT uses different terms, these are usually t
 | **Burned-in text** | Words drawn onto the picture itself (not only in the file labels). Common on ultrasound. |
 | **Embedded PHI** | Identifiers inside pixels (burned-in text) or free text (reports, comments), found after import with OCR and English NER. |
 | **Blank / Synthetic** | Two ways to remove text PHI: delete it, or replace it with a realistic fake of the same type (“hide in plain sight”). |
-| **Anonymization policy** | **Strict** (default, image-focused) or **Clinical** (keeps reports, clinical free text; SR/PDF on). Switching on an existing project replaces the project script after you confirm. Set in Project Settings. |
+| **De-identification options** | DICOM confidentiality options (Basic Profile, Modified Dates, Retain Safe Private, …). **Basic** and **Retain** are presets that fill the checkbox set. Applying options on an existing project recompiles the project script after you confirm. Set in Project Settings. |
 | **Metadata** | The DICOM tag tree for the current image in Series View. **Detect PHI** highlights leftover identifiers in tag values (separate from burned-in pixel text). |
 | **Analytics** | Dashboard charts of organ volumes after Harmonize on CT/MR (cohort overview, not a send step). |
 | **Quarantine** | A holding folder for files that could not be imported (wrong type, missing IDs, lookup miss, etc.). |

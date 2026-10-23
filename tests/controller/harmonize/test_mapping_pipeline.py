@@ -1,7 +1,5 @@
 """Non-GPU harmonize pipeline: real description mappings + similar-study peers."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest
@@ -70,7 +68,7 @@ def _capture_study(model: AnonymizerModel, *, study_uid: str, series_uid: str, s
     ds.StudyDescription = desc
     ds.SeriesDescription = "Chest AP"
     ds.StudyDate = "20230101"
-    model.capture_phi(source="pytest", ds=ds, date_offset_from_hash=0)
+    model.capture_phi(source="pytest", ds=ds, date_delta=0)
     for phi in model.load_phi_with_studies_series_no_instances():
         for study in phi.studies or []:
             if getattr(study, "study_uid", None) == study_uid:

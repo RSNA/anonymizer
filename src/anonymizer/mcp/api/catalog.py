@@ -1,10 +1,8 @@
 """Authoritative MCP tool catalog: descriptions, annotations, Pydantic args.
 
-``tools/list`` and initialize instructions are derived from this registry.
+tools/list and initialize instructions are derived from this registry.
 Handlers implement behavior only — they do not own schema text.
 """
-
-from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Final
@@ -163,10 +161,10 @@ TOOL_CATALOG: Final[tuple[ToolSpec, ...]] = (
         title="Update project settings",
         description=(
             "Change mutable settings on the open project: modalities, "
-            "transfer_syntaxes, local scp, network_timeouts, anonymization_policy. "
+            "transfer_syntaxes, local scp, network_timeouts, confidentiality_options. "
             "language_code is chosen once at project creation and, like project_name, "
             "storage_dir, site_id, and uid_root, is fixed after create — refuse those. "
-            "Switching anonymization_policy replaces the packaged script — confirm first. "
+            "Changing confidentiality_options recompiles the anonymizer script — confirm first. "
             "Call only with values the clinician supplied."
         ),
         args_model=UpdateProjectSettingsArgs,

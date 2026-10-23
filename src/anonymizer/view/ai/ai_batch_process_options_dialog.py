@@ -1,7 +1,5 @@
 """Algorithm selection dialog for PHI Index AI batch processing."""
 
-from __future__ import annotations
-
 import tkinter as tk
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -414,8 +412,9 @@ class AiBatchProcessOptionsDialog(AppToplevel):
         if not pixel_phi_selected or not hasattr(self, "_view_whitelist_button"):
             return
         mode = self._selected_ocr_remove_mode()
+        # Whitelist is a veto in every scope except All text.
         self._view_whitelist_button.configure(
-            state="normal" if mode is OcrRemoveMode.NON_WHITELISTED else "disabled"
+            state="disabled" if mode is OcrRemoveMode.ALL_TEXT else "normal"
         )
         if hasattr(self, "_pixel_phi_whitelist_disabled_label"):
             if mode is OcrRemoveMode.ALL_TEXT:

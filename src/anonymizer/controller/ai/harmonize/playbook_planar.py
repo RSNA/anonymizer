@@ -1,13 +1,28 @@
 """Planar (XR / US / MG) metadata Playbook series descriptions.
 
-Isolated from CT/MR :mod:`playbook` SeriesNameV4 emission. Uses DICOM tags and
-keywords only — never TotalSegmentator or geometry thickness/contrast.
-Study/Series descriptions supply anatomy when BodyPartExamined is empty
-(token match to Playbook series labels, ignoring procedure words such as biopsy).
+Public API
+----------
+PlanarPlaybookAttributes
+    Attributes for a planar Harmonize series description.
+
+build_planar_playbook_attributes(ds: Dataset, *, pixel_pred: object | None=None, pixel_view_pred: object | None=None) -> PlanarPlaybookAttributes
+    Build planar playbook attributes.
+
+format_planar_series_description(attributes: PlanarPlaybookAttributes) -> str
+    Emit modality-free planar series description.
+
+build_planar_harmonized_series_description(ds: Dataset, *, pixel_pred: object | None=None, pixel_view_pred: object | None=None) -> tuple[str, PlanarPlaybookAttributes]
+    Build planar harmonized series description.
+
+planar_loinc_prefix_from_attributes(attributes: PlanarPlaybookAttributes, profile: Profile2D | None=None) -> str
+    Planar loinc prefix from attributes.
+
+planar_loinc_prefix_for_series_descriptions(cohort: str, series_descriptions: list[str] | tuple[str, ...]) -> str
+    Choose LOINC prefix from cohort + emitted planar series strings.
+
+planar_harmonize_analysis_rows(attributes: PlanarPlaybookAttributes) -> list[tuple[str, str, str, str, str]]
+    Rows for Harmonize Playbook table: (element, code, value, evidence, source).
 """
-
-from __future__ import annotations
-
 import logging
 import re
 from dataclasses import dataclass
@@ -262,9 +277,9 @@ def _significant_metadata_tokens(text: str) -> set[str]:
 def _closest_catalog_anatomy_label(blob: str) -> tuple[str, str] | None:
     """Match leftover DICOM tokens to the closest Playbook series anatomy label.
 
-    Ignores procedure/modality words so ``US Biopsy Axilla`` / ``US biopsy unspecified``
-    maps to ``Axilla`` rather than failing. Requires a whole-token match so XR
-    ``Axillary`` views do not become Axilla.
+    Ignores procedure/modality words so US Biopsy Axilla / US biopsy unspecified
+    maps to Axilla rather than failing. Requires a whole-token match so XR
+    Axillary views do not become Axilla.
     """
     tokens = _significant_metadata_tokens(blob)
     if not tokens:
@@ -579,8 +594,8 @@ def planar_harmonize_analysis_rows(
 ) -> list[tuple[str, str, str, str, str]]:
     """Rows for Harmonize Playbook table: (element, code, value, evidence, source).
 
-    Source names the concrete model (like CT's ``TotalSegmentator anatomy``), not
-    generic ``pixel`` / ``planar`` tokens.
+    Source names the concrete model (like CT's TotalSegmentator anatomy), not
+    generic pixel / planar tokens.
     """
     rows: list[tuple[str, str, str, str, str]] = [
         (

@@ -1,7 +1,10 @@
-"""Association timeouts, presentation contexts, and SCP connect helper."""
+"""Association timeouts, presentation contexts, and SCP connect helper.
 
-from __future__ import annotations
-
+Public API
+----------
+AssociationMixin
+    AssociationMixin type.
+"""
 import logging
 from typing import List
 
@@ -83,7 +86,7 @@ class AssociationMixin:
         return [build_role(uid, scp_role=True, scu_role=False) for uid in self.model.storage_classes]
 
     def _resolve_remote(self, scp: str | DICOMNode) -> DICOMNode:
-        """Resolve a remote SCP name or node to a ``DICOMNode`` (shared by DIMSE and DICOMweb)."""
+        """Resolve a remote SCP name or node to a DICOMNode (shared by DIMSE and DICOMweb)."""
         if isinstance(scp, str):
             if scp not in self.model.remote_scps:
                 raise ConnectionError(f"Remote SCP {scp} not found")

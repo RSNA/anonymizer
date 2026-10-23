@@ -1,7 +1,5 @@
 """Unit tests for ProjectionView title formatting."""
 
-from __future__ import annotations
-
 from anonymizer.controller.phi.phi_io import PHI_IndexRecord
 from anonymizer.view.series.projection import format_projection_view_title
 

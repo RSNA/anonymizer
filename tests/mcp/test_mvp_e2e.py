@@ -7,8 +7,6 @@ Real EasyOCR is opt-in via ``pytest -m ocr_integration`` (slow; downloads weight
 Default path mocks OCR like ``test_imaging_phase2``.
 """
 
-from __future__ import annotations
-
 import json
 import os
 import subprocess

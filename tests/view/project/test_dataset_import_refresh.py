@@ -1,7 +1,5 @@
 """Dataset View refreshes after file/folder import completes (no polling)."""
 
-from __future__ import annotations
-
 from unittest.mock import MagicMock, patch
 
 from anonymizer.anonymizer import Anonymizer

@@ -11,8 +11,6 @@ from past regressions that the suite failed to catch:
    ``set_display_size``, so comparing them to each other proves nothing.
 """
 
-from __future__ import annotations
-
 import time
 import tkinter as tk
 

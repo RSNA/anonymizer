@@ -1,7 +1,5 @@
 """Capture fixture caches: TS copy/harvest and pixel-PHI detection JSON."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from types import SimpleNamespace
 

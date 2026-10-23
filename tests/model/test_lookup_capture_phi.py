@@ -1,7 +1,5 @@
 """Tests for lookup-aware capture_phi and Study.anon_date_delta."""
 
-from __future__ import annotations
-
 from copy import deepcopy
 from pathlib import Path
 
@@ -51,7 +49,7 @@ def _enable_lookup(model: AnonymizerModel, rows: list[CtpLookupPhiRow]) -> None:
 def test_capture_phi_non_lookup_uses_hash_date_offset(anonymizer_model: AnonymizerModel, mock_dataset: Dataset) -> None:
     hash_offset = 42
     _, _, _, date_offset = anonymizer_model.capture_phi(
-        source="pytest", ds=mock_dataset, date_offset_from_hash=hash_offset
+        source="pytest", ds=mock_dataset, date_delta=hash_offset
     )
 
     phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset.PatientID)
@@ -70,7 +68,7 @@ def test_capture_phi_lookup_with_date_offset_uses_lookup_value(
     )
 
     _, anon_ptid, _, date_offset = anonymizer_model.capture_phi(
-        source="pytest", ds=mock_dataset, date_offset_from_hash=42
+        source="pytest", ds=mock_dataset, date_delta=42
     )
 
     phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset.PatientID)
@@ -93,7 +91,7 @@ def test_capture_phi_lookup_without_date_offset_falls_back_to_hash(
     hash_offset = 55
 
     _, _, _, date_offset = anonymizer_model.capture_phi(
-        source="pytest", ds=mock_dataset, date_offset_from_hash=hash_offset
+        source="pytest", ds=mock_dataset, date_delta=hash_offset
     )
 
     phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset.PatientID)
@@ -112,7 +110,7 @@ def test_capture_phi_second_study_reuses_phi_date_offset(
         [CtpLookupPhiRow(patient_id="123456", anon_patient_id="LOOKUP-001", date_offset=127)],
     )
 
-    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset, date_offset_from_hash=42)
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset, date_delta=42)
 
     second_study = deepcopy(mock_dataset)
     second_study.StudyInstanceUID = "1.2.840.113619.2.5.1762583153.17482.978957064.4"
@@ -120,7 +118,7 @@ def test_capture_phi_second_study_reuses_phi_date_offset(
     second_study.SOPInstanceUID = "1.2.840.113619.2.5.1762583153.17482.978957064.6"
 
     _, _, _, date_offset = anonymizer_model.capture_phi(
-        source="pytest", ds=second_study, date_offset_from_hash=99
+        source="pytest", ds=second_study, date_delta=99
     )
 
     phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset.PatientID)
@@ -135,14 +133,14 @@ def test_capture_phi_lookup_miss_raises_not_found(anonymizer_model: AnonymizerMo
     anonymizer_model._lookup_required = True
 
     with pytest.raises(KeyError, match="123456"):
-        anonymizer_model.capture_phi(source="pytest", ds=mock_dataset, date_offset_from_hash=0)
+        anonymizer_model.capture_phi(source="pytest", ds=mock_dataset, date_delta=0)
 
 
 def test_capture_phi_existing_phi_skips_lookup_requirement(
     anonymizer_model: AnonymizerModel, mock_dataset: Dataset
 ) -> None:
     """Already-captured patients are not re-checked against the lookup table."""
-    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset, date_offset_from_hash=33)
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset, date_delta=33)
     anonymizer_model._lookup_required = True
     # No CTP lookup PHI for other patients — would KeyError for a new patient.
 
@@ -152,7 +150,7 @@ def test_capture_phi_existing_phi_skips_lookup_requirement(
     second.SOPInstanceUID = "1.2.840.113619.2.5.1762583153.17482.978957064.6"
 
     phi_ptid, anon_ptid, _, date_offset = anonymizer_model.capture_phi(
-        source="pytest", ds=second, date_offset_from_hash=99
+        source="pytest", ds=second, date_delta=99
     )
     assert phi_ptid == mock_dataset.PatientID
     assert anon_ptid  # preexisting anonymized id
@@ -163,10 +161,10 @@ def test_capture_phi_existing_phi_skips_lookup_requirement(
 def test_capture_phi_existing_study_returns_stored_date_delta(
     anonymizer_model: AnonymizerModel, mock_dataset: Dataset
 ) -> None:
-    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset, date_offset_from_hash=33)
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset, date_delta=33)
 
     _, _, _, date_offset = anonymizer_model.capture_phi(
-        source="pytest", ds=mock_dataset, date_offset_from_hash=99
+        source="pytest", ds=mock_dataset, date_delta=99
     )
 
     phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset.PatientID)

@@ -1,25 +1,52 @@
 """Pre-NER text filters (Metadata / Report).
-
 OpenMed expects clinical-report-style prose. Before NER:
+* **Metadata cells** — prepare_metadata_ner_segments: skip UID / date /
+  anonymizer / non-prose / DICOM code fields; same-length mask of anon
 
-* **Metadata cells** — ``prepare_metadata_ner_segments``: skip UID / date /
-  anonymizer / non-prose; wrap keepers as ``Field Name: value.``. No OCR
-  whitelist and no post-NER FP/FN screens.
-* **Report body** — ``mask_text_for_ner``: same-length mask of anon surfaces,
-  UIDs, compact dates/times (optional whitelist tokens for report path only).
+Public API
+----------
+DEFAULT_WHITELIST_SIMILARITY
+    Default whitelist similarity (0.75).
 
-OCR modality whitelists (``mr.txt``, ``ct.txt``, …) stay for pixel hide-text
-only — they are not consulted by metadata NER.
+DEFAULT_WHITELIST_MIN_LENGTH_RATIO
+    Default whitelist min length ratio (0.7).
 
-Public API: ``MetadataNerItem``, ``PreparedMetadataSegment``, ``FilterHit``,
-``MaskResult``, ``collect_anonymized_values``, ``mask_text_for_ner``,
-``prepare_metadata_ner_segments``, ``remap_ner_entities_to_original``,
-``is_dicom_uid_text``, ``is_compact_dicom_datetime``, ``looks_like_prose_carrier``,
-``wrap_field_for_ner``.
+FilterHit
+    One term/span removed or skipped before NER.
+
+MaskResult
+    Report-body mask: same-length unicode + audit hits.
+
+MetadataNerItem
+    One metadata Content cell considered for NER.
+
+PreparedMetadataSegment
+    Cell kept for NER, wrapped for clinical-report-style context.
+
+collect_anonymized_values(ds: Dataset, *, extra: Iterable[str] | None=None) -> frozenset[str]
+    Anonymized header strings already on ds (plus optional extras).
+
+mask_text_for_ner(text: str, *, whitelist: Sequence[str]=(), anon_values: Set[str] | None=None, similarity: float=DEFAULT_WHITELIST_SIMILARITY, min_length_ratio: float=..., log_context: str='report') -> MaskResult
+    Same-length mask of anon surfaces, UIDs, dates/clock-times, whitelist terms.
+
+prepare_metadata_ner_segments(items: Sequence[MetadataNerItem], *, whitelist: Sequence[str]=(), anon_values: Set[str] | None=None, similarity: float=DEFAULT_WHITELIST_SIMILARITY, min_length_ratio: float=..., log_context: str='metadata') -> list[PreparedMetadataSegment]
+    Select prose Content cells for NER and wrap them with field-name context.
+
+remap_ner_entities_to_original(entities: Sequence[Entity], prepared: PreparedMetadataSegment) -> list[Entity]
+    Keep NER spans fully inside the value region; remap to original_text.
+
+is_dicom_uid_text(text: str) -> bool
+    True when text is (or is only) a DICOM UID.
+
+is_compact_dicom_datetime(text: str) -> bool
+    True for compact DA (YYYYMMDD) or TM (HHMMSS[.frac]) only.
+
+looks_like_prose_carrier(text: str) -> bool
+    True when the cell looks like language (not a bare code / number).
+
+wrap_field_for_ner(field_name: str, value: str) -> tuple[str, int, int]
+    Wrap a metadata cell as Field Name: value. for OpenMed chunk context.
 """
-
-from __future__ import annotations
-
 import logging
 import re
 from collections.abc import Iterable, Sequence, Set
@@ -27,7 +54,7 @@ from dataclasses import dataclass
 
 from pydicom.dataset import Dataset
 
-from anonymizer.controller.ai.embedded_phi.metadata.extract import DATE_VRS, TEXT_VRS
+from anonymizer.controller.ai.embedded_phi.metadata.extract import DATE_VRS, SKIP_TEXT_KEYWORDS, TEXT_VRS
 from anonymizer.controller.ai.embedded_phi.ner.engine import Entity
 from anonymizer.controller.ai.embedded_phi.term_similarity import similarity_term_match
 
@@ -82,6 +109,12 @@ _UID_RE = re.compile(
 )
 _COMPACT_DATE_RE = re.compile(r"\b(?:19|20)\d{6}\b")
 _COMPACT_TIME_RE = re.compile(r"\b\d{6}(?:\.\d{1,6})?\b")
+# Colon clock times (HH:MM[:SS[.frac]] [AM/PM]) — masked before NER so a
+# model date_time span can only cover the date component we focus on.
+_COLON_TIME_RE = re.compile(
+    r"\b(?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,6})?)?"
+    r"(?:\s*[AaPp]\.?[Mm]\.?)?\b"
+)
 _WORD_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9'._/-]*")
 
 
@@ -132,7 +165,7 @@ def collect_anonymized_values(
     extra: Iterable[str] | None = None,
 ) -> frozenset[str]:
     """
-    Anonymized header strings already on ``ds`` (plus optional extras).
+    Anonymized header strings already on ds (plus optional extras).
 
     These must not be fed to NER as if they were residual PHI.
     """
@@ -158,7 +191,7 @@ def mask_text_for_ner(
     log_context: str = "report",
 ) -> MaskResult:
     """
-    Same-length mask of anon surfaces, UIDs, compact dates/times, whitelist terms.
+    Same-length mask of anon surfaces, UIDs, dates/clock-times, whitelist terms.
 
     Offsets into the returned string match the original, so NER spans remain
     valid against the unmasked body used for study-PHI matching / UI.
@@ -197,6 +230,11 @@ def mask_text_for_ner(
         # Avoid re-masking digits that are part of a longer UID already claimed.
         _claim(match.start(), match.end(), "time", match.group(0), detail="TM")
 
+    for match in _COLON_TIME_RE.finditer(body):
+        # Date component stays visible; only the clock time is masked, so
+        # the model cannot return a combined date_time span.
+        _claim(match.start(), match.end(), "time", match.group(0), detail="TM")
+
     if terms:
         for match in _WORD_RE.finditer(body):
             token = match.group(0)
@@ -232,12 +270,14 @@ def prepare_metadata_ner_segments(
     """
     Select prose Content cells for NER and wrap them with field-name context.
 
-    Skipped cells are logged with reason; keepers become ``Field Name: value.``
-    (or bare ``value.`` when the name is empty/structural).
+    Skipped cells are logged with reason; keepers become Field Name: value.
+    (or bare value. when the name is empty/structural).
 
-    ``whitelist`` / similarity kwargs are ignored (OCR whitelists are pixel-only).
+    whitelist terms are masked out of the value (same-length, via
+    mask_text_for_ner with similarity / min_length_ratio) before
+    the model runs — the same pre-NER veto the pixel path applies. A cell
+    left with no alphabetic text after masking is skipped, not sent.
     """
-    del whitelist, similarity, min_length_ratio
     anon = frozenset(str(v).strip() for v in (anon_values or ()) if str(v).strip())
     prepared: list[PreparedMetadataSegment] = []
     skips: list[tuple[MetadataNerItem, FilterHit]] = []
@@ -255,13 +295,23 @@ def prepare_metadata_ner_segments(
             skips.append((item, reason))
             continue
 
-        # Same-length in-cell mask (anon / UID / date) so offsets map back.
+        # Same-length in-cell mask (anon / UID / date / whitelist) so offsets map back.
         masked = mask_text_for_ner(
             stripped,
-            whitelist=(),
+            whitelist=whitelist,
             anon_values=anon,
+            similarity=similarity,
+            min_length_ratio=min_length_ratio,
             log_context=f"{log_context}.cell",
         )
+        if not any(ch.isalpha() for ch in masked.text):
+            reason = (
+                "whitelist"
+                if any(hit.reason == "whitelist" for hit in masked.hits)
+                else "masked_empty"
+            )
+            skips.append((item, FilterHit(reason, stripped, detail="no_text_after_mask")))
+            continue
         ner_text, value_start, value_end = _wrap_field_for_ner(
             item.field_name, masked.text
         )
@@ -283,7 +333,7 @@ def remap_ner_entities_to_original(
     entities: Sequence[Entity],
     prepared: PreparedMetadataSegment,
 ) -> list[Entity]:
-    """Keep NER spans fully inside the value region; remap to ``original_text``."""
+    """Keep NER spans fully inside the value region; remap to original_text."""
     out: list[Entity] = []
     for ent in entities:
         if ent.start < prepared.value_start or ent.end > prepared.value_end:
@@ -306,7 +356,7 @@ def remap_ner_entities_to_original(
 
 
 def is_dicom_uid_text(text: str) -> bool:
-    """True when ``text`` is (or is only) a DICOM UID."""
+    """True when text is (or is only) a DICOM UID."""
     stripped = str(text or "").strip()
     if not stripped:
         return False
@@ -357,6 +407,10 @@ def _metadata_skip_reason(
     if item.is_anonymizer_field:
         return FilterHit("anonymizer", text, detail=item.field_name or item.tag)
 
+    leaf_keyword = re.sub(r"\[\d+\]$", "", str(item.tag_path or "").rsplit(".", 1)[-1])
+    if leaf_keyword in SKIP_TEXT_KEYWORDS:
+        return FilterHit("code_field", text, detail=leaf_keyword)
+
     # Lazy: metadata.extract is SSOT for TEXT_VRS / DATE_VRS (avoid import cycle).
 
     vr = str(item.vr or "").upper()
@@ -379,7 +433,7 @@ def _metadata_skip_reason(
 
 
 def wrap_field_for_ner(field_name: str, value: str) -> tuple[str, int, int]:
-    """Wrap a metadata cell as ``Field Name: value.`` for OpenMed chunk context."""
+    """Wrap a metadata cell as Field Name: value. for OpenMed chunk context."""
     name = str(field_name or "").strip()
     if not name or name in {"item", "value", "-"}:
         ner = f"{value}."

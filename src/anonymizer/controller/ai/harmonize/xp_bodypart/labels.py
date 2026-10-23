@@ -1,7 +1,19 @@
-"""Xp-Bodypart-Checker class labels and planar anatomy mapping."""
+"""Xp-Bodypart-Checker class labels and planar anatomy mapping.
 
-from __future__ import annotations
+Public API
+----------
+XP_BODYPART_LABELS
+    Xp bodypart labels.
 
+map_xp_label_to_planar_anatomy(xp_label: str) -> str
+    Map model class to LOINC/Playbook planar anatomy (Incomplete Chest → Chest).
+
+coarse_region(label: str) -> str
+    Collapse DICOM or pixel labels to a coarse region for agreement checks.
+
+is_extremity_fine_label(label: str) -> bool
+    Is extremity fine label.
+"""
 # Order must match MedicalAILabo HF Space / training head.
 XP_BODYPART_LABELS: tuple[str, ...] = (
     "Head",

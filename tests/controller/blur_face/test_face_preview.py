@@ -1,7 +1,5 @@
 """Tests for in-memory face blur preview and display helpers."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 

@@ -1,7 +1,58 @@
-"""Workstation analytics UI preferences (Show / Volumes pickers)."""
+"""Workstation analytics UI preferences (Show / Volumes pickers).
 
-from __future__ import annotations
+Public API
+----------
+BOARD_WIDGET_KEYS
+    Board widget keys.
 
+ORGAN_BIN_WIDTH_PCT_CHOICES
+    Organ bin width pct choices.
+
+board_widget_display_name(key: str) -> str
+    Localized label for a board widget key (Show picker).
+
+organ_bin_width_pct_label(pct: float | None) -> str
+    Localized label for a bin-width choice (Default / 2% / …).
+
+get_selected_organs() -> list[str] | None
+    Persisted organ selection, or None when the user has not set one.
+
+get_selected_board_widgets() -> list[str] | None
+    Persisted board-widget selection, or None for all relevant widgets.
+
+get_organ_bin_width_pct() -> float | None
+    Persisted bin coarseness % of base span, or None for JSON default.
+
+set_selected_organs(names: Iterable[str] | None, *, persist: bool=True) -> None
+    Set selected organs.
+
+set_selected_board_widgets(keys: Iterable[str] | None, *, persist: bool=True) -> None
+    Set selected board widgets.
+
+set_organ_bin_width_pct(pct: float | None, *, persist: bool=True) -> None
+    Set organ bin width pct.
+
+current_analytics_preferences() -> dict[str, Any]
+    Current analytics preferences.
+
+apply_analytics_preferences(prefs: dict[str, Any] | None=None) -> None
+    Load Show/Volumes selections into module state from app state or prefs.
+
+persist_analytics_preferences() -> None
+    Merge current analytics UI prefs into .anonymizer_state.json.
+
+merge_analytics_into_state(state: dict[str, Any]) -> dict[str, Any]
+    Merge analytics into state.
+
+clear_analytics_preferences_cache() -> None
+    Test helper: reset in-memory prefs without touching disk.
+
+intersect_organ_selection(selected: Sequence[str] | None, available: Iterable[str]) -> set[str]
+    Keep only organs still present in the snapshot.
+
+intersect_board_widget_selection(selected: Sequence[str] | None, relevant: Iterable[str]) -> set[str]
+    Keep only board widgets that are relevant for the current snapshot.
+"""
 from collections.abc import Iterable, Sequence
 from typing import Any
 
@@ -17,7 +68,7 @@ from anonymizer.utils.app_state import (
 )
 from anonymizer.utils.translate import _
 
-# Must match ``BOARD_WIDGETS`` keys in view/shell/analytics_charts.py.
+# Must match BOARD_WIDGETS keys in view/shell/analytics_charts.py.
 BOARD_WIDGET_KEYS: tuple[str, ...] = ("sex", "age", "modality", "ethnicity", "ai")
 
 # Stepped coarseness choices (% of padded normative base span). None = JSON default.
@@ -72,17 +123,17 @@ def _normalize_bin_width_pct(value: object) -> float | None:
     )
 
 def get_selected_organs() -> list[str] | None:
-    """Persisted organ selection, or ``None`` when the user has not set one."""
+    """Persisted organ selection, or None when the user has not set one."""
     return None if _selected_organs is None else list(_selected_organs)
 
 
 def get_selected_board_widgets() -> list[str] | None:
-    """Persisted board-widget selection, or ``None`` for all relevant widgets."""
+    """Persisted board-widget selection, or None for all relevant widgets."""
     return None if _selected_board_widgets is None else list(_selected_board_widgets)
 
 
 def get_organ_bin_width_pct() -> float | None:
-    """Persisted bin coarseness % of base span, or ``None`` for JSON default."""
+    """Persisted bin coarseness % of base span, or None for JSON default."""
     return _organ_bin_width_pct
 
 
@@ -123,7 +174,7 @@ def current_analytics_preferences() -> dict[str, Any]:
 
 
 def apply_analytics_preferences(prefs: dict[str, Any] | None = None) -> None:
-    """Load Show/Volumes selections into module state from app state or ``prefs``."""
+    """Load Show/Volumes selections into module state from app state or prefs."""
     global _selected_organs, _selected_board_widgets, _organ_bin_width_pct
     if prefs is None:
         prefs = analytics_from_state(read_app_state())
@@ -142,7 +193,7 @@ def apply_analytics_preferences(prefs: dict[str, Any] | None = None) -> None:
 
 
 def persist_analytics_preferences() -> None:
-    """Merge current analytics UI prefs into ``.anonymizer_state.json``."""
+    """Merge current analytics UI prefs into .anonymizer_state.json."""
     state = read_app_state()
     existing = analytics_from_state(state)
     merged = dict(existing)
@@ -201,7 +252,7 @@ def intersect_board_widget_selection(
 ) -> set[str]:
     """Keep only board widgets that are relevant for the current snapshot.
 
-    ``selected is None`` means the user has not customized — return all relevant.
+    selected is None means the user has not customized — return all relevant.
     """
     relevant_set = {key for key in relevant if key in BOARD_WIDGET_KEYS}
     if selected is None:

@@ -1,7 +1,5 @@
 """Tests for clinician user-manual help URL helpers."""
 
-from __future__ import annotations
-
 from anonymizer.utils.translate import set_language_code
 from anonymizer.view.common.help_docs import (
     DOCS_BASE_URL,

@@ -24,7 +24,7 @@ class HTMLView(AppToplevel):
         parent (ctk.CTk): The parent CTk object.
         title (str): The title of the HTMLView window.
         html_file_path (str): The file path to the HTML content.
-        on_help_link (callable | None): Opens in-app help pages for ``help:`` links.
+        on_help_link (callable | None): Opens in-app help pages for help: links.
 
     Attributes:
         MIN_WIDTH_px (int): The minimum width of the HTMLView window in pixels.

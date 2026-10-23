@@ -1,6 +1,4 @@
-"""JSON Schema helpers for MCP ``inputSchema`` (from Pydantic models)."""
-
-from __future__ import annotations
+"""JSON Schema helpers for MCP inputSchema (from Pydantic models)."""
 
 from copy import deepcopy
 from typing import Any
@@ -9,11 +7,11 @@ from pydantic import BaseModel
 
 
 def mcp_input_schema(model: type[BaseModel]) -> dict[str, Any]:
-    """Build a flat MCP ``inputSchema`` from a Pydantic model.
+    """Build a flat MCP inputSchema from a Pydantic model.
 
-    - ``additionalProperties: false`` (strict args)
-    - ``$ref`` / ``$defs`` inlined so small LLM clients need not resolve refs
-    - model ``title`` stripped (tool name is authoritative)
+    - additionalProperties: false (strict args)
+    - $ref / $defs inlined so small LLM clients need not resolve refs
+    - model title stripped (tool name is authoritative)
     """
     raw = model.model_json_schema(mode="validation")
     schema = _inline_defs(deepcopy(raw))

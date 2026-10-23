@@ -1,7 +1,5 @@
 """Unit tests: metadata Content PHI detect (pre-NER filter → NER only)."""
 
-from __future__ import annotations
-
 from unittest.mock import patch
 
 from pydicom.dataset import Dataset
@@ -24,7 +22,7 @@ def test_detect_steps_filter_then_ner_only() -> None:
         assert "1.2.840" not in text
         assert "ANON-1" not in text
         idx = text.index("John")
-        return [Entity(label="NAME", start=idx, end=idx + 8)]
+        return [Entity(label="FIRST_NAME", start=idx, end=idx + 8)]
 
     items = [
         MetadataNerItem(text="John Doe", field_name="Series Description", vr="LO"),
@@ -40,7 +38,7 @@ def test_detect_steps_filter_then_ner_only() -> None:
     ) as mock_ner:
         out = detect_phi_in_texts(ds=ds, items=items)
     assert mock_ner.call_count == 1
-    assert out["John Doe"][0] == Entity(label="NAME", start=0, end=8)
+    assert out["John Doe"][0] == Entity(label="FIRST_NAME", start=0, end=8)
     assert "1.2.840.10008.1.2" not in out
     assert "AP" not in out
 
@@ -53,7 +51,7 @@ def test_detect_plain_texts_batches_prose() -> None:
         if "John Smith" not in text:
             return []
         idx = text.index("John Smith")
-        return [Entity(label="NAME", start=idx, end=idx + 10)]
+        return [Entity(label="FIRST_NAME", start=idx, end=idx + 10)]
 
     with patch(
         "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
@@ -64,7 +62,59 @@ def test_detect_plain_texts_batches_prose() -> None:
             ds,
         )
     assert mock_ner.call_count == 1
-    assert out["John Smith"] == (Entity(label="NAME", start=0, end=10),)
+    assert out["John Smith"] == (Entity(label="FIRST_NAME", start=0, end=10),)
+
+
+def test_detect_whitelist_masks_terms_before_model_runs() -> None:
+    """Whitelisted terms never reach the model (pre-NER veto, not output deletion)."""
+    ds = Dataset()
+    seen: list[str] = []
+
+    def _fake_detect(text: str, *, locale: str = "en_US") -> list[Entity]:
+        del locale
+        seen.append(text)
+        assert "Axilla" not in text
+        idx = text.index("Biopsy")
+        return [Entity(label="LOCATION", start=idx, end=idx + 6)]
+
+    items = [
+        MetadataNerItem(text="US Biopsy Axilla", field_name="Series Description", vr="LO"),
+    ]
+    with patch(
+        "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
+        side_effect=_fake_detect,
+    ):
+        out = detect_phi_in_texts(ds=ds, items=items, whitelist=["US", "AXILLA"])
+    assert seen
+    frags = ["US Biopsy Axilla"[e.start : e.end] for e in out["US Biopsy Axilla"]]
+    assert frags == ["Biopsy"]
+
+
+def test_detect_loads_modality_whitelist_when_whitelist_not_passed() -> None:
+    """Modality code selects the effective whitelist (pixel SSOT loader)."""
+    ds = Dataset()
+    seen: list[str] = []
+
+    def _fake_detect(text: str, *, locale: str = "en_US") -> list[Entity]:
+        del locale
+        seen.append(text)
+        return []
+
+    items = [MetadataNerItem(text="Jane Doe", field_name="Series Description", vr="LO")]
+    with (
+        patch(
+            "anonymizer.controller.ai.embedded_phi.metadata.detect.load_modality_whitelist",
+            return_value=["Jane"],
+        ) as mock_load,
+        patch(
+            "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
+            side_effect=_fake_detect,
+        ),
+    ):
+        detect_phi_in_texts(ds=ds, items=items, modality="US")
+    mock_load.assert_called_once_with(None, "US")
+    assert seen and "Jane" not in seen[0]
+    assert "Doe" in seen[0]
 
 
 def test_detect_keeps_openmed_spans_without_whitelist_drop() -> None:
@@ -74,7 +124,7 @@ def test_detect_keeps_openmed_spans_without_whitelist_drop() -> None:
     def _fake_detect(text: str, *, locale: str = "en_US") -> list[Entity]:
         del locale
         idx = text.index("MAMMO")
-        return [Entity(label="NAME", start=idx, end=idx + 5, raw_label="first_name")]
+        return [Entity(label="FIRST_NAME", start=idx, end=idx + 5, raw_label="first_name")]
 
     items = [
         MetadataNerItem(
@@ -96,7 +146,7 @@ def test_detect_keeps_openmed_spans_without_whitelist_drop() -> None:
 
 def test_entity_count_by_label() -> None:
     ents = {
-        "a": (Entity(label="NAME", start=0, end=1), Entity(label="ID", start=2, end=3)),
-        "b": (Entity(label="NAME", start=0, end=2),),
+        "a": (Entity(label="FIRST_NAME", start=0, end=1), Entity(label="ID", start=2, end=3)),
+        "b": (Entity(label="FIRST_NAME", start=0, end=2),),
     }
-    assert entity_count_by_label(ents) == {"NAME": 2, "ID": 1}
+    assert entity_count_by_label(ents) == {"FIRST_NAME": 2, "ID": 1}

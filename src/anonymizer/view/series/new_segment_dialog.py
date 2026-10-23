@@ -1,7 +1,5 @@
 """New Segment dialog: name + normative organ match for analytics volumes."""
 
-from __future__ import annotations
-
 import tkinter as tk
 from dataclasses import dataclass
 

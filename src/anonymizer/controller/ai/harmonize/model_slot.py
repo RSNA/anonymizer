@@ -1,7 +1,13 @@
-"""Thread-safe single-weights slot shared by XR classifier packages (leaf; no harmonize deps)."""
+"""Thread-safe single-weights slot shared by XR classifier packages (leaf; no harmonize deps).
 
-from __future__ import annotations
+Public API
+----------
+T
+    T.
 
+ModelSlot
+    Cache one loaded model keyed by its weight path.
+"""
 import logging
 import threading
 from collections.abc import Callable

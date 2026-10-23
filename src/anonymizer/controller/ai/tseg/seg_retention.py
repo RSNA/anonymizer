@@ -1,7 +1,127 @@
-"""TS segmentation cache retention: JSON sidecars, mask pruning, and adaptive ROI."""
+"""TS segmentation cache retention: JSON sidecars, mask pruning, and adaptive ROI.
 
-from __future__ import annotations
+Public API
+----------
+STRUCTURE_VOXELS_FILENAME
+    Structure voxels filename.
 
+PRIMARY_SEGMENT_VOXELS_FILENAME
+    Primary segment voxels filename.
+
+MASK_GEOMETRY_FILENAME
+    Mask geometry filename (default 'mask_geometry.json').
+
+ORGAN_VOLUMES_ML_FILENAME
+    Organ volumes ml filename.
+
+resolve_primary_segment_files(seg_dir: Path, group_name: str) -> tuple[str, ...]
+    Prefer a on-disk super-segment when configured; else the multi-file group list.
+
+primary_segment_mask_stems_on_disk(seg_dir: Path, group_name: str) -> tuple[str, ...]
+    Return resolved group stems that have .nii.gz masks under seg_dir.
+
+primary_segment_has_masks(seg_dir: Path, group_name: str) -> bool
+    True when at least one Series View overlay mask for group_name exists on disk.
+
+overlay_masks_present(seg_dir: Path) -> bool
+    True when seg/ contains at least one .nii.gz anatomy mask for Series View overlays.
+
+anatomy_overlay_cache_ready(cache_dir: Path) -> bool
+    True when Harmonize left a usable Series View overlay cache.
+
+reconcile_primary_segment_sidecar(cache_dir: Path) -> dict[str, int]
+    Rewrite primary_segment_voxels.json from structure counts ∩ on-disk masks.
+
+read_structure_voxels(cache_dir: Path) -> dict[str, int] | None
+    Read structure voxels.
+
+write_structure_voxels(cache_dir: Path, counts: dict[str, int]) -> Path
+    Write structure voxels.
+
+read_organ_volumes_ml(cache_dir: Path) -> dict[str, float] | None
+    Cached millilitre volumes from organ_volumes_ml.json, if present.
+
+write_organ_volumes_ml(cache_dir: Path, volumes: Mapping[str, float]) -> Path
+    Write organ volumes ml.
+
+organ_volumes_ml_cache_is_fresh(cache_dir: Path) -> bool
+    True when organ_volumes_ml.json is newer than masks / primary sidecar.
+
+voxels_to_ml(voxels: int, spacing: list[float] | tuple[float, ...] | None) -> float | None
+    Convert a raw mask voxel count to millilitres.
+
+mask_file_volume_ml(mask_path: Path) -> float | None
+    Millilitres for one binary *.nii.gz using that file's own spacing.
+
+organ_volumes_ml_from_masks(cache_dir: Path) -> dict[str, float]
+    Sum each primary group from on-disk masks using each file's own spacing.
+
+ensure_organ_volumes_ml(cache_dir: Path) -> dict[str, float]
+    Return cached ml volumes, or recount masks once and write organ_volumes_ml.json.
+
+read_primary_segment_voxels(cache_dir: Path) -> dict[str, int] | None
+    Read primary segment voxels.
+
+write_primary_segment_voxels(cache_dir: Path, counts: dict[str, int]) -> Path
+    Write primary segment voxels.
+
+mask_geometry_from_image(image: sitk.Image) -> dict
+    Mask geometry from image.
+
+read_mask_geometry(cache_dir: Path) -> dict | None
+    Read mask geometry.
+
+write_mask_geometry(cache_dir: Path, seg_dir: Path) -> Path | None
+    Write mask geometry.
+
+sitk_image_from_mask_geometry(payload: dict) -> sitk.Image
+    Sitk image from mask geometry.
+
+aggregate_primary_segment_voxels(structure_voxels: dict[str, int], seg_dir: Path, *, min_voxels: int=MIN_STRUCTURE_VOXELS, require_masks: bool=True) -> dict[str, int]
+    Sum per-structure counts into primary Series View overlay groups.
+
+latch_mask_stems_for_export(structure_voxels: dict[str, int], *, min_voxels: int=MIN_STRUCTURE_VOXELS) -> set[str]
+    Stems to persist for Series View overlays from structure counts (no disk required).
+
+clear_anatomy_seg_masks(seg_dir: Path) -> None
+    Remove anatomy *.nii.gz under seg/ (keeps face masks).
+
+write_binary_masks_from_multilabel(multilabel_img, seg_dir: Path, stems: set[str], *, task: str='total') -> list[str]
+    Write selected binary *.nii.gz masks from an in-memory multilabel NIfTI.
+
+compute_latch_mask_keep_set(seg_dir: Path, structure_voxels: dict[str, int], primary_segment_voxels: dict[str, int], *, min_voxels: int=MIN_STRUCTURE_VOXELS) -> set[str]
+    Mask file stems required for Series View overlay buttons and licensed tasks.
+
+prune_seg_cache(seg_dir: Path, *, structure_voxels: dict[str, int], primary_segment_voxels: dict[str, int]) -> list[str]
+    Delete seg masks not needed for Series View overlays; return removed stems.
+
+structure_voxels_sidecar_valid(cache_dir: Path, structures: list[str]) -> bool
+    Structure voxels sidecar valid.
+
+finalize_seg_cache(cache_dir: Path, seg_dir: Path, structure_voxels: dict[str, int]) -> dict[str, int]
+    Publish Harmonize segment results as one logical unit.
+
+resolve_harmonize_roi_subset(series_directory: Path) -> tuple[tuple[str, ...], str]
+    Choose CT ROI tier from DICOM metadata (HEAD / CHEST / FULL).
+
+read_roi_tier(cache_dir: Path) -> str | None
+    Read roi tier.
+
+widen_roi_tier(tier: str) -> tuple[tuple[str, ...], str] | None
+    Widen roi tier.
+
+cached_region_signal(series_directory: Path) -> CachedRegionSignal
+    Infer head vs non-head from cached TotalSegmentator ROI masks (0_TS_SEG/seg/).
+
+is_ct_head_series(series_directory: Path) -> bool
+    True for CT series classified as head-dominant (face-blur candidate).
+
+retain_volume_for_pending_face_blur(series_directory: Path, anon_model=None) -> bool
+    Keep NIfTI until manual face blur has been applied on a CT head study.
+
+evict_tseg_volume(series_directory: Path, anon_model=None) -> bool
+    Remove cached volume.nii.gz after TS work for a series is complete.
+"""
 import contextlib
 import json
 import logging
@@ -63,7 +183,7 @@ def _read_json_dict(path: Path) -> dict | None:
 
 
 def _write_json_dict(path: Path, payload: dict) -> None:
-    """Write JSON via temp file + ``os.replace`` (atomic on the same filesystem)."""
+    """Write JSON via temp file + os.replace (atomic on the same filesystem)."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_name(f"{path.name}.tmp")
@@ -80,7 +200,7 @@ def _write_json_dict(path: Path, payload: dict) -> None:
 def resolve_primary_segment_files(seg_dir: Path, group_name: str) -> tuple[str, ...]:
     """Prefer a on-disk super-segment when configured; else the multi-file group list.
 
-    MR ``total_mr`` writes combined ``vertebrae`` / whole-lung masks instead of CT
+    MR total_mr writes combined vertebrae / whole-lung masks instead of CT
     per-vertebra and lobe files; detect those when the CT multi-file packs are absent.
     """
     fallback = PRIMARY_SEGMENT_GROUPS.get(group_name)
@@ -113,7 +233,7 @@ def resolve_primary_segment_files(seg_dir: Path, group_name: str) -> tuple[str, 
 
 
 def primary_segment_mask_stems_on_disk(seg_dir: Path, group_name: str) -> tuple[str, ...]:
-    """Return resolved group stems that have ``.nii.gz`` masks under ``seg_dir``."""
+    """Return resolved group stems that have .nii.gz masks under seg_dir."""
     seg_dir = Path(seg_dir)
     return tuple(
         stem for stem in resolve_primary_segment_files(seg_dir, group_name) if (seg_dir / f"{stem}.nii.gz").is_file()
@@ -121,12 +241,12 @@ def primary_segment_mask_stems_on_disk(seg_dir: Path, group_name: str) -> tuple[
 
 
 def primary_segment_has_masks(seg_dir: Path, group_name: str) -> bool:
-    """True when at least one Series View overlay mask for ``group_name`` exists on disk."""
+    """True when at least one Series View overlay mask for group_name exists on disk."""
     return bool(primary_segment_mask_stems_on_disk(seg_dir, group_name))
 
 
 def overlay_masks_present(seg_dir: Path) -> bool:
-    """True when ``seg/`` contains at least one ``.nii.gz`` anatomy mask for Series View overlays."""
+    """True when seg/ contains at least one .nii.gz anatomy mask for Series View overlays."""
     seg_dir = Path(seg_dir)
     return seg_dir.is_dir() and any(seg_dir.glob("*.nii.gz"))
 
@@ -135,8 +255,8 @@ def anatomy_overlay_cache_ready(cache_dir: Path) -> bool:
     """
     True when Harmonize left a usable Series View overlay cache.
 
-    Requires ``structure_voxels.json``, ``primary_segment_voxels.json``, and on-disk
-    ``seg/*.nii.gz`` masks for every listed primary group. JSON counts alone are not enough.
+    Requires structure_voxels.json, primary_segment_voxels.json, and on-disk
+    seg/*.nii.gz masks for every listed primary group. JSON counts alone are not enough.
     """
     cache_dir = Path(cache_dir)
     if read_structure_voxels(cache_dir) is None:
@@ -155,9 +275,9 @@ def anatomy_overlay_cache_ready(cache_dir: Path) -> bool:
 
 def reconcile_primary_segment_sidecar(cache_dir: Path) -> dict[str, int]:
     """
-    Rewrite ``primary_segment_voxels.json`` from structure counts ∩ on-disk masks.
+    Rewrite primary_segment_voxels.json from structure counts ∩ on-disk masks.
 
-    Repairs stats-only caches that listed overlay groups without writing ``seg/*.nii.gz``.
+    Repairs stats-only caches that listed overlay groups without writing seg/*.nii.gz.
     """
     cache_dir = Path(cache_dir)
     structure = read_structure_voxels(cache_dir) or {}
@@ -190,7 +310,7 @@ def write_structure_voxels(cache_dir: Path, counts: dict[str, int]) -> Path:
 
 
 def read_organ_volumes_ml(cache_dir: Path) -> dict[str, float] | None:
-    """Cached millilitre volumes from ``organ_volumes_ml.json``, if present."""
+    """Cached millilitre volumes from organ_volumes_ml.json, if present."""
     payload = _read_json_dict(Path(cache_dir) / ORGAN_VOLUMES_ML_FILENAME)
     if payload is None:
         return None
@@ -215,7 +335,7 @@ def write_organ_volumes_ml(cache_dir: Path, volumes: Mapping[str, float]) -> Pat
 
 
 def organ_volumes_ml_cache_is_fresh(cache_dir: Path) -> bool:
-    """True when ``organ_volumes_ml.json`` is newer than masks / primary sidecar."""
+    """True when organ_volumes_ml.json is newer than masks / primary sidecar."""
     cache_dir = Path(cache_dir)
     vol_path = cache_dir / ORGAN_VOLUMES_ML_FILENAME
     if not vol_path.is_file():
@@ -242,8 +362,8 @@ def organ_volumes_ml_cache_is_fresh(cache_dir: Path) -> bool:
 def voxels_to_ml(voxels: int, spacing: list[float] | tuple[float, ...] | None) -> float | None:
     """Convert a raw mask voxel count to millilitres.
 
-    ``spacing`` must be the three voxel sizes in **millimetres** (SimpleITK
-    ``GetSpacing()`` order). Volume = count × ∏spacing_mm / 1000.
+    spacing must be the three voxel sizes in **millimetres** (SimpleITK
+    GetSpacing() order). Volume = count × ∏spacing_mm / 1000.
     """
     if voxels <= 0 or not spacing or len(spacing) < 3:
         return None
@@ -257,7 +377,7 @@ def voxels_to_ml(voxels: int, spacing: list[float] | tuple[float, ...] | None) -
 
 
 def mask_file_volume_ml(mask_path: Path) -> float | None:
-    """Millilitres for one binary ``*.nii.gz`` using that file's own spacing."""
+    """Millilitres for one binary *.nii.gz using that file's own spacing."""
     path = Path(mask_path)
     if not path.is_file():
         return None
@@ -295,7 +415,7 @@ def organ_volumes_ml_from_masks(cache_dir: Path) -> dict[str, float]:
 
 
 def ensure_organ_volumes_ml(cache_dir: Path) -> dict[str, float]:
-    """Return cached ml volumes, or recount masks once and write ``organ_volumes_ml.json``."""
+    """Return cached ml volumes, or recount masks once and write organ_volumes_ml.json."""
     cache_dir = Path(cache_dir)
     if organ_volumes_ml_cache_is_fresh(cache_dir):
         cached = read_organ_volumes_ml(cache_dir)
@@ -392,10 +512,10 @@ def aggregate_primary_segment_voxels(
 ) -> dict[str, int]:
     """Sum per-structure counts into primary Series View overlay groups.
 
-    When ``require_masks=True``, counts come from on-disk ``.nii.gz`` masks (not
-    possibly-stale ``structure_voxels`` stats mm³). Groups without masks are omitted
-    so ``primary_segment_voxels.json`` never advertises undrawable overlays.
-    Pass ``require_masks=False`` only when aggregating from statistics before masks exist.
+    When require_masks=True, counts come from on-disk .nii.gz masks (not
+    possibly-stale structure_voxels stats mm³). Groups without masks are omitted
+    so primary_segment_voxels.json never advertises undrawable overlays.
+    Pass require_masks=False only when aggregating from statistics before masks exist.
     """
 
     seg_dir = Path(seg_dir)
@@ -440,7 +560,7 @@ def latch_mask_stems_for_export(
 
 
 def clear_anatomy_seg_masks(seg_dir: Path) -> None:
-    """Remove anatomy ``*.nii.gz`` under ``seg/`` (keeps face masks)."""
+    """Remove anatomy *.nii.gz under seg/ (keeps face masks)."""
     seg_dir = Path(seg_dir)
     if not seg_dir.is_dir():
         return
@@ -461,9 +581,9 @@ def write_binary_masks_from_multilabel(
     task: str = "total",
 ) -> list[str]:
     """
-    Write selected binary ``*.nii.gz`` masks from an in-memory multilabel NIfTI.
+    Write selected binary *.nii.gz masks from an in-memory multilabel NIfTI.
 
-    ``multilabel_img`` is a nibabel ``Nifti1Image`` (TotalSegmentator ``ml=True`` return).
+    multilabel_img is a nibabel Nifti1Image (TotalSegmentator ml=True return).
     """
 
     if task not in class_map:
@@ -574,13 +694,13 @@ def finalize_seg_cache(
     """
     Publish Harmonize segment results as one logical unit.
 
-    Call only after TotalSegmentator has written ``seg/*.nii.gz``. Order:
+    Call only after TotalSegmentator has written seg/*.nii.gz. Order:
 
-    1. Prune ``seg/`` to overlay-essential masks (files settle first).
-    2. Write ``mask_geometry.json`` from a remaining mask.
-    3. Write ``structure_voxels.json``.
-    4. Write ``primary_segment_voxels.json`` last — derived only from masks still
-       on disk (``require_masks=True``). Readers treat this file as the overlay
+    1. Prune seg/ to overlay-essential masks (files settle first).
+    2. Write mask_geometry.json from a remaining mask.
+    3. Write structure_voxels.json.
+    4. Write primary_segment_voxels.json last — derived only from masks still
+       on disk (require_masks=True). Readers treat this file as the overlay
        catalog; it must never list groups without files.
 
     JSON files use temp+replace. This is not a multi-file filesystem transaction,
@@ -679,9 +799,9 @@ def _series_instance_uid(series_directory: Path) -> str | None:
 
 def cached_region_signal(series_directory: Path) -> CachedRegionSignal:
     """
-    Infer head vs non-head from cached TotalSegmentator ROI masks (``0_TS_SEG/seg/``).
+    Infer head vs non-head from cached TotalSegmentator ROI masks (0_TS_SEG/seg/).
 
-    Returns ``UNAVAILABLE`` when harmonize/regions has not populated the cache.
+    Returns UNAVAILABLE when harmonize/regions has not populated the cache.
     """
 
     seg_dir = resolve_series_cache_dir(series_directory) / "seg"
@@ -751,14 +871,14 @@ def retain_volume_for_pending_face_blur(series_directory: Path, anon_model=None)
 
 
 def evict_tseg_volume(series_directory: Path, anon_model=None) -> bool:
-    """Remove cached ``volume.nii.gz`` after TS work for a series is complete.
+    """Remove cached volume.nii.gz after TS work for a series is complete.
 
-    Segmentation sidecars (``structure_voxels.json``) must exist so harmonize and
+    Segmentation sidecars (structure_voxels.json) must exist so harmonize and
     overlays do not depend on the NIfTI. Call only when the caller has finished
     all TS stages for this series (segmentation, contrast, brain structures, …).
 
     CT head studies keep the volume until face blur has been manually applied
-    (``face_blur_algorithm_applied`` in the project DB), so the face task can reuse
+    (face_blur_algorithm_applied in the project DB), so the face task can reuse
     the cached NIfTI without a DICOM reconversion.
     """
     cache_dir = resolve_series_cache_dir(series_directory)

@@ -1,7 +1,5 @@
 """Functional ProjectController ops: import, delete, PHI CSV, totals (no AWS)."""
 
-from __future__ import annotations
-
 import time
 from pathlib import Path
 

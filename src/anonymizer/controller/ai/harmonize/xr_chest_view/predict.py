@@ -1,7 +1,16 @@
-"""Inference for CXR projection + rotation."""
+"""Inference for CXR projection + rotation.
 
-from __future__ import annotations
+Public API
+----------
+CxpViewPrediction
+    Softmax prediction from CXp-Projection-Rotation-Checker.
 
+predict_cxp_view_from_array(pixels: np.ndarray) -> CxpViewPrediction
+    Classify projection + rotation; upright in-memory and re-predict projection when needed.
+
+predict_cxp_view(pixels: np.ndarray) -> CxpViewPrediction | None
+    Predict cxp view.
+"""
 import logging
 from dataclasses import dataclass
 
@@ -9,6 +18,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+from anonymizer.controller.ai.harmonize.xp_bodypart.preprocess import tensor_from_grayscale_array
 from anonymizer.controller.ai.harmonize.xr_chest_view.cache import CXP_VIEW_WEIGHT_PATH, MODEL_SLOT, cxp_view_ready
 from anonymizer.controller.ai.harmonize.xr_chest_view.labels import (
     CXP_PROJECTION_LABELS,
@@ -16,7 +26,7 @@ from anonymizer.controller.ai.harmonize.xr_chest_view.labels import (
     map_projection_to_playbook_view,
 )
 from anonymizer.controller.ai.harmonize.xr_chest_view.model import CxpViewNet, load_cxp_view_weights
-from anonymizer.controller.ai.harmonize.xr_chest_view.preprocess import tensor_from_grayscale_array, upright_array
+from anonymizer.controller.ai.harmonize.xr_chest_view.preprocess import upright_array
 
 logger = logging.getLogger(__name__)
 

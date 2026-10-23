@@ -35,8 +35,6 @@ operand_id_for_operation(operation) -> OperandId | None
 validate_operation(operation) -> str | None
     Error message if invalid, else None.
 """
-from __future__ import annotations
-
 import re
 from dataclasses import dataclass
 from datetime import datetime

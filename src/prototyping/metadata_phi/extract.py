@@ -1,7 +1,5 @@
 """Extract free-text chunks from DICOM metadata, SR content, and encapsulated PDF."""
 
-from __future__ import annotations
-
 import io
 from collections.abc import Iterable, Iterator
 from pathlib import Path

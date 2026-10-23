@@ -1,7 +1,5 @@
 """Small coverage deltas to push TOTAL past 80%."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 

@@ -100,15 +100,14 @@ from anonymizer.controller.jobs.runner import (
     OcrEditContext,
     OcrRemoveMode,
     RunOptions,
-    detect_text_button_label,
     edit_context_display_label,
     edit_context_menu_values,
     normalize_edit_context,
     normalize_ocr_remove_mode,
+    ocr_detect_tooltip,
     ocr_remove_mode_display_label,
     ocr_remove_mode_menu_labels,
     ocr_remove_mode_tooltip,
-    remove_text_button_label,
     run_job,
 )
 from anonymizer.controller.jobs.work_state import WorkState
@@ -215,20 +214,29 @@ def ocr_results_available_for_edit_context(
     current_frame_index: int,
     overlay_ocr_by_frame: dict[int, list],
 ) -> bool:
-    """True when Detect Text left OCR overlays usable by Remove Text for the edit context."""
+    """True when Detect left OCR overlays usable by Remove for the edit context."""
     if edit_context is OcrEditContext.FRAME:
         return bool(overlay_ocr_by_frame.get(current_frame_index))
     return any(texts for texts in overlay_ocr_by_frame.values())
 
 
-def ocr_remove_toolbar_visible(
+def ocr_remove_enabled(
     *,
     interaction_allowed: bool,
     detecting: bool,
     results_available: bool,
 ) -> bool:
-    """Show Remove Pixel PHI + mode only when detections exist for the edit context."""
+    """True when Remove may be clicked: text is identified for the edit context.
+
+    Enablement follows the current Remove Scope filtering of the detected boxes,
+    so changing scope never disables Remove while removable text remains in scope.
+    """
     return interaction_allowed and not detecting and results_available
+
+
+def edit_context_toolbar_visible(*, single_frame: bool) -> bool:
+    """Show Edit Context only when the series has more than one frame to choose between."""
+    return not single_frame
 
 
 def filter_series_view_ocr_overlay(
@@ -298,7 +306,7 @@ def format_ocr_detection_complete_status(
             ner_parts.append(f"{entity_label_display(label)} {n}")
     for label, n in sorted(ner_counts.items()):
         if label not in SCORED_LABELS and n:
-            ner_parts.append(f"{label} {n}")
+            ner_parts.append(f"{entity_label_display(label)} {n}")
     if unlabeled:
         ner_parts.append(f"{_('unlabeled')} {unlabeled}")
 
@@ -1153,7 +1161,8 @@ class SeriesView(AppCTkToplevel):
             for attr in ("remove_button", "remove_text_mode_menu"):
                 widget = getattr(self, attr, None)
                 if widget is not None:
-                    self._set_toolbar_widget_present(widget, False)
+                    with contextlib.suppress(tk.TclError):
+                        widget.configure(state="disabled")
             for attr in (
                 "harmonize_button",
                 "blur_face_button",
@@ -1368,8 +1377,7 @@ class SeriesView(AppCTkToplevel):
         text_edit_group = ctk.CTkFrame(self.control_frame, fg_color="transparent")
         self._text_edit_group = text_edit_group
         text_edit_group.grid(row=0, column=0, padx=(0, self.PAD), pady=self.PAD, sticky="w")
-        edit_context_label = ctk.CTkLabel(text_edit_group, text=_("Text Edit Context") + ":")
-        edit_context_label.grid(row=0, column=0, padx=(self.PAD, 2))
+        self.edit_context_label = ctk.CTkLabel(text_edit_group, text=_("Edit Context") + ":")
         edit_context_labels = [
             edit_context_display_label(member)
             for member in edit_context_menu_values()
@@ -1384,9 +1392,27 @@ class SeriesView(AppCTkToplevel):
             dynamic_resizing=False,
             width=option_menu_width_for_labels(edit_context_labels),
         )
-        self.edit_context_combo_box.grid(row=0, column=1, padx=(0, 8))
-        remove_target_label = ctk.CTkLabel(text_edit_group, text=_("Remove") + ":")
-        remove_target_label.grid(row=0, column=2, padx=(0, 2))
+        # A single frame has no Frame/Series choice: hide Edit Context entirely.
+        show_edit_context = edit_context_toolbar_visible(single_frame=self.single_frame)
+        if show_edit_context:
+            self.edit_context_label.grid(row=0, column=0, padx=(self.PAD, 2))
+            self.edit_context_combo_box.grid(row=0, column=1, padx=(0, 8))
+        detect_label = _("Detect")
+        self.detect_button = ctk.CTkButton(
+            text_edit_group,
+            width=button_width_for_label(detect_label, minimum=self.BUTTON_WIDTH),
+            text=detect_label,
+            command=self.detect_text_button_clicked,
+        )
+        # Without Edit Context, Detect is the first control and needs the left pad.
+        detect_pad_left = 0 if show_edit_context else self.PAD
+        self.detect_button.grid(row=0, column=2, padx=(detect_pad_left, 8), pady=0)
+        bind_hover_tooltip(
+            self.detect_button,
+            lambda: ocr_detect_tooltip(self._resolve_edit_context()),
+        )
+        remove_scope_label = ctk.CTkLabel(text_edit_group, text=_("Remove Scope") + ":")
+        remove_scope_label.grid(row=0, column=3, padx=(0, 2))
         remove_mode_labels = list(ocr_remove_mode_menu_labels())
         self._ocr_remove_mode_var = tk.StringVar(
             value=ocr_remove_mode_display_label(OcrRemoveMode.NON_WHITELISTED)
@@ -1399,29 +1425,18 @@ class SeriesView(AppCTkToplevel):
             dynamic_resizing=False,
             width=option_menu_width_for_labels(remove_mode_labels),
         )
-        self.ocr_remove_mode_menu.grid(row=0, column=3, padx=(0, 8))
+        self.ocr_remove_mode_menu.grid(row=0, column=4, padx=(0, 8))
         bind_hover_tooltip(
             self.ocr_remove_mode_menu,
             lambda: ocr_remove_mode_tooltip(self._selected_ocr_remove_mode()),
         )
-        detect_label = detect_text_button_label()
-        self.detect_button = ctk.CTkButton(
-            text_edit_group,
-            width=button_width_for_label(detect_label, minimum=self.BUTTON_WIDTH),
-            text=detect_label,
-            command=self.detect_text_button_clicked,
-        )
-        self.detect_button.grid(row=0, column=4, padx=(0, 2), pady=0)
-        bind_hover_tooltip(
-            self.detect_button,
-            lambda: ocr_remove_mode_tooltip(self._selected_ocr_remove_mode()),
-        )
-        remove_label = remove_text_button_label(OcrRemoveMode.NON_WHITELISTED)
+        remove_label = _("Remove")
         self.remove_button = ctk.CTkButton(
             text_edit_group,
             width=button_width_for_label(remove_label, minimum=self.BUTTON_WIDTH),
             text=remove_label,
             command=self.remove_text_button_clicked,
+            state="disabled",
         )
         self.remove_button.grid(row=0, column=5, padx=2, pady=0)
         bind_hover_tooltip(
@@ -1439,9 +1454,8 @@ class SeriesView(AppCTkToplevel):
             variable=self.remove_text_mode_var,
         )
         self.remove_text_mode_menu.grid(row=0, column=6, padx=2, pady=0)
-        # Hide until detections exist (same presence pattern as Harmonize / Face Blur).
-        self.remove_button.grid_remove()
-        self.remove_text_mode_menu.grid_remove()
+        # Remove stays visible but disabled until Detect identifies text for removal.
+        self.remove_text_mode_menu.configure(state="disabled")
         blackout_label = _("Blackout Area")
         self.blackout_button = ctk.CTkButton(
             text_edit_group,
@@ -1454,7 +1468,7 @@ class SeriesView(AppCTkToplevel):
             self.blackout_button,
             _(
                 "Paint drawn rectangles black on the pixels. Draw a rectangle first, then click. "
-                "Follows Text Edit Context (Frame or Series)."
+                "Follows Edit Context (Frame or Series)."
             ),
         )
         exclude_label = _("Exclude Area")
@@ -2236,17 +2250,19 @@ class SeriesView(AppCTkToplevel):
         )
 
     def _refresh_ocr_toolbar_buttons(self) -> None:
-        """Show Remove Pixel PHI + mode only when detections exist for the edit context."""
-        present = ocr_remove_toolbar_visible(
+        """Enable Remove (+ removal-mode menu) only when text is identified for removal."""
+        enabled = ocr_remove_enabled(
             interaction_allowed=self._series_interaction_allowed(),
             detecting=self._ocr_detecting,
             results_available=self._ocr_results_available_for_edit_context(),
         )
+        state = "normal" if enabled else "disabled"
         for attr in ("remove_button", "remove_text_mode_menu"):
             widget = getattr(self, attr, None)
             if widget is None:
                 continue
-            self._set_toolbar_widget_present(widget, present)
+            with contextlib.suppress(tk.TclError):
+                widget.configure(state=state)
 
     def _selected_face_blur_mode(self) -> FaceBlurMode:
         if not hasattr(self, "blur_face_mode_var"):
@@ -2345,8 +2361,7 @@ class SeriesView(AppCTkToplevel):
         )
         if results:
             logger.debug(f"OCR Results:\n{pformat(results)}")
-            self.detected_text[frame_index] = results
-            self.draw_text_overlay(frame_index)
+            self._apply_ocr_detections_for_frame(frame_index, results)
 
     def _on_ocr_job_tick(self, work_state: WorkState) -> None:
         if not self._widget_alive():
@@ -2364,6 +2379,7 @@ class SeriesView(AppCTkToplevel):
                     self._apply_ocr_detections_for_frame(frame_i, texts)
 
     def _apply_ocr_detections_for_frame(self, frame_i: int, texts: list) -> None:
+        # Fresh detections are current for the selected Remove target again.
         self.detected_text[frame_i] = texts
         self._ocr_transcript_by_frame[frame_i] = [t.text for t in texts if (t.text or "").strip()]
         logger.info(
@@ -2484,24 +2500,10 @@ class SeriesView(AppCTkToplevel):
             self.ocr_remove_mode = normalize_ocr_remove_mode(self._ocr_remove_mode_var.get())
         return self.ocr_remove_mode
 
-    def _apply_ocr_remove_button_labels(self) -> None:
-        mode = self._selected_ocr_remove_mode()
-        detect_label = detect_text_button_label()
-        remove_label = remove_text_button_label(mode)
-        if hasattr(self, "detect_button"):
-            self.detect_button.configure(
-                text=detect_label,
-                width=button_width_for_label(detect_label, minimum=self.BUTTON_WIDTH),
-            )
-        if hasattr(self, "remove_button"):
-            self.remove_button.configure(
-                text=remove_label,
-                width=button_width_for_label(remove_label, minimum=self.BUTTON_WIDTH),
-            )
-
     def _on_ocr_remove_mode_changed(self, _choice: str | None = None) -> None:
-        self._apply_ocr_remove_button_labels()
+        # Changing Remove Scope only re-filters existing detections.
         self._redraw_text_overlays_if_detected()
+        self._refresh_ocr_toolbar_buttons()
 
     def filter_text_data(self, frame_index: int) -> list[OCRText]:
         """Hide boxes that the current remove target would not remove."""
@@ -2628,20 +2630,35 @@ class SeriesView(AppCTkToplevel):
         self._refresh_save_button()
         user_rects.clear()
 
-    def blackout_areas_in_series(self):
+    def blackout_areas_in_series(self) -> int:
+        """Black out pending user rects across the series; return rects applied.
+
+        With no pending rects this is a no-op (0) — it must not clear caches or
+        replay the series frame by frame.
+        """
         total_frames = self.image_viewer.num_images
+        pending = sum(
+            len(self.image_viewer.overlay_data[i].user_rects)
+            for i in range(total_frames)
+            if i in self.image_viewer.overlay_data
+        )
+        if not pending:
+            return 0
+        applied = 0
         self.image_viewer.clear_cache()
         for i in range(total_frames):
             if i not in self.image_viewer.overlay_data:
                 continue
             user_rects = self.image_viewer.overlay_data[i].user_rects
             if user_rects:
+                applied += len(user_rects)
                 self.blackout_areas_in_single_frame(i, user_rects)
             self.image_viewer.load_and_display_image(i)
             self.update()
         self.image_viewer.clear_cache()
         self.regenerate_series_projections()
         self.image_viewer.load_and_display_image(0)
+        return applied
 
     def blackout_button_clicked(self):
         logger.debug(f"Blackout text, current edit context[{self.edit_context}]")
@@ -2650,7 +2667,7 @@ class SeriesView(AppCTkToplevel):
             ndx = self.image_viewer.current_image_index
             user_rects = self.image_viewer.overlay_data[ndx].user_rects
             if not user_rects:
-                logger.warning("No blackout user rect has been define in current frame to blackout")
+                logger.warning("No blackout user rect has been defined in current frame to blackout")
                 self.update_status(_("No blackout area(s) in current frame"))
                 return
             self.update_status(_("Applying blackout to current image") + "…")
@@ -2661,8 +2678,11 @@ class SeriesView(AppCTkToplevel):
             self.update_status(_("Blackout applied to current image"))
             self.image_viewer.refresh_current_image()
         else:
-            self.update_status(_("Applying blackout to all images") + "…")
-            self.blackout_areas_in_series()
+            applied = self.blackout_areas_in_series()
+            if not applied:
+                logger.warning("No blackout user rect has been defined in series to blackout")
+                self.update_status(_("No blackout area(s) in series"))
+                return
             self.update_status(_("Blackout applied to all images"))
 
     def _commit_user_rects_to_exclude(self, frame_index: int) -> int:

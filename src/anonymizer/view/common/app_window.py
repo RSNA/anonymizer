@@ -1,7 +1,5 @@
 """Shared Toplevel bases: register for the Window menu; share menubar on macOS only."""
 
-from __future__ import annotations
-
 import contextlib
 import logging
 import sys
@@ -18,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 def attach_menubar_to_toplevels() -> bool:
     """
-    True when child windows should receive ``configure(menu=…)``.
+    True when child windows should receive configure(menu=…).
 
     On macOS the menubar is system-wide and must stay attached while a child
     window has focus. On Windows/Linux each Toplevel shows its own menubar strip,
@@ -88,9 +86,9 @@ def position_toplevel_near_parent(
     height: int | None = None,
     offset: int = 30,
 ) -> None:
-    """Place a Toplevel near ``parent`` (default: ``window.master``), clamped to the screen.
+    """Place a Toplevel near parent (default: window.master), clamped to the screen.
 
-    Avoids Windows leaving newly created dialogs at ``+0+0`` when only WxH is set.
+    Avoids Windows leaving newly created dialogs at +0+0 when only WxH is set.
     """
     try:
         window.update_idletasks()
@@ -150,9 +148,9 @@ def place_toplevel_centered_on_parent(
     height: int | None = None,
     margin: int = 20,
 ) -> None:
-    """Size ``window`` (optional) and center it over ``parent``.
+    """Size window (optional) and center it over parent.
 
-    Call while withdrawn (then ``deiconify``) so the first paint is already centered.
+    Call while withdrawn (then deiconify) so the first paint is already centered.
     Position is clamped to the screen; size is not shrunk to the parent (that clips content).
     """
     try:
@@ -219,7 +217,7 @@ def present_toplevel_centered_on_parent(
     width: int | None = None,
     height: int | None = None,
 ) -> None:
-    """Place while withdrawn, then show: first paint is already centered on ``parent``."""
+    """Place while withdrawn, then show: first paint is already centered on parent."""
     place_toplevel_centered_on_parent(window, parent, width=width, height=height)
     with contextlib.suppress(tk.TclError):
         window.deiconify()
@@ -266,9 +264,9 @@ def fit_toplevel_to_content(
     place: bool = False,
     offset: int = 30,
 ) -> tuple[int, int]:
-    """Size a dialog to its widgets (and title), optionally placing it near ``parent``.
+    """Size a dialog to its widgets (and title), optionally placing it near parent.
 
-    Tk/CTk ``winfo_reqwidth`` on the toplevel often follows a progress bar default
+    Tk/CTk winfo_reqwidth on the toplevel often follows a progress bar default
     (~200px) rather than the longest label. Walk descendants and the caption.
     """
     try:
@@ -295,7 +293,7 @@ def fit_toplevel_to_content(
 
 
 def refresh_app_window_menu(window: tk.Misc) -> None:
-    """Rebuild the Window menu so labels pick up a newly set ``title()``."""
+    """Rebuild the Window menu so labels pick up a newly set title()."""
     host = getattr(window, "_app_menu_host", None) or find_app_menu_host(window)
     refresh = getattr(host, "refresh_window_menu", None)
     if not callable(refresh):
@@ -312,7 +310,7 @@ def install_modal_dismiss(window: tk.Misc, on_cancel: Any) -> None:
 
 
 def dismiss_app_window(window: tk.Misc, *, parent: tk.Misc | None = None) -> None:
-    """Cancel a registered app window (``_on_cancel`` / ``_on_close`` / teardown)."""
+    """Cancel a registered app window (_on_cancel / _on_close / teardown)."""
     for attr in ("_on_cancel", "_on_close", "_close"):
         handler = getattr(window, attr, None)
         if callable(handler):

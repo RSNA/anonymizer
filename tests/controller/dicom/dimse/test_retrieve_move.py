@@ -6,18 +6,15 @@ import time
 import pytest
 from pydicom.dataset import Dataset
 
+from anonymizer.controller.dicom.hierarchies import InstanceUIDHierarchy, SeriesUIDHierarchy, StudyUIDHierarchy
+
 # from anonymizer.utils.dicom import (
 #     C_FAILURE,
 #     C_MOVE_UNKNOWN_AE,
 #     C_PENDING_A,
 #     C_SUCCESS,
 # )
-from anonymizer.controller.project import (
-    InstanceUIDHierarchy,
-    ProjectController,
-    SeriesUIDHierarchy,
-    StudyUIDHierarchy,
-)
+from anonymizer.controller.project import ProjectController
 from anonymizer.utils.storage.dicom_tree import count_studies_series_images
 from tests.controller.dicom.support.helpers import (
     pacs_storage_dir,

@@ -4,8 +4,6 @@ These call the tool modules directly (same functions registered in ``create_serv
 so coverage tracks the advertised LLM-facing API without requiring a live HTTP server.
 """
 
-from __future__ import annotations
-
 import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -617,7 +615,7 @@ def test_api_pacs_find_without_session():
 
 
 def test_api_pacs_move_ok_mocked():
-    from anonymizer.controller.project import SeriesUIDHierarchy
+    from anonymizer.controller.dicom.hierarchies import SeriesUIDHierarchy
 
     _create_open()
     assert mcp_tools.configure_remote("127.0.0.1", 4242, "ORTHANC")["ok"]

@@ -1,7 +1,5 @@
 """Tests for Dataset description-click multi-select modifier masking."""
 
-from __future__ import annotations
-
 import sys
 
 from anonymizer.view.project import dataset as dataset_mod

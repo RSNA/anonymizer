@@ -1,7 +1,5 @@
 """Tests for face blur status strings in the controller layer."""
 
-from __future__ import annotations
-
 from anonymizer.controller.ai.blur_face import (
     FACE_BLUR_MODE_LABELS,
     FaceBlurMode,

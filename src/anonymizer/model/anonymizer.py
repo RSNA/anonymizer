@@ -103,7 +103,7 @@ class Study(Base):
 
     series: Mapped[list[Series]] = relationship(back_populates="study", cascade="all, delete-orphan", init=False)
 
-    def harmonize_series(self, *classes: ContentClass) -> list[Series]:
+    def harmonizeable_series(self, *classes: ContentClass) -> list[Series]:
         """
         Filter child series by ContentClass.
 
@@ -132,7 +132,7 @@ class Study(Base):
 
         Returns False when the study has no such series (TEXT-only / empty).
         """
-        eligible = self.harmonize_series(ContentClass.D3, ContentClass.D2)
+        eligible = self.harmonizeable_series(ContentClass.D3, ContentClass.D2)
         if not eligible:
             return False
         return all(series.is_description_harmonized() for series in eligible)
@@ -144,8 +144,8 @@ class Study(Base):
         Returns:
             MIXED when both D3 and D2 series are present.
         """
-        has_3d = bool(self.harmonize_series(ContentClass.D3))
-        has_2d = bool(self.harmonize_series(ContentClass.D2))
+        has_3d = bool(self.harmonizeable_series(ContentClass.D3))
+        has_2d = bool(self.harmonizeable_series(ContentClass.D2))
         if has_3d and has_2d:
             return StudyImagingComposition.MIXED
         if has_3d:
@@ -1221,7 +1221,7 @@ class AnonymizerModel:
             return []
         return [
             text
-            for series in study.harmonize_series(ContentClass.D3)
+            for series in study.harmonizeable_series(ContentClass.D3)
             if (text := (series.harmonized_description or "").strip())
         ]
 
@@ -1234,7 +1234,7 @@ class AnonymizerModel:
             return []
         return [
             text
-            for series in study.harmonize_series(ContentClass.D2)
+            for series in study.harmonizeable_series(ContentClass.D2)
             if (text := (series.harmonized_description or "").strip())
         ]
 
@@ -1245,7 +1245,7 @@ class AnonymizerModel:
         study = self.session.execute(stmt).scalar_one_or_none()
         if study is None:
             return []
-        return [str(series.modality or "").strip().upper() for series in study.harmonize_series(ContentClass.D2)]
+        return [str(series.modality or "").strip().upper() for series in study.harmonizeable_series(ContentClass.D2)]
 
     @use_session(is_read_only_operation=True)
     def get_3d_series_modalities(self, anon_study_uid: str) -> list[str]:
@@ -1254,7 +1254,7 @@ class AnonymizerModel:
         study = self.session.execute(stmt).scalar_one_or_none()
         if study is None:
             return []
-        return [str(series.modality or "").strip().upper() for series in study.harmonize_series(ContentClass.D3)]
+        return [str(series.modality or "").strip().upper() for series in study.harmonizeable_series(ContentClass.D3)]
 
     @use_session(is_read_only_operation=True)
     def get_2d_series_instance_count(self, anon_study_uid: str) -> int:
@@ -1265,7 +1265,7 @@ class AnonymizerModel:
         study = self.session.execute(stmt).scalar_one_or_none()
         if study is None:
             return 0
-        return sum(len(series.instances or []) for series in study.harmonize_series(ContentClass.D2))
+        return sum(len(series.instances or []) for series in study.harmonizeable_series(ContentClass.D2))
 
     @use_session(is_read_only_operation=True)
     def get_compatible_series_harmonized_descriptions(
@@ -1331,7 +1331,7 @@ class AnonymizerModel:
         for study in studies:
             descriptions = [
                 text
-                for series in study.harmonize_series(ContentClass.D3)
+                for series in study.harmonizeable_series(ContentClass.D3)
                 if (text := (series.harmonized_description or "").strip())
             ]
             if tuple(sorted(descriptions)) == target:
@@ -1349,7 +1349,7 @@ class AnonymizerModel:
         for study in studies:
             descriptions = [
                 text
-                for series in study.harmonize_series(ContentClass.D2)
+                for series in study.harmonizeable_series(ContentClass.D2)
                 if (text := (series.harmonized_description or "").strip())
             ]
             if tuple(sorted(descriptions)) == target:

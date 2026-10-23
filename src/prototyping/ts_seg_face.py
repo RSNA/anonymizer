@@ -15,8 +15,6 @@ Licensed weights (Dataset303) download on first run. See:
 https://backend.totalsegmentator.com/license-academic/
 """
 
-from __future__ import annotations
-
 import argparse
 import logging
 import sys

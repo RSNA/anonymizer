@@ -1,7 +1,5 @@
 """Locale → asset / model resolution for metadata PHI detection."""
 
-from __future__ import annotations
-
 import json
 from dataclasses import dataclass, field
 from functools import lru_cache

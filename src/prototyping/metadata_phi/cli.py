@@ -1,7 +1,5 @@
 """CLI for DICOM metadata / report PHI NER experiment."""
 
-from __future__ import annotations
-
 import argparse
 import json
 import sys

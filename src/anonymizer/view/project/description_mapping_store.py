@@ -1,10 +1,8 @@
-"""Per-project description mapping CSVs under ``storage_dir/mappings`` (UX only; no PHI).
+"""Per-project description mapping CSVs under storage_dir/mappings (UX only; no PHI).
 
 Series: sticky intake SeriesDescription → RadLex Playbook string.
 Study: sticky intake StudyDescription → LOINC number (resolve name via LOINC CSV).
 """
-
-from __future__ import annotations
 
 import csv
 import logging
@@ -37,10 +35,10 @@ class StudyDescriptionOverride:
 
 def ensure_mappings_dir(mappings_dir: Path) -> Path:
     """
-    Create ``mappings_dir`` if missing.
+    Create mappings_dir if missing.
 
     Args:
-        mappings_dir: Project ``storage_dir/mappings`` path.
+        mappings_dir: Project storage_dir/mappings path.
 
     Returns:
         The same path.
@@ -202,7 +200,7 @@ def upsert_study_override(mappings_dir: Path, *, original: str, loinc_number: st
     Args:
         mappings_dir: Project mappings directory.
         original: Sticky intake StudyDescription.
-        loinc_number: LOINC catalog code (e.g. ``41806-1``).
+        loinc_number: LOINC catalog code (e.g. 41806-1).
 
     Returns:
         True when the file was updated.

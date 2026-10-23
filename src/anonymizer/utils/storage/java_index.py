@@ -1,7 +1,13 @@
-"""Java Anonymizer exported patient index (XLSX) I/O."""
+"""Java Anonymizer exported patient index (XLSX) I/O.
 
-from __future__ import annotations
+Public API
+----------
+JavaAnonymizerExportedStudy
+    One row from the Java Anonymizer patient index workbook.
 
+read_java_anonymizer_index_xlsx(filename: str) -> list[JavaAnonymizerExportedStudy]
+    Read the Java Anonymizer exported patient index workbook.
+"""
 from dataclasses import dataclass
 from typing import Union
 
@@ -35,7 +41,7 @@ def read_java_anonymizer_index_xlsx(filename: str) -> list[JavaAnonymizerExporte
         filename: Path to the Excel file.
 
     Returns:
-        Rows as ``JavaAnonymizerExportedStudy`` instances (empty if the sheet has no data).
+        Rows as JavaAnonymizerExportedStudy instances (empty if the sheet has no data).
 
     Raises:
         ValueError: If no active worksheet is found.

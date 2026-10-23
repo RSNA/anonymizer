@@ -1,7 +1,5 @@
 """Dataset description edit candidates: RadLex series + LOINC study (modality-scoped)."""
 
-from __future__ import annotations
-
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 

@@ -1,7 +1,5 @@
 """Harmonize Description Dialog brain-structures prompt (CT Head only)."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import patch
 

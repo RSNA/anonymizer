@@ -1,7 +1,5 @@
 """Session-scoped managed Orthanc for dicom_integration tests."""
 
-from __future__ import annotations
-
 from collections.abc import Generator
 
 import pytest

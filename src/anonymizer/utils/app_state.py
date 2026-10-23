@@ -1,7 +1,46 @@
-"""Workstation app state persisted in ``.anonymizer_state.json`` (under the logs directory)."""
+"""Workstation app state persisted in .anonymizer_state.json (under the logs directory).
 
-from __future__ import annotations
+Public API
+----------
+APP_STATE_FILENAME
+    App state filename.
 
+AI_FEATURES_SECTION
+    Ai features section (default 'ai_features').
+
+ANALYTICS_SECTION
+    Analytics section (default 'analytics').
+
+CT_SEGMENTATION_MODE_KEY
+    Ct segmentation mode key.
+
+MR_SEGMENTATION_MODE_KEY
+    Mr segmentation mode key.
+
+SELECTED_ORGANS_KEY
+    Selected organs key (default 'selected_organs').
+
+SELECTED_BOARD_WIDGETS_KEY
+    Selected board widgets key.
+
+ORGAN_BIN_WIDTH_PCT_KEY
+    Organ bin width pct key.
+
+get_app_state_path() -> Path
+    Get app state path.
+
+read_app_state() -> dict[str, Any]
+    Read app state.
+
+write_app_state(data: dict[str, Any]) -> None
+    Write app state.
+
+ai_features_from_state(state: dict[str, Any]) -> dict[str, Any]
+    Ai features from state.
+
+analytics_from_state(state: dict[str, Any]) -> dict[str, Any]
+    Analytics from state.
+"""
 import json
 import logging
 from pathlib import Path

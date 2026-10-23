@@ -19,12 +19,13 @@ def test_set_language_code_valid_code():
     assert get_current_language_code() == "en_US"
 
 
-def test_locales_dir_is_package_absolute_and_independent_of_cwd(tmp_path, monkeypatch):
-    """UI catalogs must resolve from the package tree, not process CWD."""
+def test_locales_dir_is_install_relative(monkeypatch):
+    """Locales resolve under assets/locales after chdir to the install dir."""
     from anonymizer.utils.translate import _, locales_dir, set_language_code
+    from tests.paths import REPO_ROOT
 
-    monkeypatch.chdir(tmp_path)
-    assert locales_dir().is_absolute()
+    monkeypatch.chdir(REPO_ROOT / "src" / "anonymizer")
+    assert locales_dir() == Path("assets/locales")
     assert locales_dir().is_dir()
     set_language_code("de")
     assert _("Welcome") == "Willkommen"

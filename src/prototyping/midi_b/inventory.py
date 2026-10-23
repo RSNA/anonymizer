@@ -1,7 +1,5 @@
 """Inventory Synthetic MIDI-B DICOM instances."""
 
-from __future__ import annotations
-
 import json
 import logging
 from collections import Counter

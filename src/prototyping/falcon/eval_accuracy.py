@@ -21,8 +21,6 @@ Run::
 Writes ``<data-dir>/falcon_eval_results.csv`` by default (override with ``--output``, skip with ``--no-results-file``).
 """
 
-from __future__ import annotations
-
 import argparse
 import csv
 import logging

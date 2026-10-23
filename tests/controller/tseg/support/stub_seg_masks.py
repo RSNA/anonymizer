@@ -1,7 +1,5 @@
 """Stub ``seg/*.nii.gz`` files so mocked TotalSegmentator paths can finalize the cache."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import numpy as np

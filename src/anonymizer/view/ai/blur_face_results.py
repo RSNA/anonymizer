@@ -1,16 +1,12 @@
 """Face blur review UI helpers and constants."""
 
-from __future__ import annotations
-
 from pydicom import Dataset
 
 from anonymizer.controller.ai.blur_face import (
     FACE_BLUR_MODE_LABELS,
     FaceBlurMode,
-    FaceBlurProgress,
     QaStats,
     face_blur_mode_display_label,
-    format_face_blur_progress_status,
 )
 from anonymizer.utils.translate import _
 
@@ -58,20 +54,3 @@ def format_face_blur_qa_summary(
     return _("QA PASS") + f" ({mode_label})" + f", {slice_count} " + _("slices") + f", σ={sigma_mm:.1f} mm."
 
 
-__all__ = [
-    "FACE_BLUR_MODE_LABELS",
-    "FACE_MASK_OVERLAY_ALPHA",
-    "FACE_MASK_OVERLAY_COLOR",
-    "FACE_REVIEW_WL_HU",
-    "FACE_REVIEW_WW_HU",
-    "FaceBlurMode",
-    "FaceBlurProgress",
-    "QaStats",
-    "face_blur_mode_display_label",
-    "face_blur_mode_from_menu_label",
-    "face_blur_mode_menu_values",
-    "face_review_wl_ww",
-    "format_face_blur_progress_status",
-    "format_face_blur_qa_summary",
-    "proposed_face_blur_companion_label",
-]

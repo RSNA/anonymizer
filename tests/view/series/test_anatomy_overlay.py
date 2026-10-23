@@ -1,7 +1,5 @@
 """Tests for anatomy NIfTI → series overlay conversion (no UI)."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock
 

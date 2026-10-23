@@ -25,11 +25,10 @@ it is never used for project processing. When ``--out-dir`` is omitted,
 reports are written to a separate temporary report directory.
 """
 
-from __future__ import annotations
-
 import argparse
-import atexit
 import asyncio
+import atexit
+import importlib.util
 import json
 import os
 import shutil
@@ -42,7 +41,6 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-import importlib.util
 import yaml
 
 _HERE = Path(__file__).resolve().parent

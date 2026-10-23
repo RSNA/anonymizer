@@ -1,7 +1,5 @@
 """L1: replay scenario expected_trace via MCP tool handlers (no LLM, no live server)."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest
@@ -92,17 +90,19 @@ def test_scripted_import_after_confirmed_create():
 
 def test_scripted_clinical_and_dimse_remote():
     defaults = _call_tool("project_settings_defaults", {})
-    assert "clinical" in str(defaults.get("anonymization_policies") or defaults["help"])
+    help_blob = str(defaults.get("help") or "")
+    assert "confidentiality_options" in (defaults.get("help") or {})
+    assert "113100" in help_blob
 
     prepared = _call_tool(
         "create_project",
         {
             "project_name": "ClinicalDemo",
-            "anonymization_policy": "clinical",
+            "confidentiality_options": [113100, 113107, 113108, 113111],
             "confirm": False,
         },
     )
-    assert prepared["configuration"]["anonymization_policy"] == "clinical"
+    assert prepared["configuration"]["confidentiality_options"] == [113100, 113107, 113108, 113111]
     created = _call_tool(
         "create_project",
         {

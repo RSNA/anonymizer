@@ -5,8 +5,6 @@ TSEG cache, and resume (``exists``) are identical on macOS and Windows. The host
 OS only selects the grab backend and the dest folder ``shots/<macos|windows>/``.
 """
 
-from __future__ import annotations
-
 import logging
 import os
 import shutil

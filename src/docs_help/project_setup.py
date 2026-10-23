@@ -1,7 +1,5 @@
 """Temp project + DICOM fixture helpers for screenshot capture."""
 
-from __future__ import annotations
-
 import logging
 import socket
 from pathlib import Path

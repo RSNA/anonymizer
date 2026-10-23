@@ -1,7 +1,5 @@
 """Tests for Export DICOM-SEG conversion switch."""
 
-from __future__ import annotations
-
 import json
 from pathlib import Path
 from queue import Queue
@@ -23,7 +21,8 @@ from anonymizer.controller.annotations import (
     stamp_brush,
 )
 from anonymizer.controller.annotations.store import load_annotate_session
-from anonymizer.controller.project import ExportPatientsRequest, ProjectController
+from anonymizer.controller.dicom.requests import ExportPatientsRequest
+from anonymizer.controller.project import ProjectController
 from anonymizer.view.project.export import _count_patient_images_excluding_seg
 
 

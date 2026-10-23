@@ -4,8 +4,6 @@ Unknown labels default to **ignore**. Keep this map in sync with observed
 histograms (`phase_0_characterize`, PseudoPHI-eval SCORECARD).
 """
 
-from __future__ import annotations
-
 from typing import Literal
 
 Action = Literal["blank", "synth", "ignore", "defer-to-script"]

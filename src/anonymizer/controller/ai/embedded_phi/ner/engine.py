@@ -1,42 +1,40 @@
 """Model-only PHI NER: unicode text in → labeled spans; blank or synthetic replace.
-
 Uses OpenMed ClinicalE5 token-classification only (no lexicon / phone regex).
-Product labels: ``NAME``, ``LOCATION``, ``ID``, ``PHONE``, ``DATE``, ``EMAIL``.
-
-Report metadata PHI (``process_report_text``) may reuse ``Entity`` with a DICOM
-keyword as ``label`` and ``replacement`` set to the anonymized DICOM value;
-``replace_entities`` always writes ``replacement`` when set (both blank and synth).
+Product labels: FIRST_NAME, LAST_NAME, LOCATION, ID,
+PHONE, DATE, EMAIL. Model spans are returned exactly as classified
 
 Public API
 ----------
-``Entity``
-    One PHI span: ``label`` plus ``start``/``end`` into the source string.
-    Optional ``replacement`` for metadata PHI (anonymized DICOM value).
+SCORED_LABELS
+    Scored labels.
 
-``detect_entities(text, *, locale=\"en_US\")``
-    Run the model on ``text`` → ``list[Entity]`` (offsets into ``text``).
+SUPPORTED_DETECT_LOCALES
+    Supported detect locales.
 
-``detect_entities_in_segments(segments, *, locale=\"en_US\", max_chars=…)``
-    Join field segments into chunks (breaks only on field boundaries), run
-    NER per chunk; return per-segment entities with offsets into each field.
+ReplaceMode
+    Replacemode.
 
-``replace_entities(text, entities=None, *, mode=\"blank\", …)``
-    Replace spans right-to-left → ``(new_text, entities_used)``.
-    If ``entities`` is omitted, runs ``detect_entities`` first.
-    Spans with ``Entity.replacement`` always write that string; other spans
-    blank (``mode=\"blank\"``) or synthesize (``mode=\"synth\"``).
+REPLACE_MODE_VALUES
+    Replace mode values.
 
-``detect_locale_supported(locale)``
-    Whether ``locale`` has a supported detect pack (currently ``en_US``).
+SEGMENT_SEP
+    Segment sep (default '\n\x1e\n').
 
-Constants: ``SCORED_LABELS``, ``SUPPORTED_DETECT_LOCALES``, ``ReplaceMode``,
-``REPLACE_MODE_VALUES``, ``SEGMENT_SEP``.
+Entity
+    One PHI span: product label plus character offsets into the source string.
 
-Model weights live in ``ner.cache``; synthetic pools in ``ner.synthetic_phi``.
+detect_entities(text: str, *, locale: str='en_US') -> list[Entity]
+    Run OpenMed token-classification on text.
+
+detect_entities_in_segments(segments: Sequence[str], *, locale: str='en_US', max_chars: int=_DEFAULT_SEGMENT_MAX_CHARS, scan_fn: Callable[[str], list[Entity]] | None=None) -> list[list[Entity]]
+    Run a text PHI scanner on **chunks of whole fields**.
+
+replace_entities(text: str, entities: Sequence[Entity] | None=None, *, mode: ReplaceMode='blank', locale: str='en_US', project_id: str='default', anon_ptid: str='ANON0000') -> tuple[str, list[Entity]]
+    Replace PHI spans in text right-to-left.
+
+detect_locale_supported(locale: str) -> bool
+    Return whether locale has a supported OpenMed detect pack.
 """
-
-from __future__ import annotations
-
 import logging
 import re
 from collections.abc import Callable, Sequence
@@ -62,7 +60,8 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 SCORED_LABELS = (
-    "NAME",
+    "FIRST_NAME",
+    "LAST_NAME",
     "LOCATION",
     "ID",
     "PHONE",
@@ -82,21 +81,12 @@ _DEFAULT_SEGMENT_MAX_CHARS = 1600
 
 # Map OpenMed / HF entity_group strings onto product labels (model decides; no regex).
 _TO_SCORED: dict[str, str] = {
-    "PERSON": "NAME",
-    "PER": "NAME",
-    "PATIENT": "NAME",
-    "DOCTOR": "NAME",
-    "NAME": "NAME",
-    "PATIENTNAME": "NAME",
-    "FIRSTNAME": "NAME",
-    "FIRST_NAME": "NAME",
-    "LASTNAME": "NAME",
-    "LAST_NAME": "NAME",
-    "MIDDLENAME": "NAME",
-    "MIDDLE_NAME": "NAME",
-    "USERNAME": "NAME",
-    "USER_NAME": "NAME",
-    "COMPANY_NAME": "NAME",
+    "FIRSTNAME": "FIRST_NAME",
+    "FIRST_NAME": "FIRST_NAME",
+    "LASTNAME": "LAST_NAME",
+    "LAST_NAME": "LAST_NAME",
+    "USERNAME": "ID",
+    "USER_NAME": "ID",
     "DATE": "DATE",
     "DATE_TIME": "DATE",
     "AGE": "DATE",
@@ -170,15 +160,15 @@ _PIPE_ERROR: str | None = None
 
 @dataclass(frozen=True, slots=True)
 class Entity:
-    """One PHI span: product ``label`` plus character offsets into the source string.
+    """One PHI span: product label plus character offsets into the source string.
 
-    ``score`` is the model's softmax confidence for ``raw_label`` (fine-grained HF
-    class), not for the mapped product ``label``. No score threshold is applied —
-    see module README. UI hover shows ``label`` only.
+    score is the model's softmax confidence for raw_label (fine-grained HF
+    class), not for the mapped product label. No score threshold is applied —
+    see module README. UI hover shows label only.
 
-    ``replacement``: when set (metadata PHI tagged with a DICOM keyword as
-    ``label``), ``replace_entities`` always writes this string — the anonymized
-    DICOM value — instead of blanking or ``generate_synthetic_phi``.
+    replacement: when set (metadata PHI tagged with a DICOM keyword as
+    label), replace_entities always writes this string — the anonymized
+    DICOM value — instead of blanking or generate_synthetic_phi.
     """
 
     label: str
@@ -190,13 +180,13 @@ class Entity:
 
     def text_of(self, source: str) -> str:
         """
-        Return the substring of ``source`` covered by this entity.
+        Return the substring of source covered by this entity.
 
         Args:
-            source: Full source string into which ``start``/``end`` index.
+            source: Full source string into which start/end index.
 
         Returns:
-            Slice ``source[start:end]``.
+            Slice source[start:end].
         """
         return source[self.start : self.end]
 
@@ -205,65 +195,69 @@ class Entity:
         Serialize this entity to a plain dict.
 
         Returns:
-            Mapping of field names to values (via ``dataclasses.asdict``).
+            Mapping of field names to values (via dataclasses.asdict).
         """
         return asdict(self)
 
 
 def detect_entities(text: str, *, locale: str = "en_US") -> list[Entity]:
     """
-    Run OpenMed token-classification on ``text``.
+    Run OpenMed token-classification on text.
 
-    Product-labeled entities with ``start``/``end`` into ``text``. No lexicon,
-    phone-regex, or other post-filters — only the model (plus adjacent same-label
-    merge).
+    Product-labeled entities with start/end into text. No lexicon,
+    phone-regex, merging, or other post-filters — the model's spans are
+    returned exactly as classified (label mapping only).
 
-    Logging: **INFO** = I/O traces (``ner: input text``, ``ner: tagged result``);
-    **DEBUG** = internal pipeline steps (raw spans, label map, merge).
+    Logging: **INFO** traces the key processing steps in order —
+    step 1/4 input, step 2/4 model raw spans, step 3/4 label map
+    (kept + dropped with reasons), step 4/4 tagged result.
 
     Args:
         text: Source unicode to scan.
-        locale: NER locale pack (default ``en_US``).
+        locale: NER locale pack (default en_US).
 
     Returns:
-        List of ``Entity`` spans (may be empty if models missing or text blank).
+        List of Entity spans (may be empty if models missing or text blank).
     """
     body = str(text or "")
-    logger.debug("ner: detect start locale=%s chars=%d", locale, len(body))
-    logger.info("ner: input text\n%s", _trace(body))
+    logger.info(f"ner: step 1/4 input locale={locale} chars={len(body)}\n{_trace(body)}")
 
     if not body.strip():
-        logger.debug("ner: skip — empty / whitespace-only text")
-        logger.info("ner: tagged result (no entities)\n%s", _trace(""))
+        logger.info("ner: skip — empty / whitespace-only text (steps 2-4 not run)")
+        logger.info(f"ner: step 4/4 tagged result (no entities)\n{_trace('')}")
         return []
     if not detect_locale_supported(locale):
-        logger.warning(
-            "ner: skip — locale %r not in %s",
-            locale,
-            sorted(SUPPORTED_DETECT_LOCALES),
-        )
-        logger.info("ner: tagged result (no entities)\n%s", _trace(""))
+        logger.warning(f"ner: skip — locale {locale!r} not in {sorted(SUPPORTED_DETECT_LOCALES)}")
+        logger.info(f"ner: step 4/4 tagged result (no entities)\n{_trace('')}")
         return []
     if not ner_ready():
         logger.warning("ner: skip — OpenMed weights not ready (download / probe)")
-        logger.info("ner: tagged result (no entities)\n%s", _trace(""))
+        logger.info(f"ner: step 4/4 tagged result (no entities)\n{_trace('')}")
         return []
 
-    logger.debug("ner: run OpenMed token-classification pipeline")
     raw_ents = _run_pipeline(body, locale=locale)
-    logger.debug(
-        "ner: model raw spans count=%d\n%s",
-        len(raw_ents),
-        pformat(_raw_ents_for_log(raw_ents), sort_dicts=False),
+    logger.info(
+        f"ner: step 2/4 model raw spans count={len(raw_ents)}\n"
+        f"{pformat(_raw_ents_for_log(raw_ents, body), sort_dicts=False)}"
     )
 
     mapped: list[Entity] = []
-    dropped = 0
+    dropped_rows: list[dict[str, Any]] = []
     for ent in raw_ents:
         raw = str(ent.get("entity_group") or ent.get("entity") or "")
         scored = _to_scored_label(raw)
         if scored is None or scored not in SCORED_LABELS:
-            dropped += 1
+            start, end = int(ent["start"]), int(ent["end"])
+            dropped_rows.append(
+                {
+                    "text": body[start:end],
+                    "start": start,
+                    "end": end,
+                    "score": _score_for_log(float(ent.get("score", 0.5))),
+                    "raw_label": raw,
+                    "reason": f"no product label for raw label {raw!r}",
+                }
+            )
             continue
         mapped.append(
             Entity(
@@ -274,30 +268,16 @@ def detect_entities(text: str, *, locale: str = "en_US") -> list[Entity]:
                 raw_label=raw,
             )
         )
-    logger.debug(
-        "ner: map HF labels → product labels "
-        "(kept=%d dropped=%d; labels=%s)\n%s",
-        len(mapped),
-        dropped,
-        ", ".join(SCORED_LABELS),
-        pformat(_entities_for_log(mapped, body), sort_dicts=False),
-    )
-
-    entities = _merge_adjacent(body, mapped)
-    logger.debug(
-        "ner: merge adjacent same-label spans (%d → %d)\n%s",
-        len(mapped),
-        len(entities),
-        pformat(_entities_for_log(entities, body), sort_dicts=False),
-    )
-
-    tagged = _format_entities_xml(body, entities)
     logger.info(
-        "ner: tagged result entities=%d\n%s",
-        len(entities),
-        _trace(tagged),
+        f"ner: step 3/4 label map kept={len(mapped)} dropped={len(dropped_rows)} "
+        f"(product labels={', '.join(SCORED_LABELS)})\n"
+        f"kept={pformat(_entities_for_log(mapped, body), sort_dicts=False)}\n"
+        f"dropped={pformat(dropped_rows, sort_dicts=False)}"
     )
-    return entities
+
+    tagged = _format_entities_xml(body, mapped)
+    logger.info(f"ner: step 4/4 tagged result entities={len(mapped)}\n{_trace(tagged)}")
+    return mapped
 
 
 def detect_entities_in_segments(
@@ -310,20 +290,20 @@ def detect_entities_in_segments(
     """
     Run a text PHI scanner on **chunks of whole fields**.
 
-    Joins non-empty segments with ``SEGMENT_SEP``, packs into chunks up to
-    ``max_chars``, and maps spans back to per-field offsets. Chunk boundaries
+    Joins non-empty segments with SEGMENT_SEP, packs into chunks up to
+    max_chars, and maps spans back to per-field offsets. Chunk boundaries
     are always field boundaries (a field is never split mid-value). Spans that
     cross a field separator are dropped. Empty / whitespace-only segments yield
-    ``[]``.
+    [].
 
-    Default ``scan_fn`` is ``detect_entities`` (NER only). Report View / Metadata
-    pass ``detect_phi_in_text`` so study-PHI matching + NER share one join pass.
+    Default scan_fn is detect_entities (NER only). Report View / Metadata
+    pass detect_phi_in_text so study-PHI matching + NER share one join pass.
 
     Args:
         segments: Source strings (order preserved in the return value).
-        locale: NER locale pack (used when ``scan_fn`` is omitted).
+        locale: NER locale pack (used when scan_fn is omitted).
         max_chars: Soft cap per chunk (model context window); splits only between fields.
-        scan_fn: ``text → list[Entity]`` with offsets into that text.
+        scan_fn: text → list[Entity] with offsets into that text.
 
     Returns:
         Parallel list: entities for each input segment (offsets into that segment).
@@ -413,23 +393,23 @@ def replace_entities(
     anon_ptid: str = "ANON0000",
 ) -> tuple[str, list[Entity]]:
     """
-    Replace PHI spans in ``text`` right-to-left.
+    Replace PHI spans in text right-to-left.
 
-    If ``entities`` is omitted, runs ``detect_entities`` first.
-    Spans with ``Entity.replacement`` (report metadata PHI) always write that
-    string. Remaining spans: ``blank`` clears; ``synth`` uses
-    ``generate_synthetic_phi`` and offline pools.
+    If entities is omitted, runs detect_entities first.
+    Spans with Entity.replacement (report metadata PHI) always write that
+    string. Remaining spans: blank clears; synth uses
+    generate_synthetic_phi and offline pools.
 
     Args:
         text: Source unicode containing PHI spans.
-        entities: Spans to replace; ``None`` triggers detect first.
-        mode: ``blank`` or ``synth`` (NER spans only; metadata uses ``replacement``).
+        entities: Spans to replace; None triggers detect first.
+        mode: blank or synth (NER spans only; metadata uses replacement).
         locale: Locale for detect (if needed) and synthetic pools.
         project_id: Seed namespace for synthetic values.
         anon_ptid: Anonymized patient id seed for synthetic values.
 
     Returns:
-        ``(new_text, entities_used)``.
+        (new_text, entities_used).
     """
     body = str(text or "")
     detect_first = entities is None
@@ -500,13 +480,13 @@ def replace_entities(
 
 def detect_locale_supported(locale: str) -> bool:
     """
-    Return whether ``locale`` has a supported OpenMed detect pack.
+    Return whether locale has a supported OpenMed detect pack.
 
     Args:
-        locale: Locale id (e.g. ``en_US``).
+        locale: Locale id (e.g. en_US).
 
     Returns:
-        True when ``locale`` is in ``SUPPORTED_DETECT_LOCALES``.
+        True when locale is in SUPPORTED_DETECT_LOCALES.
     """
     return locale in SUPPORTED_DETECT_LOCALES
 
@@ -528,7 +508,7 @@ def _score_for_log(score: float) -> float:
     Round a model score to two significant digits for log output.
 
     Args:
-        score: Raw confidence in ``[0, 1]`` (or nearby).
+        score: Raw confidence in [0, 1] (or nearby).
 
     Returns:
         Float with two significant digits.
@@ -536,32 +516,40 @@ def _score_for_log(score: float) -> float:
     return float(f"{float(score):.2g}")
 
 
-def _raw_ents_for_log(raw_ents: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+def _raw_ents_for_log(
+    raw_ents: Sequence[dict[str, Any]], source: str = ""
+) -> list[dict[str, Any]]:
     """
-    Copy pipeline dicts for logging with scores rounded to two significant digits.
+    Copy pipeline dicts for logging, adding the covered source text.
 
     Args:
         raw_ents: Raw Hugging Face token-classification entity dicts.
+        source: Source unicode the span offsets index into (text is only
+            added when both offsets are valid into it).
 
     Returns:
-        Shallow copies suitable for ``pformat`` (originals unchanged).
+        Shallow copies suitable for pformat (originals unchanged), with
+        scores rounded to two significant digits.
     """
     out: list[dict[str, Any]] = []
     for ent in raw_ents:
         row = dict(ent)
         if "score" in row:
             row["score"] = _score_for_log(row["score"])
+        start, end = ent.get("start"), ent.get("end")
+        if source and isinstance(start, int) and isinstance(end, int) and 0 <= start <= end <= len(source):
+            row["text"] = source[start:end]
         out.append(row)
     return out
 
 
 def _entities_for_log(entities: Sequence[Entity], source: str) -> list[dict[str, Any]]:
     """
-    Serialize product entities for ``pformat`` logging (span text + rounded score).
+    Serialize product entities for pformat logging (span text + rounded score).
 
     Args:
-        entities: Product ``Entity`` spans.
-        source: Source unicode for ``text`` slices.
+        entities: Product Entity spans.
+        source: Source unicode for text slices.
 
     Returns:
         List of plain dicts for readable logs.
@@ -591,7 +579,7 @@ def _format_entities_xml(text: str, entities: Sequence[Entity]) -> str:
         entities: Candidate spans (may overlap).
 
     Returns:
-        ``text`` with ``<LABEL>…</LABEL>`` wrappers around chosen spans.
+        text with <LABEL>…</LABEL> wrappers around chosen spans.
     """
     if not text:
         return ""
@@ -623,10 +611,10 @@ def _to_scored_label(raw: str) -> str | None:
     Map a raw HF / OpenMed entity group string onto a product label.
 
     Args:
-        raw: Model ``entity_group`` or ``entity`` string (may include B-/I- prefix).
+        raw: Model entity_group or entity string (may include B-/I- prefix).
 
     Returns:
-        Product label in ``SCORED_LABELS``, or ``None`` if unmapped / dropped (e.g. TIME).
+        Product label in SCORED_LABELS, or None if unmapped / dropped (e.g. TIME).
     """
     key = raw.strip().upper().replace(" ", "_").replace("-", "_")
     if len(key) > 2 and key[1] in {"_", "-"} and key[0] in {"B", "I", "E", "S"}:
@@ -638,7 +626,7 @@ def _to_scored_label(raw: str) -> str | None:
 
 def _run_pipeline(text: str, *, locale: str) -> list[dict[str, Any]]:
     """
-    Invoke the token-classification pipeline on ``text``.
+    Invoke the token-classification pipeline on text.
 
     Args:
         text: Non-empty source unicode.
@@ -660,13 +648,13 @@ def _run_pipeline(text: str, *, locale: str) -> list[dict[str, Any]]:
 
 def _ensure_pipeline(locale: str):
     """
-    Load or reuse the global token-classification pipeline for ``locale``.
+    Load or reuse the global token-classification pipeline for locale.
 
     Args:
         locale: Locale used to resolve the model id / cache path.
 
     Returns:
-        Hugging Face pipeline instance, or ``None`` if unavailable.
+        Hugging Face pipeline instance, or None if unavailable.
     """
     global _PIPE, _PIPE_MODEL_ID, _PIPE_ERROR
     model_id = resolve_model_id(locale)
@@ -685,49 +673,3 @@ def _ensure_pipeline(locale: str):
     return _PIPE
 
 
-def _name_initial_gap(gap: str) -> bool:
-    """
-    Return whether ``gap`` is a short name-initial separator (whitespace / dots).
-
-    Args:
-        gap: Substring between two adjacent entity spans.
-
-    Returns:
-        True when the gap should not break a NAME merge.
-    """
-    return bool(re.fullmatch(r"[\s.]*", gap)) and len(gap) <= 4
-
-
-def _merge_adjacent(text: str, entities: list[Entity]) -> list[Entity]:
-    """
-    Join same-label spans separated by short whitespace or ``N. Surname`` gaps.
-
-    Args:
-        text: Source unicode (for gap inspection).
-        entities: Spans before merge.
-
-    Returns:
-        Merged entity list in left-to-right order.
-    """
-    if not entities:
-        return []
-    ordered = sorted(entities, key=lambda e: (e.start, e.end))
-    out = [ordered[0]]
-    for ent in ordered[1:]:
-        prev = out[-1]
-        gap = text[prev.end : ent.start]
-        same = ent.label == prev.label
-        contiguous = gap == ""
-        soft_gap = gap.strip() == "" and len(gap) <= 3
-        name_gap = same and prev.label == "NAME" and _name_initial_gap(gap)
-        if same and (contiguous or soft_gap or name_gap):
-            out[-1] = Entity(
-                label=prev.label,
-                start=prev.start,
-                end=ent.end,
-                score=max(prev.score, ent.score),
-                raw_label=prev.raw_label or ent.raw_label,
-            )
-        else:
-            out.append(ent)
-    return out

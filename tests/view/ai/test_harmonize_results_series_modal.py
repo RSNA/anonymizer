@@ -1,7 +1,5 @@
 """Harmonize dialog is Series View–scoped (no app-wide grab/wait_window)."""
 
-from __future__ import annotations
-
 import contextlib
 import tkinter as tk
 from pathlib import Path

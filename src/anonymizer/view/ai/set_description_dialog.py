@@ -1,7 +1,5 @@
 """Modal to pick one RadLex/LOINC description and apply it to a Dataset multi-select."""
 
-from __future__ import annotations
-
 import contextlib
 import logging
 import tkinter as tk
@@ -146,8 +144,8 @@ class SetDescriptionDialog(AppToplevel):
     Startup conditions (one chrome, one compose entry, one sizer):
 
     * **List** — harmonized (or LOINC): filterable choices; optional Compose RadLex…
-    * **Compose closest** — Compose RadLex… button: ``full_vocab=False``, all fields
-    * **Compose stepwise** — unharmonized auto-open: ``full_vocab=True``, reveal L→R;
+    * **Compose closest** — Compose RadLex… button: full_vocab=False, all fields
+    * **Compose stepwise** — unharmonized auto-open: full_vocab=True, reveal L→R;
       after Body/Plane/Contrast unlock remainder with "—"; blank hides Closest toggle
     """
 
@@ -214,7 +212,7 @@ class SetDescriptionDialog(AppToplevel):
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
 
-        # Single chrome for every startup; compose always enters via ``_enter_compose_mode``.
+        # Single chrome for every startup; compose always enters via _enter_compose_mode.
         self._create_widgets(hint=hint, initial=initial)
         self.update_idletasks()
         self.deiconify()
@@ -222,7 +220,7 @@ class SetDescriptionDialog(AppToplevel):
         self.lift()
         self.grab_set()
         if self._start_in_compose:
-            # Same entry as Compose RadLex…; ``full_vocab`` selects closest vs stepwise.
+            # Same entry as Compose RadLex…; full_vocab selects closest vs stepwise.
             self._enter_compose_mode(full_vocab=self._compose_full_vocab_on_open)
             self._ok_button.focus()
         else:
@@ -425,7 +423,7 @@ class SetDescriptionDialog(AppToplevel):
             self._vocab_button.configure(text=label)
 
     def _enter_compose_mode(self, *, full_vocab: bool = False) -> None:
-        """Enter compose. ``full_vocab=False`` = Compose RadLex…; ``True`` = stepwise all codes."""
+        """Enter compose. full_vocab=False = Compose RadLex…; True = stepwise all codes."""
         if self._compose_spec is None or self._compose_mode:
             return
         try:
@@ -489,7 +487,7 @@ class SetDescriptionDialog(AppToplevel):
                 bottom = max(bottom, y + h)
                 right = max(right, x + w)
 
-        # Inner grid pads around footer/hint + outer pack padx/pady on ``_frame``.
+        # Inner grid pads around footer/hint + outer pack padx/pady on _frame.
         inner_w = max(right + pad, content_w + 2 * pad)
         inner_h = max(bottom + pad, 120)
         width = max(inner_w + 2 * pad, 240)
@@ -501,7 +499,7 @@ class SetDescriptionDialog(AppToplevel):
 
     @staticmethod
     def _compose_list_width(codes: list[str]) -> int:
-        """Listbox ``width`` from measured text pixels (avoids oversized char cells)."""
+        """Listbox width from measured text pixels (avoids oversized char cells)."""
 
         font = tkfont.nametofont("TkTextFont")
         zero = max(1, int(font.measure("0")))
@@ -586,7 +584,7 @@ class SetDescriptionDialog(AppToplevel):
             self._bind_compose_code_tooltip(lb, field_key)
 
     def _bind_compose_code_tooltip(self, listbox: tk.Listbox, field_key: str) -> None:
-        """Hover gloss for abbreviated Playbook codes (``CODE — full name``)."""
+        """Hover gloss for abbreviated Playbook codes (CODE — full name)."""
 
         def _text_for_position(event: tk.Event) -> str | None:
             try:

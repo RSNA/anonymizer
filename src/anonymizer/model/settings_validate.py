@@ -1,15 +1,14 @@
 """Project settings limits and validators (GUI + MCP).
 
 Reject invalid values (do not clamp). Limits live at the top of this module;
-``ux_fields`` imports the network address constants for keystroke widgets.
+ux_fields imports the network address constants for keystroke widgets.
 """
-
-from __future__ import annotations
 
 import string
 from typing import Any
 
-from anonymizer.model.project import AnonymizationPolicy, DICOMNode, NetworkTimeouts, ProjectModel
+from anonymizer.model.project import DICOMNode, NetworkTimeouts, ProjectModel
+from anonymizer.utils.dicom import DeidMethodCode
 from anonymizer.utils.modalities import Modality, get_modality_catalog
 from anonymizer.utils.network import is_valid_ip
 from anonymizer.utils.translate import code_to_language, language_to_code
@@ -104,18 +103,37 @@ def validate_language_code(value: str) -> str:
     return code
 
 
-def validate_anonymization_policy(value: str | None) -> str:
-    """Return normalized policy value; missing/empty → strict."""
+def validate_confidentiality_options(value: object) -> list[int]:
+    """
+    Return normalized de-identification option codes; missing → Basic Profile.
 
-    text = (value or "").strip().lower()
-    if not text:
-        return AnonymizationPolicy.STRICT.value
-    allowed = {p.value for p in AnonymizationPolicy}
-    if text not in allowed:
+    Args:
+        value: Iterable of DICOM CID 7050 code values (ints or int strings).
+
+    Returns:
+        Sorted unique code values, always including the Basic Profile code.
+
+    Raises:
+        SettingsValidationError: When a code is not a known DeidMethodCode.
+    """
+    if value is None:
+        return [int(DeidMethodCode.BASIC)]
+    codes: set[int] = {int(DeidMethodCode.BASIC)}
+    try:
+        items = list(value)  # type: ignore[arg-type]
+    except TypeError as exc:
         raise SettingsValidationError(
-            f"anonymization_policy must be one of {sorted(allowed)} (got {value!r})"
-        )
-    return text
+            f"confidentiality_options must be a list of code values (got {value!r})"
+        ) from exc
+    for item in items:
+        try:
+            codes.add(int(DeidMethodCode(int(item))))  # type: ignore[arg-type]
+        except (TypeError, ValueError) as exc:
+            allowed = sorted(int(code) for code in DeidMethodCode)
+            raise SettingsValidationError(
+                f"confidentiality_options codes must be in {allowed} (got {item!r})"
+            ) from exc
+    return sorted(codes)
 
 
 def validate_ip(value: str, *, field: str = "ip") -> str:
@@ -181,7 +199,7 @@ def validate_network_timeouts(
     network: int | float | None = None,
     base: NetworkTimeouts | None = None,
 ) -> NetworkTimeouts:
-    """Validate provided timeout fields; fill omitted from ``base`` or factory defaults."""
+    """Validate provided timeout fields; fill omitted from base or factory defaults."""
 
     src = base if base is not None else ProjectModel.default_timeouts()
     tcp = (
@@ -231,7 +249,7 @@ def validate_local_scp(
     aet: str | None = None,
     base: DICOMNode | None = None,
 ) -> DICOMNode:
-    """Validate local SCP fields; fill omitted from ``base`` or factory default."""
+    """Validate local SCP fields; fill omitted from base or factory default."""
 
     src = base if base is not None else ProjectModel.default_local_server()
     resolved_ip = validate_ip(ip if ip is not None else src.ip)
@@ -321,16 +339,16 @@ def settings_defaults_payload() -> dict[str, Any]:
             "language_code": model.language_code,
             "site_id": "(auto-generated at create if omitted)",
             "uid_root": model.uid_root,
-            "anonymization_policy": model.anonymization_policy.value
-            if hasattr(model.anonymization_policy, "value")
-            else str(model.anonymization_policy),
+            "confidentiality_options": sorted(
+                int(code) for code in model.confidentiality_options
+            ),
             "modalities": list(model.modalities),
             "transfer_syntaxes": list(model.transfer_syntaxes),
             "scp": {"ip": scp.ip, "port": scp.port, "aet": scp.aet},
             "network_timeouts": timeouts_dict(model.network_timeouts),
         },
         "language_codes": sorted(language_to_code.values()),
-        "anonymization_policies": ["strict", "clinical"],
+        "confidentiality_option_codes": sorted(int(code) for code in DeidMethodCode),
         "languages": {code: name for code, name in code_to_language.items()},
         "ranges": {
             "project_name": f"{PROJECT_NAME_MIN_CHARS}–{PROJECT_NAME_MAX_CHARS} chars; letters/digits/space/-/.",

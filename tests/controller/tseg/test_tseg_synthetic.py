@@ -1,7 +1,5 @@
 """Synthetic CT DICOM integration tests for the tseg module (no TotalSegmentator inference)."""
 
-from __future__ import annotations
-
 import shutil
 from pathlib import Path
 from unittest.mock import MagicMock, patch

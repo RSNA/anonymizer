@@ -3,8 +3,6 @@
 Model and controller must not import this module.
 """
 
-from __future__ import annotations
-
 import re
 
 from anonymizer.utils.modalities import (
@@ -120,7 +118,7 @@ def extract_modality_tokens_from_text(text: str) -> list[str]:
         text: Free-text modalities phrase.
 
     Returns:
-        Tokens such as ``defaults`` or DICOM codes.
+        Tokens such as defaults or DICOM codes.
     """
     raw = str(text or "").strip()
     if not raw:
@@ -135,7 +133,7 @@ def extract_modality_tokens_from_text(text: str) -> list[str]:
 
 
 def _coerce_modality_token_list(modalities: list[str] | str | None) -> list[str] | None:
-    """Normalize list/str input into raw tokens (may still include ``defaults``)."""
+    """Normalize list/str input into raw tokens (may still include defaults)."""
     if modalities is None:
         return None
     if isinstance(modalities, str):
@@ -178,11 +176,11 @@ def resolve_project_modalities(
     default_modalities: list[str] | None = None,
 ) -> list[str] | None:
     """
-    Resolve create/open ``modalities`` to DICOM codes.
+    Resolve create/open modalities to DICOM codes.
 
     Args:
         modalities: Codes, aliases, comma-separated string, or natural language.
-        default_modalities: Expansion for the ``defaults`` token.
+        default_modalities: Expansion for the defaults token.
 
     Returns:
         Resolved DICOM modality code strings, or None if input empty.

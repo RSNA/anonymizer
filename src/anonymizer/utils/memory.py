@@ -1,7 +1,52 @@
-"""Process memory logging helpers."""
+"""Memory helpers for the anonymizer.
 
-from __future__ import annotations
+Public API
+----------
+MemoryPressure
+    Memorypressure.
 
+BATCH_MEMORY_WARN_AVAILABLE_MB
+    Batch memory warn available mb (3000).
+
+BATCH_MEMORY_ABORT_AVAILABLE_MB
+    Batch memory abort available mb (1024).
+
+MemorySnapshot
+    MemorySnapshot type.
+
+BatchResourceEstimate
+    BatchResourceEstimate type.
+
+format_array_memory(array: np.ndarray | None) -> str
+    Format array memory.
+
+capture_memory_snapshot() -> MemorySnapshot | None
+    Return current process RSS and system memory usage, or None when psutil is unavailable.
+
+format_memory_snapshot_label(snapshot: MemorySnapshot) -> str
+    User-facing one-line memory summary for batch dialog.
+
+estimate_batch_resources(*, includes_pixel_phi: bool, includes_harmonize: bool, includes_face_blur: bool) -> BatchResourceEstimate
+    Heuristic minimum available system memory (MB) for one AI batch series.
+
+MemoryGuard
+    Cooperative low-memory guard for batch processing (series-boundary checks).
+
+log_process_memory(stage: str, *, array: np.ndarray | None=None, extra: str='', log: logging.Logger | None=None) -> float | None
+    Log process RSS and optional NumPy array size; return RSS in MB when available.
+
+is_main_thread() -> bool
+    Is main thread.
+
+collect_garbage_safe(*, generations: int=1) -> None
+    Run gc.collect only on the main thread.
+
+release_accelerator_caches() -> None
+    Release PyTorch CUDA/MPS allocator caches without invoking Python GC.
+
+schedule_collect_garbage_on_tk(widget, *, generations: int=1) -> None
+    Schedule a main-thread GC pass after the current Tk event (safe after dialog teardown).
+"""
 import contextlib
 import gc
 import logging
@@ -158,7 +203,7 @@ def is_main_thread() -> bool:
 
 def collect_garbage_safe(*, generations: int = 1) -> None:
     """
-    Run ``gc.collect`` only on the main thread.
+    Run gc.collect only on the main thread.
 
     Tk / PIL.ImageTk finalizers must not run on worker threads (macOS segfault risk).
     """

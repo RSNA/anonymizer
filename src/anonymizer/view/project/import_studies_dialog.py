@@ -5,7 +5,9 @@ from typing import List
 
 import customtkinter as ctk
 
-from anonymizer.controller.project import MoveStudiesRequest, ProjectController, StudyUIDHierarchy
+from anonymizer.controller.dicom.hierarchies import StudyUIDHierarchy
+from anonymizer.controller.dicom.requests import MoveStudiesRequest
+from anonymizer.controller.project import ProjectController
 from anonymizer.utils.translate import _
 from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel

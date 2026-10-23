@@ -1,6 +1,4 @@
-"""Contract locks: setup wizard help, import gate, anonymization_policy, sibling tools."""
-
-from __future__ import annotations
+"""Contract locks: setup wizard help, import gate, confidentiality_options, sibling tools."""
 
 from pathlib import Path
 
@@ -18,7 +16,7 @@ from anonymizer.mcp.api.schemas import (
 from anonymizer.mcp.instructions import load_behavior_instructions, load_server_instructions
 from anonymizer.mcp.ops import project_settings_defaults
 from anonymizer.mcp.session import SESSION
-from anonymizer.model.project import AnonymizationPolicy, ProjectModel
+from anonymizer.model.project import RETAIN_OPTIONS, ProjectModel
 from anonymizer.utils.translate import set_language_code
 from tests.mcp.project_create import confirm_create
 
@@ -36,7 +34,7 @@ _REQUIRED_HELP = frozenset(
     {
         "usage",
         "configuration_confirmation",
-        "anonymization_policy",
+        "confidentiality_options",
         "modalities",
         "transfer_syntaxes",
         "local_scp",
@@ -78,7 +76,7 @@ def test_instructions_confirmation_flow():
     assert "confirm=true" in text
     assert "import_plan" not in text
     assert "setup_checklist" not in text
-    assert "anonymization_policy" in text
+    assert "confidentiality_options" in text
     assert "One tool per reply" in text or "one tool per" in text.lower()
     assert "DIMSE" in text and "DICOMweb" in text
     assert "do not assume DICOMweb" in text.lower() or "Do not assume DICOMweb" in text
@@ -95,14 +93,14 @@ def test_instructions_confirmation_flow():
         assert name in text
 
 
-def test_create_with_clinical_policy():
+def test_create_with_clinical_options():
     result = confirm_create(
         mcp_tools.create_project,
         project_name="ClinicalPol",
-        anonymization_policy="clinical",
+        confidentiality_options=sorted(int(c) for c in RETAIN_OPTIONS),
     )
     assert result["ok"] is True
-    assert SESSION.controller.model.anonymization_policy is AnonymizationPolicy.CLINICAL
+    assert SESSION.controller.model.confidentiality_options == RETAIN_OPTIONS
     assert "import_plan" not in result
 
 

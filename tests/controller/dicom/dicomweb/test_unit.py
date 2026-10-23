@@ -1,7 +1,5 @@
 """Unit tests for controller.dicom.dicomweb (mocked HTTP)."""
 
-from __future__ import annotations
-
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 

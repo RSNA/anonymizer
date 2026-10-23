@@ -13,8 +13,6 @@ Requires TotalSegmentator (``tseg`` extra) and viz dependencies. Face mask is re
     uv run python -m prototyping.ffr.face /path/to/ct_head_series
 """
 
-from __future__ import annotations
-
 import logging
 import sys
 from pathlib import Path

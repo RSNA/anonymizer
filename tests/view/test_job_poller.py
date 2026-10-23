@@ -1,7 +1,5 @@
 """Tests for JobPoller and start_background_job."""
 
-from __future__ import annotations
-
 import threading
 import time
 from unittest.mock import MagicMock

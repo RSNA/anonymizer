@@ -1,7 +1,5 @@
 """Unit tests for extractor + radiology guard (prototyping; not in CI)."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest

@@ -124,6 +124,9 @@ midi-b = [
 target-version = "py311"
 line-length = 120
 
+# Note: Ruff has no rule that forbids defining `__all__`. Product code ban is
+# enforced by tests/controller/infra/test_mvc_import_guards.py and .cursor/rules/main.mdc.
+# Intentional package re-exports use `from .mod import Name as Name` (keeps F401 clean).
 [tool.ruff.lint]
 select = [
     "E",
@@ -167,6 +170,6 @@ markers = [
     "mcp_e2e: live HTTP MCP server e2e (opt-in; excluded from default)",
     "dicom_integration: managed Orthanc PACS (DIMSE + DICOMweb); included in default suite; skip with -m 'not dicom_integration'",
     "rsna_local_data: requires local RSNA_TEST_DATA directory (skipped when absent)",
-    "view_dev: local Series View layout tests against developer MRI_TEST fixtures (excluded from default; not in testpaths)",
+    "view_dev: Series View layout/startup design-time tests (Tk display; excluded from default; not in testpaths)",
     "prototyping: tests for src/prototyping scripts",
 ]

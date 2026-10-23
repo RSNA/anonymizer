@@ -169,7 +169,7 @@ Open a series as described above ([Right-click a series → Series View](#right-
 
 ### Metadata (DICOM tags)
 
-Import already replaces or removes patient identifiers in the file labels. **Metadata** lets you **spot-check** the tag tree for the **current image** — useful when a study still looks “too personal” in free-text fields, or when you use the **Clinical** anonymization policy (which keeps more report-oriented text).
+Import already replaces or removes patient identifiers in the file labels. **Metadata** lets you **spot-check** the tag tree for the **current image** — useful when a study still looks “too personal” in free-text fields, or when your project keeps more report-oriented text (for example the **Retain** preset).
 
 This is **not** the same as burned-in text on the picture. Pixel cleanup is [Remove Pixel PHI](../08-process/02-remove-burned-in-text/). Reports open in [Report Text Review](../08-process/02-remove-burned-in-text/#reports-and-free-text-report-text-review).
 
@@ -178,15 +178,16 @@ This is **not** the same as burned-in text on the picture. Pixel cleanup is [Rem
 1. Open a series in Series View (demo: **`davidson_cxr`**).
 2. Click **Metadata** in the Series View toolbar.
 3. Browse the tree (**Field Name**, **Tag**, **Content**). Use **Search** to narrow by field name; **Expand** / **Collapse** to open or close branches.
-4. Optional — click **Detect PHI** (needs [Embedded PHI](../03-ai-features-setup/) models). Highlighted cells use the same colors as Report Text Review (Name, Location, ID, Phone, Date, Email). Hover a highlighted cell for a short label chip. The status line summarizes counts.
-5. Click **Close** when finished.
+4. Optional — click **Detect PHI** (needs [Embedded PHI](../03-ai-features-setup/) models). The dialog opens centered on Series View, sized so field names are fully visible (up to 85% of the screen height when the tag list is long). Highlighted rows are colored with the entity color (same highlight style as Dataset View) and show their category in the Content cell (for example **[LOCATION]**); hovering Content with detected PHI shows the entity color chip (fields without PHI have no hover tooltip). Entity colors match Report Text Review (Name, Location, ID, Phone, Date, Email). The status line summarizes counts. Detection uses the same effective modality whitelist as burned-in text: whitelisted words, DICOM code values, UIDs, and dates are not sent to the model. The dialog title names the series it belongs to, and the completion status also reports private-tag UID/date fields: those are handled by the anonymizer script (UID remapping / date shifting), not scored by Detect PHI.
+5. Optional — like Report Text Review: click a highlighted field to exclude it from removal, choose **Blank** or **Synthetic**, then click **Remove PHI** / **Replace PHI**. Removal updates the tree; click **Save** to write the cleaned tags back to the current image file.
+6. Click **Close** when finished (you will be asked about unsaved changes).
 
 ![Metadata tree](shots/macos/MetadataAssessment.png)
 
 ![Metadata after Detect PHI](shots/macos/MetadataAssessment_DetectPHI.png)
 
-!!! note "View only"
-    Metadata **Detect PHI** highlights leftover identifiers for review. It does **not** rewrite tags. Tag cleanup happens at import (and via the project anonymizer script). Use Remove Pixel PHI or Report Text Review when you need to change pixels or report text.
+!!! note "Current image only"
+    Metadata removal applies to the **current image** in Series View. Use AI Batch Process when you need to clean tags across a whole series.
 
 #### What good looks like
 

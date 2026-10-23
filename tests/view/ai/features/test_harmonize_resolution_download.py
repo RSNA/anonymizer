@@ -1,7 +1,5 @@
 """AI Features: active workstation resolution drives Harmonize download need."""
 
-from __future__ import annotations
-
 from unittest.mock import patch
 
 from anonymizer.controller.ai.feature_availability import harmonize_ct_needs_download

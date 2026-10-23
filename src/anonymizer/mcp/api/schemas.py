@@ -1,10 +1,8 @@
-"""Pydantic input models — single source of truth for MCP ``inputSchema``.
+"""Pydantic input models — single source of truth for MCP inputSchema.
 
 Field descriptions and validators are what clients (and LLMs) see via
-``tools/list``. Do not duplicate these strings on handler signatures.
+tools/list. Do not duplicate these strings on handler signatures.
 """
-
-from __future__ import annotations
 
 import dataclasses
 import re
@@ -124,10 +122,11 @@ TRANSFER_SYNTAXES_DESC = (
     "Optional list of transfer-syntax UIDs from the project default set. "
     "Omit to keep factory defaults."
 )
-POLICY_DESC = (
-    "Anonymization policy: strict (default, image-focused) or clinical "
-    "(keeps more report/clinical tags; enables SR/PDF). "
-    "On an existing project, switching policy replaces the packaged anonymizer script."
+OPTIONS_DESC = (
+    "De-identification options as DICOM CID 7050 code values "
+    "(113100 Basic Profile default; e.g. add 113107 Retain Longitudinal "
+    "Modified Dates, 113111 Retain Safe Private). Basic is always included. "
+    "On an existing project, changing options recompiles the anonymizer script."
 )
 # Shown when configure_remote rejects invented keys (single source for retry hints).
 CONFIGURE_REMOTE_EXTRA_HINT = (
@@ -152,7 +151,7 @@ def _require_user_absolute_path(value: str) -> str:
 
 
 class EmptyArgs(BaseModel):
-    """Zero-argument tools: call with ``arguments: {}`` only."""
+    """Zero-argument tools: call with arguments: {} only."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -185,7 +184,7 @@ _FIELD_DESCRIPTIONS: dict[str, str] = {
     "transfer_syntaxes": TRANSFER_SYNTAXES_DESC,
     "scp": SCP_DESC,
     "network_timeouts": TIMEOUTS_DESC,
-    "anonymization_policy": POLICY_DESC,
+    "confidentiality_options": OPTIONS_DESC,
     "ip": (
         f"IPv4 address ({IP_MIN_CHARS}–{IP_MAX_CHARS} chars, digits and dots). "
         "Omit to keep current/default."
@@ -227,15 +226,15 @@ _FIELD_DESCRIPTIONS: dict[str, str] = {
 
 def _charset_pattern(charset: str) -> str:
     """
-    Build a JSON Schema pattern from a ``settings_validate`` charset.
+    Build a JSON Schema pattern from a settings_validate charset.
 
-    The core model validators in ``settings_validate`` own the allowed
+    The core model validators in settings_validate own the allowed
     characters for each settings field; deriving the schema pattern from
-    those charsets keeps ``tools/list`` in lockstep with the validation the
+    those charsets keeps tools/list in lockstep with the validation the
     server applies, instead of maintaining a parallel hand-written regex.
 
     Args:
-        charset: Allowed characters, as declared in ``settings_validate``.
+        charset: Allowed characters, as declared in settings_validate.
 
     Returns:
         Anchored character-class pattern accepting one or more charset chars.
@@ -291,7 +290,7 @@ def _model_annotation(source: type[Any], name: str) -> Any:
 
     Args:
         source: Core dataclass type.
-        name: Field name that must exist on ``source``.
+        name: Field name that must exist on source.
 
     Returns:
         The resolved Python annotation.
@@ -319,14 +318,14 @@ def _generated_field(
 
     Args:
         source: Core dataclass that owns the field.
-        name: Field name on ``source``.
+        name: Field name on source.
         required: Whether the tool projection requires the field.
         annotation: Optional transport annotation replacing the dataclass type.
         description: Optional LLM-facing field description.
         default: Default for an optional field.
 
     Returns:
-        ``(annotation, FieldInfo)`` pair suitable for ``create_model``.
+        (annotation, FieldInfo) pair suitable for create_model.
     """
     resolved = annotation if annotation is not None else _model_annotation(source, name)
     if not required:
@@ -351,7 +350,7 @@ def _generated_model(
 
     Args:
         name: Pydantic model name.
-        definitions: Mapping of field name to ``(annotation, FieldInfo)``.
+        definitions: Mapping of field name to (annotation, FieldInfo).
         base: Optional base model carrying config/validators.
 
     Returns:
@@ -401,7 +400,7 @@ def _patch_definitions(
         annotations: Optional transport annotation overrides by field name.
 
     Returns:
-        Field definitions suitable for ``create_model``.
+        Field definitions suitable for create_model.
     """
     overrides = annotations or {}
     return {
@@ -438,14 +437,14 @@ _PROJECT_CREATE_FIELDS = (
     "transfer_syntaxes",
     "scp",
     "network_timeouts",
-    "anonymization_policy",
+    "confidentiality_options",
 )
 _PROJECT_MUTABLE_FIELDS = (
     "modalities",
     "transfer_syntaxes",
     "scp",
     "network_timeouts",
-    "anonymization_policy",
+    "confidentiality_options",
 )
 _PROJECT_ANNOTATIONS: dict[str, Any] = {
     "storage_dir": Annotated[str, AfterValidator(_require_user_absolute_path)],
@@ -456,10 +455,10 @@ _PROJECT_ANNOTATIONS: dict[str, Any] = {
 
 def _create_project_definitions() -> dict[str, tuple[Any, Any]]:
     """
-    Generate the create-project projection of ``ProjectModel``.
+    Generate the create-project projection of ProjectModel.
 
     Returns:
-        Field definitions with ``project_name`` required, all other model
+        Field definitions with project_name required, all other model
         fields optional, plus the MCP confirmation protocol fields.
     """
     definitions: dict[str, tuple[Any, Any]] = {}
@@ -602,12 +601,12 @@ class ImportFileArgs(BaseModel):
 
 def _configure_remote_definitions() -> dict[str, tuple[Any, Any]]:
     """
-    Generate the remote-node projection of ``DICOMNode``.
+    Generate the remote-node projection of DICOMNode.
 
     Returns:
-        Field definitions for one remote node. ``role`` is added by the tool
-        because it is the ``ProjectModel.remote_scps`` dictionary key, not a
-        ``DICOMNode`` field.
+        Field definitions for one remote node. role is added by the tool
+        because it is the ProjectModel.remote_scps dictionary key, not a
+        DICOMNode field.
     """
     definitions: dict[str, tuple[Any, Any]] = {
         "ip": _generated_field(
@@ -690,7 +689,7 @@ class PacsFindArgs(BaseModel):
 
 
 class PacsStudyRef(BaseModel):
-    """One study row from ``pacs_find`` for ``pacs_move``."""
+    """One study row from pacs_find for pacs_move."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -721,7 +720,7 @@ class SeriesSelectorsArgs(BaseModel):
 
 
 class ExportPreviewArgs(BaseModel):
-    """Selectors for ``export_series_preview`` — must identify exactly one series."""
+    """Selectors for export_series_preview — must identify exactly one series."""
 
     model_config = ConfigDict(extra="forbid")
 

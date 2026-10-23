@@ -10,8 +10,6 @@ screen BitBlt of the DWM rect, which would include desktop pixels around
 rounded corners (white in Cursor, black on a dark desktop).
 """
 
-from __future__ import annotations
-
 import logging
 import sys
 from contextlib import contextmanager

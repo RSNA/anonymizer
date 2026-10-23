@@ -1,7 +1,5 @@
 """Emit official MIDI validator ``id_old,id_new`` mapping CSVs."""
 
-from __future__ import annotations
-
 import csv
 import logging
 import sqlite3

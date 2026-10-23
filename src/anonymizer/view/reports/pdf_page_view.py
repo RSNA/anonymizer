@@ -1,7 +1,5 @@
 """Fit-width PDF page viewer (graphic preview only; PHI highlights live in the text panel)."""
 
-from __future__ import annotations
-
 import tkinter as tk
 from collections.abc import Callable, Sequence
 from tkinter import Misc
@@ -103,8 +101,8 @@ class PdfPageView(ctk.CTkFrame):
         Load PDF pages into the viewer.
 
         Args:
-            data: Raw PDF bytes, or ``None`` for placeholder.
-            notify_ready: Call ``on_pages_ready`` once after load.
+            data: Raw PDF bytes, or None for placeholder.
+            notify_ready: Call on_pages_ready once after load.
             keep_display_width: Reuse current fit width (Save preview).
         """
         prev_w = self._display_width if keep_display_width else 0
@@ -130,7 +128,7 @@ class PdfPageView(ctk.CTkFrame):
 
         Args:
             pages: PIL images, one per page.
-            notify_ready: Call ``on_pages_ready`` once after load.
+            notify_ready: Call on_pages_ready once after load.
         """
         self.clear()
         self._page_pils = [p.convert("RGB") for p in pages]

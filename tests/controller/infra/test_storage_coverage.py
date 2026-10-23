@@ -1,12 +1,11 @@
 """Storage helpers exercised under tests/controller (utils/ is not in testpaths)."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
+from anonymizer.controller.ai import model_download as model_download_mod
 from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
     default_whitelist_path,
     load_default_whitelist,
@@ -17,7 +16,6 @@ from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
     save_project_whitelist,
     save_whitelist_to_txt,
 )
-from anonymizer.controller.ai import model_download as model_download_mod
 from anonymizer.controller.ai.model_download import (
     DownloadProgress,
     any_model_download_active,
@@ -29,6 +27,7 @@ from anonymizer.controller.ai.model_download import (
     update_model_download,
 )
 from anonymizer.utils.storage.dicom_tree import count_quarantine_images
+
 
 @pytest.fixture(autouse=True)
 def _clear_progress() -> None:

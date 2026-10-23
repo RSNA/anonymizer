@@ -5,4 +5,3 @@ from anonymizer.controller.ai.blur_face import (
     write_blurred_dicom_series,
 )
 
-__all__ = ["hu_slice_to_stored_pixels", "write_blurred_dicom_series"]

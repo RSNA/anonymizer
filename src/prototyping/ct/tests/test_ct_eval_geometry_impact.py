@@ -1,7 +1,5 @@
 """Unit tests for ct_eval geometry routing and impact reports (step 4)."""
 
-from __future__ import annotations
-
 import json
 from pathlib import Path
 

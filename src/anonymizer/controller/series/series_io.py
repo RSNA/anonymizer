@@ -1,11 +1,47 @@
-"""DICOM series load/save and series_buffer I/O."""
+"""DICOM series load/save and series_buffer I/O.
 
-from __future__ import annotations
+Public API
+----------
+SERIES_VIEW_PROJECTION_COUNT
+    Series view projection count (3).
 
+SeriesProjections
+    Min / mean / max planes derived from anatomical slices (not scrolled with the stack).
+
+compute_series_projections(frames: np.ndarray) -> SeriesProjections
+    Compute min, mean, and max projection planes from an anatomical slice stack.
+
+LoadedSeries
+    In-memory anatomical frame stack from load_series_frames (one row per slice file).
+
+load_series_frames(series_path: Path, *, dcm_paths: list[Path] | None=None) -> LoadedSeries
+    Load a DICOM series directory (anatomical frames only, no projections).
+
+clip_and_cast_to_int(float_array: np.ndarray, target_dtype: type[np.integer]) -> np.ndarray | None
+    Safely converts a float NumPy array to a target integer dtype by:
+
+ordered_series_dcm_paths(series_path: Path) -> list[Path]
+    Return DICOM paths in the same order as load_series_frames / face blur.
+
+stored_monochrome_to_series_buffer(stored_frame: np.ndarray, ds: Dataset) -> tuple[np.ndarray, float | None]
+    Convert one stored grayscale frame to Series View pixel space (float32).
+
+series_buffer_monochrome_to_stored(viewer_frame: np.ndarray, ds: Dataset, *, mono1_invert_max: float | None=None) -> np.ndarray
+    Convert Series View grayscale pixels back to stored DICOM pixels.
+
+apply_series_description(series_path: Path, description: str) -> bool
+    Set SeriesDescription on every DICOM file in a series directory.
+
+apply_study_description(study_root: Path, description: str, *, loinc_number: str | None=None) -> bool
+    Set StudyDescription (0008,1030) on every DICOM instance under a study directory.
+
+save_series_frames(original_series_path: Path, processed_frames: np.ndarray, reference_ds: Dataset) -> bool
+    Saves processed frames back by OVERWRITING original DICOM files.
+"""
 import logging
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import numpy as np
 from cv2 import INTER_AREA, INTER_LINEAR, resize
@@ -19,16 +55,12 @@ from pydicom.sequence import Sequence
 from pydicom.tag import Tag
 from pydicom.uid import ExplicitVRLittleEndian
 
-from anonymizer.controller.ai.tseg.dicom_geometry import list_dicom_paths, stackable_dicom_paths
-
-if TYPE_CHECKING:
-    from anonymizer.controller.ai.embedded_phi.metadata.extract import MetadataPhiRow
-from datetime import datetime
-
+from anonymizer.controller.ai.embedded_phi.metadata.extract import MetadataPhiRow
 from anonymizer.controller.ai.embedded_phi.metadata.series_index import (
     extract_sop_metadata_rows,
     unique_metadata_texts,
 )
+from anonymizer.controller.ai.tseg.dicom_geometry import list_dicom_paths, stackable_dicom_paths
 from anonymizer.utils.dicom import SUPPORTED_PHOTOMETRIC_INTERPRETATIONS, get_wl_ww
 from anonymizer.utils.memory import log_process_memory
 from anonymizer.utils.storage.dicom_tree import get_dcm_files
@@ -108,7 +140,7 @@ def load_series_frames(
     dcm_paths: list[Path] | None = None,
 ) -> LoadedSeries:
     """Load a DICOM series directory (anatomical frames only, no projections)."""
-    # Lazy import: metadata.extract → anonymizer_script must not load at series_io import time.
+    # Lazy import: metadata.extract pulls heavy deps; keep series_io import light.
 
     logger.info("load_series_frames: %s", series_path)
     metadata, frames, slice_paths, sop_uids, metadata_by_sop = _load_series_frames(
@@ -124,21 +156,6 @@ def load_series_frames(
         metadata_by_sop=metadata_by_sop,
         metadata_unique_texts=unique_metadata_texts(metadata_by_sop),
     )
-
-
-__all__ = [
-    "LoadedSeries",
-    "SeriesProjections",
-    "SERIES_VIEW_PROJECTION_COUNT",
-    "compute_series_projections",
-    "apply_series_description",
-    "apply_study_description",
-    "load_series_frames",
-    "ordered_series_dcm_paths",
-    "save_series_frames",
-    "series_buffer_monochrome_to_stored",
-    "stored_monochrome_to_series_buffer",
-]
 
 
 def clip_and_cast_to_int(
@@ -195,10 +212,10 @@ def clip_and_cast_to_int(
 
 def ordered_series_dcm_paths(series_path: Path) -> list[Path]:
     """
-    Return DICOM paths in the same order as ``load_series_frames`` / face blur.
+    Return DICOM paths in the same order as load_series_frames / face blur.
 
-    Uses ``stackable_dicom_paths`` (IPP stack order). Falls back to direct children
-    of ``series_path`` sorted by ``InstanceNumber`` — never recursive subdirectories.
+    Uses stackable_dicom_paths (IPP stack order). Falls back to direct children
+    of series_path sorted by InstanceNumber — never recursive subdirectories.
     """
     series_path = Path(series_path).resolve()
     try:
@@ -243,9 +260,9 @@ def _prepare_monochrome_stored_pixels(
     frame_data: np.ndarray, ds_orig: Dataset
 ) -> np.ndarray:
     """
-    Convert processed frames to stored pixels using ``ds_orig`` rescale and integer encoding.
+    Convert processed frames to stored pixels using ds_orig rescale and integer encoding.
 
-    Float input is treated as post-modality-LUT values (same as ``load_series_frames`` output).
+    Float input is treated as post-modality-LUT values (same as load_series_frames output).
     Integer input is clipped/cast to the source slice dtype without changing rescale semantics.
     """
     target_dtype = _stored_integer_dtype(ds_orig)
@@ -314,9 +331,9 @@ def stored_monochrome_to_series_buffer(
     """
     Convert one stored grayscale frame to Series View pixel space (float32).
 
-    Matches ``load_series_frames`` monochrome handling (modality LUT, MONOCHROME1 invert).
-    Returns ``(viewer_pixels, mono1_invert_max)``; ``mono1_invert_max`` is required to map back
-    for MONOCHROME1 and is ``None`` for MONOCHROME2.
+    Matches load_series_frames monochrome handling (modality LUT, MONOCHROME1 invert).
+    Returns (viewer_pixels, mono1_invert_max); mono1_invert_max is required to map back
+    for MONOCHROME1 and is None for MONOCHROME2.
     """
     pi = str(getattr(ds, "PhotometricInterpretation", "") or "").upper()
     modality = np.asarray(apply_modality_lut(stored_frame, ds), dtype=np.float32)
@@ -580,7 +597,7 @@ def _load_series_frames(
               Shape: (num_frames, height, width) or (num_frames, height, width, 3).
             - Source DICOM paths in the same order as stacked frames (one entry per frame).
             - SOP Instance UIDs parallel to stacked frames.
-            - ``metadata_by_sop`` keyed by SOP Instance UID.
+            - metadata_by_sop keyed by SOP Instance UID.
 
     Raises:
         ValueError: If no DICOM files are found, or if essential DICOM tags
@@ -830,12 +847,12 @@ def _dicom_lo_text(value: object | None) -> str:
 
 def _source_of_previous_values(ds: Dataset) -> str:
     """
-    Best-effort ``SourceOfPreviousValues`` ``(0400,0564)`` for OAS.
+    Best-effort SourceOfPreviousValues (0400,0564) for OAS.
 
     Preference when still present after anonymization (Type 2 → empty if none):
-    1. InstitutionName ``(0008,0080)``
-    2. InstitutionalDepartmentName ``(0008,1040)``
-    3. file meta SourceApplicationEntityTitle ``(0002,0016)``
+    1. InstitutionName (0008,0080)
+    2. InstitutionalDepartmentName (0008,1040)
+    3. file meta SourceApplicationEntityTitle (0002,0016)
     """
     for attr in ("InstitutionName", "InstitutionalDepartmentName"):
         text = _dicom_lo_text(getattr(ds, attr, None))
@@ -851,15 +868,15 @@ def _source_of_previous_values(ds: Dataset) -> str:
 
 def _append_original_attributes(ds: Dataset, modified_attrs: Dataset) -> None:
     """
-    Append one Original Attributes Sequence item capturing ``modified_attrs``.
+    Append one Original Attributes Sequence item capturing modified_attrs.
 
     DICOM SOP Common C.12.1.1.9 / Table C.12.1.1.9-1:
-    - Modified Attributes Sequence ``(0400,0550)`` Type 1 (prior values)
-    - Attribute Modification DateTime ``(0400,0562)`` Type 1
-    - Modifying System ``(0400,0563)`` Type 1
-    - Source of Previous Values ``(0400,0564)`` Type 2 (empty if unknown)
-    - Reason for the Attribute Modification ``(0400,0565)`` Type 1
-      (``COERCE`` — Harmonize replaces study/series descriptions with playbook values)
+    - Modified Attributes Sequence (0400,0550) Type 1 (prior values)
+    - Attribute Modification DateTime (0400,0562) Type 1
+    - Modifying System (0400,0563) Type 1
+    - Source of Previous Values (0400,0564) Type 2 (empty if unknown)
+    - Reason for the Attribute Modification (0400,0565) Type 1
+      (COERCE — Harmonize replaces study/series descriptions with playbook values)
 
     Does not add private creator tags.
     """
@@ -942,13 +959,13 @@ def apply_study_description(
     """
     Set StudyDescription (0008,1030) on every DICOM instance under a study directory.
 
-    When ``loinc_number`` is provided, also set Procedure Code Sequence (0008,1032)
-    with Coding Scheme Designator ``LN`` (DICOM CID 102 / LOINC-RSNA Playbook).
+    When loinc_number is provided, also set Procedure Code Sequence (0008,1032)
+    with Coding Scheme Designator LN (DICOM CID 102 / LOINC-RSNA Playbook).
 
     When the prior StudyDescription differs, append Original Attributes Sequence
     with the previous value before overwriting the public tag.
 
-    ``study_root`` is the anonymized study folder (``images/<patient>/<study>/``) whose
+    study_root is the anonymized study folder (images/<patient>/<study>/) whose
     immediate children are series directories.
     """
     description = description.strip()

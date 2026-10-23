@@ -1,7 +1,5 @@
 """Definitive PHI text eval dataset schema and validation."""
 
-from __future__ import annotations
-
 import json
 from dataclasses import dataclass, field
 from pathlib import Path

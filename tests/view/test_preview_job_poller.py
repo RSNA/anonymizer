@@ -1,7 +1,5 @@
 """Tests that preview dialogs use WorkState + JobPoller patterns."""
 
-from __future__ import annotations
-
 from unittest.mock import MagicMock, patch
 
 from anonymizer.controller.ai.blur_face import FaceBlurMode

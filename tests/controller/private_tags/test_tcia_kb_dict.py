@@ -1,7 +1,5 @@
 """Generated KB dict lookup coverage."""
 
-from __future__ import annotations
-
 from anonymizer.controller.private_tags import PrivateTagAction, lookup_private_tag
 from anonymizer.controller.private_tags.tcia_kb_data import PRIVATE_KB, PRIVATE_KB_FALLBACK
 

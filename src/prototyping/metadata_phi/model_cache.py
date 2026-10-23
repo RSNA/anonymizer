@@ -1,7 +1,5 @@
 """Offline pinning helpers for clinical DeID HuggingFace models."""
 
-from __future__ import annotations
-
 import os
 from pathlib import Path
 

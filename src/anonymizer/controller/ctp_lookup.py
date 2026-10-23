@@ -37,8 +37,6 @@ commit_ctp_lookup(project_controller, preview, document=None) -> Path
     Copy properties, patch/write project script, load PHI SQL, reload script.
 """
 
-from __future__ import annotations
-
 import logging
 import re
 import shutil

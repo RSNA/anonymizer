@@ -1,7 +1,5 @@
 """Tests for analyze_series entry point (mocked TotalSegmentator)."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 

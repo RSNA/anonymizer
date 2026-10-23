@@ -10,8 +10,6 @@ Keeps the clinician-manual sequence stable across languages and re-runs:
 5. Optionally Accept, then latch all segmentation overlays on the middle slice.
 """
 
-from __future__ import annotations
-
 import contextlib
 import logging
 import os

@@ -1,10 +1,109 @@
-"""Algorithm-agnostic background runners for Series View and batch."""
+"""Algorithm-agnostic background runners for Series View and batch.
 
-from __future__ import annotations
+Public API
+----------
+Algorithm
+    Algorithm type.
 
+CANONICAL_ALGORITHM_ORDER
+    Canonical algorithm order.
+
+OcrEditContext
+    Language-agnostic Series View OCR scope (combobox stores these codes).
+
+OcrRemoveMode
+    What Detect/Remove keeps: NER PHI, non-whitelisted OCR, or every OCR box.
+
+edit_context_menu_values() -> tuple[OcrEditContext, ...]
+    Internal codes for the Edit Context picker (never pass through gettext).
+
+edit_context_display_label(context: OcrEditContext) -> str
+    Translated combobox label for an edit context (not used for menu state).
+
+edit_context_menu_labels() -> tuple[str, ...]
+    Translated combobox labels in canonical order.
+
+normalize_edit_context(value: object | None, *, default: OcrEditContext=OcrEditContext.FRAME) -> OcrEditContext
+    Resolve combobox / legacy label text to OcrEditContext.
+
+ocr_remove_mode_menu_values() -> tuple[OcrRemoveMode, ...]
+    Ocr remove mode menu values.
+
+ocr_remove_mode_display_label(mode: OcrRemoveMode) -> str
+    Ocr remove mode display label.
+
+ocr_remove_mode_menu_labels() -> tuple[str, ...]
+    Ocr remove mode menu labels.
+
+ocr_detect_tooltip(edit_context: OcrEditContext) -> str
+    Ocr detect tooltip.
+
+ocr_remove_mode_tooltip(mode: OcrRemoveMode) -> str
+    Ocr remove mode tooltip.
+
+remove_text_button_label(mode: OcrRemoveMode) -> str
+    Remove text button label.
+
+normalize_ocr_remove_mode(value: object | None, *, default: OcrRemoveMode=...) -> OcrRemoveMode
+    Normalize ocr remove mode.
+
+ocr_remove_mode_from_legacy_whitelist(*, use_modality_whitelist: bool) -> OcrRemoveMode
+    Map historic batch checkbox: True = non-whitelisted, False = all text.
+
+whitelist_arg_for_ocr_remove_mode(mode: OcrRemoveMode) -> list[str] | None
+    None loads the effective modality whitelist; [] disables whitelist filtering.
+
+apply_phi_ner_filter_for_ocr_remove_mode(mode: OcrRemoveMode) -> bool
+    Apply phi ner filter for ocr remove mode.
+
+RunOptions
+    RunOptions type.
+
+ModelHandle
+    ModelHandle type.
+
+BatchSpec
+    BatchSpec type.
+
+BatchSummary
+    BatchSummary type.
+
+Runner
+    Runner type.
+
+RemovePixelPhiRunner
+    OCR detect (Series View) or per-instance PHI removal (batch).
+
+HarmonizeRunner
+    Batch harmonize phase: owns TotalSegmentator session for the algorithm pass.
+
+FaceBlurRunner
+    Batch face-blur phase: owns face-segmentation model preload for the algorithm pass.
+
+RUNNERS
+    Runners.
+
+runner_for(algorithm: Algorithm) -> Runner
+    Runner for.
+
+enter_batch_phase(algorithm: Algorithm) -> tuple[Runner, ModelHandle]
+    Load models once for an entire batch algorithm phase.
+
+exit_batch_phase(runner: Runner, handle: ModelHandle) -> None
+    Exit batch phase.
+
+process_series(algorithm: Algorithm, work_state: WorkState, handle: ModelHandle, *, options: RunOptions | None=None) -> None
+    Process series.
+
+run_job(algorithm: Algorithm, work_state: WorkState, *, options: RunOptions | None=None) -> None
+    Run job.
+
+run_batch(work_state: WorkState, batch: BatchSpec, *, on_series_start: Callable[[Path, Algorithm], None] | None=None) -> BatchSummary
+    Run batch.
+"""
 import logging
 from dataclasses import dataclass, field
-from enum import StrEnum, auto
+from enum import StrEnum
 from pathlib import Path
 from typing import Callable, Protocol
 
@@ -23,18 +122,12 @@ from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import _ocr_us
 from anonymizer.controller.ai.feature_availability import embedded_phi_has_models
 from anonymizer.controller.ai.tseg.contrast import release_working_memory
 from anonymizer.controller.ai.tseg.model_cache import clear_predictor_cache, preload_face_models, tseg_batch_session
-from anonymizer.controller.jobs.work_state import WorkState
+from anonymizer.controller.jobs.work_state import Algorithm, WorkState
 from anonymizer.controller.series.series_io import load_series_frames
 from anonymizer.controller.series.series_overlay import OCRText
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
-
-
-class Algorithm(StrEnum):
-    REMOVE_PIXEL_PHI = auto()
-    HARMONIZE = auto()
-    FACE_BLUR = auto()
 
 
 CANONICAL_ALGORITHM_ORDER: tuple[Algorithm, ...] = (
@@ -60,7 +153,7 @@ class OcrRemoveMode(StrEnum):
 
 
 def edit_context_menu_values() -> tuple[OcrEditContext, ...]:
-    """Internal codes for the Text Edit Context picker (never pass through gettext)."""
+    """Internal codes for the Edit Context picker (never pass through gettext)."""
     return (OcrEditContext.FRAME, OcrEditContext.SERIES)
 
 
@@ -81,7 +174,7 @@ def normalize_edit_context(
     *,
     default: OcrEditContext = OcrEditContext.FRAME,
 ) -> OcrEditContext:
-    """Resolve combobox / legacy label text to ``OcrEditContext``."""
+    """Resolve combobox / legacy label text to OcrEditContext."""
     text = str(value or "").strip()
     if not text:
         return default
@@ -120,19 +213,27 @@ def ocr_remove_mode_menu_labels() -> tuple[str, ...]:
     return tuple(ocr_remove_mode_display_label(member) for member in ocr_remove_mode_menu_values())
 
 
+def ocr_detect_tooltip(edit_context: OcrEditContext) -> str:
+    if edit_context is OcrEditContext.SERIES:
+        return _(
+            "Detect burnt-in text in all frames. Boxes show what Remove would delete "
+            "for the selected Remove Scope; no pixels are changed."
+        )
+    return _(
+        "Detect burnt-in text in the current frame. Boxes show what Remove would delete "
+        "for the selected Remove Scope; no pixels are changed."
+    )
+
+
 def ocr_remove_mode_tooltip(mode: OcrRemoveMode) -> str:
     if mode is OcrRemoveMode.PHI_ONLY:
         return _(
             "Named Entity Recognition (NER) labels only: names, dates, IDs, phones, emails. "
-            "Unlabeled text is left."
+            "Unlabeled text and whitelist matches are left."
         )
     if mode is OcrRemoveMode.ALL_TEXT:
         return _("Remove every detected burnt-in text box; whitelist is ignored.")
     return _("Remove detected burnt-in text except whitelist matches and exclude areas.")
-
-
-def detect_text_button_label() -> str:
-    return _("Detect Text")
 
 
 def remove_text_button_label(mode: OcrRemoveMode) -> str:
@@ -174,10 +275,14 @@ def ocr_remove_mode_from_legacy_whitelist(*, use_modality_whitelist: bool) -> Oc
 
 
 def whitelist_arg_for_ocr_remove_mode(mode: OcrRemoveMode) -> list[str] | None:
-    """None loads the effective modality whitelist; [] disables whitelist filtering."""
-    if mode is OcrRemoveMode.NON_WHITELISTED:
-        return None
-    return []
+    """None loads the effective modality whitelist; [] disables whitelist filtering.
+
+    The whitelist is a veto in every scope except All text, so PHI only
+    also loads it (NER filter then keeps only labelled non-whitelisted).
+    """
+    if mode is OcrRemoveMode.ALL_TEXT:
+        return []
+    return None
 
 
 def apply_phi_ner_filter_for_ocr_remove_mode(mode: OcrRemoveMode) -> bool:

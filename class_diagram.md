@@ -11,7 +11,7 @@ flowchart TB
         V_PROJECT["view.project<br/>DatasetView<br/>QueryView<br/>ExportView<br/>DeleteStudiesDialog<br/>ImportStudiesDialog<br/>ImportFilesDialog"]
         V_SERIES["view.series<br/>SeriesView<br/>SeriesViewStartupSpec<br/>SeriesLoadError<br/>ProjectionView<br/>ImageViewer<br/>Histogram"]
         V_SETTINGS["view.settings<br/>SettingsDialog<br/>DICOMNodeDialog<br/>SOPClassesDialog<br/>TransferSyntaxesDialog<br/>ModalitiesDialog<br/>NetworkTimeoutsDialog<br/>LookupTableDialog<br/>AWSCognitoDialog<br/>LoggingLevelsDialog"]
-        V_AI["view.ai<br/>AiFeaturesSetupDialog<br/>AiBatchProcessDialog<br/>AiBatchProcessOptionsDialog<br/>AiBatchProcessOptionsResult<br/>HarmonizeStudiesDialog<br/>HarmonizeResultsView<br/>FaceBlurReviewDialog<br/>SetDescriptionDialog<br/>ModalityWhitelistPreviewDialog"]
+        V_AI["view.ai<br/>AiFeaturesSetupDialog<br/>AiBatchProcessDialog<br/>AiBatchProcessOptionsDialog<br/>AiBatchProcessOptionsResult<br/>HarmonizeResultsView<br/>FaceBlurReviewDialog<br/>SetDescriptionDialog<br/>ModalityWhitelistPreviewDialog"]
         V_AI_FEAT["view.ai.features<br/>AiFeaturesPanel<br/>AiFeatureDownloadManager"]
         V_COMMON["view.common<br/>AppToplevel<br/>AppCTkToplevel<br/>AppMenuHost<br/>AppFonts<br/>JobPoller"]
         V_MCP["mcp<br/>MCPServer tools / ops / session / snapshots"]

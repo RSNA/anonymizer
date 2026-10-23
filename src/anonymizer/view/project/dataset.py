@@ -3,8 +3,6 @@ This module contains the DatasetView class, which is a tkinter Toplevel window f
 The DatasetView class provides a user interface for viewing the study index, deleting studies and exporting the patient lookup table to file.
 """
 
-from __future__ import annotations
-
 import contextlib
 import logging
 import sys
@@ -427,7 +425,7 @@ class DatasetView(AppToplevel):
         self,
     ) -> tuple[str, list[str], object | None]:
         """
-        Return ``(kind, uids, selection_info)`` where kind is ``series``, ``study``, or ``invalid``.
+        Return (kind, uids, selection_info) where kind is series, study, or invalid.
         """
 
         selected = list(self._tree.selection())
@@ -1053,7 +1051,7 @@ class DatasetView(AppToplevel):
                 logger.debug("ProjectionView already closed", exc_info=True)
 
     def _open_projection_view(self, phi_records: list[PHI_IndexRecord]) -> None:
-        """Open or focus a Projection View for ``phi_records`` (one window per study set)."""
+        """Open or focus a Projection View for phi_records (one window per study set)."""
         if not phi_records:
             logger.error("No Studies selected")
             return

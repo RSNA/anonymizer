@@ -24,8 +24,6 @@ With MedGemma after export::
       --medgemma-dir /path/to/medgemma_4b_it
 """
 
-from __future__ import annotations
-
 import argparse
 import asyncio
 import importlib.util

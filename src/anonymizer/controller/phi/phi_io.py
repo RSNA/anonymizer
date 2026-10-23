@@ -1,9 +1,25 @@
 """PHI dataset read-model, Patient Lookup CSV export, and Java index import orchestration.
 
-Controller-layer I/O: builds DTOs from the ORM model and writes alternate formats.
-Does not own SQLite persistence — that remains on AnonymizerModel.
-"""
+Public API
+----------
+format_series_processing_status(status: SeriesProcessingStatus, *, include_face_blur: bool=True) -> str
+    Compact one-line series processing caption for Series View control bar.
 
+PHI_SeriesIndexRecord
+    Per-series payload nested under a PHI dataset study row.
+
+PHI_IndexRecord
+    Phi indexrecord dataclass/type.
+
+build_phi_index(anon_model: AnonymizerModel) -> list[PHI_IndexRecord] | None
+    Build nested PHI dataset records from the ORM model.
+
+write_lookup_csv(path: Path, records: list[PHI_IndexRecord]) -> None
+    Write series-grain Patient Lookup CSV to path.
+
+import_java_phi_studies(anon_model: AnonymizerModel, java_studies: list[JavaAnonymizerExportedStudy]) -> None
+    Orchestrate Java index import; persistence is delegated to the model.
+"""
 import csv
 import logging
 from collections.abc import Iterator
@@ -346,7 +362,7 @@ class PHI_IndexRecord:
 def _study_index_harmonized(study: Study) -> bool:
     """True when Dataset should show the study Harmonized (green).
 
-    Every tseg ∪ planar Harmonize series must have ``harmonized_description``.
+    Every tseg ∪ planar Harmonize series must have harmonized_description.
     Report-only (SR/DOC/PDF) studies are not study-green from series alone.
     """
     return study.all_series_harmonized()
@@ -460,7 +476,7 @@ def build_phi_index(anon_model: AnonymizerModel) -> list[PHI_IndexRecord] | None
 
 
 def write_lookup_csv(path: Path, records: list[PHI_IndexRecord]) -> None:
-    """Write series-grain Patient Lookup CSV to ``path``."""
+    """Write series-grain Patient Lookup CSV to path."""
     with open(path, "w", newline="") as csv_file:
         writer = csv.writer(csv_file, delimiter=",")
         writer.writerow(PHI_IndexRecord.LOOKUP_CSV_FIELD_TITLES)

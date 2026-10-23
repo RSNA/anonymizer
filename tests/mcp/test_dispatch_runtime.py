@@ -1,7 +1,5 @@
 """CLI dispatch: -c and --mcp are mutually exclusive."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest

@@ -2,7 +2,7 @@
 
 ## Goal
 
-Use **rsna-anonymizer core** + **EasyOCR** + **OpenMed** to de-identify Pseudo-PHI Evaluation files so candidates match DeIdentified gold at **>95% accuracy**. **UIDs need not match.** Clinical script may be adapted under `scripts/` with general DICOM rules only.
+Use **rsna-anonymizer core** + **EasyOCR** + **OpenMed** to de-identify Pseudo-PHI Evaluation files so candidates match DeIdentified gold at **>95% accuracy**. **UIDs need not match.** anonymizer script may be adapted under `scripts/` with general DICOM rules only.
 
 ## Accuracy (plain English)
 

@@ -1,37 +1,42 @@
 """OpenMed DeID model cache: download, probe, load, and remove weights.
-
-Weights live under ``assets/ai/embedded_phi/model`` (override via
-``NerModelOptions.cache_dir``). Repo: ``OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1``.
+Weights live under assets/ai/embedded_phi/model (override via
+NerModelOptions.cache_dir). Repo: OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1.
 
 Public API
 ----------
-``NerModelOptions``
-    Frozen overrides for model id, cache directory, and HF local-files-only mode.
+HF_REPO_ID
+    Hf repo id.
 
-``ner_ready()``
-    True when weights are present and transformers/torch import.
+MODEL_DIR
+    Model dir.
 
-``probe_ner_models()``
-    ``(NerModelStatus, localized_message)`` for UI.
+DOWNLOAD_ID
+    Download id (default 'embedded_phi').
 
-``download_ner_models(*, locale=\"en_US\", options=None)``
-    Fetch weights into the product cache → ``(ok, message)``.
+NerModelOptions
+    Overrides for PHI NER weight resolution and Hugging Face load mode.
 
-``remove_ner_models(*, options=None)``
-    Delete the on-disk cache.
+NerModelStatus
+    Coarse status of the on-disk PHI NER model cache.
 
-``load_token_classification_pipeline(model_id, *, options=None)``
-    Build the HF token-classification pipeline (used by ``ner.detect_entities``).
+ner_ready(*, options: NerModelOptions | None=None) -> bool
+    Return whether NER weights are ready for inference.
 
-``resolve_model_id(locale=\"en_US\", *, options=None)``
-    Local cache path when present, else HF repo id (or ``options.model_id``).
+probe_ner_models(*, options: NerModelOptions | None=None) -> tuple[NerModelStatus, str]
+    Probe download / readiness state for UI messaging.
 
-``NerModelStatus``
-    ``READY`` / ``MISSING`` / ``DOWNLOADING`` / ``FAILED``.
+download_ner_models(*, locale: str='en_US', options: NerModelOptions | None=None) -> tuple[bool, str]
+    Download PHI NER models into the product cache if missing.
+
+remove_ner_models(*, options: NerModelOptions | None=None) -> None
+    Delete the on-disk NER model cache and recreate an empty cache directory.
+
+load_token_classification_pipeline(model_id: str, *, options: NerModelOptions | None=None)
+    Build a Hugging Face token-classification pipeline for model_id.
+
+resolve_model_id(_locale: str='en_US', *, options: NerModelOptions | None=None) -> str
+    Prefer a local cache directory when present; else the HF repo id.
 """
-
-from __future__ import annotations
-
 import logging
 import os
 import shutil
@@ -43,7 +48,6 @@ from huggingface_hub import snapshot_download
 from transformers import AutoModelForTokenClassification, AutoTokenizer, pipeline
 
 from anonymizer.controller.ai.model_download import update_model_download
-from anonymizer.utils.package_paths import ai_feature_dir
 from anonymizer.utils.translate import _
 
 try:
@@ -57,7 +61,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 HF_REPO_ID = "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1"
-MODEL_DIR = ai_feature_dir("embedded_phi", "model")
+MODEL_DIR = Path("assets/ai/embedded_phi/model")
 _MIN_MODEL_FILES = 3
 DOWNLOAD_ID = "embedded_phi"
 _downloading = False
@@ -91,7 +95,7 @@ def ner_ready(*, options: NerModelOptions | None = None) -> bool:
     Return whether NER weights are ready for inference.
 
     Returns:
-        True when ``probe_ner_models()`` reports ``READY``.
+        True when probe_ner_models() reports READY.
     """
     return probe_ner_models(options=options)[0] == NerModelStatus.READY
 
@@ -101,7 +105,7 @@ def probe_ner_models(*, options: NerModelOptions | None = None) -> tuple[NerMode
     Probe download / readiness state for UI messaging.
 
     Returns:
-        ``(status, localized_message)``.
+        (status, localized_message).
     """
     if _downloading:
         return NerModelStatus.DOWNLOADING, _("Downloading PHI NER models…")
@@ -123,7 +127,7 @@ def download_ner_models(
         options: Optional model/cache overrides.
 
     Returns:
-        ``(ok, localized_or_error_message)``.
+        (ok, localized_or_error_message).
     """
     global _downloading
     if not _transformers_available():
@@ -162,15 +166,17 @@ def load_token_classification_pipeline(
     model_id: str, *, options: NerModelOptions | None = None
 ):
     """
-    Build a Hugging Face token-classification pipeline for ``model_id``.
+    Build a Hugging Face token-classification pipeline for model_id.
 
     Args:
         model_id: Local directory or Hugging Face repo id.
-        options: Optional load-mode overrides (``local_files_only``).
+        options: Optional load-mode overrides (local_files_only).
 
     Returns:
-        ``transformers`` pipeline with ``aggregation_strategy=\"max\"`` and no
+        transformers pipeline with aggregation_strategy="max" and no
         custom score threshold (HF default keeps all aggregated spans).
+        The model is used exactly as published: no output classes are
+        suppressed or otherwise adjusted.
     """
     opts = _resolve_options(options)
     lfo = opts.local_files_only
@@ -178,7 +184,7 @@ def load_token_classification_pipeline(
     model = AutoModelForTokenClassification.from_pretrained(model_id, local_files_only=lfo)
     # OpenMed labels every WordPiece as B-* (never I-*), so "simple" never merges
     # subwords. "max"/"first"/"average" group consecutive same-entity tokens into
-    # whole words (Mnikathi, not Mn/ika/thi). No ``threshold`` — scores are logged
+    # whole words (Mnikathi, not Mn/ika/thi). No threshold — scores are logged
     # only; product labels are not filtered by confidence.
     return pipeline(
         "token-classification",
@@ -199,7 +205,7 @@ def resolve_model_id(
         options: Optional model/cache overrides.
 
     Returns:
-        Filesystem path string, ``options.model_id``, or ``HF_REPO_ID``.
+        Filesystem path string, options.model_id, or HF_REPO_ID.
     """
     opts = _resolve_options(options)
     if opts.model_id:
@@ -227,7 +233,7 @@ def _model_cache_dir(options: NerModelOptions | None = None) -> Path:
     Resolve the directory used for OpenMed DeID weights.
 
     Returns:
-        ``options.cache_dir`` when set, otherwise the packaged ``MODEL_DIR``.
+        options.cache_dir when set, otherwise the packaged MODEL_DIR.
     """
     opts = _resolve_options(options)
     return Path(opts.cache_dir).expanduser() if opts.cache_dir is not None else MODEL_DIR
@@ -260,7 +266,7 @@ def _model_files_present(options: NerModelOptions | None = None) -> bool:
     Return whether the cache looks like a complete model tree.
 
     Returns:
-        True when ``config.json`` exists and enough non-dot files are present.
+        True when config.json exists and enough non-dot files are present.
     """
     cache = _model_cache_dir(options)
     if not cache.is_dir():
@@ -274,7 +280,7 @@ def _model_files_present(options: NerModelOptions | None = None) -> bool:
 
 def _transformers_available() -> bool:
     """
-    Return whether ``torch`` and ``transformers`` can be imported.
+    Return whether torch and transformers can be imported.
 
     Returns:
         True when both packages import successfully.

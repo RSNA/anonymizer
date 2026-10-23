@@ -1,7 +1,5 @@
 """Tests for FALCON DICOM loading aligned with TotalSegmentator stack ordering."""
 
-from __future__ import annotations
-
 import math
 from pathlib import Path
 

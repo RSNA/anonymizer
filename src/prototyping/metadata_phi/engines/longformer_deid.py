@@ -1,7 +1,5 @@
 """Long-context clinical DeID adapter (offline-pinnable via locale / env / cache)."""
 
-from __future__ import annotations
-
 from prototyping.metadata_phi.engines.label_map import to_scored_label
 from prototyping.metadata_phi.engines.regex_spacy import RegexSpacyEngine
 from prototyping.metadata_phi.model_cache import (

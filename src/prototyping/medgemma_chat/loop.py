@@ -1,7 +1,5 @@
 """MCP LLM tool loop: generate → parse tool JSON → call_tool → repeat (no planner)."""
 
-from __future__ import annotations
-
 import base64
 import json
 import logging

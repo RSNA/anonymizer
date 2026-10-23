@@ -11,7 +11,7 @@ Open a clean project with a storage folder and site identity ready for import.
 1. From **File → New Project**, open **New Project Settings**.
 2. Choose a **Project Name** (short, under 16 characters) and confirm the **Storage Directory**.
 3. Review Site ID and UID Root (usually leave defaults unless continuing a Java Anonymizer site).
-4. Choose **Anonymization Policy**: **Strict** (default, image-focused script) or **Clinical** (keeps report/clinical free-text tags; enables SR/PDF modalities). Hover each option for a short summary. On an **existing** project, changing policy asks you to confirm — Accepting replaces the project anonymizer script with the packaged policy script (**custom script edits are lost**). Already-imported images are not re-processed.
+4. Choose **De-identification Options** (DICOM confidentiality options). The **Basic** preset selects only the Basic Profile; **Retain** adds Modified Dates, Patient Characteristics, and Retain Safe Private. Cleaning options (Clean Pixel Data, Clean Structured Content, Clean Descriptors, Clean Recognizable Visual Features) can only be selected when their AI feature is installed — you will be offered the model download. On an **existing** project, applying different options asks you to confirm — Accepting recompiles the project anonymizer script from the packaged default plus option overlays (**custom script edits are lost**). Already-imported images are not re-processed.
 5. Confirm modalities and network settings with IT if you will query a PACS.
 6. Save / create the project. The packaged script is copied beside `ProjectModel.json` as `{site_id}-anonymizer.script`. The **Dashboard** opens.
 
@@ -104,9 +104,9 @@ The project **anonymizer script** is a CTP-compatible XML file that lists every 
 
 Open **File → Project Settings** (or New Project Settings), then click **Edit Anonymizer Script**. The editor loads the packaged default until you Accept; after that it opens your project-private copy and shows its path at the top of the dialog.
 
-The header shows **Anonymization Policy** (**Strict** or **Clinical**), **Provenance** (packaged vs project script basename), and the project script **Path** once a private copy exists. Under **Clinical**, provenance points at `clinical-anonymizer.script` and Active rules keep more report / clinical free-text tags.
+The header shows the option summary (**Basic**, **Retain**, or **Custom** when the stored options match neither preset) and the **Script** path (packaged default filename, or the project script path once a project copy exists). **Import…** loads a custom CTP script: unknown operands are rejected, date rules must match the StudyDate operation (one-click fix available), and on Accept you confirm which de-identification options to record for it (prefilled from its rules).
 
-![Anonymizer Script Editor (Clinical)](shots/macos/AnonymizerScriptEditor.png)
+![Anonymizer Script Editor](shots/macos/AnonymizerScriptEditor.png)
 
 #### Views
 
@@ -125,14 +125,14 @@ Search and the **Operand** filter apply inside the current view.
 3. If the operand needs a parameter, **Apply** prompts for the value with units and meaning. Use **Change parameter** to edit it later on a rule that already uses that operand:
    - **@round(this,n)** — age band width in whole years
    - **@always()** — fixed replacement text (CTP style, e.g. `YES`). Stores as `@always()YES`. Bare literals such as `YES` in older scripts are the same operand and remain valid.
-   - **@incrementdate(this,n)** — fixed day offset (CTP DATEINC). Prompted when you apply the operand (default 365). Because DATEINC is trial-wide, confirming applies the same `@incrementdate(this,n)` to every date-shift field in the script (for example all `@hashdate` rules), and the prompt lists those fields.
+   - **@incrementdate(this,n)** — fixed day delta (CTP DATEINC). Prompted when you apply the operand (default 365). Because DATEINC is trial-wide, confirming applies the same `@incrementdate(this,n)` to every date-delta field in the script (for example all `@hashdate` rules), and the prompt lists those fields.
    - **@rebasedate(this,origin)** — epoch ORIGIN as YYYYMMDD (default `19600101`). Prompted when you apply the operand; if basedates are not loaded, Apply opens the lookup-table dialog first.
    - **@lookup(this,ptid)** / **@lookup(this,dateoffset)** — if the required lookup table (or dateoffset rows) is not loaded, Apply opens the lookup-table dialog first.
 4. Choosing **@remove()** (then Apply) demotes the tag out of the Active view (it stays in the script as `@remove()`).
 
 #### Longitudinal dates (TCIA-style)
 
-All date-shift strategies preserve intervals between a patient's studies. When any of them runs, the anonymizer sets `(0028,0303) LongitudinalTemporalInformationModified = MODIFIED` (DICOM option 113107).
+All date-delta strategies preserve intervals between a patient's studies. When any of them runs, the anonymizer sets `(0028,0303) LongitudinalTemporalInformationModified = MODIFIED` (DICOM option 113107).
 
 | Strategy | Operand | When to use |
 | --- | --- | --- |

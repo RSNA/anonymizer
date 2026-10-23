@@ -1,7 +1,5 @@
 """Shared OCR remove-target helpers."""
 
-from __future__ import annotations
-
 from anonymizer.controller.jobs.runner import (
     OcrRemoveMode,
     apply_phi_ner_filter_for_ocr_remove_mode,
@@ -26,6 +24,6 @@ def test_legacy_whitelist_maps_to_remove_mode() -> None:
 def test_whitelist_and_ner_kwargs_for_modes() -> None:
     assert whitelist_arg_for_ocr_remove_mode(OcrRemoveMode.NON_WHITELISTED) is None
     assert whitelist_arg_for_ocr_remove_mode(OcrRemoveMode.ALL_TEXT) == []
-    assert whitelist_arg_for_ocr_remove_mode(OcrRemoveMode.PHI_ONLY) == []
+    assert whitelist_arg_for_ocr_remove_mode(OcrRemoveMode.PHI_ONLY) is None
     assert apply_phi_ner_filter_for_ocr_remove_mode(OcrRemoveMode.PHI_ONLY) is True
     assert apply_phi_ner_filter_for_ocr_remove_mode(OcrRemoveMode.NON_WHITELISTED) is False

@@ -1,7 +1,5 @@
 """Tests for CT Harmonize single-pass helpers and stage timings."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -11,6 +9,7 @@ from anonymizer.controller.ai.harmonize import harmonize_series
 from anonymizer.controller.ai.harmonize.timings import HarmonizeStageTimings
 from anonymizer.controller.ai.tseg.config import TSEG_CACHE_DIRNAME
 from anonymizer.controller.ai.tseg.contrast import structure_voxels_from_organ_stats
+from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult
 from anonymizer.controller.ai.tseg.segment import (
     NO_ANATOMY_REGIONS_ERROR,
     TS_result,
@@ -119,8 +118,6 @@ def test_harmonize_prefers_ct_single_pass_when_enabled(
 
 
 def _ct_head_geometry() -> SeriesGeometryResult:
-    from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult
-
     return SeriesGeometryResult(
         plane="axial",
         plane_confidence=0.95,

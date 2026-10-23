@@ -1,12 +1,37 @@
 """Project-level series anatomy ledger for Dataset analytics.
 
-Per-series ``organ_volumes_ml.json`` remains the volume source of truth. This
-ledger stores compact anatomy rows so Dashboard Refresh can assemble charts
-without walking ``images/`` at thousands of series.
+Public API
+----------
+LEDGER_DIRNAME
+    Ledger dirname (default 'analytics').
+
+LEDGER_FILENAME
+    Ledger filename.
+
+ledger_path_for_images_dir(images_dir: Path) -> Path
+    Resolve the project analytics ledger path for an images tree.
+
+SeriesLedgerRow
+    One segmented series contribution to anatomy analytics.
+
+utc_now_iso() -> str
+    Utc now iso.
+
+ledger_exists(images_dir: Path) -> bool
+    Ledger exists.
+
+read_ledger_rows(images_dir: Path) -> dict[str, SeriesLedgerRow]
+    Load ledger keyed by anon_series_uid (last line wins on duplicates).
+
+write_ledger_rows(images_dir: Path, rows: Mapping[str, SeriesLedgerRow]) -> Path
+    Atomically rewrite the ledger (sorted by series uid for stable diffs).
+
+upsert_series_row(images_dir: Path, row: SeriesLedgerRow) -> Path
+    Insert or replace one series row in the project ledger.
+
+replace_ledger_rows(images_dir: Path, rows: Mapping[str, SeriesLedgerRow]) -> Path
+    Full rewrite used by legacy rebuild.
 """
-
-from __future__ import annotations
-
 import contextlib
 import json
 import logging
@@ -14,7 +39,7 @@ import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Self
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +50,9 @@ LEDGER_FILENAME = "series_ledger.jsonl"
 def ledger_path_for_images_dir(images_dir: Path) -> Path:
     """Resolve the project analytics ledger path for an images tree.
 
-    Prefer ``{storage}/analytics/series_ledger.jsonl`` when ``images_dir`` is the
+    Prefer {storage}/analytics/series_ledger.jsonl when images_dir is the
     project public tree (sibling of the project model). Otherwise keep the ledger
-    under ``images_dir/analytics/`` so ad-hoc/test roots stay self-contained.
+    under images_dir/analytics/ so ad-hoc/test roots stay self-contained.
     """
     images_dir = Path(images_dir).resolve()
     storage_dir = images_dir.parent
@@ -63,8 +88,8 @@ class SeriesLedgerRow:
             "updated_at": self.updated_at,
         }
 
-    @staticmethod
-    def from_json_dict(payload: Mapping[str, Any]) -> SeriesLedgerRow | None:
+    @classmethod
+    def from_json_dict(cls, payload: Mapping[str, Any]) -> Self | None:
         uid = str(payload.get("anon_series_uid") or "").strip()
         patient = str(payload.get("anon_patient_id") or "").strip()
         if not uid or not patient:
@@ -86,7 +111,7 @@ class SeriesLedgerRow:
             if ml > 0:
                 organs[str(key)] = ml
         updated = str(payload.get("updated_at") or "")
-        return SeriesLedgerRow(
+        return cls(
             anon_series_uid=uid,
             anon_patient_id=patient,
             modality=modality,
@@ -106,7 +131,7 @@ def ledger_exists(images_dir: Path) -> bool:
 
 
 def read_ledger_rows(images_dir: Path) -> dict[str, SeriesLedgerRow]:
-    """Load ledger keyed by ``anon_series_uid`` (last line wins on duplicates)."""
+    """Load ledger keyed by anon_series_uid (last line wins on duplicates)."""
     path = ledger_path_for_images_dir(images_dir)
     if not path.is_file():
         return {}

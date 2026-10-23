@@ -1,7 +1,5 @@
 """Unit tests for DatasetView tree navigation gestures."""
 
-from __future__ import annotations
-
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -218,6 +216,8 @@ def test_tree_row_tooltip_text_by_row_type() -> None:
 
 def test_tree_row_tooltip_only_over_description_column() -> None:
     view = _navigation_view()
+    study = view._studies_by_uid["study-1"]
+    study.series = [_series("series-1")]
     view._tree.identify_row.return_value = study_tree_iid("study-1")
 
     view._tree.identify_column.return_value = "#1"

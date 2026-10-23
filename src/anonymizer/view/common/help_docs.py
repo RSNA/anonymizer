@@ -1,10 +1,8 @@
 """Open the published clinician user manual in the system browser.
 
 Primary docs: https://rsna.github.io/anonymizer/
-Offline fallback: local MkDocs ``site/`` build next to the repo/workdir when present.
+Offline fallback: local MkDocs site/ build next to the repo/workdir when present.
 """
-
-from __future__ import annotations
 
 import logging
 import webbrowser
@@ -21,7 +19,7 @@ TUTORIALS_YOUTUBE_URL = "https://www.youtube.com/@RSNA"
 
 def docs_language_prefix() -> str:
     """Return URL language segment for non-default locales (empty for English at site root)."""
-    code = (get_current_language_code() or "en_US").replace("-", "_")
+    code = get_current_language_code().replace("-", "_")
     if code.lower().startswith("en"):
         return ""
     if code in {"de", "es", "fr"}:
@@ -46,7 +44,7 @@ def help_page_url(slug: str = "", *, base_url: str = DOCS_BASE_URL) -> str:
 
 
 def local_site_index() -> Path | None:
-    """Return ``site/index.html`` if a local MkDocs build is available."""
+    """Return site/index.html if a local MkDocs build is available."""
     candidates = [
         Path.cwd() / "site" / "index.html",
         Path(__file__).resolve().parents[4] / "site" / "index.html",  # repo root from src/anonymizer/view/common
@@ -100,16 +98,10 @@ def open_tutorials_channel() -> bool:
 
 
 def locale_html_dir() -> Path:
-    """Return ``assets/locales/<lang>/html`` for the active UI language."""
+    """Return assets/locales/<lang>/html for the active UI language."""
 
-    code = get_current_language_code() or "en_US"
-    packaged = locales_dir() / code / "html"
-    if packaged.is_dir():
-        return packaged
-    cwd_candidate = Path("assets/locales") / code / "html"
-    if cwd_candidate.is_dir():
-        return cwd_candidate
-    return packaged
+    code = get_current_language_code()
+    return locales_dir() / code / "html"
 
 
 def license_html_path() -> Path | None:
@@ -117,8 +109,6 @@ def license_html_path() -> Path | None:
 
     candidates = [locale_html_dir()]
     en_fallback = locales_dir() / "en_US" / "html"
-    if not en_fallback.is_dir():
-        en_fallback = Path("assets/locales/en_US/html")
     if en_fallback not in candidates:
         candidates.append(en_fallback)
 

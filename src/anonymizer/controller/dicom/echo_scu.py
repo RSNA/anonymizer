@@ -1,7 +1,10 @@
-"""C-ECHO SCU."""
+"""C-ECHO SCU: verify DICOM connectivity to a remote AE.
 
-from __future__ import annotations
-
+Public API
+----------
+EchoMixin
+    EchoMixin type.
+"""
 import logging
 import threading
 from queue import Queue

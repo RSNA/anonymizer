@@ -1,7 +1,5 @@
 """Tests for AI Features view strings and tseg module boundaries."""
 
-from __future__ import annotations
-
 import re
 from pathlib import Path
 

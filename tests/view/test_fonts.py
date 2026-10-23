@@ -1,7 +1,5 @@
 """Tests for centralized view font helpers."""
 
-from __future__ import annotations
-
 from unittest.mock import MagicMock, patch
 
 from anonymizer.view.common import fonts as fonts_module

@@ -1,7 +1,16 @@
-"""Fuse Xp pixel body-part prediction with DICOM planar anatomy."""
+"""Fuse Xp pixel body-part prediction with DICOM planar anatomy.
 
-from __future__ import annotations
+Public API
+----------
+AnatomyFusionResult
+    Resolved planar anatomy after DICOM + optional pixel fusion.
 
+format_xp_bodypart_evidence(label: str, confidence: float) -> str
+    Human-readable Xp-Bodypart evidence (matches CT classifier confidence style).
+
+fuse_planar_anatomy(*, dicom_label: str | None, dicom_evidence: str | None, pixel_pred: XpBodypartPrediction | None) -> AnatomyFusionResult
+    Apply plan fusion rules; dicom_label None when metadata mapping failed.
+"""
 from dataclasses import dataclass
 
 from anonymizer.controller.ai.harmonize.xp_bodypart.labels import (
@@ -39,7 +48,7 @@ def fuse_planar_anatomy(
     dicom_evidence: str | None,
     pixel_pred: XpBodypartPrediction | None,
 ) -> AnatomyFusionResult:
-    """Apply plan fusion rules; ``dicom_label`` None when metadata mapping failed."""
+    """Apply plan fusion rules; dicom_label None when metadata mapping failed."""
     dicom = (dicom_label or "").strip() or None
     dicom_ev = (dicom_evidence or "").strip()
 

@@ -1,7 +1,5 @@
 """End-of-run capture inventory (one row per shot, languages per OS column)."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from docs_help.capture import format_capture_report

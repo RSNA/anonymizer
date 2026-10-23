@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Backward-compatible CLI entry point. Prefer ``src/prototyping/ct/ct_eval.py``."""
 
-from __future__ import annotations
-
 import sys
 from pathlib import Path
 

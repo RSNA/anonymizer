@@ -1,7 +1,5 @@
 """E2E contract for server-owned project-configuration confirmation."""
 
-from __future__ import annotations
-
 import dataclasses
 from pathlib import Path
 
@@ -57,7 +55,7 @@ def test_configuration_schemas_are_generated_from_core_dataclasses():
         "transfer_syntaxes",
         "scp",
         "network_timeouts",
-        "anonymization_policy",
+        "confidentiality_options",
     }
     assert expected_create <= project_fields
     assert set(CreateProjectArgs.model_fields) == expected_create | {
@@ -70,7 +68,7 @@ def test_configuration_schemas_are_generated_from_core_dataclasses():
         "transfer_syntaxes",
         "scp",
         "network_timeouts",
-        "anonymization_policy",
+        "confidentiality_options",
     }
     assert set(LocalDicomNodeArgs.model_fields) == {
         field.name for field in dataclasses.fields(DICOMNode)[:3]
@@ -87,7 +85,7 @@ def test_configuration_schemas_are_generated_from_core_dataclasses():
 def test_prepare_returns_supplied_values_combined_with_defaults(tmp_path: Path):
     prepared = mcp_tools.create_project(
         project_name="ConfirmMe",
-        anonymization_policy="clinical",
+        confidentiality_options=[113100, 113107, 113108, 113111, 113104],
         modalities=["CT", "MR"],
     )
 
@@ -104,15 +102,15 @@ def test_prepare_returns_supplied_values_combined_with_defaults(tmp_path: Path):
 
     configuration = prepared["configuration"]
     assert configuration["project_name"] == "ConfirmMe"
-    assert configuration["anonymization_policy"] == "clinical"
-    # Clinical policy installs SR/PDF at creation, so the preview shows them.
+    assert configuration["confidentiality_options"] == [113100, 113104, 113107, 113108, 113111]
+    # Clean Structured Content enables SR/PDF, so the preview shows them.
     assert configuration["modalities"] == ["CT", "MR", "SR", "PDF"]
     assert configuration["language_code"] == ProjectModel.default_language_code()
     assert configuration["uid_root"] == ProjectModel.default_uid_root()
     assert configuration["scp"]["aet"] == ProjectModel.default_local_server().aet
     assert set(prepared["supplied_by_user"]) == {
         "project_name",
-        "anonymization_policy",
+        "confidentiality_options",
         "modalities",
     }
     assert "language_code" in prepared["using_defaults"]

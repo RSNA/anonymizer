@@ -1,7 +1,5 @@
 """Create tiny synthetic SR and Encapsulated PDF DICOMs with fake PHI (no real PHI)."""
 
-from __future__ import annotations
-
 from datetime import datetime
 from pathlib import Path
 

@@ -1,7 +1,19 @@
-"""Classify a series for Embedded PHI routing (Series View, Report Review, AI batch)."""
+"""Classify a series for Embedded PHI routing (Series View, Report Review, AI batch).
 
-from __future__ import annotations
+Public API
+----------
+SR_SOP_CLASS_PREFIX
+    Sr sop class prefix.
 
+ENCAPSULATED_PDF_SOP_CLASS_UID
+    Encapsulated pdf sop class uid.
+
+SeriesKind
+    Embedded PHI processing / workspace route for a series.
+
+classify_series(series_path: Path | str, *, modality: str | None=None) -> SeriesKind
+    Classify a series for workspace routing.
+"""
 from enum import StrEnum
 from pathlib import Path
 
@@ -25,7 +37,7 @@ class SeriesKind(StrEnum):
 
 
 def _first_header(series_path: Path | str):
-    """Header (no pixels) of the first readable DICOM file in a series directory, else ``None``."""
+    """Header (no pixels) of the first readable DICOM file in a series directory, else None."""
     path = Path(series_path)
     if not path.is_dir():
         return None
@@ -41,8 +53,8 @@ def classify_series(series_path: Path | str, *, modality: str | None = None) -> 
     """
     Classify a series for workspace routing.
 
-    SOP Class (SR / Encapsulated PDF) wins when the header is readable; otherwise ``modality`` decides.
-    SC/OT series whose description looks like a text report → ``PIXEL_TEXT_REPORT`` (Report View).
+    SOP Class (SR / Encapsulated PDF) wins when the header is readable; otherwise modality decides.
+    SC/OT series whose description looks like a text report → PIXEL_TEXT_REPORT (Report View).
     """
     header = _first_header(series_path)
     mod = (modality or (str(header.get("Modality", "")) if header is not None else "")).strip().upper()

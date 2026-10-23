@@ -1,3 +1,13 @@
+"""Application and package version strings for UI, logging, and DICOM Software Versions.
+
+Public API
+----------
+find_project_pyproject() -> Path | None
+    Return pyproject.toml for this repo when running from a source checkout.
+
+get_version() -> str
+    Return the package version.
+"""
 import importlib.metadata
 from pathlib import Path
 
@@ -27,7 +37,7 @@ def _pyproject_names_package(pyproject_path: Path) -> bool:
 
 
 def find_project_pyproject() -> Path | None:
-    """Return ``pyproject.toml`` for this repo when running from a source checkout."""
+    """Return pyproject.toml for this repo when running from a source checkout."""
     path = Path(__file__).resolve().parent
     for _ in range(8):
         candidate = path / "pyproject.toml"
@@ -43,7 +53,7 @@ def get_version() -> str:
     """
     Return the package version.
 
-    Prefer ``pyproject.toml`` when this package is loaded from a source checkout
+    Prefer pyproject.toml when this package is loaded from a source checkout
     so log lines, window titles, and CLI help match the repo version exactly.
     Fall back to installed distribution metadata for PyPI wheel installs.
     """

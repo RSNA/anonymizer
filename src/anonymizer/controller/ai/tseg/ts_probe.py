@@ -1,7 +1,25 @@
-"""TotalSegmentator leaf probes: weight kinds, package/license checks, checkpoint presence (no tseg deps)."""
+"""TotalSegmentator leaf probes: weight kinds, package/license checks, checkpoint presence (no tseg deps).
 
-from __future__ import annotations
+Public API
+----------
+TSEG_INSTALL_HINT
+    Tseg install hint.
 
+CHECKPOINT_NAME
+    Checkpoint name.
+
+TsWeightKind
+    TsWeightKind type.
+
+totalsegmentator_available() -> bool
+    True when the TotalSegmentator package is installed and importable.
+
+verify_face_license() -> tuple[bool, str]
+    Verify face license.
+
+checkpoint_ready(model_folder: Path | None) -> bool
+    True when checkpoint_final.pth exists under the model folder (root or fold_*).
+"""
 import importlib
 import importlib.metadata as md
 import logging
@@ -66,7 +84,7 @@ def verify_face_license() -> tuple[bool, str]:
 
 
 def checkpoint_ready(model_folder: Path | None) -> bool:
-    """True when ``checkpoint_final.pth`` exists under the model folder (root or fold_*)."""
+    """True when checkpoint_final.pth exists under the model folder (root or fold_*)."""
     if model_folder is None:
         return False
     root_checkpoint = model_folder / CHECKPOINT_NAME

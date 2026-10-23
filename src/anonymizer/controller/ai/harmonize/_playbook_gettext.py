@@ -1,5 +1,11 @@
-"""Register Playbook harmonize label msgids for xgettext extraction."""
+"""Register Playbook harmonize label msgids for xgettext extraction.
 
+Public API
+----------
+
+Public API
+----------
+"""
 from anonymizer.utils.translate import _
 
 

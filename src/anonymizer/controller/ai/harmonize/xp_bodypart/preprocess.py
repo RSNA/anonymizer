@@ -1,7 +1,16 @@
-"""Preprocess radiograph pixels for Xp-Bodypart-Checker (256 pad + normalize)."""
+"""Preprocess radiograph pixels for Xp-Bodypart-Checker (256 pad + normalize).
 
-from __future__ import annotations
+Public API
+----------
+uint8_grayscale_from_array(pixels: np.ndarray) -> np.ndarray
+    Convert DICOM/numpy pixels to 2-D uint8 grayscale.
 
+pad_to_square_256(image: Image.Image) -> Image.Image
+    Longest side → 256; black-pad shorter side to 256×256 (paper preprocess).
+
+tensor_from_grayscale_array(pixels: np.ndarray) -> torch.Tensor
+    Return batch tensor [1, 1, 256, 256] ready for EfficientNet-B4.
+"""
 import numpy as np
 import torch
 import torchvision.transforms as T
@@ -58,7 +67,7 @@ def pad_to_square_256(image: Image.Image) -> Image.Image:
 
 
 def tensor_from_grayscale_array(pixels: np.ndarray) -> torch.Tensor:
-    """Return batch tensor ``[1, 1, 256, 256]`` ready for EfficientNet-B4."""
+    """Return batch tensor [1, 1, 256, 256] ready for EfficientNet-B4."""
     gray = uint8_grayscale_from_array(pixels)
     pil = pad_to_square_256(Image.fromarray(gray, mode="L"))
     return _TO_TENSOR(pil).unsqueeze(0)

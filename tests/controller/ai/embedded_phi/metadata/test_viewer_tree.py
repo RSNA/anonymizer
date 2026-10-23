@@ -1,7 +1,5 @@
 """Unit tests: Horos-style metadata tree builder."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from pydicom import dcmread

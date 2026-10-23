@@ -1,7 +1,5 @@
 """CLI entry point tests."""
 
-from __future__ import annotations
-
 from click.testing import CliRunner
 
 from anonymizer.anonymizer import main

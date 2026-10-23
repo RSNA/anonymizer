@@ -3,8 +3,6 @@
 All rows share the same schema; only text length (and thus context) differs.
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 import random

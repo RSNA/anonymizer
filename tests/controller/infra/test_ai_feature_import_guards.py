@@ -1,7 +1,5 @@
 """Guard against AI feature wrapper / View re-export regressions."""
 
-from __future__ import annotations
-
 import ast
 from pathlib import Path
 

@@ -1,7 +1,5 @@
 """Functional series_io load/save/description roundtrips (real DICOM)."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest

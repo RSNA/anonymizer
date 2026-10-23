@@ -1,7 +1,5 @@
 """Deeper gold / negatives sanity checks (prototyping; not in CI)."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from prototyping.metadata_phi.eval import load_gold

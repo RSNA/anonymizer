@@ -1,10 +1,8 @@
-"""MCP wire format: dict handlers → ``ToolResult`` (plain text; images as ImageContent).
+"""MCP wire format: dict handlers → ToolResult (plain text; images as ImageContent).
 
-Unit tests call handlers directly and get dicts. Registration wraps via ``as_plain_tool``.
-``output_schema`` stays unset so clients get free-text / image content, not structuredContent.
+Unit tests call handlers directly and get dicts. Registration wraps via as_plain_tool.
+output_schema stays unset so clients get free-text / image content, not structuredContent.
 """
-
-from __future__ import annotations
 
 import inspect
 import json
@@ -36,8 +34,8 @@ def _slim_project(proj: Any) -> Any:
 def wire_text(result: Any) -> str:
     """Flatten a tool dict into plain text for MCP clients.
 
-    ``list_inventory`` becomes TSV only (no ``series`` / ``inventory`` JSON arrays).
-    Preview success omits ``preview_base64`` (image is sent as MCP ``ImageContent``).
+    list_inventory becomes TSV only (no series / inventory JSON arrays).
+    Preview success omits preview_base64 (image is sent as MCP ImageContent).
     Other successes are one-line compact JSON without pretty-print nesting.
     """
     if isinstance(result, str):
@@ -81,7 +79,7 @@ def wire_text(result: Any) -> str:
 
 
 def parse_wire_text(text: str) -> dict[str, Any]:
-    """Inverse of ``wire_text`` for clients/tests (TSV inventory → series rows)."""
+    """Inverse of wire_text for clients/tests (TSV inventory → series rows)."""
     raw = (text or "").strip()
     if not raw:
         return {"ok": False, "error": "empty tool result"}
@@ -139,7 +137,7 @@ def parse_wire_text(text: str) -> dict[str, Any]:
 
 
 def as_plain_tool(fn: Any) -> Any:
-    """Wrap a dict-returning handler as MCP ``ToolResult`` (text + optional image)."""
+    """Wrap a dict-returning handler as MCP ToolResult (text + optional image)."""
 
     @wraps(fn)
     def wrapper(*args: Any, **kwargs: Any) -> ToolResult:

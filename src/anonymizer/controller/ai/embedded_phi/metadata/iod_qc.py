@@ -1,49 +1,61 @@
 """IOD QC for dataset curation — isolated from Metadata PHI extract / scrub.
-
 Detect / resolve only. UI and series load must call this API; they must not
-import ``dicom_validator.validator`` directly.
+import dicom_validator.validator directly.
 
 Public API
 ----------
-``detect_iod_qc(ds, *, dicom_info=None)``
-    Run a narrow ``IODValidator`` pass and classify each tag error as
-    ``BLOCKER`` (structural) or ``REVIEW`` (unexpected / soft).
+QcSeverity
+    Curation severity for one IOD QC finding.
 
-``detect_series_iod_qc(instances, *, dicom_info=None)``
-    Per-SOP detect + series rollup (blocker/review counts, affected SOP UIDs).
+QcErrorKind
+    Normalized error kinds from dicom-validator ErrorCode.
 
-``resolve_iod_qc(ds, issue, action, *, dismissed=None)``
-    Apply one curation action. Returns ``QcResolveResult`` (may mutate ``ds``
-    only for blankable value fixes). Missing Type 1 is never auto-filled.
+QcAction
+    Resolve actions the UI / batch may request.
 
-``qc_chip_label(report)``
-    Short series-chrome string, e.g. ``QC · 3 issues · 2 slices``.
+QcIssue
+    One curated IOD finding (single tag or SOP-level status).
 
-``is_blocker`` / ``is_review``
-    Severity helpers for filters.
+QcInstanceReport
+    QC findings for one SOP Instance.
 
-PHI free-text unexpected highlighting stays in ``iod_allowlist.mark_iod_unexpected``;
-this module does not scrub text or shift dates.
+QcSeriesReport
+    Series rollup over per-SOP instance reports.
+
+QcResolveResult
+    Outcome of resolve_iod_qc.
+
+is_blocker(issue: QcIssue) -> bool
+    Is blocker.
+
+is_review(issue: QcIssue) -> bool
+    Is review.
+
+qc_chip_label(report: QcSeriesReport) -> str
+    Series-chrome chip text; empty when no active blockers.
+
+detect_iod_qc(ds: Dataset, *, dicom_info: DicomInfo | None=None) -> QcInstanceReport
+    Detect curated IOD QC issues on one dataset (header-only is fine).
+
+detect_series_iod_qc(instances: Iterable[tuple[str, Dataset]] | Mapping[str, Dataset], *, dicom_info: DicomInfo | None=None) -> QcSeriesReport
+    Detect QC across a series.
+
+resolve_iod_qc(ds: Dataset, issue: QcIssue, action: QcAction, *, report: QcSeriesReport | None=None) -> QcResolveResult
+    Apply a curation resolve action.
 """
-
-from __future__ import annotations
-
 import logging
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from enum import Enum
-from typing import TYPE_CHECKING
 
-from pydicom.dataset import Dataset
-
-from anonymizer.controller.ai.embedded_phi.metadata.iod_allowlist import load_dicom_info
-
-if TYPE_CHECKING:
-    from dicom_validator.validator.dicom_info import DicomInfo
+from dicom_validator.validator.dicom_info import DicomInfo
 from dicom_validator.validator.error_handler import NullValidationResultHandler
 from dicom_validator.validator.iod_validator import IODValidator
 from dicom_validator.validator.validation_result import ErrorCode, Status
 from pydicom.datadict import keyword_for_tag
+from pydicom.dataset import Dataset
+
+from anonymizer.controller.ai.embedded_phi.metadata.iod_allowlist import load_dicom_info
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +68,7 @@ class QcSeverity(str, Enum):
 
 
 class QcErrorKind(str, Enum):
-    """Normalized error kinds from dicom-validator ``ErrorCode``."""
+    """Normalized error kinds from dicom-validator ErrorCode."""
 
     TAG_MISSING = "tag_missing"
     TAG_EMPTY = "tag_empty"
@@ -188,7 +200,7 @@ class QcSeriesReport:
 
 @dataclass(frozen=True)
 class QcResolveResult:
-    """Outcome of ``resolve_iod_qc``."""
+    """Outcome of resolve_iod_qc."""
 
     ok: bool
     action: QcAction
@@ -295,8 +307,8 @@ def detect_series_iod_qc(
     """
     Detect QC across a series.
 
-    ``instances`` is ``(sop_instance_uid, dataset)`` pairs or a SOP→dataset map.
-    Datasets may be header-only (``stop_before_pixels=True``).
+    instances is (sop_instance_uid, dataset) pairs or a SOP→dataset map.
+    Datasets may be header-only (stop_before_pixels=True).
     """
     info = dicom_info if dicom_info is not None else load_dicom_info()
     if isinstance(instances, Mapping):
@@ -339,10 +351,10 @@ def resolve_iod_qc(
     """
     Apply a curation resolve action.
 
-    - ``DISMISS``: mark the issue dismissed on ``report`` (required for bookkeeping).
-    - ``EXCLUDE_INSTANCE``: add SOP to ``report.excluded_sop_uids``.
-    - ``BLANK_VALUE``: clear the element when kind is blankable; never invent Type 1.
-    - ``COPY_TAG_PATH``: success no-op (caller copies ``issue.tag_path``).
+    - DISMISS: mark the issue dismissed on report (required for bookkeeping).
+    - EXCLUDE_INSTANCE: add SOP to report.excluded_sop_uids.
+    - BLANK_VALUE: clear the element when kind is blankable; never invent Type 1.
+    - COPY_TAG_PATH: success no-op (caller copies issue.tag_path).
     """
     if action is QcAction.COPY_TAG_PATH:
         return QcResolveResult(
@@ -490,7 +502,7 @@ def _kind_from_error_code(code: object) -> QcErrorKind | None:
 
 
 def _format_dicom_tag(dicom_tag: object) -> tuple[str, str]:
-    """Return ``(GGGGEEEE, path)`` from a validator ``DicomTag``."""
+    """Return (GGGGEEEE, path) from a validator DicomTag."""
     tag = getattr(dicom_tag, "tag", None)
     parents = getattr(dicom_tag, "parents", None) or []
     parts: list[str] = []

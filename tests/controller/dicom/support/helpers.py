@@ -5,13 +5,9 @@ from queue import Queue
 from pydicom import Dataset
 from pydicom.data import get_testdata_file
 
-from anonymizer.controller.project import (
-    ExportPatientsRequest,
-    ExportPatientsResponse,
-    MoveStudiesRequest,
-    ProjectController,
-    StudyUIDHierarchy,
-)
+from anonymizer.controller.dicom.hierarchies import StudyUIDHierarchy
+from anonymizer.controller.dicom.requests import ExportPatientsRequest, ExportPatientsResponse, MoveStudiesRequest
+from anonymizer.controller.project import ProjectController
 from anonymizer.model.project import DICOMNode
 
 # DICOM NODES involved in tests:

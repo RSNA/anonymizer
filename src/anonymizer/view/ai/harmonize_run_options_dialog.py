@@ -1,7 +1,5 @@
 """Combined pre-run options for Series View Harmonize (mapping vs model + brain)."""
 
-from __future__ import annotations
-
 import contextlib
 import tkinter as tk
 from dataclasses import dataclass

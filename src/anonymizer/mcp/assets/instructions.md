@@ -71,8 +71,8 @@ The server owns the pending configuration. Do not run a setup wizard and do not 
 ## Change settings later
 
 1. Call `project_info` (`{}`) if you need current values.
-2. Call `update_project_settings` with mutable fields only: `modalities`, `transfer_syntaxes`, `scp`, `network_timeouts`, `anonymization_policy`.
-3. Switching `anonymization_policy` replaces the project packaged script (custom edits lost) — confirm with the clinician first.
+2. Call `update_project_settings` with mutable fields only: `modalities`, `transfer_syntaxes`, `scp`, `network_timeouts`, `confidentiality_options`.
+3. Changing `confidentiality_options` (CID 7050 code values, e.g. clinical = [113100, 113107, 113108, 113111]) recompiles the project anonymizer script (custom edits lost) — confirm with the clinician first.
 4. Fixed-after-create fields (`project_name`, `storage_dir`, `site_id`, `uid_root`, `language_code`) cannot be changed. `language_code` is chosen once at project creation, like the desktop welcome-screen language selector; it is not a project setting. If the user asks to change one, do **not** call `update_project_settings`; explain that it is fixed after creation and do not invent a workaround.
 5. Reply → **stop**.
 

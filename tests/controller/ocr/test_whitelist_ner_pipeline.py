@@ -1,7 +1,5 @@
 """Controller tests: whitelist × NER permutations (Series View annotate vs batch filter)."""
 
-from __future__ import annotations
-
 from unittest.mock import MagicMock, patch
 
 from anonymizer.controller.ai.embedded_phi.ner.engine import Entity
@@ -33,16 +31,21 @@ def _davidson_detections() -> list[OCRText]:
 
 
 def _fake_detect_phi(text: str, *, locale: str = "en_US") -> list[Entity]:
-    """Deterministic PHI labels for Davidson-like strings (no model)."""
-    t = text.strip()
-    upper = t.upper()
-    if "DAVIDSON" in upper or "DOUGLAS" in upper:
-        return [Entity("NAME", 0, len(t), score=0.99)]
-    if "DOB" in upper or (t.count(".") == 2 and any(ch.isdigit() for ch in t)):
-        return [Entity("DATE", 0, len(t), score=0.95)]
-    if "@" in t:
-        return [Entity("EMAIL", 0, len(t), score=0.9)]
-    return []
+    """Deterministic PHI spans in the joined frame context (no model)."""
+    ents: list[Entity] = []
+    for needle, label, score in (
+        ("DAVIDSON", "FIRST_NAME", 0.99),
+        ("DOUGLAS", "FIRST_NAME", 0.98),
+        ("01.09.2012", "DATE", 0.95),
+        ("06.16.1976", "DATE", 0.95),
+    ):
+        idx = text.find(needle)
+        if idx >= 0:
+            ents.append(Entity(label, idx, idx + len(needle), score=score))
+    if "@" in text:
+        idx = text.find("@")
+        ents.append(Entity("EMAIL", max(0, idx - 2), idx + 3, score=0.9))
+    return sorted(ents, key=lambda e: e.start)
 
 
 # --- Whitelist only -----------------------------------------------------------------
@@ -85,11 +88,11 @@ def test_whitelist_preserves_phi_label() -> None:
         top_left=(0, 0),
         bottom_right=(10, 10),
         prob=0.9,
-        phi_label="NAME",
+        phi_label="FIRST_NAME",
     )
     kept = filter_ocr_whitelist_only([labeled, name], whitelist=["PORTABLE"])
     assert [t.text for t in kept] == ["DAVIDSON"]
-    assert kept[0].phi_label == "NAME"
+    assert kept[0].phi_label == "FIRST_NAME"
 
 
 # --- NER annotate (Series View) -------------------------------------------------------
@@ -123,18 +126,64 @@ def test_annotate_labels_phi_without_dropping_overlay(
     assert "OCR→NER classify: 3 labeled" in caplog.text
 
 
+@patch(
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
+    return_value=True,
+)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
+def test_annotate_one_contextual_call_and_box_entities(
+    _mock_ready: MagicMock, _mock_locale: MagicMock, caplog
+) -> None:
+    """One NER call on the joined frame; entities recorded per box for hover."""
+    seen: list[str] = []
+
+    def detect(body: str, *, locale: str = "en_US") -> list[Entity]:
+        seen.append(body)
+        return _fake_detect_phi(body)
+
+    name = OCRText(text="DAVIDSON", top_left=(0, 0), bottom_right=(80, 20), prob=0.95)
+    dob = OCRText(text="DOB: 06.16.1976", top_left=(0, 30), bottom_right=(120, 50), prob=0.95)
+    portable = OCRText(text="Portable", top_left=(200, 30), bottom_right=(260, 50), prob=0.95)
+    with caplog.at_level("INFO"):
+        out = annotate_ocr_phi_labels([name, dob, portable], detect_fn=detect)
+    assert seen == ["DAVIDSON, DOB: 06.16.1976, Portable"]
+    by_text = {t.text: t for t in out}
+    # Pixel category collapses the model's FIRST_NAME to NAME.
+    assert by_text["DAVIDSON"].phi_label == "NAME"
+    assert by_text["DAVIDSON"].phi_entities == (("NAME", "DAVIDSON"),)
+    # Only the entity inside the box is recorded — not the "DOB:" prefix.
+    assert by_text["DOB: 06.16.1976"].phi_label == "DATE"
+    assert by_text["DOB: 06.16.1976"].phi_entities == (("DATE", "06.16.1976"),)
+    assert by_text["Portable"].phi_label is None
+    assert by_text["Portable"].phi_entities == ()
+    assert "OCR→NER box 'DOB: 06.16.1976' → DATE" in caplog.text
+
+
+@patch(
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
+    return_value=True,
+)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
+def test_annotate_entity_spanning_two_boxes_labels_both(
+    _mock_ready: MagicMock, _mock_locale: MagicMock
+) -> None:
+    def detect(body: str, *, locale: str = "en_US") -> list[Entity]:
+        return [Entity("FIRST_NAME", 0, len(body), score=0.9)]
+
+    left = OCRText(text="Olivia", top_left=(0, 0), bottom_right=(50, 20), prob=0.95)
+    right = OCRText(text="Diaz", top_left=(56, 0), bottom_right=(100, 20), prob=0.95)
+    out = annotate_ocr_phi_labels([left, right], detect_fn=detect)
+    assert [t.phi_label for t in out] == ["NAME", "NAME"]
+    assert out[0].phi_entities == (("NAME", "Olivia"),)
+    assert out[1].phi_entities == (("NAME", "Diaz"),)
+
+
 def _name_split_detect_phi(text: str, *, locale: str = "en_US") -> list[Entity]:
-    """Olivia is NAME alone; Diaz is not; the full phrase is NAME covering both tokens."""
-    t = text.strip()
-    if t == "Olivia Diaz":
-        return [Entity("NAME", 0, len(t), score=0.99)]
-    if t == "Olivia":
-        start = t.find("Olivia")
-        return [Entity("NAME", start, start + 6, score=0.99)]
-    if t.startswith("Olivia ") and t != "Olivia Diaz":
-        start = t.find("Olivia")
-        return [Entity("NAME", start, start + 6, score=0.99)]
-    return []
+    """Olivia is FIRST_NAME in the joined context; Diaz is not labelled."""
+    idx = text.find("Olivia")
+    if idx < 0:
+        return []
+    return [Entity("FIRST_NAME", idx, idx + 6, score=0.99)]
 
 
 @patch(
@@ -146,18 +195,20 @@ def _name_split_detect_phi(text: str, *, locale: str = "en_US") -> list[Entity]:
     "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_entities",
     side_effect=_name_split_detect_phi,
 )
-def test_annotate_propagates_name_to_adjacent_unlabeled_surname(
+def test_annotate_does_not_propagate_name_to_adjacent_unlabeled_box(
     _mock_detect: MagicMock,
     _mock_ready: MagicMock,
     _mock_locale: MagicMock,
 ) -> None:
+    """No OCR-box band-aid: a box the model did not label stays unlabeled,
+    even next to a labelled first name."""
     olivia = OCRText(text="Olivia", top_left=(100, 20), bottom_right=(160, 40), prob=0.95)
     diaz = OCRText(text="Diaz", top_left=(166, 20), bottom_right=(210, 40), prob=0.95)
     left = OCRText(text="LEFT", top_left=(120, 200), bottom_right=(180, 220), prob=0.95)
     out = annotate_ocr_phi_labels([olivia, diaz, left])
     by_text = {t.text: t.phi_label for t in out}
     assert by_text["Olivia"] == "NAME"
-    assert by_text["Diaz"] == "NAME"
+    assert by_text["Diaz"] is None
     assert by_text["LEFT"] is None
 
 
@@ -192,16 +243,17 @@ def test_annotate_does_not_label_adjacent_overlay_when_span_is_first_name_only(
     "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_entities",
     side_effect=_name_split_detect_phi,
 )
-def test_batch_ner_filter_keeps_adjacent_surname_after_context_pass(
+def test_batch_ner_filter_drops_adjacent_unlabeled_box(
     _mock_detect: MagicMock,
     _mock_ready: MagicMock,
     _mock_locale: MagicMock,
 ) -> None:
+    """Batch filter keeps only boxes the model itself labelled."""
     olivia = OCRText(text="Olivia", top_left=(100, 20), bottom_right=(160, 40), prob=0.95)
     diaz = OCRText(text="Diaz", top_left=(166, 20), bottom_right=(210, 40), prob=0.95)
     portable = OCRText(text="Portable", top_left=(10, 80), bottom_right=(90, 100), prob=0.95)
     kept = filter_ocr_phi_ner([olivia, diaz, portable])
-    assert {t.text: t.phi_label for t in kept} == {"Olivia": "NAME", "Diaz": "NAME"}
+    assert {t.text: t.phi_label for t in kept} == {"Olivia": "NAME"}
 
 
 @patch(

@@ -3,8 +3,6 @@
 Does not change the product default anonymizer script. Callers must opt in.
 """
 
-from __future__ import annotations
-
 import io
 from pathlib import Path
 

@@ -1,10 +1,8 @@
 """Log every inbound MCP request (tools/call, initialize, tools/list, …).
 
-Installed via ``middleware.default_middleware()``. Logs full outbound
-``initialize`` instructions and ``tools/list`` API definitions.
+Installed via middleware.default_middleware(). Logs full outbound
+initialize instructions and tools/list API definitions.
 """
-
-from __future__ import annotations
 
 import json
 import logging

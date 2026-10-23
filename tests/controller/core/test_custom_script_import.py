@@ -1,7 +1,5 @@
 """Custom CTP script validation and option inference (no project install API)."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest

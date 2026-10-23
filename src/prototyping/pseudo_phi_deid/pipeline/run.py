@@ -1,19 +1,16 @@
 """PseudoPHI header pipeline — steps 1–7 (score is step 8, outside this module).
 
-1. Clinical anonymizer script (public tags; privates untouched on walk)
-2. ``process_private_tags_tcia`` (creator-aware Private Tag KB)
-3. Extract remaining non-empty ``TEXT_VRS``
-4. Prepare NER: drop stamps + script-generated fields; caret→space; wrap
+1. anonymizer script (Retain Safe Private via AnonymizerController walk)
+2. Extract remaining non-empty TEXT_VRS
+3. Prepare NER: drop stamps + script-generated fields; caret→space; wrap
    (private tags → TCIA KB description when available)
-5. Bulk OpenMed detect + taxonomy scrub on NER spans
-6. ``ner_residual_cleanup`` (dangling for/file, FORFILE, month+year tokens)
-7. Persist candidates
-8. Score vs DeIdentified gold (``score_pairs`` / CLI)
+4. Bulk OpenMed detect + taxonomy scrub on NER spans
+5. ner_residual_cleanup (dangling for/file, FORFILE, month+year tokens)
+6. Persist candidates
+7. Score vs DeIdentified gold (score_pairs / CLI)
 
 No keyword wipe, no overlay strip, no pixel OCR, no radiology deny-lists.
 """
-
-from __future__ import annotations
 
 import logging
 import shutil
@@ -21,14 +18,12 @@ from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Self
 
 import pydicom
 
-from anonymizer.controller.ai.embedded_phi.metadata.process_private_tags_tcia import (
-    process_private_tags_tcia,
-)
 from prototyping.pseudo_phi_deid.pairs import InstancePair
-from prototyping.pseudo_phi_deid.pipeline.clinical import ClinicalSession
+from prototyping.pseudo_phi_deid.pipeline.script_session import AnonymizerSession, operation_resolver
 from prototyping.pseudo_phi_deid.pipeline.metadata_ner import scrub_dataset
 from prototyping.pseudo_phi_deid.pipeline.ner_residual_cleanup import (
     cleanup_dataset_residuals,
@@ -50,7 +45,7 @@ class RunConfig:
     subject_ids: list[str] = field(default_factory=list)
 
     @classmethod
-    def from_mode(cls, mode: str, **kwargs: object) -> RunConfig:
+    def from_mode(cls, mode: str, **kwargs: object) -> Self:
         cfg = cls(mode=mode, **kwargs)  # type: ignore[arg-type]
         if mode == "script":
             cfg.use_script = True
@@ -92,10 +87,10 @@ def run_pairs(
 
     hist: Counter[str] = Counter()
     samples: list[dict] = []
-    session: ClinicalSession | None = None
+    session: AnonymizerSession | None = None
     try:
         if config.use_script:
-            session = ClinicalSession(config.script_path)
+            session = AnonymizerSession(config.script_path)
             session.__enter__()
 
         total = len(pairs)
@@ -104,19 +99,15 @@ def run_pairs(
                 logger.info("run %s %d/%d %s", config.mode, i, total, pair.eval_sop_uid[:24])
             ds = pydicom.dcmread(str(pair.eval_path), force=True)
 
-            # Step 1 — Clinical script (public tags only; privates left for step 2).
+            # Step 1 — anonymizer script (public + SAFE_PRIVATE KB walk).
             if config.use_script:
                 assert session is not None
                 ds = session.apply(ds)
 
-            # Step 2 — TCIA Private Tag KB (creator-aware).
-            if config.use_script or config.use_openmed:
-                process_private_tags_tcia(ds)
-
-            # Steps 3–5 — extract / prepare / bulk NER + taxonomy scrub.
+            # Steps 2–4 — extract / prepare / bulk NER + taxonomy scrub.
             if config.use_openmed:
                 resolve = (
-                    session.anon.model.resolve_tag_keep
+                    operation_resolver(session.anon)
                     if session is not None and session.anon is not None
                     else None
                 )
@@ -125,7 +116,7 @@ def run_pairs(
                     field_wrap=config.field_wrap,
                     caret_space=config.caret_space,
                     anon_ptid=pair.gold_patient_id,
-                    resolve_tag_keep=resolve,
+                    operation_for_tag=resolve,
                 )
                 hist.update(h)
                 for s in samp:

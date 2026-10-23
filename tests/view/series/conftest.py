@@ -1,7 +1,5 @@
 """Shared Tk/CustomTkinter scaffolding for Series View tests."""
 
-from __future__ import annotations
-
 import contextlib
 import tkinter as tk
 from pathlib import Path
@@ -45,8 +43,10 @@ def _stub_viewer_icon_assets(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-def mock_controller() -> MagicMock:
+def mock_controller(tmp_path: Path) -> MagicMock:
+    """Controller stub with a real project storage dir (exclude/whitelist I/O)."""
     controller = MagicMock()
+    controller.model.storage_dir = tmp_path
     controller.get_phi_by_anon_patient_id.return_value = None
     controller.get_series_processing_status.return_value = None
     controller.series_has_face_blur.return_value = False

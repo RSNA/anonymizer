@@ -1,7 +1,5 @@
 """Parse and assert ProjectionView startup traces from caplog."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 import pytest

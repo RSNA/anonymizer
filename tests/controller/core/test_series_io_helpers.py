@@ -1,7 +1,5 @@
 """Additional series_io coverage: projections, view stack, LOINC apply, helpers."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import numpy as np

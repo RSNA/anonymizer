@@ -1,7 +1,5 @@
 """Presidio PatternRecognizers built from the locale ID/date packs (single source)."""
 
-from __future__ import annotations
-
 from typing import Any
 
 from prototyping.metadata_phi.locale_registry import get_locale_pack

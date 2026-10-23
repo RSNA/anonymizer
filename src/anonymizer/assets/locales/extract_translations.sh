@@ -10,7 +10,7 @@ SRC_DIR="../.."
 POT_FILE="messages.pot"
 
 # Find all .py files in the source directory and extract translatable strings
-find $SRC_DIR -name '*.py' | xargs xgettext -v -d messages -o $POT_FILE --from-code UTF-8 -L Python --omit-header --no-wrap --no-location
+find $SRC_DIR -name '*.py' | xargs xgettext -v -d messages -o $POT_FILE --from-code UTF-8 -L Python --keyword=_mark_for_translation --omit-header --no-wrap --no-location
 
 # To initialise a new language translation file, run the following command:
 msginit -l en_US -o en_US/LC_MESSAGES/messages.po -i messages.pot --no-translator --no-wrap

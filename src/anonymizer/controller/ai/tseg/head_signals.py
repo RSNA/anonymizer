@@ -1,7 +1,16 @@
-"""Head vs non-head signals from DICOM metadata and cached region labels (leaf; no pipeline deps)."""
+"""Head vs non-head signals from DICOM metadata and cached region labels (leaf; no pipeline deps).
 
-from __future__ import annotations
+Public API
+----------
+MetadataSignal
+    MetadataSignal type.
 
+CachedRegionSignal
+    CachedRegionSignal type.
+
+metadata_signal(ds: Dataset | None) -> MetadataSignal
+    Metadata signal.
+"""
 from enum import StrEnum, auto
 
 from pydicom import Dataset

@@ -1,6 +1,6 @@
 # MIDI-B challenge harness
 
-Same header pipeline as PseudoPHI (Clinical script → TCIA private KB → OpenMed NER →
+Same header pipeline as PseudoPHI (anonymizer script → TCIA private KB → OpenMed NER →
 residual cleanup), scored with the official
 [CBIIT MIDI_validation_script](https://github.com/CBIIT/MIDI_validation_script).
 

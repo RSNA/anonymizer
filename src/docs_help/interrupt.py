@@ -9,8 +9,6 @@ A console control handler calls ``os._exit`` from a dedicated Windows thread so
 Ctrl+C kills the process even while nnUNet or EasyOCR is in native code.
 """
 
-from __future__ import annotations
-
 import logging
 import os
 import signal

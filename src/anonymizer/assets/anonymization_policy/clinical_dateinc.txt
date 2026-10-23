@@ -1,4 +1,0 @@
-# TCIA / CTP trial-wide DATEINC (days). Used by Clinical compile for Table 1
-# @incrementdate(this,@DATEINC) and private-tag disposition o/oi.
-# Pseudo-PHI DeIdentified gold uses -3670 on every study; change per trial.
--3670

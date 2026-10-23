@@ -6,8 +6,6 @@ so primary-disk space is not consumed across iteration runs:
   /Volumes/MBOD.DX.LIFE/TCIA/MIDI-B/harness-runs/<split>_<UTC>[_<slug>]/
 """
 
-from __future__ import annotations
-
 from datetime import datetime, timezone
 from pathlib import Path
 

@@ -1,7 +1,5 @@
 """Structured editor for the project anonymizer script (Active-first)."""
 
-from __future__ import annotations
-
 import contextlib
 import logging
 import re
@@ -115,7 +113,8 @@ class AnonymizerScriptDialog(AppToplevel):
         self._committed = False
         self._lookup_ctx = lookup_table_context(self.project_model, self._pending_lookup_preview)
         self._char_width_px = max(7, default_char_width_px())
-        self._dict_dialog: AddFromDictionaryDialog | None = None
+        self._dict_dialog: "AddFromDictionaryDialog | None" = None
+
 
         self.title(_("Edit Anonymizer Script"))
         self.resizable(True, True)

@@ -1,7 +1,13 @@
-"""Shared string similarity matching for OCR modality whitelists."""
+"""Shared string similarity matching for OCR modality whitelists.
 
-from __future__ import annotations
+Public API
+----------
+SimilarityMatchResult
+    SimilarityMatchResult type.
 
+similarity_term_match(text: str, terms: Sequence[str], *, threshold: float, min_length_ratio: float=0.7, min_term_len: int=1, min_text_len: int=1) -> SimilarityMatchResult
+    Best difflib.SequenceMatcher hit of *text* against *terms*.
+"""
 import difflib
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -24,10 +30,10 @@ def similarity_term_match(
     min_text_len: int = 1,
 ) -> SimilarityMatchResult:
     """
-    Best ``difflib.SequenceMatcher`` hit of *text* against *terms*.
+    Best difflib.SequenceMatcher hit of *text* against *terms*.
 
-    Both sides are compared uppercased. Terms shorter than ``min_term_len`` and
-    text shorter than ``min_text_len`` are skipped (callers use exact membership
+    Both sides are compared uppercased. Terms shorter than min_term_len and
+    text shorter than min_text_len are skipped (callers use exact membership
     for short view codes).
     """
     processed = text.upper().strip()

@@ -1,7 +1,5 @@
 """Dataset Harmonized (green) flag for CT/MR and planar XR/US/MG studies."""
 
-from __future__ import annotations
-
 import types
 from types import SimpleNamespace
 
@@ -17,7 +15,7 @@ def _series(modality: str, harmonized: str | None) -> SimpleNamespace:
 
 def _study(series: list[SimpleNamespace]) -> SimpleNamespace:
     study = SimpleNamespace(series=series)
-    study.harmonize_series = types.MethodType(Study.harmonize_series, study)
+    study.harmonizeable_series = types.MethodType(Study.harmonizeable_series, study)
     study.all_series_harmonized = types.MethodType(Study.all_series_harmonized, study)
     return study
 

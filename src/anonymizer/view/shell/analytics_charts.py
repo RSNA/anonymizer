@@ -1,26 +1,24 @@
 """Matplotlib chart helpers for the Dashboard Dataset analytics board.
 
-Uses the Agg backend and ``ImageTk.PhotoImage`` (ImageViewer pattern) so charts
+Uses the Agg backend and ImageTk.PhotoImage (ImageViewer pattern) so charts
 never embed a TkAgg canvas (which deadlocks CustomTkinter's main loop).
 
 Layout contract
 ---------------
-* Relevance-gated ``WidgetSpec`` registry → only widgets with real data.
-* ``plan_board_layout`` owns row/col/span: even 2-col flow; a lone last-row
+* Relevance-gated WidgetSpec registry → only widgets with real data.
+* plan_board_layout owns row/col/span: even 2-col flow; a lone last-row
   widget spans the full width so L→R space is used.
 * Board width is forced to the scroll viewport (CTk scroll inner frames
   otherwise shrink-wrap and leave a dead right gutter).
 * Viewport grows with content up to a screen fraction; scrollbar only when
   content still overflows that cap. Mouse-wheel steps are pixel-granular (see
-  ``configure_granular_scroll``); scrollbar thumb/trough stay native.
-* Every figure uses a fixed template; sample size is ``· n=`` in the title
+  configure_granular_scroll); scrollbar thumb/trough stay native.
+* Every figure uses a fixed template; sample size is · n= in the title
   (same pattern as organ volume histograms). No Unknown-% caption band.
-* ``select_widgets`` orders chart widgets first, then textual (AI coverage).
+* select_widgets orders chart widgets first, then textual (AI coverage).
 * Count axes: labeled majors every 5 (scaled 1/2/5×10^k up to 1e6 patients);
   unlabeled minors subdivide each major interval (e.g. 1–4 between 0 and 5).
 """
-from __future__ import annotations
-
 import contextlib
 import io
 import logging
@@ -90,10 +88,10 @@ def _matplotlib_fonts_healthy() -> bool:
 
 
 def _configure_matplotlib_fonts(*, force_rebuild: bool = False) -> None:
-    """Pin Agg charts to bundled DejaVu; rebuild cache when ``uv`` swapped .venv Pythons.
+    """Pin Agg charts to bundled DejaVu; rebuild cache when uv swapped .venv Pythons.
 
-    Shared ``~/.matplotlib/fontlist-*.json`` stores absolute paths into
-    ``.venv/lib/pythonX.Y/...``. After a Python switch those files vanish and
+    Shared ~/.matplotlib/fontlist-*.json stores absolute paths into
+    .venv/lib/pythonX.Y/.... After a Python switch those files vanish and
     matplotlib falls through to LastResortHE at a dead path (FileNotFoundError
     during Dashboard analytics rasterize).
     """
@@ -225,7 +223,7 @@ def _theme_mpl(value: Any) -> str:
 
 
 def _mpl_figure_facecolor(value: Any, *, fallback: str) -> str:
-    """Matplotlib-safe facecolor; never pass CTk ``transparent`` through."""
+    """Matplotlib-safe facecolor; never pass CTk transparent through."""
     resolved = _theme_mpl(value)
     if not resolved or resolved.casefold() in {"transparent", "none", ""}:
         return fallback
@@ -304,11 +302,11 @@ _SCROLL_EXCLUDE_TYPES = frozenset({"CTkScrollbar", "CTkSlider", "CTkTextbox"})
 
 
 def _event_targets_analytics_scroll(scroll: ctk.CTkScrollableFrame, widget: object) -> bool:
-    """True when ``widget`` is under this scroll's canvas/inner frame.
+    """True when widget is under this scroll's canvas/inner frame.
 
-    Walks ``master`` ourselves. CTk's ``_check_if_valid_scroll`` recurses via
-    ``self._check_if_valid_scroll``, so it cannot be reused after we neuter that
-    attribute to disable CTk's captured ``bind_all`` handler.
+    Walks master ourselves. CTk's _check_if_valid_scroll recurses via
+    self._check_if_valid_scroll, so it cannot be reused after we neuter that
+    attribute to disable CTk's captured bind_all handler.
     """
     canvas = getattr(scroll, "_parent_canvas", None)
     if canvas is None or widget is None:
@@ -333,13 +331,13 @@ def configure_granular_scroll(
     *,
     step_px: int = ANALYTICS_SCROLL_STEP_PX,
 ) -> None:
-    """Pixel-level mouse-wheel steps; scrollbar ``moveto`` stays native (no flicker).
+    """Pixel-level mouse-wheel steps; scrollbar moveto stays native (no flicker).
 
-    CTk ``bind_all`` captures ``_mouse_wheel_all`` at init — assigning a new
+    CTk bind_all captures _mouse_wheel_all at init — assigning a new
     method on the instance does nothing. We neuter CTk's captured handler via
-    ``_check_if_valid_scroll``, then ``bind_all`` our own (Tk-aware notches).
+    _check_if_valid_scroll, then bind_all our own (Tk-aware notches).
 
-    Setting ``yscrollincrement=1`` without replacing the handler made Aqua
+    Setting yscrollincrement=1 without replacing the handler made Aqua
     scroll *slower* (CTk defaults to 8px/notch on darwin).
     """
     canvas = getattr(scroll, "_parent_canvas", None)
@@ -404,7 +402,7 @@ def _flow_placements(
     *,
     cols: int = 2,
 ) -> list[tuple[WidgetSpec, int, int, int]]:
-    """Compatibility wrapper around ``plan_board_layout`` for older tests."""
+    """Compatibility wrapper around plan_board_layout for older tests."""
     layout = plan_board_layout(widgets, cols=cols)
     return [(p.spec, p.row, p.col, p.colspan) for p in layout.placements]
 
@@ -427,7 +425,7 @@ def _clear_children(frame: ctk.CTkFrame) -> None:
 
 
 def _nice_count_step(raw: float, *, min_step: int = COUNT_AXIS_TICK_STEP) -> int:
-    """Round ``raw`` up to 1/2/5 × 10^k, never below ``min_step`` (default 5)."""
+    """Round raw up to 1/2/5 × 10^k, never below min_step (default 5)."""
     step = max(float(raw), float(min_step), 1.0)
     exp = math.floor(math.log10(step))
     base = 10.0**exp
@@ -453,9 +451,9 @@ def count_axis_tick_values(
 
     Always uses a consistent major grid (default every 5). The axis top is
     rounded up onto that grid. For large peaks the major step grows on a
-    1/2/5 × 10^k scale so ~``max_ticks`` labels cover up to 1e6 patients.
+    1/2/5 × 10^k scale so ~max_ticks labels cover up to 1e6 patients.
     Unlabeled minors between majors are applied separately via
-    ``_set_count_axis_ticks``.
+    _set_count_axis_ticks.
     """
     peak = max(0, int(math.ceil(float(max_count) - 1e-9)))
     base = max(1, int(step))
@@ -498,7 +496,7 @@ def _set_integer_count_ticks(ax: Axes, max_count: float) -> None:
 
 
 def _chart_title(label: str, count: int) -> str:
-    """Shared title pattern for graphical widgets: ``Label · n=N``."""
+    """Shared title pattern for graphical widgets: Label · n=N."""
     return _("{label} · n={count}").format(label=label, count=count)
 
 
@@ -602,7 +600,7 @@ def _embed_figure(
 ) -> None:
     """Rasterize at fixed figure size — do not use bbox_inches='tight' (breaks captions).
 
-    Uses ``ImageTk.PhotoImage`` directly (ImageViewer pattern), not ``CTkImage``.
+    Uses ImageTk.PhotoImage directly (ImageViewer pattern), not CTkImage.
     CTkImage's scale-cache can drop PhotoImages without dispose on DPI/window resize,
     and those finalizers then crash when GC runs on a DICOM worker thread.
 
@@ -1217,7 +1215,7 @@ class BoardSections:
 
     @property
     def graphical(self) -> tuple[WidgetSpec, ...]:
-        """Charts + organs (legacy); prefer ``ordered`` for layout."""
+        """Charts + organs (legacy); prefer ordered for layout."""
         return self.charts + self.organs
 
     @property
@@ -1287,7 +1285,7 @@ def select_board_sections(
     selected_board_widgets: Sequence[str] | None = None,
     on_organ_bar_activate: OrganBarActivate | None = None,
 ) -> BoardSections:
-    """Relevance filter + organ/board selection; use ``.ordered`` / ``.all`` for layout."""
+    """Relevance filter + organ/board selection; use .ordered / .all for layout."""
     registry = tuple(widgets) if widgets is not None else BOARD_WIDGETS
     allowed_keys = None if selected_board_widgets is None else {name for name in selected_board_widgets if name}
     charts = tuple(
@@ -1416,7 +1414,7 @@ def render_widget_section(
     analytics: DatasetAnalytics,
     theme: ChartTheme | None = None,
 ) -> BoardLayout:
-    """Fill ``host`` with a 2-col flow of ``widgets`` (clears host first)."""
+    """Fill host with a 2-col flow of widgets (clears host first)."""
     resolved = theme or load_chart_theme()
     _clear_children(host)
     _reset_flow_grid(host)
@@ -1444,7 +1442,7 @@ def sync_widget_section(
 
     Added widgets are painted; removed widgets are destroyed; surviving widgets are
     only re-gridded (and re-painted when their figsize/span changes, or when
-    ``force_repaint_keys`` names them — e.g. organ histograms after bin-width change).
+    force_repaint_keys names them — e.g. organ histograms after bin-width change).
     """
     resolved = theme or load_chart_theme()
     layout = plan_board_layout(widgets)
@@ -1511,7 +1509,7 @@ def render_analytics_board(
     selected_board_widgets: Sequence[str] | None = None,
     on_organ_bar_activate: OrganBarActivate | None = None,
 ) -> BoardLayout:
-    """Fill ``board`` via ``plan_board_layout``; returns the layout used."""
+    """Fill board via plan_board_layout; returns the layout used."""
     theme = resolve_board_theme(board)
     active = select_widgets(
         analytics,

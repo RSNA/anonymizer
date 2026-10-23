@@ -1,7 +1,5 @@
 """OCR and AI batch integration tests on color (RGB) ultrasound with burnt-in overlays."""
 
-from __future__ import annotations
-
 import shutil
 from pathlib import Path
 
@@ -18,11 +16,11 @@ from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     filter_ocr_whitelist_only,
     ocr_image_for_frame,
 )
-from anonymizer.controller.jobs.runner import OcrEditContext, RemovePixelPhiRunner, RunOptions
-from anonymizer.controller.series.series_io import load_series_frames
-from anonymizer.controller.jobs.work_state import WorkState
-from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_default_whitelist
+from anonymizer.controller.jobs.runner import OcrEditContext, RemovePixelPhiRunner, RunOptions
+from anonymizer.controller.jobs.work_state import WorkState
+from anonymizer.controller.series.series_io import load_series_frames
+from anonymizer.model.anonymizer import AnonymizerModel
 from tests.controller.ocr.conftest import assert_dcm
 from tests.controller.support.pixel_phi_test_support import register_series_with_anonymizer
 from tests.controller.support.us_rgb_fixtures import (

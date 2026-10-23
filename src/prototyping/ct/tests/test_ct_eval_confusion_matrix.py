@@ -1,7 +1,5 @@
 """Unit tests for ct_eval confusion matrix helpers."""
 
-from __future__ import annotations
-
 import pytest
 
 from prototyping.ct.ct_eval import (

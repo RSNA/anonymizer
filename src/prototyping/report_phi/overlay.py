@@ -1,7 +1,5 @@
 """Draw predicted PHI boxes on rasterized PDF pages."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from PIL import ImageDraw

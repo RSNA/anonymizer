@@ -1,7 +1,5 @@
 """Dialog for loading a CTP properties lookup table."""
 
-from __future__ import annotations
-
 import contextlib
 import logging
 import tkinter as tk

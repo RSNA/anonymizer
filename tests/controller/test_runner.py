@@ -1,7 +1,5 @@
 """Tests for runner OCR path and DICOM windowing."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -17,8 +15,8 @@ from anonymizer.controller.jobs.runner import (
     RunOptions,
     run_job,
 )
-from anonymizer.controller.series.series_overlay import OCRText
 from anonymizer.controller.jobs.work_state import WorkState
+from anonymizer.controller.series.series_overlay import OCRText
 from anonymizer.utils.dicom import get_wl_ww
 from anonymizer.utils.windowing import apply_windowing
 

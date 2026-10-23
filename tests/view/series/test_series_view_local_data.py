@@ -4,8 +4,6 @@ These exercise the real image_frame Configure → fit_to_viewport path on real 5
 MRI data. Resize is driven only by ``geometry()`` / ``drag_window``.
 """
 
-from __future__ import annotations
-
 import tkinter as tk
 from pathlib import Path
 from unittest.mock import MagicMock

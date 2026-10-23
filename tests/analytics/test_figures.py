@@ -1,7 +1,5 @@
 """Headless figure checks: integer ticks, n= titles, no label clash, PNG shots."""
 
-from __future__ import annotations
-
 import contextlib
 from datetime import datetime
 from pathlib import Path

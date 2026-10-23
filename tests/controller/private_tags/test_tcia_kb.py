@@ -1,6 +1,6 @@
 """TCIA private-tag KB_OPERATION + Retain Safe XX collapse."""
 
-from __future__ import annotations
+from pathlib import Path
 
 from pydicom.dataset import Dataset, FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian, SecondaryCaptureImageStorage, generate_uid

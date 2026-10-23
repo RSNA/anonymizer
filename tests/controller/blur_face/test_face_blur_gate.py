@@ -1,7 +1,5 @@
 """Unit tests for CT head eligibility gate (blur_face)."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import numpy as np

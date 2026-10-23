@@ -5,7 +5,7 @@
 SRC_DIR="../.."
 POT_FILE="messages.pot"
 # Find all .py files in the source directory and extract translatable strings
-find $SRC_DIR -name '*.py' | xargs xgettext -v -d messages -o $POT_FILE --from-code UTF-8 -L Python --omit-header --no-wrap --no-location
+find $SRC_DIR -name '*.py' | xargs xgettext -v -d messages -o $POT_FILE --from-code UTF-8 -L Python --keyword=_mark_for_translation --omit-header --no-wrap --no-location
 
 # Step 2: Loop through each language directory in the locale directory
 for lang_dir in */LC_MESSAGES; do

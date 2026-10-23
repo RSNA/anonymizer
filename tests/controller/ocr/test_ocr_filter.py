@@ -1,7 +1,5 @@
 """Tests for shared OCR noise filtering and batch removal modes."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 

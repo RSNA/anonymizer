@@ -6,8 +6,6 @@ Study mappings remember LOINC numbers (names resolved from the LOINC catalog).
 Row management mirrors View Dataset: Select All, Clear Selection, Delete.
 """
 
-from __future__ import annotations
-
 import logging
 import tkinter as tk
 from pathlib import Path
@@ -286,5 +284,5 @@ class DescriptionMappingsDialog(AppToplevel):
 
 
 def show_description_mappings_dialog(parent: tk.Misc, *, mappings_dir: Path) -> None:
-    """Open the description mappings inspector for ``mappings_dir``."""
+    """Open the description mappings inspector for mappings_dir."""
     DescriptionMappingsDialog(parent, mappings_dir=mappings_dir)

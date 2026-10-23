@@ -1,7 +1,19 @@
-"""Fuse CXp projection with DICOM XR view codes."""
+"""Fuse CXp projection with DICOM XR view codes.
 
-from __future__ import annotations
+Public API
+----------
+ViewFusionResult
+    Resolved XR view after DICOM + optional pixel fusion.
 
+format_cxp_projection_evidence(projection: str, confidence: float) -> str
+    Human-readable CXp projection evidence (CT-style confidence).
+
+format_cxp_rotation_evidence(rotation: str, confidence: float) -> str
+    Human-readable CXp rotation evidence.
+
+fuse_xr_view(*, dicom_view: str | None, dicom_evidence: str | None, pixel_pred: CxpViewPrediction | None) -> ViewFusionResult
+    Fuse DICOM view with pixel projection; never override 2V/3V from pixels.
+"""
 from dataclasses import dataclass
 
 from anonymizer.controller.ai.harmonize.xr_chest_view.labels import is_dicom_multiview

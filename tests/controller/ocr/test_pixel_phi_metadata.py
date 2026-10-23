@@ -1,7 +1,5 @@
 """Tests for pixel PHI metadata helpers."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -73,7 +71,7 @@ def test_apply_instance_embedded_phi_delegates_to_model(mock_dataset: Dataset, t
     db_path = tmp_path / "pixel_phi.db"
 
     with opened_anonymizer_model(f"sqlite:///{db_path}") as model:
-        model.capture_phi(source="pytest", ds=mock_dataset, date_offset_from_hash=0)
+        model.capture_phi(source="pytest", ds=mock_dataset, date_delta=0)
         phi = model.get_phi_by_phi_patient_id(mock_dataset.PatientID)
         assert phi is not None
         instance = phi.studies[0].series[0].instances[0]
@@ -95,7 +93,7 @@ def test_apply_instance_embedded_phi_for_dcm_reads_sop_uid(
     db_path = tmp_path / "pixel_phi_for_dcm.db"
 
     with opened_anonymizer_model(f"sqlite:///{db_path}") as model:
-        model.capture_phi(source="pytest", ds=mock_dataset, date_offset_from_hash=0)
+        model.capture_phi(source="pytest", ds=mock_dataset, date_delta=0)
         phi = model.get_phi_by_phi_patient_id(mock_dataset.PatientID)
         assert phi is not None
         instance = phi.studies[0].series[0].instances[0]

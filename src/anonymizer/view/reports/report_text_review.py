@@ -1,7 +1,5 @@
 """Report Text Review: Detect / Remove / Save for native SR and Encapsulated PDF."""
 
-from __future__ import annotations
-
 import contextlib
 import logging
 import queue
@@ -9,13 +7,14 @@ import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 import customtkinter as ctk
 from pydicom import Dataset, dcmread
 
 from anonymizer.controller.ai.embedded_phi.ner.engine import REPLACE_MODE_VALUES, Entity, ReplaceMode
 from anonymizer.controller.ai.embedded_phi.report.process_report_text import (
+    _SLOT_SEP,
     detect_phi,
     encapsulated_pdf_bytes,
     extract_report_text,
@@ -23,6 +22,8 @@ from anonymizer.controller.ai.embedded_phi.report.process_report_text import (
     write_report_text,
 )
 from anonymizer.controller.ai.feature_availability import harmonize_allowed_for_modality, report_text_phi_ready
+from anonymizer.controller.project import ProjectController
+from anonymizer.utils.dicom import DeidMethodCode, record_deid_method_codes
 from anonymizer.utils.storage.dicom_tree import get_dcm_files
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.harmonize_description import (
@@ -33,15 +34,11 @@ from anonymizer.view.ai.harmonize_description import (
 from anonymizer.view.ai.harmonize_results import HarmonizeBatchOutcome
 from anonymizer.view.common.app_window import AppCTkToplevel, refresh_app_window_menu
 from anonymizer.view.common.ctk_safe import mark_ctk_window_destroyed
+from anonymizer.view.common.fonts import AppFonts
 from anonymizer.view.common.navigation import find_dataset_view_parent, return_to_dataset_view
+from anonymizer.view.common.ux_fields import truncate_series_description
 from anonymizer.view.reports.pdf_page_view import PdfPageView
 from anonymizer.view.reports.report_canvas import ReportCanvas
-
-if TYPE_CHECKING:
-    from anonymizer.controller.project import ProjectController
-    from anonymizer.view.common.fonts import AppFonts
-from anonymizer.controller.ai.embedded_phi.report.process_report_text import _SLOT_SEP
-from anonymizer.view.common.ux_fields import truncate_series_description
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +56,7 @@ def replace_mode_labels() -> dict[str, ReplaceMode]:
 
 
 def _display_report_text(text: str) -> str:
-    """Show slot separator as newlines when extract used ``\\x1e`` (embedded newlines)."""
+    """Show slot separator as newlines when extract used \\x1e (embedded newlines)."""
 
     body = str(text or "")
     if _SLOT_SEP in body and _SLOT_SEP != "\n":
@@ -548,6 +545,8 @@ class ReportTextReview(AppCTkToplevel):
         if self._ds is None or self._dcm_path is None:
             return
         sr = write_report_text(self._ds, self._text)
+        record_deid_method_codes(self._ds, {DeidMethodCode.CLEAN_STRUCTURED_CONTENT})
+        record_deid_method_codes(sr, {DeidMethodCode.CLEAN_STRUCTURED_CONTENT})
         self._ds.save_as(self._dcm_path, enforce_file_format=True)
         out_dir = self._series_path.parent / str(sr.SeriesInstanceUID)
         out_dir.mkdir(parents=True, exist_ok=True)

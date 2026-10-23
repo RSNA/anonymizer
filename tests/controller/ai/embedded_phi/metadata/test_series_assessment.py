@@ -1,7 +1,5 @@
 """Unit tests: series-level Metadata assessment consolidator."""
 
-from __future__ import annotations
-
 from anonymizer.controller.ai.embedded_phi.metadata.extract import (
     VR_SEQ_TEXT,
     MetadataPhiRow,
@@ -138,9 +136,9 @@ def test_anonymizer_stamp_detection_and_date_notes() -> None:
     assert consolidated.is_anonymizer_field
     assert "De-identification Method" in consolidated.note
 
-    assert date_shift_note("@hashdate(this,StudyDate)", covered=True) == "date-shifted (@hashdate)"
+    assert date_shift_note("@hashdate(this,StudyDate)", covered=True) == "date delta (@hashdate)"
     assert date_shift_note("@lookup(this,dateoffset)", covered=True) == (
-        "date-shifted (@lookup dateoffset)"
+        "date delta (@lookup dateoffset)"
     )
     date_row = consolidate_series_metadata(
         {
@@ -156,4 +154,4 @@ def test_anonymizer_stamp_detection_and_date_notes() -> None:
             )
         }
     )[0]
-    assert "date-shifted (@hashdate)" in date_row.note
+    assert "date delta (@hashdate)" in date_row.note

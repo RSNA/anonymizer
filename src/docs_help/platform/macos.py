@@ -1,7 +1,5 @@
 """macOS-only window capture via ``screencapture -l`` and CGWindow listing."""
 
-from __future__ import annotations
-
 import json
 import logging
 import os

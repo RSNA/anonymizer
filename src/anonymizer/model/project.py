@@ -5,7 +5,6 @@ This module contains the ProjectModel class and related data classes for storing
 import time
 from copy import copy, deepcopy
 from dataclasses import asdict, dataclass, field
-from enum import StrEnum
 from logging import INFO, WARNING, getLevelName
 from pathlib import Path
 from pprint import pformat
@@ -14,15 +13,39 @@ from typing import Dict, List
 from dataclasses_json import config, dataclass_json
 from pynetdicom._globals import DEFAULT_TRANSFER_SYNTAXES
 
+from anonymizer.utils.dicom import DeidMethodCode
 from anonymizer.utils.modalities import DEFAULT_PROJECT_MODALITIES, Modality, get_modality_catalog
 from anonymizer.utils.translate import _
 from anonymizer.utils.version import get_version
 
+# De-identification options executed during anonymize. Every other
+# DeidMethodCode runs in a later task, except NOT_EXECUTED.
+AT_INGEST: frozenset[DeidMethodCode] = frozenset(
+    {
+        DeidMethodCode.BASIC,
+        DeidMethodCode.FULL_DATES,
+        DeidMethodCode.MODIFIED_DATES,
+        DeidMethodCode.PATIENT_CHARACTERISTICS,
+        DeidMethodCode.DEVICE_IDENTITY,
+        DeidMethodCode.RETAIN_UIDS,
+        DeidMethodCode.SAFE_PRIVATE,
+        DeidMethodCode.INSTITUTION_IDENTITY,
+    }
+)
 
-class AnonymizationPolicy(StrEnum):
-    """Ingest anonymization script policy: Strict (anonymization) or Clinical (TCIA de-identification)."""
-    STRICT = "strict"
-    CLINICAL = "clinical"
+# Selected codes that no task executes yet.
+NOT_EXECUTED: frozenset[DeidMethodCode] = frozenset({DeidMethodCode.CLEAN_GRAPHICS})
+
+# Preset option sets that fill the creation checkbox set. They store nothing.
+BASIC_OPTIONS: frozenset[DeidMethodCode] = frozenset({DeidMethodCode.BASIC})
+RETAIN_OPTIONS: frozenset[DeidMethodCode] = frozenset(
+    {
+        DeidMethodCode.BASIC,
+        DeidMethodCode.MODIFIED_DATES,
+        DeidMethodCode.PATIENT_CHARACTERISTICS,
+        DeidMethodCode.SAFE_PRIVATE,
+    }
+)
 
 
 # Controller Custom Error classes:
@@ -191,6 +214,10 @@ class ProjectModel:
         return NetworkTimeouts(5, 30, 30, 60)
 
     @staticmethod
+    def default_anonymizer_script_path() -> Path:
+        return Path("assets/scripts/default-anonymizer.script")
+
+    @staticmethod
     def default_logging_levels() -> LoggingLevels:
         return LoggingLevels(INFO, WARNING, False, False, False)
 
@@ -213,8 +240,15 @@ class ProjectModel:
     export_to_AWS: bool = False
     aws_cognito: AWSCognito = field(default_factory=default_aws_cognito)
     network_timeouts: NetworkTimeouts = field(default_factory=default_timeouts)
-    anonymizer_script_path: Path = field(default=Path("assets/scripts/default-anonymizer.script"), metadata=path_field)
-    anonymization_policy: AnonymizationPolicy = AnonymizationPolicy.STRICT
+    anonymizer_script_path: Path = field(default_factory=default_anonymizer_script_path, metadata=path_field)
+
+    confidentiality_options: frozenset[DeidMethodCode] = field(
+        default_factory=lambda: BASIC_OPTIONS,
+        metadata=config(
+            encoder=lambda codes: sorted(int(code) for code in codes),
+            decoder=lambda values: frozenset(DeidMethodCode(int(code)) for code in values),
+        ),
+    )
 
     def __post_init__(self):
         # Images tree stays ASCII English: SimpleITK/NIfTI fails on Windows when any
@@ -225,8 +259,10 @@ class ProjectModel:
         self.PHI_EXPORT_DIR = _("phi_export")
         self.QUARANTINE_DIR = _("quarantine")
         self.BATCH_RUNS_DIR = _("batch_runs")
-        if not isinstance(self.anonymization_policy, AnonymizationPolicy):
-            self.anonymization_policy = AnonymizationPolicy(self.anonymization_policy)
+        self.confidentiality_options = (
+            frozenset(DeidMethodCode(int(code)) for code in self.confidentiality_options)
+            | {DeidMethodCode.BASIC}
+        )
         # New / empty projects derive SOP classes from modalities; loaded projects keep
         # persisted custom storage_classes (do not wipe on every __post_init__).
         if not self.storage_classes:
@@ -302,7 +338,7 @@ class ProjectModel:
         self.site_id = self.default_site_id()
 
     def set_storage_classes_from_modalities(self):
-        """Replace ``storage_classes`` with the union of selected modalities' SOP classes."""
+        """Replace storage_classes with the union of selected modalities' SOP classes."""
         if self.storage_classes is None:
             self.storage_classes = []
         else:

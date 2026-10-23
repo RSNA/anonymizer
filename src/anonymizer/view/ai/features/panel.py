@@ -1,7 +1,5 @@
 """AI Features setup: download / remove models and license (no enable preferences)."""
 
-from __future__ import annotations
-
 import logging
 import queue
 import threading

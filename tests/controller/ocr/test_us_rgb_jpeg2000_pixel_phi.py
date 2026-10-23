@@ -1,7 +1,5 @@
 """Compressed RGB US pixel PHI: JPEG2000 re-encode and color preservation."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 

@@ -1,24 +1,120 @@
 """Classify DICOM series for TotalSegmentator eligibility and metadata-only harmonize.
 
-Centralizes keyword lists and evaluation order so geometry analysis and Harmonize share
-one structured decision flow.
+Public API
+----------
+TsSkipCategory
+    Tsskipcategory.
+
+MPR_KEYWORDS
+    Mpr keywords.
+
+RENDER_KEYWORDS
+    Render keywords.
+
+LOCALIZER_KEYWORDS
+    Localizer keywords.
+
+SURVEY_LOCALIZER_KEYWORDS
+    Survey localizer keywords.
+
+PARAMETRIC_MAP_KEYWORDS
+    Parametric map keywords.
+
+PARAMETRIC_MAP_EXACT_TOKENS
+    Parametric map exact tokens.
+
+BODY_PARTS_WITHOUT_TS_ROI
+    Body parts without ts roi.
+
+ANGIO_SEQUENCE_KEYWORDS
+    Angio sequence keywords.
+
+SPECTROSCOPY_KEYWORDS
+    Spectroscopy keywords.
+
+MONITORING_SEQUENCE_KEYWORDS
+    Monitoring sequence keywords.
+
+RADIATION_DOSE_SEQUENCE_KEYWORDS
+    Radiation dose sequence keywords.
+
+CONTRAST_DOSE_SEQUENCE_KEYWORDS
+    Contrast dose sequence keywords.
+
+FUSED_SEQUENCE_KEYWORDS
+    Fused sequence keywords.
+
+METADATA_DIAGNOSTIC_SKIP_CATEGORIES
+    Metadata diagnostic skip categories.
+
+TsSuitability
+    Structured TotalSegmentator eligibility outcome.
+
+normalized_series_text(*parts: str | None) -> str
+    Normalized series text.
+
+contains_keyword(text: str, keywords: tuple[str, ...]) -> bool
+    Contains keyword.
+
+image_type_values(header: Dataset) -> tuple[str, ...] | None
+    Image type values.
+
+series_description_text(headers: list[Dataset], *, series_description: str | None=None) -> str
+    Series description text.
+
+series_level_description_text(headers: list[Dataset], *, series_description: str | None=None) -> str
+    Series/protocol naming only (study description excluded).
+
+description_suggests_localizer(headers: list[Dataset], *, series_description: str | None=None) -> bool
+    Description suggests localizer.
+
+stack_suggests_survey_localizer(stack: StackMetrics, description_text: str) -> bool
+    Stack suggests survey localizer.
+
+description_suggests_parametric_map(headers: list[Dataset], *, series_description: str | None=None) -> bool
+    Description suggests parametric map.
+
+body_part_lacks_ts_roi(header: Dataset) -> bool
+    Body part lacks ts roi.
+
+description_suggests_angio_sequence(description_text: str) -> bool
+    Description suggests angio sequence.
+
+description_suggests_spectroscopy(description_text: str) -> bool
+    Description suggests spectroscopy.
+
+description_suggests_monitoring(description_text: str) -> bool
+    Description suggests monitoring.
+
+description_suggests_radiation_dose(description_text: str) -> bool
+    Description suggests radiation dose.
+
+description_suggests_contrast_dose(description_text: str) -> bool
+    Description suggests contrast dose.
+
+description_suggests_fused(description_text: str) -> bool
+    Description suggests fused.
+
+metadata_diagnostic_fallback_allowed(skip_category: TsSkipCategory | None) -> bool
+    True when Harmonize should guess a Playbook name from DICOM instead of requiring TS.
+
+evaluate_ts_suitability(*, dimensionality: DimensionalityLabel, provenance: ProvenanceLabel, headers: list[Dataset], stack: StackMetrics, series_description: str | None=None) -> TsSuitability
+    Decide whether TotalSegmentator anatomy segmentation should run.
+
+infer_survey_localizer_dimensionality(headers: list[Dataset], stack: StackMetrics, *, series_description: str | None=None) -> bool
+    True when thick-slice survey naming indicates a localizer rather than diagnostic volume.
 """
-
-from __future__ import annotations
-
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from pydicom import Dataset
 
 from anonymizer.controller.ai.tseg.config import SURVEY_MIN_SLICE_SPACING_MM
-
-if TYPE_CHECKING:
-    from anonymizer.controller.ai.tseg.dicom_geometry import (
-        DimensionalityLabel,
-        ProvenanceLabel,
-        StackMetrics,
-    )
+from anonymizer.controller.ai.tseg.geometry_types import (
+    DimensionalityLabel,
+    ProvenanceLabel,
+    StackMetrics,
+)
 
 TsSkipCategory = Literal[
     "localizer",
@@ -233,8 +329,8 @@ def series_level_description_text(
 ) -> str:
     """Series/protocol naming only (study description excluded).
 
-    Study-level labels such as ``CTA CHEST`` must not suppress TotalSegmentator on
-    unrelated diagnostic series in the same exam (e.g. ``PE CHEST 2.5mm``).
+    Study-level labels such as CTA CHEST must not suppress TotalSegmentator on
+    unrelated diagnostic series in the same exam (e.g. PE CHEST 2.5mm).
     """
     if not headers:
         return ""

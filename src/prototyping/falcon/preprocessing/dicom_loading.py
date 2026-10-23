@@ -1,7 +1,5 @@
 """Load stacked CT DICOM slices into a SimpleITK image."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import SimpleITK as sitk

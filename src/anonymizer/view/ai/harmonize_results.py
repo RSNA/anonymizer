@@ -1,7 +1,5 @@
 """Harmonize results view: batch-aware analysis progress, Treeview tables, and Playbook proposal."""
 
-from __future__ import annotations
-
 import contextlib
 import logging
 import tkinter as tk
@@ -9,6 +7,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from tkinter import ttk
+from typing import Self
 
 import customtkinter as ctk
 from pydicom import Dataset
@@ -62,9 +61,37 @@ from anonymizer.view.project.description_mapping_store import (
 
 logger = logging.getLogger(__name__)
 
+
+@dataclass(frozen=True)
+class HarmonizeSeriesItem:
+    """One CT series selected for Playbook harmonization within a study batch."""
+
+    series_path: Path
+    ds: Dataset
+    study_description: str = ""
+    current_description: str = ""
+    phi_header: StudyPhiHeader | None = None
+
+    @classmethod
+    def from_dataset(
+        cls,
+        series_path: Path,
+        ds: Dataset,
+        *,
+        phi_header: StudyPhiHeader | None = None,
+    ) -> Self:
+        return cls(
+            series_path=Path(series_path),
+            ds=ds,
+            study_description=str(ds.get("StudyDescription", "") or "").strip(),
+            current_description=str(ds.get("SeriesDescription", "") or "").strip(),
+            phi_header=phi_header,
+        )
+
+
 # In-flight Harmonize windows keyed by anon SeriesInstanceUID (or resolved series path).
 # At most one Harmonize dialog may be open app-wide (TotalSegmentator is not process-safe concurrently).
-_open_harmonize_by_series_key: dict[str, HarmonizeResultsView] = {}
+_open_harmonize_by_series_key: dict[str, "HarmonizeResultsView"] = {}
 
 
 def _series_key_for_items(items: Sequence[HarmonizeSeriesItem]) -> str:
@@ -75,7 +102,7 @@ def _series_key_for_items(items: Sequence[HarmonizeSeriesItem]) -> str:
     return str(Path(first.series_path).resolve())
 
 
-def focus_harmonize_view(view: HarmonizeResultsView) -> None:
+def focus_harmonize_view(view: "HarmonizeResultsView") -> None:
     """Bring an existing Harmonize window forward."""
     with contextlib.suppress(tk.TclError):
         if not view.winfo_exists():
@@ -85,7 +112,7 @@ def focus_harmonize_view(view: HarmonizeResultsView) -> None:
         view.focus_force()
 
 
-def get_open_harmonize_view(series_key: str) -> HarmonizeResultsView | None:
+def get_open_harmonize_view(series_key: str) -> "HarmonizeResultsView | None":
     view = _open_harmonize_by_series_key.get(series_key)
     if view is None:
         return None
@@ -98,7 +125,7 @@ def get_open_harmonize_view(series_key: str) -> HarmonizeResultsView | None:
     return None
 
 
-def get_any_open_harmonize_view() -> HarmonizeResultsView | None:
+def get_any_open_harmonize_view() -> "HarmonizeResultsView | None":
     """Return any live Harmonize window (at most one should exist app-wide)."""
     for key, view in list(_open_harmonize_by_series_key.items()):
         try:
@@ -144,33 +171,6 @@ def should_prompt_brain_structures_for_series(series_path: Path, ds: Dataset | N
     return series_is_ct_head_candidate(series_path, ds) and brain_structures_allowed()
 
 
-@dataclass(frozen=True)
-class HarmonizeSeriesItem:
-    """One CT series selected for Playbook harmonization within a study batch."""
-
-    series_path: Path
-    ds: Dataset
-    study_description: str = ""
-    current_description: str = ""
-    phi_header: StudyPhiHeader | None = None
-
-    @classmethod
-    def from_dataset(
-        cls,
-        series_path: Path,
-        ds: Dataset,
-        *,
-        phi_header: StudyPhiHeader | None = None,
-    ) -> HarmonizeSeriesItem:
-        return cls(
-            series_path=Path(series_path),
-            ds=ds,
-            study_description=str(ds.get("StudyDescription", "") or "").strip(),
-            current_description=str(ds.get("SeriesDescription", "") or "").strip(),
-            phi_header=phi_header,
-        )
-
-
 @dataclass
 class HarmonizeSeriesOutcome:
     item: HarmonizeSeriesItem
@@ -204,13 +204,13 @@ class HarmonizeResultsView(AppToplevel):
     Series View–scoped dialog (blocks launching Series View only): runs the pipeline per
     selected series, shows progress, then Playbook results.
 
-    Does not use application-wide ``grab_set`` / ``wait_window`` so Dataset and other
+    Does not use application-wide grab_set / wait_window so Dataset and other
     windows remain usable. The launching Series View disables its own controls while open.
 
     A study-description header at the top updates as the view iterates through a batch of series
-    (single-series use passes one ``HarmonizeSeriesItem``).
+    (single-series use passes one HarmonizeSeriesItem).
 
-    Layout follows ``QueryView`` in ``query_retrieve_import.py``:
+    Layout follows QueryView in query_retrieve_import.py:
     batch header, results frames, optional error frame, footer (status + progress + buttons).
     """
 
@@ -320,7 +320,7 @@ class HarmonizeResultsView(AppToplevel):
         self._start_current_item_worker()
 
     def batch_outcome(self) -> HarmonizeBatchOutcome:
-        """Snapshot of recorded outcomes for ``on_closed`` / tests."""
+        """Snapshot of recorded outcomes for on_closed / tests."""
         if self.cancelled and not self._outcomes:
             return HarmonizeBatchOutcome(outcomes=[], cancelled=True)
         if self.cancelled:
@@ -1334,11 +1334,11 @@ def show_harmonize_results_view(
     """
     Open Harmonize as a Series View–scoped dialog (non-blocking for the rest of the app).
 
-    Pass ``items`` for multi-series batches (e.g. from a study-selection view), or the legacy
-    ``series_path`` / ``ds`` / ``current_description`` arguments for a single series.
+    Pass items for multi-series batches (e.g. from a study-selection view), or the legacy
+    series_path / ds / current_description arguments for a single series.
 
     If a Harmonize window is already open for any series, focuses it and returns that view
-    without starting a second job. Callers should pass ``on_closed`` for post-close UI refresh.
+    without starting a second job. Callers should pass on_closed for post-close UI refresh.
     """
     if items is None:
         if series_path is None or ds is None:

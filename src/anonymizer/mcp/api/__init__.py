@@ -1,51 +1,88 @@
 """MCP tool API surface.
 
-``catalog``
+catalog
     Authoritative tool list: names, titles, descriptions, MCP annotations, Pydantic models.
-``schemas``
+schemas
     Pydantic args models + validators (path safety, enums).
-``schema_json``
-    ``model_json_schema`` → flat MCP ``inputSchema``.
-``handlers``
+schema_json
+    model_json_schema → flat MCP inputSchema.
+handlers
     Implementations (dict returns for unit tests).
-``wire``
-    Dict → plain-text MCP ``ToolResult`` (``output_schema=None`` for LLM free text).
+wire
+    Dict → plain-text MCP ToolResult (output_schema=None for LLM free text).
 """
 
-from __future__ import annotations
+from typing import Any as Any
 
-from typing import Any
+from fastmcp.tools import Tool as Tool
 
-from fastmcp.tools import Tool
-
-from anonymizer.mcp.api import handlers
-from anonymizer.mcp.api.catalog import MCP_TOOL_NAMES, TOOL_CATALOG, TOOL_INPUT_MODELS, ZERO_ARG_TOOLS
+from anonymizer.mcp.api import handlers as handlers
+from anonymizer.mcp.api.catalog import MCP_TOOL_NAMES as MCP_TOOL_NAMES
+from anonymizer.mcp.api.catalog import TOOL_CATALOG as TOOL_CATALOG
+from anonymizer.mcp.api.catalog import TOOL_INPUT_MODELS as TOOL_INPUT_MODELS
+from anonymizer.mcp.api.catalog import ZERO_ARG_TOOLS as ZERO_ARG_TOOLS
 from anonymizer.mcp.api.handlers import (
-    anonymizer_usage,
-    configure_remote,
-    create_project,
-    export_series_preview,
-    harmonize_studies,
-    import_directory,
-    import_file,
-    job_status,
-    list_inventory,
-    list_projects,
-    pacs_find,
-    pacs_move,
-    project_info,
-    project_open,
-    project_settings_defaults,
-    remove_pixel_phi,
-    resolve_series,
-    update_project_settings,
+    anonymizer_usage as anonymizer_usage,
 )
-from anonymizer.mcp.api.schema_json import mcp_input_schema
-from anonymizer.mcp.api.wire import as_plain_tool, parse_wire_text, wire_text
+from anonymizer.mcp.api.handlers import (
+    configure_remote as configure_remote,
+)
+from anonymizer.mcp.api.handlers import (
+    create_project as create_project,
+)
+from anonymizer.mcp.api.handlers import (
+    export_series_preview as export_series_preview,
+)
+from anonymizer.mcp.api.handlers import (
+    harmonize_studies as harmonize_studies,
+)
+from anonymizer.mcp.api.handlers import (
+    import_directory as import_directory,
+)
+from anonymizer.mcp.api.handlers import (
+    import_file as import_file,
+)
+from anonymizer.mcp.api.handlers import (
+    job_status as job_status,
+)
+from anonymizer.mcp.api.handlers import (
+    list_inventory as list_inventory,
+)
+from anonymizer.mcp.api.handlers import (
+    list_projects as list_projects,
+)
+from anonymizer.mcp.api.handlers import (
+    pacs_find as pacs_find,
+)
+from anonymizer.mcp.api.handlers import (
+    pacs_move as pacs_move,
+)
+from anonymizer.mcp.api.handlers import (
+    project_info as project_info,
+)
+from anonymizer.mcp.api.handlers import (
+    project_open as project_open,
+)
+from anonymizer.mcp.api.handlers import (
+    project_settings_defaults as project_settings_defaults,
+)
+from anonymizer.mcp.api.handlers import (
+    remove_pixel_phi as remove_pixel_phi,
+)
+from anonymizer.mcp.api.handlers import (
+    resolve_series as resolve_series,
+)
+from anonymizer.mcp.api.handlers import (
+    update_project_settings as update_project_settings,
+)
+from anonymizer.mcp.api.schema_json import mcp_input_schema as mcp_input_schema
+from anonymizer.mcp.api.wire import as_plain_tool as as_plain_tool
+from anonymizer.mcp.api.wire import parse_wire_text as parse_wire_text
+from anonymizer.mcp.api.wire import wire_text as wire_text
 
 
 def register_tools(server: Any) -> None:
-    """Register catalog tools on FastMCP with Pydantic ``inputSchema`` + annotations."""
+    """Register catalog tools on FastMCP with Pydantic inputSchema + annotations."""
 
     for spec in TOOL_CATALOG:
         fn = getattr(handlers, spec.name)
@@ -61,30 +98,3 @@ def register_tools(server: Any) -> None:
         server.add_tool(tool)
 
 
-__all__ = [
-    "MCP_TOOL_NAMES",
-    "ZERO_ARG_TOOLS",
-    "TOOL_INPUT_MODELS",
-    "TOOL_CATALOG",
-    "wire_text",
-    "parse_wire_text",
-    "register_tools",
-    "anonymizer_usage",
-    "job_status",
-    "list_projects",
-    "project_settings_defaults",
-    "create_project",
-    "project_open",
-    "project_info",
-    "update_project_settings",
-    "list_inventory",
-    "import_directory",
-    "import_file",
-    "configure_remote",
-    "pacs_find",
-    "pacs_move",
-    "remove_pixel_phi",
-    "harmonize_studies",
-    "export_series_preview",
-    "resolve_series",
-]

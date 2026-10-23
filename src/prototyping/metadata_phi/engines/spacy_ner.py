@@ -1,7 +1,5 @@
 """Context-only baseline: spaCy NER with no regex / pattern pack."""
 
-from __future__ import annotations
-
 import os
 
 from prototyping.metadata_phi.locale_registry import get_locale_pack

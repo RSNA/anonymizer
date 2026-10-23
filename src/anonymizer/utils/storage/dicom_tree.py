@@ -1,16 +1,71 @@
-"""Anonymized store tree: DICOM listing, counts, and hidden-path helpers."""
+"""Dicom tree helpers for the anonymizer.
 
-from __future__ import annotations
+Public API
+----------
+DICOM_FILE_SUFFIX
+    Dicom file suffix (default '.dcm').
 
+is_hidden_name(name: str) -> bool
+    True for dot-prefixed file or directory names (e.g. .DS_Store, .git).
+
+is_hidden_path(path: str | Path) -> bool
+    True when any path component is a hidden file or directory name.
+
+is_non_dicom_import_name(name: str) -> bool
+    True for known non-DICOM sidecars and product cache trees skipped on import.
+
+list_import_directory_files(root_dir: str | Path) -> list[str]
+    List files under root_dir, skipping hidden names and non-DICOM sidecars.
+
+count_studies_series_images(patient_path: str) -> tuple[int, int, int]
+    Count studies, series, and images in a patient directory in the anonymizer store.
+
+count_series(base_dir: str, patient_ids: Optional[list[str]]=None) -> int
+    Count series across patients in the anonymizer store.
+
+get_dcm_files(root_path: str | Path) -> list[Path]
+    Collect .dcm paths under a patient, study, or series directory.
+
+count_study_images(base_dir: Path, anon_pt_id: str, study_uid: str) -> int
+    Count images stored under a study directory.
+
+count_quarantine_images(quarantine_path: Path) -> int
+    Count images stored in the quarantine directory.
+"""
 import os
 from pathlib import Path
 from typing import Optional
 
 DICOM_FILE_SUFFIX = ".dcm"
 
+# Product cache trees under a series folder (must match controller/ai/tseg/config
+# TSEG_CACHE_DIRNAME and ANNOTATIONS_DIRNAME — utils cannot import controller).
+_IMPORT_SKIP_DIRNAMES = frozenset({"0_TS_SEG", "annotations"})
+
+# Known non-DICOM sidecars; DICOM instances may be extensionless or .dcm.
+_IMPORT_SKIP_SUFFIXES = (
+    ".nii",
+    ".nii.gz",
+    ".nrrd",
+    ".seg.nrrd",
+    ".json",
+    ".csv",
+    ".txt",
+    ".md",
+    ".html",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".bmp",
+    ".zip",
+    ".xlsx",
+    ".xls",
+)
+
 
 def is_hidden_name(name: str) -> bool:
-    """True for dot-prefixed file or directory names (e.g. ``.DS_Store``, ``.git``)."""
+    """True for dot-prefixed file or directory names (e.g. .DS_Store, .git)."""
     return bool(name) and name.startswith(".")
 
 
@@ -19,14 +74,32 @@ def is_hidden_path(path: str | Path) -> bool:
     return any(is_hidden_name(part) for part in Path(path).parts)
 
 
+def is_non_dicom_import_name(name: str) -> bool:
+    """
+    True for known non-DICOM sidecars and product cache trees skipped on import.
+
+    Args:
+        name: File or directory basename (not a full path).
+
+    Returns:
+        True when the name should not be walked or imported as DICOM.
+    """
+    if not name or name in _IMPORT_SKIP_DIRNAMES:
+        return True
+    lower = name.lower()
+    return any(lower.endswith(suffix) for suffix in _IMPORT_SKIP_SUFFIXES)
+
+
 def list_import_directory_files(root_dir: str | Path) -> list[str]:
-    """List files under ``root_dir``, skipping hidden directories and files."""
+    """List files under root_dir, skipping hidden names and non-DICOM sidecars."""
     root = os.fspath(root_dir)
     file_paths: list[str] = []
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [name for name in dirnames if not is_hidden_name(name)]
+        dirnames[:] = [
+            name for name in dirnames if not is_hidden_name(name) and not is_non_dicom_import_name(name)
+        ]
         for filename in filenames:
-            if is_hidden_name(filename):
+            if is_hidden_name(filename) or is_non_dicom_import_name(filename):
                 continue
             file_paths.append(os.path.join(dirpath, filename))
     return file_paths
@@ -40,7 +113,7 @@ def count_studies_series_images(patient_path: str) -> tuple[int, int, int]:
         patient_path: Path to the patient directory.
 
     Returns:
-        ``(study_count, series_count, image_count)``.
+        (study_count, series_count, image_count).
     """
     study_count = 0
     series_count = 0
@@ -92,7 +165,7 @@ def count_series(base_dir: str, patient_ids: Optional[list[str]] = None) -> int:
 
 def get_dcm_files(root_path: str | Path) -> list[Path]:
     """
-    Collect ``.dcm`` paths under a patient, study, or series directory.
+    Collect .dcm paths under a patient, study, or series directory.
 
     Args:
         root_path: Root path to search.

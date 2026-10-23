@@ -1,7 +1,5 @@
 """CLI: characterize / run / score / final-report / phase1-baselines."""
 
-from __future__ import annotations
-
 import argparse
 import json
 import logging
@@ -10,7 +8,7 @@ from pathlib import Path
 from prototyping.pseudo_phi_deid.characterize import characterize
 from prototyping.pseudo_phi_deid.pairs import pair_all
 from prototyping.pseudo_phi_deid.paths import RESULTS_DIR, phase_dir
-from prototyping.pseudo_phi_deid.pipeline.clinical import ensure_experiment_script_copy
+from prototyping.pseudo_phi_deid.pipeline.script_session import ensure_experiment_script_copy
 from prototyping.pseudo_phi_deid.pipeline.run import RunConfig, run_pairs
 from prototyping.pseudo_phi_deid.report import (
     upsert_section_12,
@@ -160,8 +158,8 @@ def cmd_phase1(args: argparse.Namespace) -> int:
         return 1
     pixel_same = _load_pixel_same()
     variants = [
-        ("1a_script", "script", "Step 1 Clinical script only", "Baseline without NER"),
-        ("1b_openmed", "openmed", "Steps 2–6 private KB + NER (no Clinical script)", "NER without script"),
+        ("1a_script", "script", "Step 1 anonymizer script only", "Baseline without NER"),
+        ("1b_openmed", "openmed", "Steps 2–6 private KB + NER (no anonymizer script)", "NER without script"),
         ("1c_combined", "combined", "Steps 1–6 script + private KB + bulk NER", "Plan path"),
     ]
     summary = []
@@ -237,7 +235,7 @@ def cmd_phase2(args: argparse.Namespace) -> int:
     args.slug = "taxonomy_combined"
     args.goal = "Combined with taxonomy locked from Phase 0"
     args.changed = "ACTIONS locked; clinical script experiment copy in use"
-    args.next_step = "If header failures cluster on script tags, patch scripts/clinical-anonymizer.script"
+    args.next_step = "If header failures cluster on script tags, patch scripts/default-anonymizer.script"
     args.pixels_all = False
     return cmd_run(args)
 
@@ -280,7 +278,7 @@ def cmd_final_report(_args: argparse.Namespace) -> int:
 
 
 def _sync_tcia_clinical_script() -> Path:
-    """Copy packaged clinical-anonymizer.script into the experiment scripts dir."""
+    """Copy packaged default-anonymizer.script into the experiment scripts dir."""
     return ensure_experiment_script_copy(force=True)
 
 
@@ -289,7 +287,7 @@ PSEUDO_PHI_NER = "PseudoPHI-ner"
 
 
 def cmd_pseudo_phi_ner(args: argparse.Namespace) -> int:
-    """Legacy: steps 2–6 only (no Clinical script). Prefer PseudoPHI-eval."""
+    """Legacy: steps 2–6 only (no anonymizer script). Prefer PseudoPHI-eval."""
     pairs, _ = pair_all(patient_ids=args.subjects or None)
     if not pairs:
         logger.error("no pairs")
@@ -300,7 +298,7 @@ def cmd_pseudo_phi_ner(args: argparse.Namespace) -> int:
         "ner_only",
         subject_ids=args.subjects or ["ALL"],
     )
-    logger.info("=== %s (steps 2–6 only; no Clinical script) ===", PSEUDO_PHI_NER)
+    logger.info("=== %s (steps 2–6 only; no anonymizer script) ===", PSEUDO_PHI_NER)
     cand = out / "candidates"
     result = run_pairs(pairs, cand, cfg)
     metrics = score_pairs(
@@ -312,7 +310,7 @@ def cmd_pseudo_phi_ner(args: argparse.Namespace) -> int:
     _write_run(
         phase=0,
         slug=PSEUDO_PHI_NER,
-        goal="Steps 2–6: private KB + bulk NER (no Clinical script)",
+        goal="Steps 2–6: private KB + bulk NER (no anonymizer script)",
         changed="PseudoPHI-ner: no step 1 script",
         next_step="Use PseudoPHI-eval for plan path (steps 1–6).",
         config=cfg,
@@ -353,7 +351,7 @@ def cmd_pseudo_phi_ner(args: argparse.Namespace) -> int:
 def cmd_pseudo_phi_eval(args: argparse.Namespace) -> int:
     """Score combined (clinical script + private KB + bulk NER)."""
     script = _sync_tcia_clinical_script()
-    logger.info("Clinical script: %s (%d bytes)", script, script.stat().st_size)
+    logger.info("anonymizer script: %s (%d bytes)", script, script.stat().st_size)
 
     pairs, _ = pair_all(patient_ids=args.subjects or None)
     if not pairs:
@@ -367,8 +365,8 @@ def cmd_pseudo_phi_eval(args: argparse.Namespace) -> int:
         script_path=script,
         subject_ids=args.subjects or ["ALL"],
     )
-    goal = "TCIA Clinical script + private KB + bulk NER (no pixels/regex)"
-    changed = "PseudoPHI-eval: script + process_private_tags_tcia + OpenMed bulk NER"
+    goal = "TCIA anonymizer script + private KB + bulk NER (no pixels/regex)"
+    changed = "PseudoPHI-eval: script (SAFE_PRIVATE) + OpenMed bulk NER"
 
     logger.info("=== %s ===", PSEUDO_PHI_EVAL)
     cand = out / "candidates"
@@ -582,7 +580,7 @@ def _append_tcia_report_section(
             inventory.append(
                 (
                     "pet_public",
-                    "PET / NM public attributes (gold keeps; Clinical removes)",
+                    "PET / NM public attributes (gold keeps; Retain removes)",
                     by.pop("pet_public"),
                 )
             )

@@ -1,17 +1,5 @@
 """External real-data loaders for metadata PHI eval (local trees)."""
 
-from __future__ import annotations
-
-__all__ = [
-    "DEFAULT_OPENI_DIR",
-    "DEFAULT_TCIA_SR_DIR",
-    "DEFAULT_REXERR_DIR",
-    "DEFAULT_PSEUDO_PHI_ROOT",
-    "DEFAULT_PSEUDO_PHI_EVAL_DIR",
-    "DEFAULT_PSEUDO_PHI_DEID_DIR",
-    "DEFAULT_HEROLIM_SR_DIR",
-    "DEFAULT_MIDI_B_VAL_DIR",
-]
 
 DEFAULT_OPENI_DIR = "/Users/michaelevans/DATA/OpenI_NLMCXR/ecgen-radiology"
 DEFAULT_TCIA_SR_DIR = "/Users/michaelevans/DATA/SR_wgllssg1"

@@ -1,7 +1,5 @@
 """Import tests using real public tool-export samples under segment_imports/."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import numpy as np

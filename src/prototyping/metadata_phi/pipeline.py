@@ -1,7 +1,5 @@
 """Analyze text or DICOM paths with an engine + radiology guard."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from prototyping.metadata_phi.engines.base import PhiEngine, get_engine

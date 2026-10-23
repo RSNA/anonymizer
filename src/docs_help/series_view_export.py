@@ -4,8 +4,6 @@ Builds a docs-faithful composite from the ImageViewer PIL cache (with overlays)
 plus a latch-button strip, so Harmonize help shots can still ship without TCC.
 """
 
-from __future__ import annotations
-
 import logging
 from pathlib import Path
 from typing import Any

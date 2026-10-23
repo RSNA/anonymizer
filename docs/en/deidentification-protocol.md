@@ -2,26 +2,24 @@
 
 This page summarizes how the Anonymizer follows the DICOM Basic Application Confidentiality Profile ([PS 3.15 Appendix E](https://dicom.nema.org/medical/dicom/2023b/output/chtml/part15/chapter_E.html)) in plain language.
 
-## Anonymization policy (ingest)
+## De-identification options (ingest)
 
-Ingest uses the **anonymizer script only** (never NER/OCR). Project Settings choose:
+Ingest uses the **anonymizer script only** (never NER/OCR). Project Settings choose **de-identification options** — the DICOM confidentiality options of [PS 3.15 Table E.1-1](https://dicom.nema.org/medical/dicom/current/output/chtml/part15/chapter_E.html) — shown by their standard names (Basic Profile, Retain Longitudinal Temporal Information Modified Dates Option, …). Two preset buttons fill the checkbox set: **Basic** (Basic Profile only) and **Retain** (Basic Profile + Modified Dates + Patient Characteristics + Retain Safe Private). Presets store nothing; the project stores only the selected option codes.
 
-| Policy | Script | Private tags at **ingest** (must stay fast) | Reports / clinical free text |
-| --- | --- | --- | --- |
-| **Strict** (default) | `default-anonymizer.script` | **All removed** (`remove_private_tags`) before walk | Mostly `@remove()`; SR/PDF modalities off |
-| **Clinical** | `clinical-anonymizer.script` (maintained public-tag script) | **Left untouched** — not wiped and not processed on the anonymize walk | Script ops; other public tags kept for Posda-style review; `@process()` sequences |
+The script is **compiled** from the selected options using the packaged `default-anonymizer.script` plus option overlays, and stored beside `ProjectModel.json` as `{site_id}-anonymizer.script`. A project carries **one date strategy**: every date rule must match the StudyDate rule's operation (the script editor offers a one-click fix). A custom CTP script can be imported from the script editor; unknown operands reject the import, date rules must match StudyDate, and the options recorded for it are the ones you confirm (prefilled from the script's rules). The project records whether its script was generated or imported (filename + SHA-256).
 
-**Private cleanup under Clinical** is **not** done at ingest. It is owned by optional **Embedded PHI** (metadata + TCIA Private Tag KB by private creator) after ingest — same idea as pixel OCR / report NER. The anonymize walk stays script-only and fast.
+Private tags at ingest depend on **Retain Safe Private**:
 
-The active script is stored beside `ProjectModel.json` as `{site_id}-anonymizer.script`.
+- Without it, **all private tags are removed** before the walk.
+- With it, private elements are resolved **in the anonymize walk** from the TCIA Private Tag KB (generated lookup dict, matched by private creator): keep / remove / UID-remap / date delta by the project date delta; unknown slots are removed and logged. Retain Safe Private needs your own knowledge of which private tags are safe — the KB is the project's action source; the anonymizer log records one line per unknown private element removed (tag, creator, VR — never values).
 
-Clinical is seeded from the [TCIA submission / de-identification overview](https://www.cancerimagingarchive.net/submission-and-de-identification-overview/) Table 1 and then **fine-tuned** in `clinical-anonymizer.script` (Basic Profile + Clean Descriptors, Retain Longitudinal With Modified Dates, Retain Patient Characteristics, plus product keeps/`@safe()`). Retain Safe Private is applied later via Embedded PHI, not on the ingest walk. Clinical does **not** claim Retain Device Identity (Station Name and Device Serial Number are removed). Method codes written to `(0012,0064)`: `113100`, `113105`, `113107`, `113108`, `113111`.
+Executed options are recorded in `(0012,0064) DeidentificationMethodCodeSequence`: ingest records the selected options that run at ingest; later tasks record theirs when they run (Clean Pixel Data 113101 by Remove Burnt-in Text, Retain Safe Private 113111 at ingest, Clean Structured Content 113104 by report cleaning, Clean Descriptors 113105 by metadata cleaning, Clean Recognizable Visual Features 113102 by Blur Face). Clean Graphics (113103) is selectable but not executed yet. Selecting Clean Structured Content or Clean Descriptors enables SR/PDF modalities.
 
 ## What gets removed or replaced
 
 - Patient name and ID become project-scoped anonymized values (Site ID + sequential patient number). The same person keeps the same anonymized ID across studies in the project.
 - UIDs, dates (via `@hashdate`), and accession numbers are replaced with **deterministic** project-scoped values so links between images stay consistent. See [Deterministic replacements](#deterministic-replacements-uids-dates-accessions) below.
-- Many clinical workflow tags follow the script. Private tags: removed entirely (Strict) or deferred to Embedded PHI (Clinical).
+- Many clinical workflow tags follow the script. Private tags: removed entirely, or resolved in the walk under Retain Safe Private.
 - The file records that patient identity was removed and names the RSNA DICOM Anonymizer as the method.
 
 ## Deterministic replacements (UIDs, dates, accessions)
@@ -42,12 +40,12 @@ These transforms are **intentional** and **secret-free**. Their job is **stable 
 
 Dates are shifted so the **order and spacing** of a patient’s studies stay meaningful, but calendar dates are not the originals. Time-of-day is typically left as-is. Strategies (script / lookup):
 
-- **@hashdate** — per-patient deterministic offset (Strict / default script)
+- **@hashdate** — per-patient deterministic offset (default packaged script)
 - **@lookup(this,dateoffset)** — per-patient offset from a CTP `.properties` table
-- **@incrementdate(this,n)** — fixed trial-wide day offset (CTP DATEINC; Clinical script and Embedded PHI private dates use `n` from `clinical_dateinc.txt`)
+- **@incrementdate(this,n)** — fixed trial-wide day offset (CTP DATEINC; packaged default offset in `controller/private_tags/dateinc.txt`). Private date elements under Retain Safe Private shift by the same single resolved delta as public dates.
 - **@rebasedate(this,origin)** — epoch rebase from registration `basedate/` + ORIGIN parameter (default `19600101`)
 
-When any of these run, the anonymizer writes `(0028,0303) LongitudinalTemporalInformationModified = MODIFIED` (DICOM option 113107). See [Create project — longitudinal dates](05-create-project/#longitudinal-dates-tcia-style).
+When any of these run, the anonymizer writes `(0028,0303) LongitudinalTemporalInformationModified = MODIFIED`, and records code 113107 when the Modified Dates option is selected. See [Create project — longitudinal dates](05-create-project/#longitudinal-dates-tcia-style).
 
 ## What may be kept (partial options)
 
@@ -68,7 +66,7 @@ Capture stores **removed PHI entity text only** (`EmbeddedPHI` / `EmbeddedPHIRem
 
 ## Structured reports and overlays
 
-Curve/overlay groups are removed. Whether Structured Report / Encapsulated PDF objects are accepted is controlled by project modalities and the Anonymization Policy (Clinical enables SR/PDF).
+Curve/overlay groups are removed. Whether Structured Report / Encapsulated PDF objects are accepted is controlled by project modalities; selecting Clean Structured Content or Clean Descriptors enables SR/PDF.
 
 !!! note "For compliance review"
     Have your privacy officer review the [anonymizer script](05-create-project/#anonymizer-script-editor) and AI tools for your institution. This manual is operational guidance, not legal advice.

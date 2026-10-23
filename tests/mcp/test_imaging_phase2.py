@@ -1,7 +1,5 @@
 """Phase 2 MCP imaging: inventory, pixel-PHI strip (mocked OCR), preview export."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 

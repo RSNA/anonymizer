@@ -1,7 +1,16 @@
-"""Inference entry points for XR body-part classification."""
+"""Inference entry points for XR body-part classification.
 
-from __future__ import annotations
+Public API
+----------
+XpBodypartPrediction
+    Softmax prediction from Xp-Bodypart-Checker.
 
+predict_body_part_from_array(pixels: np.ndarray) -> XpBodypartPrediction
+    Classify a 2-D (or single-frame) radiograph array.
+
+predict_body_part(pixels: np.ndarray) -> XpBodypartPrediction | None
+    Classify pixels; return None on failure (caller falls back to DICOM).
+"""
 import logging
 from dataclasses import dataclass
 

@@ -11,8 +11,6 @@ write_generated_module(rows: list[dict[str, str]], src_name: str, out_module: Pa
 main() -> None
     Run official CSV → generated module from CLI arguments.
 """
-from __future__ import annotations
-
 import argparse
 import csv
 import re

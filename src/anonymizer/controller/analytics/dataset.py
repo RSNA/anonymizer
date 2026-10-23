@@ -1,27 +1,157 @@
 """Project Dataset analytics: PHI demographics, modality/AI coverage, TS organ volumes.
 
-Simple read-only API for the Dashboard to call when analytics UX needs a refresh.
-Does not own threads, caches, or idle gating — that belongs in the view.
+Public API
+----------
+AGE_BANDS_KNOWN
+    Age bands known.
 
-Snapshot shape (nested by domain so panels can grow independently)::
+AGE_BANDS
+    Age bands.
 
-    DatasetAnalytics
-      .demographics    DemographicsAnalytics  (sex / age / ethnicity Distributions)
-      .imaging         ImagingAnalytics       (modality / ai_coverage Distributions)
-      .anatomy         AnatomyAnalytics       (regions + main-organ volume histogram)
+AGE_UNKNOWN
+    Age unknown (default 'Unknown').
 
-Population denominators live on each ``Distribution.total`` — this API does not
-replace or feed the Dashboard Patients/Studies/Series/Images counters.
+AGE_HIST_BIN_YEARS
+    Age hist bin years (5.0).
 
-Unknown demographic values are excluded from chart ``items`` and tracked on
-``Distribution.unknown_count`` (charts report known ``n=`` in titles). AI coverage
-is % of series with
-only non-zero algorithms included. Organ panel histograms patient-mean organ volumes
-(one sample per patient after averaging multi-series volumes for that organ).
+AGE_HIST_RANGE_YEARS
+    Age hist range years.
+
+ETHNICITY_TOP_N
+    Ethnicity top n (5).
+
+TOP_ORGANS_N
+    Top organs n (2).
+
+MODALITY_FILTER_TOP_N
+    Modality filter top n (6).
+
+VOLUME_SEGMENT_GROUPS
+    Volume segment groups.
+
+HEAD_LIMITED_EXCLUDED_ORGANS
+    Head limited excluded organs.
+
+NORM_MISMATCH_EXCLUDED_ORGANS
+    Norm mismatch excluded organs.
+
+ORGAN_VOLUME_MIN_BIN_WIDTH_ML
+    Organ volume min bin width ml (0.1).
+
+ORGAN_VOLUME_BIN_WIDTH_PCT_MIN
+    Organ volume bin width pct min (1.0).
+
+ORGAN_VOLUME_BIN_WIDTH_PCT_MAX
+    Organ volume bin width pct max (20.0).
+
+BODY_REGIONS
+    Body regions.
+
+MODALITY_FILTER_ALL
+    Modality filter all (default 'All').
+
+CountBucket
+    One categorical label and its absolute count.
+
+Distribution
+    Categorical counts with a single shared percentage denominator.
+
+OrganVolumeSample
+    One patient-mean organ volume (ml) after modality filter.
+
+OrganVolumeDistribution
+    Per-patient mean ml samples for one organ (histogram source).
+
+load_organ_volume_ranges() -> dict[str, tuple[float, float, float]]
+    Load normative (min_ml, max_ml, bin_width_ml) per PRIMARY_SEGMENT_GROUPS key.
+
+organ_volume_range_ml(organ_name: str) -> tuple[float, float, float]
+    Return normative (min_ml, max_ml, bin_width_ml) for a primary segment group.
+
+has_organ_volume_range(organ_name: str) -> bool
+    True when organ_name has a normative JSON entry (matched TS / user organs).
+
+ORGAN_VOLUME_NEAR_EXTENT_BINS
+    Organ volume near extent bins (2).
+
+organ_volume_base_span(organ_name: str) -> tuple[float, float, float, float, float]
+    Return (base_lo, base_hi, norm_lo, norm_hi, json_bin_width_ml).
+
+effective_bin_width_ml(organ_name: str, bin_width_pct: float | None=None, *, samples: Sequence[float] | None=None) -> float
+    JSON bin_width_ml when bin_width_pct is unset; else % of base span.
+
+organ_volume_axis_span(samples: Sequence[float] | None=None, *, organ_name: str, bin_width_pct: float | None=None) -> tuple[float, float, float, float, float]
+    Return (plot_lo, plot_hi, norm_lo, norm_hi, bin_width_ml).
+
+organ_volume_bin_edges(samples: Sequence[float] | None=None, *, organ_name: str, bin_width_pct: float | None=None) -> list[float]
+    Fixed-width main edges; one-bin under/overflow sentinels when extremes exist.
+
+organ_volume_clip_samples_for_hist(samples: Sequence[float], edges: Sequence[float], *, plot_lo: float, plot_hi: float) -> list[float]
+    Map extreme under/overflow ml into sentinel bin centers for ax.hist.
+
+organ_volume_bin_patient_ids(samples: Sequence[OrganVolumeSample], edges: Sequence[float], *, plot_lo: float | None=None, plot_hi: float | None=None) -> list[tuple[str, ...]]
+    Group patient ids into bins; extremes go in under/overflow sentinels when present.
+
+organ_volume_ml_tick_values(axis_lo: float, axis_hi: float, bin_width: float, *, max_ticks: int=6) -> list[float]
+    Sparse ml-axis tick positions — always labels the left origin.
+
+age_histogram_bin_edges(samples: Sequence[float] | None=None, *, width: float=AGE_HIST_BIN_YEARS, lo: float=AGE_HIST_RANGE_YEARS[0], hi: float=AGE_HIST_RANGE_YEARS[1]) -> list[float]
+    Static fixed-width age histogram edges (default 0–100 in 5-year bins).
+
+AgeHistogram
+    Known patient ages in years for a 5-year histogram; Unknown excluded from samples.
+
+DemographicsAnalytics
+    DemographicsAnalytics type.
+
+ImagingAnalytics
+    ImagingAnalytics type.
+
+AnatomyAnalytics
+    TS-derived anatomy; available is False when no series cache was found.
+
+AnalyticsFilterIndex
+    Compact facts for modality re-bucketing without a PHI reload.
+
+DatasetAnalytics
+    Immutable project analytics snapshot for Dashboard charts.
+
+normalize_sex_label(raw: str | None) -> str
+    Normalize sex label.
+
+age_years_for_dob(dob: date | None, study_date: date | None) -> float | None
+    Age in whole years at study date, or None when Unknown.
+
+age_band_for_dob(dob: date | None, study_date: date | None) -> str
+    Age band for dob.
+
+normalize_ethnicity_label(raw: str | None) -> str
+    Normalize ethnicity label.
+
+default_selected_organ_names(organ_volumes: Sequence[OrganVolumeDistribution], *, top_n: int=TOP_ORGANS_N) -> tuple[str, ...]
+    Default Volumes-picker checks: first top_n ranked organs.
+
+organ_display_name(organ_name: str) -> str
+    UI label for a volume segment key (frontal_lobe → Frontal lobe).
+
+series_is_head_limited(structure_voxels: Mapping[str, int] | None) -> bool
+    True when Head latch mass is present and Chest/Abdomen are not.
+
+rebuild_anatomy_ledger(images_dir: Path, modality_by_anon_uid: dict[str, str], *, should_abort: Callable[[], bool] | None=None) -> tuple[tuple[_RegionHit, ...], tuple[_OrganSample, ...], tuple[str, ...]]
+    Walk images once, write the project ledger, return anatomy tuples.
+
+load_anatomy_from_ledger(images_dir: Path, modality_by_anon_uid: dict[str, str]) -> tuple[tuple[_RegionHit, ...], tuple[_OrganSample, ...], tuple[str, ...]] | None
+    Return anatomy from the project ledger, or None when the ledger file is absent.
+
+upsert_series_ledger_from_cache(cache_dir: Path, *, modality: str | None=None) -> SeriesLedgerRow | None
+    Append/replace one ledger row after Harmonize finalize (best-effort).
+
+finalize_seg_cache_with_ledger(cache_dir: Path, seg_dir: Path, structure_voxels: dict[str, int]) -> dict[str, int]
+    Publish the seg cache, then append/replace the project analytics ledger row (best-effort).
+
+build_dataset_analytics(anon_model: AnonymizerModel, images_dir: Path, *, should_abort: Callable[[], bool] | None=None) -> DatasetAnalytics
+    Build a read-only Dataset analytics snapshot from PHI + TS cache files.
 """
-
-from __future__ import annotations
-
 import contextlib
 import json
 import logging
@@ -34,7 +164,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir
 from anonymizer.controller.ai.tseg.config import PRIMARY_SEGMENT_GROUPS, TSEG_CACHE_DIRNAME
@@ -84,7 +214,7 @@ VOLUME_SEGMENT_GROUPS: frozenset[str] = frozenset(PRIMARY_SEGMENT_GROUPS)
 # series (no Chest/Abdomen latch mass) these are incomplete by construction — omit
 # from volume histograms rather than amber-flag against whole-body norms.
 # Note: TS does export cervical vertebrae_C1–C7 (and spinal_cord) on head FOV, but
-# the ``spine`` group still unions C+T+L+S; head CT typically only sees C1–C2.
+# the spine group still unions C+T+L+S; head CT typically only sees C1–C2.
 HEAD_LIMITED_EXCLUDED_ORGANS: frozenset[str] = frozenset(
     {
         "spine",
@@ -107,15 +237,13 @@ HEAD_LIMITED_EXCLUDED_ORGANS: frozenset[str] = frozenset(
 NORM_MISMATCH_EXCLUDED_ORGANS: frozenset[str] = frozenset({"brainstem"})
 # Floor when resolving user % of base span into an effective bin width.
 ORGAN_VOLUME_MIN_BIN_WIDTH_ML = 0.1
-# Clamp for persisted ``organ_bin_width_pct`` (percent of padded normative span).
+# Clamp for persisted organ_bin_width_pct (percent of padded normative span).
 ORGAN_VOLUME_BIN_WIDTH_PCT_MIN = 1.0
 ORGAN_VOLUME_BIN_WIDTH_PCT_MAX = 20.0
 BODY_REGIONS: tuple[str, ...] = ("Head", "Chest", "Abdomen")
 _DICOM_DATE_RE = re.compile(r"^(\d{4})(\d{2})(\d{2})$")
 MODALITY_FILTER_ALL = "All"
-_ORGAN_VOLUME_RANGES_PATH = (
-    Path(__file__).resolve().parents[2] / "assets" / "analytics" / "organ_volume_ranges_ml.json"
-)
+_ORGAN_VOLUME_RANGES_PATH = Path("assets/analytics/organ_volume_ranges_ml.json")
 # Nested JSON sections under assets/analytics/organ_volume_ranges_ml.json.
 _ORGAN_VOLUME_RANGE_SECTIONS: tuple[str, ...] = (
     "soft_organs",
@@ -138,12 +266,12 @@ class CountBucket:
 class Distribution:
     """Categorical counts with a single shared percentage denominator.
 
-    ``total`` is the denominator for ``pct`` (e.g. patient count for sex),
-    not necessarily ``sum(item.count for item in items)`` when items can overlap
+    total is the denominator for pct (e.g. patient count for sex),
+    not necessarily sum(item.count for item in items) when items can overlap
     or when the chart should show coverage against a population.
 
-    For demographics, ``items`` exclude Unknown; ``unknown_count`` is tracked but
-    titles use known ``n=`` only.
+    For demographics, items exclude Unknown; unknown_count is tracked but
+    titles use known n= only.
     """
 
     items: tuple[CountBucket, ...]
@@ -184,7 +312,7 @@ class OrganVolumeSample:
 class OrganVolumeDistribution:
     """Per-patient mean ml samples for one organ (histogram source).
 
-    Each entry in ``samples`` is one patient: the mean volume across that
+    Each entry in samples is one patient: the mean volume across that
     patient's segmented series for this organ (after modality filter).
     """
 
@@ -223,8 +351,8 @@ def _parse_organ_volume_range_entry(
 def load_organ_volume_ranges() -> dict[str, tuple[float, float, float]]:
     """Load normative (min_ml, max_ml, bin_width_ml) per PRIMARY_SEGMENT_GROUPS key.
 
-    JSON is sectioned (``soft_organs`` / ``brain_structures`` / ``skeletal`` /
-    ``airways_and_cord``) to mirror TS latch grouping; the returned map is flat.
+    JSON is sectioned (soft_organs / brain_structures / skeletal /
+    airways_and_cord) to mirror TS latch grouping; the returned map is flat.
     There is no default range — every volume histogram key must be listed.
     """
     global _ORGAN_VOLUME_RANGES_CACHE
@@ -279,8 +407,8 @@ def load_organ_volume_ranges() -> dict[str, tuple[float, float, float]]:
 def organ_volume_range_ml(organ_name: str) -> tuple[float, float, float]:
     """Return normative (min_ml, max_ml, bin_width_ml) for a primary segment group.
 
-    Raises ``KeyError`` when ``organ_name`` has no healthy-adult entry in
-    ``organ_volume_ranges_ml.json`` (no catch-all default).
+    Raises KeyError when organ_name has no healthy-adult entry in
+    organ_volume_ranges_ml.json (no catch-all default).
     """
     ranges = load_organ_volume_ranges()
     try:
@@ -294,7 +422,7 @@ def organ_volume_range_ml(organ_name: str) -> tuple[float, float, float]:
 
 
 def has_organ_volume_range(organ_name: str) -> bool:
-    """True when ``organ_name`` has a normative JSON entry (matched TS / user organs)."""
+    """True when organ_name has a normative JSON entry (matched TS / user organs)."""
     return organ_name in load_organ_volume_ranges()
 
 
@@ -307,7 +435,7 @@ _CUSTOM_ORGAN_DEFAULT_BIN_WIDTH_ML = 10.0
 
 
 def organ_volume_base_span(organ_name: str) -> tuple[float, float, float, float, float]:
-    """Return ``(base_lo, base_hi, norm_lo, norm_hi, json_bin_width_ml)``.
+    """Return (base_lo, base_hi, norm_lo, norm_hi, json_bin_width_ml).
 
     Base span is the normative window plus one JSON bin of pad on each side.
     User coarseness (% of range) is always relative to this stable span — never
@@ -351,7 +479,7 @@ def effective_bin_width_ml(
     *,
     samples: Sequence[float] | None = None,
 ) -> float:
-    """JSON ``bin_width_ml`` when ``bin_width_pct`` is unset; else % of base span."""
+    """JSON bin_width_ml when bin_width_pct is unset; else % of base span."""
     if has_organ_volume_range(organ_name):
         _base_lo, _base_hi, _nlo, _nhi, json_w = organ_volume_base_span(organ_name)
     else:
@@ -372,16 +500,16 @@ def organ_volume_axis_span(
     organ_name: str,
     bin_width_pct: float | None = None,
 ) -> tuple[float, float, float, float, float]:
-    """Return ``(plot_lo, plot_hi, norm_lo, norm_hi, bin_width_ml)``.
+    """Return (plot_lo, plot_hi, norm_lo, norm_hi, bin_width_ml).
 
     Base span is the normative window plus one-bin pad (JSON width). Mild
     (“near”) outliers may extend that span by at most
-    ``ORGAN_VOLUME_NEAR_EXTENT_BINS`` whole bins of the *effective* width.
+    ORGAN_VOLUME_NEAR_EXTENT_BINS whole bins of the *effective* width.
     Extreme samples beyond that do **not** stretch the axis — they use one-bin
-    under/overflow sentinels (see ``organ_volume_bin_edges``).
+    under/overflow sentinels (see organ_volume_bin_edges).
 
     Custom organs without a JSON range use a data-driven base span and set
-    ``norm_lo == plot_lo`` / ``norm_hi == plot_hi`` so charts skip the band.
+    norm_lo == plot_lo / norm_hi == plot_hi so charts skip the band.
     """
     if has_organ_volume_range(organ_name):
         base_lo, base_hi, norm_lo, norm_hi, _json_w = organ_volume_base_span(organ_name)
@@ -434,7 +562,7 @@ def _organ_volume_sentinel_flags(
     plot_lo: float,
     plot_hi: float,
 ) -> tuple[bool, bool]:
-    """Return ``(has_underflow, has_overflow)`` from edge list vs plot span."""
+    """Return (has_underflow, has_overflow) from edge list vs plot span."""
     if len(edges) < 2:
         return False, False
     has_under = float(edges[0]) < float(plot_lo) - 1e-9
@@ -449,7 +577,7 @@ def organ_volume_clip_samples_for_hist(
     plot_lo: float,
     plot_hi: float,
 ) -> list[float]:
-    """Map extreme under/overflow ml into sentinel bin centers for ``ax.hist``."""
+    """Map extreme under/overflow ml into sentinel bin centers for ax.hist."""
     if len(edges) < 2:
         return [float(s) for s in samples]
     has_under, has_over = _organ_volume_sentinel_flags(edges, plot_lo=plot_lo, plot_hi=plot_hi)
@@ -508,7 +636,7 @@ def organ_volume_bin_patient_ids(
 
 
 def _nice_ml_tick_step(raw_step: float) -> float:
-    """Round ``raw_step`` up to 1/2/5 × 10^k for readable ml axis labels."""
+    """Round raw_step up to 1/2/5 × 10^k for readable ml axis labels."""
     step = max(float(raw_step), 1e-6)
     exp = math.floor(math.log10(step))
     base = 10.0**exp
@@ -533,8 +661,8 @@ def organ_volume_ml_tick_values(
 ) -> list[float]:
     """Sparse ml-axis tick positions — always labels the left origin.
 
-    Tick step is at least ``bin_width`` and grows (1/2/5×10^k) until there are at
-    most ``max_ticks`` labels across ``[axis_lo, axis_hi]``. ``axis_lo`` is always
+    Tick step is at least bin_width and grows (1/2/5×10^k) until there are at
+    most max_ticks labels across [axis_lo, axis_hi]. axis_lo is always
     included so the left spine is never mistaken for an unlabeled 0. The next
     sparse label above the origin is omitted so it cannot overwrite the origin
     text. Normative bounds are not force-injected (avoids clutter).
@@ -590,7 +718,7 @@ def age_histogram_bin_edges(
     """Static fixed-width age histogram edges (default 0–100 in 5-year bins).
 
     Edges do not shrink to the sample span — a single patient still shows the
-    full age axis. ``samples`` is ignored (kept for call-site compatibility).
+    full age axis. samples is ignored (kept for call-site compatibility).
     """
     _ = samples
     w = float(width) if width > 0 else AGE_HIST_BIN_YEARS
@@ -641,13 +769,13 @@ class ImagingAnalytics:
 
 @dataclass(frozen=True)
 class AnatomyAnalytics:
-    """TS-derived anatomy; ``available`` is False when no series cache was found.
+    """TS-derived anatomy; available is False when no series cache was found.
 
-    ``applicable`` is False when the active modality filter cannot have Harmonize
+    applicable is False when the active modality filter cannot have Harmonize
     CT/MR segmentation (e.g. CR-only filter).
-    ``organ_volumes`` lists every ``PRIMARY_SEGMENT_GROUPS`` latch with samples
+    organ_volumes lists every PRIMARY_SEGMENT_GROUPS latch with samples
     (soft organs, brain structures, skeletal, airways/cord), ranked for default
-    picker selection (first ``TOP_ORGANS_N`` are pre-checked in the UI).
+    picker selection (first TOP_ORGANS_N are pre-checked in the UI).
     """
 
     available: bool
@@ -709,7 +837,7 @@ class AnalyticsFilterIndex:
 class DatasetAnalytics:
     """Immutable project analytics snapshot for Dashboard charts.
 
-    Independent of Dashboard inventory counters (``Totals`` / databoard labels).
+    Independent of Dashboard inventory counters (Totals / databoard labels).
     """
 
     generated_at: datetime
@@ -725,8 +853,8 @@ class DatasetAnalytics:
         key = (self.modality_filter or "").strip()
         return not key or key == MODALITY_FILTER_ALL
 
-    def for_modality(self, modality: str | None) -> DatasetAnalytics:
-        """Return a view restricted to ``modality``, or self when All/None."""
+    def for_modality(self, modality: str | None) -> Self:
+        """Return a view restricted to modality, or self when All/None."""
         key = (modality or "").strip()
         if not key or key == MODALITY_FILTER_ALL:
             if self.is_all_modalities:
@@ -893,10 +1021,10 @@ def _warn_organ_volume_outside_normative(
 ) -> None:
     """Log WARNING when patient mean or any series ml falls outside the normative axis.
 
-    Out-of-range volumes are still kept in the histogram sample list (``n=`` unchanged);
+    Out-of-range volumes are still kept in the histogram sample list (n= unchanged);
     they simply fall outside the fixed axis bins. Causes may be segmentation error,
-    a true clinical outlier, or an incorrect entry in ``organ_volume_ranges_ml.json``.
-    Custom ``user:*`` organs have no normative JSON entry — skip logging.
+    a true clinical outlier, or an incorrect entry in organ_volume_ranges_ml.json.
+    Custom user:* organs have no normative JSON entry — skip logging.
     """
     if not has_organ_volume_range(organ):
         return
@@ -946,7 +1074,7 @@ def _patient_mean_samples_by_organ(
     contributing series) outside the normative JSON range are logged at WARNING
     but still included in the returned samples.
 
-    Accepts ``PRIMARY_SEGMENT_GROUPS`` keys and custom ``user:*`` annotation keys.
+    Accepts PRIMARY_SEGMENT_GROUPS keys and custom user:* annotation keys.
     """
     by_organ_patient: dict[str, dict[str, list[tuple[float, str]]]] = {}
     for sample in organ_samples:
@@ -988,12 +1116,12 @@ def default_selected_organ_names(
     *,
     top_n: int = TOP_ORGANS_N,
 ) -> tuple[str, ...]:
-    """Default Volumes-picker checks: first ``top_n`` ranked organs."""
+    """Default Volumes-picker checks: first top_n ranked organs."""
     return tuple(organ.organ_name for organ in organ_volumes[: max(0, top_n)])
 
 
 def organ_display_name(organ_name: str) -> str:
-    """UI label for a volume segment key (``frontal_lobe`` → ``Frontal lobe``)."""
+    """UI label for a volume segment key (frontal_lobe → Frontal lobe)."""
     name = str(organ_name or "")
     if name.startswith("user:"):
         name = name[5:]
@@ -1041,7 +1169,7 @@ def _organ_allowed_for_series(organ: str, *, head_limited: bool) -> bool:
 def _organ_volumes_ml_for_cache(cache_dir: Path) -> dict[str, float]:
     """Primary-segment volumes in ml, overlaid with user annotation volumes.
 
-    Prefers ``organ_volumes_ml.json`` when fresher than masks (fast Refresh).
+    Prefers organ_volumes_ml.json when fresher than masks (fast Refresh).
     Otherwise recounts masks once and writes that cache. Falls back to voxel
     sidecars only when no anatomy masks exist. User annotation ml always
     overlays TS (user wins on the same organ key).
@@ -1056,10 +1184,10 @@ def _organ_volumes_ml_for_cache(cache_dir: Path) -> dict[str, float]:
 
 
 def _organ_volumes_ml_from_sidecars(cache_dir: Path) -> dict[str, float]:
-    """Legacy fallback: sidecar voxel counts × shared ``mask_geometry`` spacing.
+    """Legacy fallback: sidecar voxel counts × shared mask_geometry spacing.
 
     Only used when no anatomy masks are on disk. Sidecar values must be raw
-    voxel counts (post-``reconcile_structure_voxels_from_masks``), not mm³.
+    voxel counts (post-reconcile_structure_voxels_from_masks), not mm³.
     """
     geometry = read_mask_geometry(cache_dir)
     spacing = geometry.get("spacing") if geometry else None
@@ -1141,7 +1269,7 @@ def _organ_counts_for_cache(cache_dir: Path) -> dict[str, int]:
 
 
 def _iter_series_dirs(images_dir: Path) -> list[Path]:
-    """Leaf series directories under ``images_dir/patient/study/series``."""
+    """Leaf series directories under images_dir/patient/study/series."""
     series: list[Path] = []
     root = Path(images_dir)
     if not root.is_dir():
@@ -1340,7 +1468,7 @@ def upsert_series_ledger_from_cache(
         return None
     if len(rel.parts) != 3:
         return None
-    # Real projects: ProjectModel beside images; tests: ASCII ``public/`` tree.
+    # Real projects: ProjectModel beside images; tests: ASCII public/ tree.
     if not (images_dir.parent / "ProjectModel.json").is_file() and images_dir.name != "public":
         return None
     mod = (modality or "").strip().upper()

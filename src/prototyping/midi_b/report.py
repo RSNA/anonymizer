@@ -1,7 +1,5 @@
 """Failure / score reports from official MIDI validation_results.db."""
 
-from __future__ import annotations
-
 import sqlite3
 from pathlib import Path
 

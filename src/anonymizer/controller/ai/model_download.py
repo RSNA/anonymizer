@@ -1,7 +1,31 @@
-"""Thread-safe progress tracking for AI model downloads (any feature)."""
+"""Thread-safe progress tracking for AI model downloads (any feature).
 
-from __future__ import annotations
+Public API
+----------
+DownloadProgress
+    Snapshot of one in-flight AI model download.
 
+begin_model_download(download_id: str, *, message: str='') -> None
+    Register a model download under download_id.
+
+update_model_download(download_id: str, *, message: str | None=None, fraction: float | None | object=...) -> None
+    Update progress for an active download; no-op if download_id is unknown.
+
+end_model_download(download_id: str) -> None
+    Clear progress for download_id when a download finishes or fails.
+
+get_model_download_progress(download_id: str) -> DownloadProgress | None
+    Return the current progress snapshot for download_id, if any.
+
+is_model_download_active(download_id: str) -> bool
+    True when a download is registered for download_id.
+
+any_model_download_active() -> bool
+    True when any model download is in progress.
+
+track_tqdm_model_download(download_id: str, *, start_message: str | None=None, label: str='', tqdm_module: object, on_progress: Callable[[str, float | None], None] | None=None, manage_lifecycle: bool=True) -> Iterator[None]
+    Capture tqdm/stdout progress while a third-party library downloads model weights.
+"""
 import contextlib
 import io
 import sys
@@ -29,7 +53,7 @@ _download_progress: dict[str, DownloadProgress] = {}
 
 def begin_model_download(download_id: str, *, message: str = "") -> None:
     """
-    Register a model download under ``download_id``.
+    Register a model download under download_id.
 
     Args:
         download_id: Stable feature key for UI polling.
@@ -46,12 +70,12 @@ def update_model_download(
     fraction: float | None | object = ...,
 ) -> None:
     """
-    Update progress for an active download; no-op if ``download_id`` is unknown.
+    Update progress for an active download; no-op if download_id is unknown.
 
     Args:
         download_id: Stable feature key.
         message: New message, or None to keep the current one.
-        fraction: New fraction, ``...`` to keep current, or None to clear.
+        fraction: New fraction, ... to keep current, or None to clear.
     """
     with _download_lock:
         current = _download_progress.get(download_id)
@@ -64,7 +88,7 @@ def update_model_download(
 
 def end_model_download(download_id: str) -> None:
     """
-    Clear progress for ``download_id`` when a download finishes or fails.
+    Clear progress for download_id when a download finishes or fails.
 
     Args:
         download_id: Stable feature key.
@@ -75,7 +99,7 @@ def end_model_download(download_id: str) -> None:
 
 def get_model_download_progress(download_id: str) -> DownloadProgress | None:
     """
-    Return the current progress snapshot for ``download_id``, if any.
+    Return the current progress snapshot for download_id, if any.
 
     Args:
         download_id: Stable feature key.
@@ -89,7 +113,7 @@ def get_model_download_progress(download_id: str) -> DownloadProgress | None:
 
 def is_model_download_active(download_id: str) -> bool:
     """
-    True when a download is registered for ``download_id``.
+    True when a download is registered for download_id.
 
     Args:
         download_id: Stable feature key.
@@ -163,11 +187,11 @@ def track_tqdm_model_download(
     Capture tqdm/stdout progress while a third-party library downloads model weights.
 
     Args:
-        download_id: Stable key for UI polling (e.g. ``remove_pixel_phi``, ``enable_harmonize``).
-        start_message: Initial status line (used when ``label`` is empty).
-        label: Optional model name shown after ``Downloading:`` with byte progress.
-        tqdm_module: Module object whose ``tqdm`` attribute will be patched (e.g. ``totalsegmentator.libs``).
-        on_progress: Optional ``(message, fraction)`` callback on each update.
+        download_id: Stable key for UI polling (e.g. remove_pixel_phi, enable_harmonize).
+        start_message: Initial status line (used when label is empty).
+        label: Optional model name shown after Downloading: with byte progress.
+        tqdm_module: Module object whose tqdm attribute will be patched (e.g. totalsegmentator.libs).
+        on_progress: Optional (message, fraction) callback on each update.
         manage_lifecycle: When False, only report updates; caller owns begin/end_model_download.
     """
     resolved_start_message = start_message or _("Downloading…")

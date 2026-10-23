@@ -1,7 +1,5 @@
 """Tests for utils.windowing.apply_windowing."""
 
-from __future__ import annotations
-
 import numpy as np
 
 from anonymizer.utils.windowing import apply_windowing

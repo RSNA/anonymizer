@@ -1,7 +1,5 @@
 """Tests for persisted CT/MR TotalSegmentator resolution modes (ephemeral process defaults)."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest

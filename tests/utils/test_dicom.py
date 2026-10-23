@@ -1,7 +1,5 @@
 """Tests for utils.dicom tag helpers and constants."""
 
-from __future__ import annotations
-
 import logging
 
 import pytest

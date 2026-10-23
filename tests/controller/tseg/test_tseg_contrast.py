@@ -1,7 +1,5 @@
 """Tests for TotalSegmentator XGBoost contrast phase helpers."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 

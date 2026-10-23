@@ -1,15 +1,10 @@
 """Analytics layout verification helpers (docs_help-style fixture wiring)."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest
 
 from docs_help.project_setup import TEST_DCM_ROOT, collect_import_paths, fixture_dirs
-
-# Re-export for tests that need fixture paths.
-__all__ = ["TEST_DCM_ROOT", "collect_import_paths", "fixture_dirs", "require_fixture"]
 
 
 def require_fixture(*keys: str) -> list[str]:

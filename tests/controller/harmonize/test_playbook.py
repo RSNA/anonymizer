@@ -1,7 +1,5 @@
 """Tests for RadLex Playbook harmonization codes and series-description formatting."""
 
-from __future__ import annotations
-
 from dataclasses import replace
 
 import pytest

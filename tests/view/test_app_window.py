@@ -1,7 +1,5 @@
 """Tests for shared app menubar bases and Window menu registry."""
 
-from __future__ import annotations
-
 import contextlib
 import sys
 import tkinter as tk

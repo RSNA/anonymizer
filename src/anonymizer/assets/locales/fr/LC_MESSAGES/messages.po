@@ -2492,6 +2492,11 @@ msgid "Optional CT Head detail after total anatomy (academic license)."
 msgstr ""
 "Détail CT crânien facultatif après l'anatomie totale (licence académique)."
 
+msgid "Harmonize Series Description using RadLex playbook and Study Description using LOINC dictionary."
+msgstr ""
+"Harmoniser la description de série avec le playbook RadLex et la description "
+"d'étude avec le dictionnaire LOINC."
+
 msgid "Blur face on head CT/MR (academic license)."
 msgstr "Flouter le visage sur CT/IRM crânienne (licence académique)."
 
@@ -2909,3 +2914,87 @@ msgstr "Rechercher le décalage de date"
 
 msgid "Round age"
 msgstr "Arrondir l'âge"
+
+msgid "Basic Application Confidentiality Profile"
+msgstr ""
+
+msgid "Clean Pixel Data Option"
+msgstr ""
+
+msgid "Clean Recognizable Visual Features Option"
+msgstr ""
+
+msgid "Clean Graphics Option"
+msgstr ""
+
+msgid "Clean Structured Content Option"
+msgstr ""
+
+msgid "Clean Descriptors Option"
+msgstr ""
+
+msgid "Retain Longitudinal Temporal Information Full Dates Option"
+msgstr ""
+
+msgid "Retain Longitudinal Temporal Information Modified Dates Option"
+msgstr ""
+
+msgid "Retain Patient Characteristics Option"
+msgstr ""
+
+msgid "Retain Device Identity Option"
+msgstr ""
+
+msgid "Retain UIDs Option"
+msgstr ""
+
+msgid "Retain Safe Private Option"
+msgstr ""
+
+msgid "Retain Institution Identity Option"
+msgstr ""
+
+msgid "De-identification Options"
+msgstr ""
+
+msgid "This option is not available yet."
+msgstr ""
+
+msgid "This option is not ready (models or license missing)."
+msgstr ""
+
+msgid "Models for this option are not installed. Download now?"
+msgstr ""
+
+msgid "Another download is already in progress."
+msgstr ""
+
+msgid "Failed to apply de-identification options"
+msgstr ""
+
+msgid "Import CTP Script"
+msgstr ""
+
+msgid "Script Files"
+msgstr ""
+
+msgid "Unsupported script:"
+msgstr ""
+
+msgid "Date rules must match the StudyDate operation."
+msgstr ""
+
+msgid "Apply the StudyDate operation to all date fields?"
+msgstr ""
+
+msgid "Record these de-identification options for the imported script?"
+msgstr ""
+
+msgid "Apply these de-identification options? This replaces your project anonymizer script with a script compiled from the selected options. Custom script edits will be lost.\n\nWhat does not change:\n• Already anonymized data is not re-processed.\n\nSelecting Clean Structured Content or Clean Descriptors enables SR and PDF modalities if they are not already selected."
+msgstr ""
+
+msgid "Retain Safe Private kept private and clinical tags at ingest. This step is OCR on burnt-in image pixels."
+msgstr ""
+
+msgid "Basic Profile already removed most private and clinical text at ingest. This step is OCR on burnt-in image pixels."
+msgstr ""

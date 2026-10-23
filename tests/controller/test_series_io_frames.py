@@ -1,7 +1,5 @@
 """Tests for load_series_frames naming and LoadedSeries.frames."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import numpy as np

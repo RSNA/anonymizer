@@ -1,7 +1,5 @@
 """MCP project settings: defaults, validation ranges, create/update."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest
@@ -70,7 +68,7 @@ def test_project_settings_defaults_ok():
     assert "nothing is created yet" in result["help"]["usage"].lower()
     assert "import_gate" not in result["help"]
     assert "setup_checklist" not in result["help"]
-    assert "anonymization_policy" in result["help"]
+    assert "confidentiality_options" in result["help"]
     assert "en_US" in result["language_codes"]
 
 

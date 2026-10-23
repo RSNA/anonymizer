@@ -1,7 +1,22 @@
-"""2D brush stamping and undo patches for annotation sessions."""
+"""2D brush stamping and undo patches for annotation sessions.
 
-from __future__ import annotations
+Public API
+----------
+UNDO_LIMIT
+    Undo limit (20).
 
+stamp_brush(volume: np.ndarray, *, slice_index: int, cy: int, cx: int, radius: int, value: int) -> tuple[int, int, int, int] | None
+    Stamp a disk onto volume[slice]. Returns bbox or None if out of range.
+
+begin_stroke_capture(volume: np.ndarray, *, slice_index: int) -> np.ndarray
+    Copy full slice for undo (simple, robust for Phase 1).
+
+commit_stroke_undo(session: AnnotateSession, *, kind: PaintTargetKind, structure_name: str | None, slice_index: int, before_slice: np.ndarray) -> None
+    Commit stroke undo.
+
+undo_last_stroke(session: AnnotateSession) -> bool
+    Undo last stroke.
+"""
 import numpy as np
 
 from anonymizer.controller.annotations.store import AnnotateSession, PaintTargetKind, StrokeUndo
@@ -29,7 +44,7 @@ def stamp_brush(
     radius: int,
     value: int,
 ) -> tuple[int, int, int, int] | None:
-    """Stamp a disk onto ``volume[slice]``. Returns bbox or None if out of range."""
+    """Stamp a disk onto volume[slice]. Returns bbox or None if out of range."""
     if slice_index < 0 or slice_index >= volume.shape[0]:
         return None
     plane = volume[slice_index]

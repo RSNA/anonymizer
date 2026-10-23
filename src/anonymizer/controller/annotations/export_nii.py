@@ -1,7 +1,10 @@
-"""NIfTI ML export bundle from annotation store."""
+"""NIfTI ML export bundle from annotation store.
 
-from __future__ import annotations
-
+Public API
+----------
+export_ml_bundle(cache_dir: Path, dest_dir: Path, *, session: AnnotateSession | None=None) -> Path
+    Copy volume + labels + label_map into dest_dir for ML training.
+"""
 import json
 from pathlib import Path
 
@@ -21,7 +24,7 @@ def export_ml_bundle(
     *,
     session: AnnotateSession | None = None,
 ) -> Path:
-    """Copy volume + labels + label_map into ``dest_dir`` for ML training."""
+    """Copy volume + labels + label_map into dest_dir for ML training."""
     cache_dir = Path(cache_dir)
     dest_dir = Path(dest_dir)
     dest_dir.mkdir(parents=True, exist_ok=True)

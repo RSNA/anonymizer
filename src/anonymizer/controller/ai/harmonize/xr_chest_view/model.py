@@ -1,7 +1,16 @@
-"""EfficientNet-B4 dual-head net matching MedicalAILabo CXp MultiNet checkpoint."""
+"""EfficientNet-B4 dual-head net matching MedicalAILabo CXp MultiNet checkpoint.
 
-from __future__ import annotations
+Public API
+----------
+CxpViewNet
+    EfficientNet-B4 + projection (3) and rotation (4) heads, 1-channel input.
 
+build_cxp_view_net() -> CxpViewNet
+    Build cxp view net.
+
+load_cxp_view_weights(weight_path: Path, *, device: torch.device | None=None) -> CxpViewNet
+    Build network and load cxp_projection_rotation.pt state dict.
+"""
 import logging
 from pathlib import Path
 
@@ -63,7 +72,7 @@ def build_cxp_view_net() -> CxpViewNet:
 
 
 def load_cxp_view_weights(weight_path: Path, *, device: torch.device | None = None) -> CxpViewNet:
-    """Build network and load ``cxp_projection_rotation.pt`` state dict."""
+    """Build network and load cxp_projection_rotation.pt state dict."""
     device = device or torch.device("cpu")
     net = build_cxp_view_net()
     try:

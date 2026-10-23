@@ -1,7 +1,5 @@
 """MIDI-B 2024 VAL held-out evaluation (final check; not for method selection)."""
 
-from __future__ import annotations
-
 import json
 import time
 from pathlib import Path

@@ -1,12 +1,16 @@
-"""C-FIND SCU and Study UID hierarchy building."""
+"""C-FIND SCU and Study UID hierarchy building.
 
-from __future__ import annotations
-
+Public API
+----------
+FindMixin
+    FindMixin type.
+"""
 import logging
 import threading
-from typing import TYPE_CHECKING, List, Tuple
+from typing import List, Tuple
 
 from pydicom import Dataset
+from pynetdicom.association import Association
 from pynetdicom.status import QR_FIND_SERVICE_CLASS_STATUS
 
 from anonymizer.controller.dicom import dicomweb as dicomweb_api
@@ -15,9 +19,6 @@ from anonymizer.controller.dicom.requests import FindStudyRequest, FindStudyResp
 from anonymizer.model.project import DICOMRuntimeError
 from anonymizer.utils.dicom import C_FAILURE, C_PENDING_A, C_PENDING_B, C_SUCCESS
 from anonymizer.utils.translate import _
-
-if TYPE_CHECKING:
-    from pynetdicom.association import Association
 
 logger = logging.getLogger(__name__)
 

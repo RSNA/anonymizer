@@ -1,11 +1,43 @@
 """RadLex Playbook series description: component-wise options and assembly.
 
-Avoids cartesian-product catalogs. Callers pick one value per field and
-``format_*`` builds the Playbook string from the existing vocabularies.
+Public API
+----------
+TSEG_COMPONENT_FIELDS
+    Tseg component fields.
+
+PLANAR_COMPONENT_FIELDS
+    Planar component fields.
+
+PlaybookComponentSelection
+    CT|MR Playbook series description components (RadLex Series Playbook).
+
+PlanarComponentSelection
+    XR|MG|US Playbook series description components.
+
+format_playbook_series_description(selection: PlaybookComponentSelection) -> str
+    Assemble a CT|MR Playbook series description (SeriesNameV4 order).
+
+format_planar_component_description(selection: PlanarComponentSelection) -> str
+    Assemble an XR|MG|US Playbook series description from component codes.
+
+playbook_selection_from_field_map(fields: dict[str, str]) -> PlaybookComponentSelection
+    Build a selection from UI field → code map (body_part may be Ch+Abd).
+
+planar_selection_from_field_map(fields: dict[str, str], *, cohort: str) -> PlanarComponentSelection
+    Planar selection from field map.
+
+series_playbook_component_options(*, modality: object | None, current_description: str, anatomy_hint: str='', full_vocab: bool=False) -> dict[str, list[str]]
+    Per-field Playbook code lists for the series description composer.
+
+series_playbook_component_initial(*, modality: object | None, current_description: str, anatomy_hint: str='') -> dict[str, str]
+    Default field → code map for the composer (from parse / modality seed).
+
+series_playbook_component_field_order(modality: object | None) -> tuple[str, ...]
+    Series playbook component field order.
+
+format_series_playbook_fields(fields: dict[str, str], *, modality: object | None) -> str
+    Assemble description from a UI field map for the given modality.
 """
-
-from __future__ import annotations
-
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -225,7 +257,7 @@ def format_playbook_series_description(selection: PlaybookComponentSelection) ->
     """
     Assemble a CT|MR Playbook series description (SeriesNameV4 order).
 
-    ``Laterality? BodyPart Plane IV Luminal? SeriesType? Modifier? ST? Kernel? View?``
+    Laterality? BodyPart Plane IV Luminal? SeriesType? Modifier? ST? Kernel? View?
     Soft kernel, Supine view, and Med thickness are omitted by leaving those fields empty.
     """
     parts: list[str] = []
@@ -274,7 +306,7 @@ def format_planar_component_description(selection: PlanarComponentSelection) -> 
 
 
 def playbook_selection_from_field_map(fields: dict[str, str]) -> PlaybookComponentSelection:
-    """Build a selection from UI field → code map (body_part may be ``Ch+Abd``)."""
+    """Build a selection from UI field → code map (body_part may be Ch+Abd)."""
     raw = (fields.get("body_part") or "").strip()
     body_parts = tuple(p for p in raw.split("+") if p.strip()) if raw else ()
     return PlaybookComponentSelection(
@@ -306,7 +338,7 @@ def planar_selection_from_field_map(
 
 
 def _prefer_first(preferred: Sequence[str], ordered_universe: Sequence[str]) -> list[str]:
-    """Stable unique list: preferred values first, then remaining in ``ordered_universe`` order."""
+    """Stable unique list: preferred values first, then remaining in ordered_universe order."""
     allowed = set(ordered_universe)
     result: list[str] = []
     seen: set[str] = set()
@@ -517,8 +549,8 @@ def series_playbook_component_options(
     """
     Per-field Playbook code lists for the series description composer.
 
-    Closest (``full_vocab=False``): current parse + small edit vocabularies.
-    Full (``full_vocab=True``): entire frozenset vocabulary per field — never a
+    Closest (full_vocab=False): current parse + small edit vocabularies.
+    Full (full_vocab=True): entire frozenset vocabulary per field — never a
     cartesian product of composed strings.
     """
 
@@ -553,7 +585,7 @@ def series_playbook_component_initial(
 ) -> dict[str, str]:
     """Default field → code map for the composer (from parse / modality seed).
 
-    Blank descriptions stay empty — do not invent ``Ch Ax WO`` (or similar) defaults.
+    Blank descriptions stay empty — do not invent Ch Ax WO (or similar) defaults.
     """
     options = series_playbook_component_options(
         modality=modality,

@@ -1,7 +1,5 @@
 """compile_script overlays, presets, and the one-date-strategy check."""
 
-from __future__ import annotations
-
 from anonymizer.controller.dates import is_date_delta_operation
 from anonymizer.controller.script.compile import compile_script
 from anonymizer.controller.script.date_rules import (

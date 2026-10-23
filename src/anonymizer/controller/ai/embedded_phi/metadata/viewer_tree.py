@@ -1,7 +1,28 @@
-"""Horos-style DICOM metadata tree for one dataset (view-only)."""
+"""Horos-style DICOM metadata tree for one dataset (view-only).
 
-from __future__ import annotations
+Public API
+----------
+STRUCTURAL_TAG
+    Structural tag (default '-').
 
+ITEM_NAME
+    Item name (default 'item').
+
+VALUE_NAME
+    Value name (default 'value').
+
+MetadataTreeNode
+    One row in the Metadata tree viewer.
+
+build_metadata_tree(ds: Dataset, *, include_file_meta: bool=False) -> list[MetadataTreeNode]
+    Walk ds into a Horos-like tree: SQ → item children, VM>1 → value children.
+
+filter_metadata_tree(nodes: Sequence[MetadataTreeNode], query: str) -> list[MetadataTreeNode]
+    Keep nodes matching query (case-insensitive) and ancestors of matches.
+
+flatten_tree_paths(nodes: Sequence[MetadataTreeNode]) -> list[str]
+    All tag_path values depth-first (tests / search helpers).
+"""
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
@@ -13,7 +34,7 @@ from pydicom.tag import Tag
 from pydicom.valuerep import PersonName
 
 from anonymizer.controller.ai.embedded_phi.metadata.extract import element_display_name
-from anonymizer.controller.ingest.anonymizer_script import format_dicom_tag
+from anonymizer.utils.dicom_dictionary import format_dicom_tag
 
 STRUCTURAL_TAG = "-"
 ITEM_NAME = "item"
@@ -31,7 +52,7 @@ class MetadataTreeNode:
     vr: str
     content: str
     tag_path: str
-    children: tuple[MetadataTreeNode, ...] = field(default_factory=tuple)
+    children: tuple["MetadataTreeNode", ...] = field(default_factory=tuple)
 
 
 def build_metadata_tree(
@@ -40,7 +61,7 @@ def build_metadata_tree(
     include_file_meta: bool = False,
 ) -> list[MetadataTreeNode]:
     """
-    Walk ``ds`` into a Horos-like tree: SQ → ``item`` children, VM>1 → ``value`` children.
+    Walk ds into a Horos-like tree: SQ → item children, VM>1 → value children.
 
     Pixel Data is summarized (VR / length) without dumping bytes.
     """
@@ -57,7 +78,7 @@ def filter_metadata_tree(
     nodes: Sequence[MetadataTreeNode],
     query: str,
 ) -> list[MetadataTreeNode]:
-    """Keep nodes matching ``query`` (case-insensitive) and ancestors of matches."""
+    """Keep nodes matching query (case-insensitive) and ancestors of matches."""
     needle = str(query or "").strip().lower()
     if not needle:
         return list(nodes)
@@ -70,7 +91,7 @@ def filter_metadata_tree(
 
 
 def flatten_tree_paths(nodes: Sequence[MetadataTreeNode]) -> list[str]:
-    """All ``tag_path`` values depth-first (tests / search helpers)."""
+    """All tag_path values depth-first (tests / search helpers)."""
     paths: list[str] = []
 
     def walk(n: MetadataTreeNode) -> None:

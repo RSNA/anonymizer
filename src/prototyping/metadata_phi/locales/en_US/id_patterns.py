@@ -1,7 +1,5 @@
 """English (US) PATIENT_IDENTIFIER / PHONE / EMAIL pattern packs."""
 
-from __future__ import annotations
-
 import re
 
 # Locale → model ids (resolved by LocaleRegistry).

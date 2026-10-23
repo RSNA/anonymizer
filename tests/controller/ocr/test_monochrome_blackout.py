@@ -1,7 +1,5 @@
 """Tests for MONOCHROME1/MONOCHROME2 blackout alignment with Series View pixels."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 

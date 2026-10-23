@@ -1,7 +1,5 @@
 """Helpers for Orthanc dicom_integration tests (managed Orthanc lifecycle)."""
 
-from __future__ import annotations
-
 import logging
 
 import pytest

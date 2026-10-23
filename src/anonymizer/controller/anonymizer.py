@@ -431,22 +431,18 @@ class AnonymizerController:
             elif anon_acc_no:
                 dataset[tag].value = anon_acc_no
         elif is_date_delta_operation(operation):
-            if date_delta is None:
-                logger.error(
-                    f"No date delta resolved for patient {phi_ptid}; leaving {tag} unchanged ({operation})"
-                )
+            # Date ops only write DA/DT calendar text. Numeric private VRs (e.g. SL
+            # unix-time) cannot hold YYYYMMDD; remove those tags instead.
+            vr = (getattr(data_element, "VR", None) or "").upper()
+            if vr not in {"DA", "DT"}:
+                del dataset[tag]
                 return
+            if date_delta is None:
+                logger.error(f"No date delta resolved for patient {phi_ptid}; leaving {tag} unchanged ({operation})")
+                return
+            # @hashdate: invalid/empty date or missing PatientID → fixed sentinel (not a shifted value).
             if "@hashdate" in operation and (not phi_ptid or not valid_date(raw.strip()[:8])):
                 dataset[tag].value = DEFAULT_ANON_DATE
-            elif data_element.tag.is_private and data_element.VR in ("SL", "UL", "IS"):
-                # Numeric private dates (YYYYMMDD in an int VR) apply as ints.
-                try:
-                    dataset[tag].value = int(
-                        apply_day_delta(f"{int(raw.strip()):08d}", date_delta)[:8]
-                    )
-                except ValueError:
-                    del dataset[tag]
-                    return
             else:
                 dataset[tag].value = apply_day_delta(raw, date_delta)
         elif "@lookup" in operation:

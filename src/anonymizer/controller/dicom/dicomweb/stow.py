@@ -1,7 +1,10 @@
-"""STOW-RS store helpers."""
+"""DICOMweb STOW-RS client: store DICOM instances to a remote archive.
 
-from __future__ import annotations
-
+Public API
+----------
+store_files(session: DicomWebSession, file_paths: Iterable[str], *, abort_check: Callable[[], bool] | None=None) -> int
+    STOW-RS POST of DICOM files to .../studies.
+"""
 import logging
 import uuid
 from pathlib import Path
@@ -35,7 +38,7 @@ def store_files(
     abort_check: Callable[[], bool] | None = None,
 ) -> int:
     """
-    STOW-RS POST of DICOM files to ``.../studies``.
+    STOW-RS POST of DICOM files to .../studies.
 
     Returns the number of files included in a successful request.
     Raises DICOMRuntimeError on HTTP failure.

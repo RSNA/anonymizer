@@ -14,8 +14,6 @@ private_creator_string(ds: Dataset, tag: BaseTag) -> str
 private_tag_operation(ds: Dataset, elem: DataElement, *, retain_uids: bool, date_delta: int | None) -> str
     Return the operation for one private element.
 """
-from __future__ import annotations
-
 import logging
 
 from pydicom.dataelem import DataElement

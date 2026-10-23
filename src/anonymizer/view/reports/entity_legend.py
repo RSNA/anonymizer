@@ -1,7 +1,5 @@
 """Shared Embedded PHI entity legend widget (Report Text Review / Series View chrome)."""
 
-from __future__ import annotations
-
 from tkinter import Misc
 
 import customtkinter as ctk

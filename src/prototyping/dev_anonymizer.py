@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Run rsna-anonymizer and restart when Python sources under src/anonymizer change."""
 
-from __future__ import annotations
-
 import os
 import shutil
 import subprocess

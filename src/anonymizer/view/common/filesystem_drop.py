@@ -4,8 +4,6 @@ Experimental: soft-fails if tkdnd binaries are missing or incompatible with the
 host Tcl/Tk. File → Import remains the primary path.
 """
 
-from __future__ import annotations
-
 import logging
 from collections.abc import Callable
 from typing import Any
@@ -28,7 +26,7 @@ def enable_filesystem_drops(
     widget: Any,
     on_paths: Callable[[list[str]], None],
 ) -> bool:
-    """Register ``DND_FILES`` on ``widget``. Returns False if DnD is unavailable."""
+    """Register DND_FILES on widget. Returns False if DnD is unavailable."""
     if TkinterDnD is None or DND_FILES is None:
         logger.warning(
             "File drop unavailable (tkinterdnd2 import failed): %s",

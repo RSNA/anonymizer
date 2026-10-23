@@ -1,7 +1,5 @@
 """Phase 0 MCP project session / tool tests."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest

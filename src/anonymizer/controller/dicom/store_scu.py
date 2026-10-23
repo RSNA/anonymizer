@@ -1,7 +1,10 @@
-"""C-STORE SCU (send files to a remote SCP)."""
+"""C-STORE SCU (send files to a remote SCP).
 
-from __future__ import annotations
-
+Public API
+----------
+StoreMixin
+    StoreMixin type.
+"""
 import logging
 
 from pynetdicom.status import STORAGE_SERVICE_CLASS_STATUS

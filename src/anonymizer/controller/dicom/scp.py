@@ -1,7 +1,10 @@
-"""Local C-ECHO / C-STORE SCP handlers and server lifecycle."""
+"""Local C-ECHO / C-STORE SCP handlers and server lifecycle.
 
-from __future__ import annotations
-
+Public API
+----------
+ScpMixin
+    ScpMixin type.
+"""
 import logging
 import time
 from typing import List, cast

@@ -1,7 +1,5 @@
 """Orthanc dicom_integration: export patient with DICOM-SEG (TS seg masks) via STOW-RS."""
 
-from __future__ import annotations
-
 import json
 import shutil
 from pathlib import Path
@@ -17,7 +15,8 @@ from pydicom.uid import SegmentationStorage
 
 from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir
 from anonymizer.controller.ai.tseg.seg_retention import MASK_GEOMETRY_FILENAME, mask_geometry_from_image
-from anonymizer.controller.project import ExportPatientsResponse, ProjectController
+from anonymizer.controller.dicom.requests import ExportPatientsResponse
+from anonymizer.controller.project import ProjectController
 from tests.controller.dicom.support.orthanc import enable_orthanc_dicomweb_remote, wipe_orthanc
 from tests.controller.dicom.support.orthanc_bundle import (
     HTTP_PORT,

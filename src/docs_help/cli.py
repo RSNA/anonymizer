@@ -1,7 +1,5 @@
 """CLI for MkDocs help screenshot capture."""
 
-from __future__ import annotations
-
 import argparse
 import logging
 import os

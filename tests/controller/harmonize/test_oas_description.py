@@ -1,7 +1,5 @@
 """Tests for DICOM Original Attributes Sequence on description apply."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import numpy as np

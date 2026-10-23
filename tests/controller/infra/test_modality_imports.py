@@ -1,7 +1,5 @@
 """Guard against modality predicate wrappers reappearing on modality_profile."""
 
-from __future__ import annotations
-
 import ast
 from pathlib import Path
 

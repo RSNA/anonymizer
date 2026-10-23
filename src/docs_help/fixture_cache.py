@@ -5,8 +5,6 @@ the live Harmonize UI). Pixel PHI: apply committed EasyOCR boxes through Series
 View's normal overlay/whitelist/exclude filters.
 """
 
-from __future__ import annotations
-
 import json
 import logging
 import shutil

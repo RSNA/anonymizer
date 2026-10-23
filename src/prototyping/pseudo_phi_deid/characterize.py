@@ -1,7 +1,5 @@
 """Phase 0: full Evaluation characterize (headers, pixels, overlays, NER inventory)."""
 
-from __future__ import annotations
-
 import hashlib
 import json
 import logging

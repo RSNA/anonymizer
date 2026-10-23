@@ -21,7 +21,8 @@ from anonymizer.controller.analytics.prefs import (
     set_selected_board_widgets,
     set_selected_organs,
 )
-from anonymizer.controller.project import EchoRequest, EchoResponse, ProjectController
+from anonymizer.controller.dicom.requests import EchoRequest, EchoResponse
+from anonymizer.controller.project import ProjectController
 from anonymizer.model.anonymizer import Totals
 from anonymizer.utils.memory import schedule_collect_garbage_on_tk
 from anonymizer.utils.storage.dicom_tree import (

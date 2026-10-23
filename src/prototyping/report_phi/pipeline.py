@@ -1,7 +1,5 @@
 """Obsolete EasyOCR×OpenMed letterhead harness (product APIs removed)."""
 
-from __future__ import annotations
-
 
 def run(*_a, **_k):
     raise RuntimeError(

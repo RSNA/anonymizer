@@ -3,9 +3,10 @@
 Resize is driven only through ``geometry()`` and event pumping, exactly as a user
 drag would. Square and non-square series are both covered: a square frame cannot
 detect width/height transposition in the aspect maths.
-"""
 
-from __future__ import annotations
+Design-time / local only (``view_dev``): needs a working Tk display; excluded from
+default ``pytest`` via addopts.
+"""
 
 import tkinter as tk
 from unittest.mock import MagicMock
@@ -32,6 +33,8 @@ SERIES_BUILDERS = {
     "square_256": build_synthetic_chest_ct_series,
     "wide_256x512": build_synthetic_wide_ct_series,
 }
+
+pytestmark = pytest.mark.view_dev
 
 
 @pytest.fixture(params=sorted(SERIES_BUILDERS), ids=sorted(SERIES_BUILDERS))

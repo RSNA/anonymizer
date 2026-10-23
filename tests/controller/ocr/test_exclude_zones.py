@@ -1,7 +1,5 @@
 """Named exclude zones and remove-mode overlay filtering."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from anonymizer.controller.ai.embedded_phi.pixel.exclude_zones import (
@@ -10,12 +8,12 @@ from anonymizer.controller.ai.embedded_phi.pixel.exclude_zones import (
     normalize_user_rects,
     user_rects_from_normalized,
 )
-from anonymizer.controller.jobs.runner import OcrRemoveMode
-from anonymizer.controller.series.series_overlay import OCRText, UserRectangle
 from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
     load_project_exclude_rects,
     save_project_exclude_rects,
 )
+from anonymizer.controller.jobs.runner import OcrRemoveMode
+from anonymizer.controller.series.series_overlay import OCRText, UserRectangle
 
 
 def _ocr(text: str, *, phi: str | None = None, box: tuple[int, int, int, int] = (0, 0, 10, 10)) -> OCRText:
@@ -94,3 +92,32 @@ def test_filter_ocr_for_remove_mode_phi_only_and_all_text() -> None:
         exclude_rects=panel,
     )
     assert [t.text for t in non_wl] == ["DAVIDSON"]
+
+
+def test_filter_phi_only_whitelist_vetoes_labeled_keeper() -> None:
+    """A whitelisted box stays even when NER labelled it (AXILLA-as-NAME case)."""
+    detections = [
+        _ocr("DAVIDSON", phi="NAME", box=(0, 0, 20, 20)),
+        _ocr("AXILLA", phi="NAME", box=(30, 0, 50, 20)),
+        _ocr("Portable", box=(60, 0, 80, 20)),
+    ]
+    whitelist = ["AXILLA"]
+    phi_only = filter_ocr_for_remove_mode(
+        detections,
+        remove_mode=OcrRemoveMode.PHI_ONLY,
+        whitelist=whitelist,
+    )
+    assert [t.text for t in phi_only] == ["DAVIDSON"]
+    # All text is the only scope that ignores the whitelist.
+    all_text = filter_ocr_for_remove_mode(
+        detections,
+        remove_mode=OcrRemoveMode.ALL_TEXT,
+        whitelist=whitelist,
+    )
+    assert [t.text for t in all_text] == ["DAVIDSON", "AXILLA", "Portable"]
+    non_wl = filter_ocr_for_remove_mode(
+        detections,
+        remove_mode=OcrRemoveMode.NON_WHITELISTED,
+        whitelist=whitelist,
+    )
+    assert [t.text for t in non_wl] == ["DAVIDSON", "Portable"]

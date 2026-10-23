@@ -1,7 +1,5 @@
 """Push remaining readiness / version / dicom coverage over the 80% line."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 

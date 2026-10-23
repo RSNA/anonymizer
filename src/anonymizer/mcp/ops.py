@@ -1,10 +1,8 @@
 """MCP orchestration over existing ProjectController / AI controller APIs.
 
 Selector resolve, inventory shaping, import, pixel-PHI, preview, PACS.
-Structured results have no ``{"ok": ...}`` envelopes; raise ``HeadlessOpsError`` on failure.
+Structured results have no {"ok": ...} envelopes; raise HeadlessOpsError on failure.
 """
-
-from __future__ import annotations
 
 import base64
 import copy
@@ -28,8 +26,10 @@ from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
 )
 from anonymizer.controller.ai.harmonize import auto_apply_best_study_descriptions
 from anonymizer.controller.ai.harmonize.xp_bodypart.preprocess import uint8_grayscale_from_array
+from anonymizer.controller.dicom.hierarchies import StudyUIDHierarchy
+from anonymizer.controller.dicom.requests import MoveStudiesRequest
 from anonymizer.controller.jobs.runner import RemovePixelPhiRunner
-from anonymizer.controller.project import MoveStudiesRequest, ProjectController, StudyUIDHierarchy
+from anonymizer.controller.project import ProjectController
 from anonymizer.controller.series.series_io import load_series_frames
 from anonymizer.mcp.modality_tokens import resolve_project_modalities
 from anonymizer.mcp.session import (
@@ -48,11 +48,11 @@ from anonymizer.mcp.snapshots import (
     serialize_project_info,
 )
 from anonymizer.model.anonymizer import AnonymizerModel
-from anonymizer.model.project import AnonymizationPolicy, DICOMNode, ProjectModel
+from anonymizer.model.project import DICOMNode, ProjectModel
 from anonymizer.model.settings_validate import (
     SettingsValidationError,
     settings_defaults_payload,
-    validate_anonymization_policy,
+    validate_confidentiality_options,
     validate_language_code,
     validate_local_scp,
     validate_network_timeouts,
@@ -62,6 +62,7 @@ from anonymizer.model.settings_validate import (
     validate_transfer_syntaxes,
     validate_uid_root,
 )
+from anonymizer.utils.dicom import DeidMethodCode
 from anonymizer.utils.modalities import Modality, get_modality_catalog
 from anonymizer.utils.storage.dicom_tree import (
     get_dcm_files,
@@ -231,24 +232,25 @@ def _set_model_modalities(
     model.set_storage_classes_from_modalities()
 
 
-def _apply_policy_to_model(
+def _apply_options_to_model(
     model: ProjectModel,
-    anonymization_policy: str | AnonymizationPolicy | None,
+    confidentiality_options: object,
 ) -> None:
     """
-    Assign an anonymization policy and its model-level modality effects.
+    Assign de-identification options and their model-level modality effects.
 
     Args:
         model: Project model to update.
-        anonymization_policy: Policy name/value, or ``None`` for no change.
+        confidentiality_options: CID 7050 code values, or None for no change.
     """
-    if anonymization_policy is None or (
-        isinstance(anonymization_policy, str) and not anonymization_policy.strip()
-    ):
+    if confidentiality_options is None:
         return
-    policy = AnonymizationPolicy(validate_anonymization_policy(str(anonymization_policy)))
-    model.anonymization_policy = policy
-    if policy is AnonymizationPolicy.CLINICAL:
+    codes = validate_confidentiality_options(confidentiality_options)
+    model.confidentiality_options = frozenset(DeidMethodCode(code) for code in codes)
+    if model.confidentiality_options & {
+        DeidMethodCode.CLEAN_STRUCTURED_CONTENT,
+        DeidMethodCode.CLEAN_DESCRIPTORS,
+    }:
         catalog = get_modality_catalog()
         for code in (Modality.SR, Modality.PDF):
             if code in catalog and code.value not in model.modalities:
@@ -268,13 +270,13 @@ def _build_project_model(
     transfer_syntaxes: list[str] | None,
     scp: dict[str, Any] | None,
     network_timeouts: dict[str, Any] | None,
-    anonymization_policy: str | AnonymizationPolicy | None,
+    confidentiality_options: list[int] | None,
 ) -> ProjectModel:
     """
-    Build a complete unsaved ``ProjectModel`` from defaults plus overrides.
+    Build a complete unsaved ProjectModel from defaults plus overrides.
 
     Args:
-        base: Existing pending model to revise, or ``None`` for model defaults.
+        base: Existing pending model to revise, or None for model defaults.
         project_name: Clinician-supplied project name.
         storage_dir: Optional clinician-supplied project directory.
         site_id: Optional site identifier override.
@@ -284,10 +286,10 @@ def _build_project_model(
         transfer_syntaxes: Optional transfer-syntax UID list.
         scp: Optional partial local SCP fields.
         network_timeouts: Optional partial timeout fields.
-        anonymization_policy: Optional anonymization policy.
+        confidentiality_options: Optional CID 7050 option code values.
 
     Returns:
-        A validated, unsaved core ``ProjectModel``.
+        A validated, unsaved core ProjectModel.
     """
     model = copy.deepcopy(base) if base is not None else ProjectModel()
     model.project_name = validate_project_name(project_name)
@@ -308,11 +310,11 @@ def _build_project_model(
         network_timeouts=network_timeouts,
     )
     _set_model_modalities(model, modalities)
-    if anonymization_policy is not None:
-        _apply_policy_to_model(model, anonymization_policy)
-    # Re-apply the effective policy after a modality revision so a clinical
-    # draft preview matches the modalities installed at confirmation.
-    _apply_policy_to_model(model, model.anonymization_policy)
+    if confidentiality_options is not None:
+        _apply_options_to_model(model, confidentiality_options)
+    # Re-apply the effective options after a modality revision so a draft
+    # preview matches the modalities installed at confirmation.
+    _apply_options_to_model(model, sorted(int(c) for c in model.confidentiality_options))
     return model
 
 
@@ -418,9 +420,8 @@ def _confirm_pending_project(
     """
     model, overwrite = session.pending_creation(revision)
     controller = session.create_from_model(model, overwrite=overwrite)
-    if model.anonymization_policy is AnonymizationPolicy.CLINICAL:
-        controller.apply_anonymization_policy(model.anonymization_policy)
-        controller.save_model()
+    controller.apply_confidentiality_options(model.confidentiality_options)
+    controller.save_model()
     return {
         "status": "created",
         "created": True,
@@ -441,18 +442,18 @@ def create_project(
     transfer_syntaxes: list[str] | None = None,
     scp: dict[str, Any] | None = None,
     network_timeouts: dict[str, Any] | None = None,
-    anonymization_policy: str | AnonymizationPolicy | None = None,
+    confidentiality_options: list[int] | None = None,
     confirm: bool = False,
     revision: int | None = None,
 ) -> dict[str, Any]:
     """
     Prepare/revise a project configuration, or confirm its exact revision.
 
-    With ``confirm=False`` this validates supplied fields over a new or pending
-    core ``ProjectModel``, stores that unsaved model in the MCP session, and
+    With confirm=False this validates supplied fields over a new or pending
+    core ProjectModel, stores that unsaved model in the MCP session, and
     returns the complete configuration for clinician confirmation. It never
-    creates a project. With ``confirm=True`` and no configuration changes, it
-    creates only the pending model at the exact ``revision``.
+    creates a project. With confirm=True and no configuration changes, it
+    creates only the pending model at the exact revision.
 
     Args:
         session: MCP project session.
@@ -466,12 +467,12 @@ def create_project(
         transfer_syntaxes: Optional transfer-syntax UID list.
         scp: Optional partial local SCP fields.
         network_timeouts: Optional partial network timeout fields.
-        anonymization_policy: Optional anonymization policy.
+        confidentiality_options: Optional CID 7050 option code values.
         confirm: Whether this call is the later confirmation call.
         revision: Pending revision being confirmed.
 
     Returns:
-        ``confirmation_required`` or ``created`` response.
+        confirmation_required or created response.
     """
     try:
         raw_name = (project_name or "").strip()
@@ -495,7 +496,7 @@ def create_project(
                 transfer_syntaxes,
                 scp,
                 network_timeouts,
-                anonymization_policy,
+                confidentiality_options,
             )
         )
         pending = session.pending_project
@@ -524,7 +525,7 @@ def create_project(
             transfer_syntaxes=transfer_syntaxes,
             scp=scp,
             network_timeouts=network_timeouts,
-            anonymization_policy=anonymization_policy,
+            confidentiality_options=confidentiality_options,
         )
         supplied: set[str] = (
             set(session.pending_supplied_fields) if same_pending else set()
@@ -539,7 +540,7 @@ def create_project(
             ("transfer_syntaxes", transfer_syntaxes),
             ("scp", scp),
             ("network_timeouts", network_timeouts),
-            ("anonymization_policy", anonymization_policy),
+            ("confidentiality_options", confidentiality_options),
         ):
             if value is not None:
                 supplied.add(field_name)
@@ -579,12 +580,12 @@ def project_settings_defaults() -> dict[str, Any]:
 def anonymizer_usage() -> dict[str, Any]:
     """Canonical plain-language usage instructions for clinicians.
 
-    The returned ``answer`` is a complete, ready-to-show reply — usage text
+    The returned answer is a complete, ready-to-show reply — usage text
     plus the example requests integrated as things the clinician can say —
     so the client model does not need to compose or summarize anything.
 
     Returns:
-        dict[str, Any]: Single ``answer`` field holding the finished text,
+        dict[str, Any]: Single answer field holding the finished text,
             sourced from the shared MCP setup-help asset.
     """
     help_block = _load_mcp_setup_help()
@@ -604,7 +605,7 @@ def update_project_settings(
     transfer_syntaxes: list[str] | None = None,
     scp: dict[str, Any] | None = None,
     network_timeouts: dict[str, Any] | None = None,
-    anonymization_policy: str | AnonymizationPolicy | None = None,
+    confidentiality_options: list[int] | None = None,
 ) -> dict[str, Any]:
     """
     Update mutable settings on an open project.
@@ -615,7 +616,7 @@ def update_project_settings(
         transfer_syntaxes: Optional transfer-syntax UID list.
         scp: Optional partial local SCP fields.
         network_timeouts: Optional partial network timeout fields.
-        anonymization_policy: Optional anonymization policy.
+        confidentiality_options: Optional CID 7050 option code values.
 
     Returns:
         Updated-project response. Identity fields are not accepted here.
@@ -627,12 +628,12 @@ def update_project_settings(
             transfer_syntaxes,
             scp,
             network_timeouts,
-            anonymization_policy,
+            confidentiality_options,
         )
     ):
         raise HeadlessOpsError(
             "Provide at least one mutable setting: modalities, "
-            "transfer_syntaxes, scp, network_timeouts, or anonymization_policy"
+            "transfer_syntaxes, scp, network_timeouts, or confidentiality_options"
         )
     try:
         _apply_mutable_settings(
@@ -643,16 +644,18 @@ def update_project_settings(
             network_timeouts=network_timeouts,
             mirror_scp_to_scu=True,
         )
-        if anonymization_policy is not None and str(anonymization_policy).strip():
-            policy = validate_anonymization_policy(str(anonymization_policy))
-            controller.apply_anonymization_policy(AnonymizationPolicy(policy))
+        if confidentiality_options is not None:
+            codes = validate_confidentiality_options(confidentiality_options)
+            controller.apply_confidentiality_options(
+                frozenset(DeidMethodCode(code) for code in codes)
+            )
             controller.save_model()
     except SettingsValidationError as exc:
         raise HeadlessOpsError(str(exc)) from exc
     except HeadlessSessionError as exc:
         raise HeadlessOpsError(str(exc)) from exc
     except (OSError, FileNotFoundError, ValueError) as exc:
-        raise HeadlessOpsError(f"Failed to apply anonymization_policy: {exc}") from exc
+        raise HeadlessOpsError(f"Failed to apply confidentiality_options: {exc}") from exc
     return {
         "status": "updated",
         "project": serialize_project_info(controller),
@@ -701,7 +704,7 @@ def _apply_non_modality_settings_to_model(
         mirror_scp_to_scu: Whether a local SCP change also updates the SCU.
 
     Returns:
-        ``True`` when a network-related field changed and a live controller
+        True when a network-related field changed and a live controller
         should refresh its SCP/model state.
     """
     restart_scp = False
@@ -803,10 +806,10 @@ def apply_project_modalities(
     controller: ProjectController,
     modalities: list[str] | str | None,
 ) -> list[str]:
-    """Set allowed ingest modalities (and storage classes) when ``modalities`` is provided.
+    """Set allowed ingest modalities (and storage classes) when modalities is provided.
 
-    ``None`` / empty leaves the project unchanged. Token ``defaults`` expands to
-    ``ProjectModel.default_modalities()`` (CR, DX, CT, MR). Persists ProjectModel.json.
+    None / empty leaves the project unchanged. Token defaults expands to
+    ProjectModel.default_modalities() (CR, DX, CT, MR). Persists ProjectModel.json.
     """
     try:
         resolved = resolve_project_modalities(modalities)
@@ -984,7 +987,7 @@ def _patient_order(rows: list[dict[str, Any]]) -> list[str]:
 
 
 def _match_patient_by_inventory_index(patients: list[str], selector: str) -> str | None:
-    """Match ``patient=1`` to the 1-based patient in inventory order."""
+    """Match patient=1 to the 1-based patient in inventory order."""
     if not selector.isdigit():
         return None
     idx = int(selector)
@@ -1609,7 +1612,7 @@ def harmonize_studies(
     anon_study_uids: list[str] | None = None,
     progress: ProgressCallback | None = None,
 ) -> dict[str, Any]:
-    """Harmonize study/series descriptions via ``ProjectController.harmonize_studies``.
+    """Harmonize study/series descriptions via ProjectController.harmonize_studies.
 
     omit patient+study, or patient=all → every study
     patient=<patient_index>|<anon_patient_id> → that patient's studies
@@ -1891,7 +1894,7 @@ def configure_remote(
     username: str | None = None,
     password: str | None = None,
 ) -> dict[str, Any]:
-    """Thin adapter: set ``remote_scps`` + ``save_model`` (no controller changes)."""
+    """Thin adapter: set remote_scps + save_model (no controller changes)."""
     try:
         role_enum = role if isinstance(role, RemoteScpRole) else RemoteScpRole(str(role).strip().upper())
     except ValueError as exc:
@@ -1935,7 +1938,7 @@ def pacs_find(
     study_date: str = "",
     modality: str = "",
 ) -> dict[str, Any]:
-    """Thin adapter: ``ProjectController.find_studies`` → allowlisted study dicts."""
+    """Thin adapter: ProjectController.find_studies → allowlisted study dicts."""
     scp_key = _query_scp_key()
     if scp_key not in controller.model.remote_scps:
         raise HeadlessOpsError(f"No {scp_key} remote configured. Call configure_remote first.")
@@ -1975,7 +1978,7 @@ def pacs_move(
     studies: list[dict[str, str]],
     level: PacsMoveLevel | str = PacsMoveLevel.SERIES,
 ) -> dict[str, Any]:
-    """Thin adapter: ensure SCP (DIMSE only) → ``get_study_uid_hierarchies`` / ``manage_move``."""
+    """Thin adapter: ensure SCP (DIMSE only) → get_study_uid_hierarchies / manage_move."""
     if not studies:
         raise HeadlessOpsError("studies list is empty")
 

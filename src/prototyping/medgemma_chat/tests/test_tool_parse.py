@@ -1,7 +1,5 @@
 """Unit tests for MedGemma chat tool JSON parsing (no GPU / planner)."""
 
-from __future__ import annotations
-
 from prototyping.medgemma_chat.mcp_client import load_mcp_config
 from prototyping.medgemma_chat.tool_parse import clean_tool_arguments, parse_tool_call
 

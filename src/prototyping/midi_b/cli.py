@@ -1,7 +1,5 @@
 """CLI: inventory / run / score MIDI-B Validation (and Test)."""
 
-from __future__ import annotations
-
 import argparse
 import json
 import logging
@@ -18,7 +16,7 @@ from prototyping.midi_b.score_official import (
     run_validation,
     write_config,
 )
-from prototyping.pseudo_phi_deid.pipeline.clinical import ensure_experiment_script_copy
+from prototyping.pseudo_phi_deid.pipeline.script_session import ensure_experiment_script_copy
 from prototyping.pseudo_phi_deid.pipeline.run import RunConfig
 
 logger = logging.getLogger("midi_b")
@@ -185,7 +183,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="python -m prototyping.midi_b",
-        description="MIDI-B harness (Clinical + private KB + NER → official scorer)",
+        description="MIDI-B harness (script + private KB + NER → official scorer)",
     )
     p.add_argument("-v", "--verbose", action="store_true")
     sub = p.add_subparsers(dest="cmd", required=True)

@@ -1,7 +1,5 @@
 """Shared Harmonize Description toolbar action (Series View + Report View)."""
 
-from __future__ import annotations
-
 import logging
 import tkinter as tk
 from collections.abc import Callable
@@ -68,14 +66,14 @@ def launch_harmonize_description(
         ds: Loaded series dataset (first instance).
         anon_model: AnonymizerModel for ORM / PHI header.
         fonts: Optional app fonts.
-        mappings_dir: Project ``storage_dir/mappings`` for description override CSVs.
+        mappings_dir: Project storage_dir/mappings for description override CSVs.
         existing_view: Caller's held Harmonize window, if any.
         on_series_description_updated: Refresh host title/index after Accept.
         on_closed: Host cleanup when Harmonize closes.
         on_before_open: Host UI (hide button / disable controls) before opening.
 
     Returns:
-        The Harmonize window, or ``None`` if the action was blocked / cancelled.
+        The Harmonize window, or None if the action was blocked / cancelled.
     """
     ds_mod = Modality.from_code(getattr(ds, "Modality", None) if ds is not None else None)
     if ds is None or ds_mod is None or not get_modality_catalog()[ds_mod].harmonize:

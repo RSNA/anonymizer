@@ -1,7 +1,187 @@
-"""Combine TotalSegmentator anatomy analysis into Playbook-compliant series descriptions."""
+"""Combine TotalSegmentator anatomy analysis into Playbook-compliant series descriptions.
 
-from __future__ import annotations
+Public API
+----------
+HarmonizeProgressStage
+    Progress stage tokens emitted by the Harmonize worker.
 
+HarmonizeProgress
+    Progress event for Harmonize UI/batch (includes Playbook description when ready).
+
+HarmonizeProgressCallback
+    Harmonizeprogresscallback.
+
+HarmonizedResult
+    HarmonizedResult type.
+
+harmonized_description_from_cache(series_directory: Path, *, ds: Dataset | None=None) -> str | None
+    Reconstruct the Playbook series description from cached harmonize inputs.
+
+series_description_is_harmonized(series_directory: Path, ds: Dataset) -> bool | None
+    Return whether SeriesDescription matches the cached Playbook harmonization.
+
+harmonize_context_hint(series_directory: Path, ds: Dataset | None) -> str | None
+    Optional Series View geometry-line suffix when harmonization is already up to date.
+
+HarmonizeApplyOutcome
+    HarmonizeApplyOutcome type.
+
+HarmonizeStudiesSummary
+    HarmonizeStudiesSummary type.
+
+HarmonizeStudiesProgressCallback
+    Harmonizestudiesprogresscallback.
+
+HarmonizeStudiesCancelledCallback
+    Harmonizestudiescancelledcallback.
+
+HarmonizeCancelledCallback
+    Harmonizecancelledcallback.
+
+HarmonizeStudiesLogCallback
+    Harmonizestudieslogcallback.
+
+HarmonizeStudiesBatchHook
+    Harmonizestudiesbatchhook.
+
+missing_series_description_label() -> str
+    Missing series description label.
+
+format_harmonize_progress_message(progress: HarmonizeProgress, *, include_pct: bool=True, segmentation_mode: object | None=None) -> str
+    Translate harmonize pipeline stages to clinician-friendly status text.
+
+log_harmonize_playbook_rows(log_workflow: Callable[[str], None], *, tseg: TS_result, geometry: SeriesGeometryResult, ds: Dataset | None=None) -> None
+    Emit Playbook table rows to the batch workflow log.
+
+format_harmonize_batch_series_label(series_path: Path, ds: Dataset | None=None) -> str
+    Compact series label for batch harmonize progress.
+
+format_harmonize_batch_progress_text(*, series_index: int, total: int, progress: AnalysisProgress, series_path: Path, ds: Dataset | None=None) -> str
+    Full batch progress line: series position, context, and friendly stage.
+
+build_report_harmonized_series_description(ds: Dataset) -> str
+    Propose a SeriesDescription for native SR / DOC / PDF (no pixel / TSEG models).
+
+enumerate_ct_series_for_studies(images_dir: Path, studies: Sequence[tuple[str, str]]) -> list[Path]
+    Return CT series directories under the selected anonymized studies.
+
+enumerate_tseg_series_for_studies(images_dir: Path, studies: Sequence[tuple[str, str]]) -> list[Path]
+    Return CT|MR series directories under the selected anonymized studies.
+
+enumerate_planar_series_for_studies(images_dir: Path, studies: Sequence[tuple[str, str]]) -> list[Path]
+    Return XR/US/MG series directories under the selected anonymized studies.
+
+enumerate_harmonize_series_for_studies(images_dir: Path, studies: Sequence[tuple[str, str]]) -> list[Path]
+    Return CT|MR|XR|US|MG series directories (SC/OT/DOC excluded).
+
+study_harmonize_status(anon_model: 'AnonymizerModel', anon_study_uid: str) -> bool
+    Return True when every tseg ∪ planar Harmonize series in the study is done.
+
+apply_harmonized_description(series_path: Path, description: str, anon_model: AnonymizerModel | None) -> bool
+    Apply harmonized SeriesDescription to DICOM when needed and update the project database.
+
+study_root_for_series(series_path: Path) -> Path
+    Return the anonymized study directory that contains series_path.
+
+study_series_description_fingerprint(anon_model: AnonymizerModel, anon_study_uid: str) -> tuple[str, ...]
+    Sorted multiset fingerprint of CT Playbook series descriptions for a study.
+
+find_studies_with_fingerprint(anon_model: AnonymizerModel, fingerprint: tuple[str, ...]) -> list[str]
+    Return anon_study_uid values whose CT series Playbook set matches fingerprint.
+
+apply_harmonized_study_description(study_root: Path, description: str, anon_model: AnonymizerModel | None, anon_study_uid: str, *, loinc_number: str | None=None) -> bool
+    Write StudyDescription (+ optional LOINC ProcedureCodeSequence) and update ORM.
+
+ct_series_paths_for_study(images_dir: Path, anon_patient_id: str, anon_study_uid: str) -> list[Path]
+    Return CT series directories under an anonymized study folder.
+
+tseg_series_paths_for_study(images_dir: Path, anon_patient_id: str, anon_study_uid: str) -> list[Path]
+    Return CT|MR series directories under an anonymized study folder.
+
+planar_series_paths_for_study(images_dir: Path, anon_patient_id: str, anon_study_uid: str) -> list[Path]
+    Return XR/US/MG series directories under an anonymized study folder.
+
+maybe_offer_study_description_harmonize(anon_model: AnonymizerModel, anon_study_uid: str, *, images_dir: Path | None=None, top_n: int=8) -> StudyDescriptionOffer | None
+    Build a Study Description offer when the study just became fully Harmonized.
+
+study_description_edit_offer(anon_model: AnonymizerModel, anon_study_uid: str, *, top_n: int=10) -> StudyDescriptionOffer | None
+    Build a LOINC Study Description menu for Dataset edit from ORM signals only.
+
+MIN_DESCRIPTION_CHOICES
+    Min description choices (4).
+
+NEAREST_DESCRIPTION_CHOICES
+    Nearest description choices (10).
+
+ensure_min_description_choices(choices: list[str], extras: list[str], *, minimum: int=MIN_DESCRIPTION_CHOICES) -> list[str]
+    Append unique extras until minimum choices, preserving order.
+
+series_description_edit_choices(*, modality: object | None, current_description: str, minimum: int=MIN_DESCRIPTION_CHOICES, full_catalog: bool=False, anatomy_hint: str | None=None) -> list[str]
+    RadLex Playbook series description menu for Dataset edit.
+
+study_loinc_prefix_for_edit(anon_model: AnonymizerModel, anon_study_uid: str) -> str | None
+    Return LOINC LongCommonName prefix for a study, or None when unknown/mixed.
+
+study_description_edit_choices(anon_model: AnonymizerModel, anon_study_uid: str, *, top_n: int=NEAREST_DESCRIPTION_CHOICES, minimum: int=MIN_DESCRIPTION_CHOICES, hint_description: str | None=None, full_catalog: bool=False, nearest_only: bool=False) -> list[tuple[str, str | None]]
+    LOINC Study Description menu for Dataset edit (modality-filtered CSV only).
+
+DescriptionEditSelectionKind
+    Descriptioneditselectionkind.
+
+DescriptionEditSelection
+    Validated Dataset selection for group description edit.
+
+series_description_cohort_key(modality: object | None) -> str | None
+    Return cohort key for series group edit (3D / XR / US / MG / TEXT).
+
+study_ready_for_description_edit(anon_model: AnonymizerModel, anon_study_uid: str) -> bool
+    True when Dataset may open Set description for a study.
+
+classify_description_edit_selection(*, series_cohort_keys: Sequence[str | None] | None=None, study_loinc_prefixes: Sequence[str | None] | None=None) -> DescriptionEditSelection
+    Validate a Dataset multi-select for Set description….
+
+series_description_group_choices(*, modalities: Sequence[object | None], current_descriptions: Sequence[str], minimum: int=MIN_DESCRIPTION_CHOICES, anatomy_hint: str | None=None, full_catalog: bool=False) -> list[str]
+    Shared RadLex menu for a homogeneous series multi-select.
+
+study_description_group_choices(anon_model: AnonymizerModel, anon_study_uids: Sequence[str], *, top_n: int=NEAREST_DESCRIPTION_CHOICES, minimum: int=MIN_DESCRIPTION_CHOICES, hint_descriptions: Sequence[str] | None=None, full_catalog: bool=False) -> list[tuple[str, str | None]]
+    Shared LOINC menu for a homogeneous study multi-select.
+
+apply_series_descriptions(*, series_dirs: Sequence[Path], description: str, anon_model: AnonymizerModel) -> list[Path]
+    Apply one RadLex series description to each series directory; return successes.
+
+apply_study_descriptions(*, images_dir: Path, anon_model: AnonymizerModel, anon_study_uids: Sequence[str], description: str, loinc_number: str | None=None) -> list[str]
+    Apply one LOINC study description to each study; return updated UIDs.
+
+find_similar_study_uids(anon_model: AnonymizerModel, anon_study_uid: str, *, candidates: Sequence[tuple[str, str, str | None]] | None=None) -> list[str]
+    Other studies similar to anon_study_uid (excludes self).
+
+find_similar_series_uids(candidates: Sequence[tuple[str, object | None, str]], *, seed_uid: str, seed_modality: object | None, seed_description: str) -> list[str]
+    Other series UIDs with the same cohort and description text.
+
+apply_study_description_offer(*, images_dir: Path, anon_model: AnonymizerModel, offer: StudyDescriptionOffer, description: str, apply_to_peers: bool, loinc_number: str | None=None) -> list[str]
+    Apply a chosen LOINC LongCommonName (and code) to the offer study and optionally peers.
+
+auto_apply_study_description_offer(*, images_dir: Path, anon_model: AnonymizerModel, offer: StudyDescriptionOffer) -> list[str]
+    Auto-apply the top-ranked match to the offer study and fingerprint peers.
+
+group_study_description_offers_by_fingerprint(offers: Sequence[StudyDescriptionOffer]) -> list[StudyDescriptionOffer]
+    Collapse offers that share a fingerprint into one offer (union of peer UIDs).
+
+auto_apply_best_study_descriptions(*, images_dir: Path, anon_model: AnonymizerModel, anon_study_uids: Sequence[str], prefer_description_mappings: bool=True, study_loinc_overrides: Mapping[str, str] | None=None) -> list[tuple[StudyDescriptionOffer, list[str]]]
+    Best-guess LOINC Study Description for Harmonize (Series View and AI Batch).
+
+harmonize_and_apply_series(series_path: Path, *, anon_model: AnonymizerModel | None=None, progress: HarmonizeProgressCallback | None=None, include_brain_structures: bool=False, prefer_description_mappings: bool=False, series_description_overrides: Mapping[str, str] | None=None) -> HarmonizeApplyOutcome
+    Run harmonize for one CT|MR|XR|US|MG series and auto-apply the merged description.
+
+format_harmonize_batch_contrast_log_lines(result: HarmonizedResult) -> list[str]
+    IV contrast row (and CT organ HU) for the AI Batch workflow log.
+
+harmonize_studies_batch(images_dir: Path, studies: Sequence[tuple[str, str]], *, anon_model: AnonymizerModel | None=None, progress: HarmonizeStudiesProgressCallback | None=None, cancelled: HarmonizeStudiesCancelledCallback | None=None, on_outcome: HarmonizeStudiesLogCallback | None=None, on_batch_start: HarmonizeStudiesBatchHook | None=None, on_batch_end: HarmonizeStudiesBatchHook | None=None) -> HarmonizeStudiesSummary
+    Harmonize all CT|MR|XR|US|MG series under selected studies, auto-applying descriptions.
+
+harmonize_series(series_directories: list[Path], *, progress: HarmonizeProgressCallback | None=None, include_brain_structures: bool=False, anon_model=None, cancelled: HarmonizeCancelledCallback | None=None, timing_collector: HarmonizeTimingCollector | None=None) -> list[HarmonizedResult]
+    Run harmonize per series with an exclusive modality branch:
+"""
 import logging
 import re
 import time
@@ -9,12 +189,31 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from pydicom import Dataset, dcmread
+from pydicom.errors import InvalidDicomError
 
 import anonymizer.controller.ai.tseg.config as tseg_config
+from anonymizer.controller.ai.harmonize.description_components import (
+    PlaybookComponentSelection,
+    format_playbook_series_description,
+)
+from anonymizer.controller.ai.harmonize.loinc_study import (
+    LoincStudyMatch,
+    StudyDescriptionOffer,
+    build_study_description_ranking,
+    count_planar_study_images,
+    fingerprint_for_harmonized_study,
+    fingerprint_for_planar_harmonized_study,
+    infer_loinc_anatomy_from_text,
+    load_loinc_study_descriptions_for_prefix,
+    long_common_name_for_loinc,
+    parse_playbook_series_description,
+    rank_loinc_study_descriptions_from_hint,
+    rank_planar_loinc_study_descriptions,
+)
 from anonymizer.controller.ai.harmonize.playbook import (
+    BODY_PART_PLAYBOOK_CODES,
     MetadataHarmonizeRoute,
     PlaybookHarmonizeAttributes,
     build_harmonized_series_description,
@@ -23,20 +222,38 @@ from anonymizer.controller.ai.harmonize.playbook import (
     build_playbook_attributes,
     format_playbook_analysis_log_lines,
     is_localizer_geometry,
+    playbook_iv_contrast_row_values,
     resolve_metadata_harmonize_route,
 )
+from anonymizer.controller.ai.harmonize.playbook_planar import (
+    build_planar_harmonized_series_description,
+    build_planar_playbook_attributes,
+    planar_loinc_prefix_for_series_descriptions,
+)
+from anonymizer.controller.ai.harmonize.profile_2d import (
+    is_2d_harmonize_modality,
+    normalize_2d_modality_label,
+    profile_2d_for_modality,
+    profile_2d_from_dataset,
+)
 from anonymizer.controller.ai.harmonize.timings import HarmonizeStageTimings, HarmonizeTimingCollector
+from anonymizer.controller.ai.harmonize.xp_bodypart import predict_body_part, xp_bodypart_ready
+from anonymizer.controller.ai.harmonize.xr_chest_view import cxp_view_ready, predict_cxp_view
 from anonymizer.controller.ai.tseg.config import (
     CONTRAST_PHASE_CACHE_FILENAME,
     CONTRAST_STATS_FILENAME,
     CONTRAST_STATS_HN_FILENAME,
     ENABLE_TS_CONTRAST,
     ROI_SUBSET,
+    segmentation_mode_display,
+    segmentation_mode_for_modality,
 )
 from anonymizer.controller.ai.tseg.contrast import (
     contrast_phase_cache_is_valid,
+    format_dominant_organ_hu_summary,
     load_contrast_phase_cache,
     load_contrast_statistics,
+    load_contrast_stats_hn,
     log_memory_usage,
     needs_head_neck_vessel_stats,
     phase_to_iv_contrast,
@@ -52,8 +269,9 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
     ts_regions_eligible,
 )
 from anonymizer.controller.ai.tseg.ml_env import log_active_threads
-from anonymizer.controller.ai.tseg.modality_profile import resolve_profile_for_series
+from anonymizer.controller.ai.tseg.modality_profile import profile_for_modality, resolve_profile_for_series
 from anonymizer.controller.ai.tseg.model_cache import tseg_batch_session
+from anonymizer.controller.ai.tseg.seg_retention import evict_tseg_volume
 from anonymizer.controller.ai.tseg.segment import (
     HARMONIZE_CANCELLED_MESSAGE,
     AnalysisProgress,
@@ -75,63 +293,16 @@ from anonymizer.controller.ai.tseg.segment import (
 from anonymizer.controller.ai.tseg.segment import (
     _segmentation_cache_valid as segmentation_cache_valid,
 )
-from anonymizer.utils.translate import _
-
-if TYPE_CHECKING:
-    from anonymizer.model.anonymizer import AnonymizerModel
-
-from pydicom.errors import InvalidDicomError
-
-from anonymizer.controller.ai.harmonize.description_components import (
-    PlaybookComponentSelection,
-    format_playbook_series_description,
-)
-from anonymizer.controller.ai.harmonize.loinc_study import (
-    LoincStudyMatch,
-    StudyDescriptionOffer,
-    build_study_description_ranking,
-    count_planar_study_images,
-    fingerprint_for_harmonized_study,
-    fingerprint_for_planar_harmonized_study,
-    infer_loinc_anatomy_from_text,
-    load_loinc_study_descriptions_for_prefix,
-    long_common_name_for_loinc,
-    parse_playbook_series_description,
-    rank_loinc_study_descriptions_from_hint,
-    rank_planar_loinc_study_descriptions,
-)
-from anonymizer.controller.ai.harmonize.playbook import BODY_PART_PLAYBOOK_CODES, playbook_iv_contrast_row_values
-from anonymizer.controller.ai.harmonize.playbook_planar import (
-    build_planar_harmonized_series_description,
-    build_planar_playbook_attributes,
-    planar_loinc_prefix_for_series_descriptions,
-)
-from anonymizer.controller.ai.harmonize.profile_2d import (
-    is_2d_harmonize_modality,
-    normalize_2d_modality_label,
-    profile_2d_for_modality,
-    profile_2d_from_dataset,
-)
-from anonymizer.controller.ai.harmonize.xp_bodypart import predict_body_part, xp_bodypart_ready
-from anonymizer.controller.ai.harmonize.xr_chest_view import cxp_view_ready, predict_cxp_view
-from anonymizer.controller.ai.tseg.config import (
-    segmentation_mode_display,
-    segmentation_mode_for_modality,
-)
-from anonymizer.controller.ai.tseg.contrast import (
-    format_dominant_organ_hu_summary,
-    load_contrast_stats_hn,
-)
-from anonymizer.controller.ai.tseg.modality_profile import profile_for_modality
-from anonymizer.controller.ai.tseg.seg_retention import evict_tseg_volume
 from anonymizer.controller.series.create_projections import invalidate_projection_cache
 from anonymizer.controller.series.series_io import apply_series_description, apply_study_description
+from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.utils.modalities import (
     ContentClass,
     Modality,
     StudyImagingComposition,
     get_modality_catalog,
 )
+from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 
@@ -390,7 +561,7 @@ def _merge_result(
 
 
 def _tseg_result_from_cache(series_directory: Path) -> TS_result | None:
-    """Rebuild anatomy (+ contrast when required) TS_result from ``0_TS_SEG`` without running ML."""
+    """Rebuild anatomy (+ contrast when required) TS_result from 0_TS_SEG without running ML."""
     cache_dir = series_cache_dir(series_directory)
     seg_dir = cache_dir / "seg"
     profile = resolve_profile_for_series(series_directory)
@@ -465,7 +636,7 @@ def harmonized_description_from_cache(
     Reconstruct the Playbook series description from cached harmonize inputs.
 
     Returns the expected description when geometry and TS caches are complete,
-    or ``None`` when harmonize must run before the outcome can be known.
+    or None when harmonize must run before the outcome can be known.
     """
     series_directory = Path(series_directory)
     geometry = load_geometry_cache(series_directory)
@@ -521,9 +692,9 @@ def harmonized_description_from_cache(
 
 def series_description_is_harmonized(series_directory: Path, ds: Dataset) -> bool | None:
     """
-    Return whether ``SeriesDescription`` matches the cached Playbook harmonization.
+    Return whether SeriesDescription matches the cached Playbook harmonization.
 
-    ``True`` / ``False`` when TS cache is complete; ``None`` when unknown.
+    True / False when TS cache is complete; None when unknown.
     """
     expected = harmonized_description_from_cache(series_directory, ds=ds)
     if expected is None:
@@ -826,8 +997,8 @@ def build_report_harmonized_series_description(ds: Dataset) -> str:
     """
     Propose a SeriesDescription for native SR / DOC / PDF (no pixel / TSEG models).
 
-    Prefers existing ``SeriesDescription``, then SR ConceptName meaning,
-    then ``DocumentTitle``, then a modality default.
+    Prefers existing SeriesDescription, then SR ConceptName meaning,
+    then DocumentTitle, then a modality default.
     """
     existing = str(ds.get("SeriesDescription", "") or "").strip()
     if existing:
@@ -950,7 +1121,7 @@ def study_harmonize_status(
     """
     Return True when every tseg ∪ planar Harmonize series in the study is done.
 
-    Uses ORM ``Series.harmonized_description`` metadata (no filesystem or TS cache reads).
+    Uses ORM Series.harmonized_description metadata (no filesystem or TS cache reads).
     """
     return anon_model.study_all_series_harmonized(anon_study_uid)
 
@@ -985,7 +1156,7 @@ def apply_harmonized_description(
 
 
 def study_root_for_series(series_path: Path) -> Path:
-    """Return the anonymized study directory that contains ``series_path``."""
+    """Return the anonymized study directory that contains series_path."""
     return Path(series_path).resolve().parent
 
 
@@ -1002,7 +1173,7 @@ def find_studies_with_fingerprint(
     anon_model: AnonymizerModel,
     fingerprint: tuple[str, ...],
 ) -> list[str]:
-    """Return anon_study_uid values whose CT series Playbook set matches ``fingerprint``."""
+    """Return anon_study_uid values whose CT series Playbook set matches fingerprint."""
     return anon_model.find_studies_with_series_fingerprint(fingerprint)
 
 
@@ -1091,7 +1262,7 @@ def maybe_offer_study_description_harmonize(
     Build a Study Description offer when the study just became fully Harmonized.
 
     Gate: every tseg ∪ planar series has a harmonized description.
-    Path: ``tseg`` / ``mixed`` → CT/MR LOINC ranking; ``planar`` → planar ranking.
+    Path: tseg / mixed → CT/MR LOINC ranking; planar → planar ranking.
     Report-only studies are skipped (dose/report SRs normally share a parent imaging study).
     """
 
@@ -1200,7 +1371,7 @@ def maybe_offer_study_description_harmonize(
 
 
 def _looks_like_loinc_study_description(name: str) -> bool:
-    """True when ``name`` looks like a LOINC LongCommonName (modality-prefixed)."""
+    """True when name looks like a LOINC LongCommonName (modality-prefixed)."""
     return bool(re.match(r"(?i)^(CT|MR|XR|US|MG)\b", (name or "").strip()))
 
 
@@ -1214,7 +1385,7 @@ def study_description_edit_offer(
     Build a LOINC Study Description menu for Dataset edit from ORM signals only.
 
     Uses stored series harmonized descriptions, composition, and planar instance
-    counts — never opens DICOM or walks ``images_dir``. When CT|MR series are not
+    counts — never opens DICOM or walks images_dir. When CT|MR series are not
     yet Harmonized, ranks LOINC from the study description text when present.
     """
 
@@ -1353,7 +1524,7 @@ def ensure_min_description_choices(
     *,
     minimum: int = MIN_DESCRIPTION_CHOICES,
 ) -> list[str]:
-    """Append unique ``extras`` until ``minimum`` choices, preserving order."""
+    """Append unique extras until minimum choices, preserving order."""
     result: list[str] = []
     seen: set[str] = set()
     for text in choices:
@@ -1690,8 +1861,8 @@ def series_description_edit_choices(
     RadLex Playbook series description menu for Dataset edit.
 
     Current value first, then modality-appropriate Playbook alternatives.
-    Unrecognized PHI does not invent anatomy. ``full_catalog`` expands the
-    modality-relevant Playbook catalog (filterable scroll dialog). ``anatomy_hint``
+    Unrecognized PHI does not invent anatomy. full_catalog expands the
+    modality-relevant Playbook catalog (filterable scroll dialog). anatomy_hint
     (usually the parent study description) prioritizes matching body parts.
     """
 
@@ -1765,10 +1936,10 @@ def study_description_edit_choices(
     """
     LOINC Study Description menu for Dataset edit (modality-filtered CSV only).
 
-    Returns ``(long_common_name, loinc_number)`` with the current harmonized
+    Returns (long_common_name, loinc_number) with the current harmonized
     description first when present. Harmonized studies: nearest ranked matches.
-    Unharmonized / ``full_catalog``: entire modality-prefix LOINC list with
-    hint-ranked rows first (filterable scroll dialog). ``nearest_only`` skips
+    Unharmonized / full_catalog: entire modality-prefix LOINC list with
+    hint-ranked rows first (filterable scroll dialog). nearest_only skips
     the unharmonized auto-expand (multi-select opens closest, then Expand).
     """
 
@@ -1844,7 +2015,7 @@ class DescriptionEditSelection:
 
 
 def series_description_cohort_key(modality: object | None) -> str | None:
-    """Return cohort key for series group edit (``3D`` / ``XR`` / ``US`` / ``MG`` / ``TEXT``)."""
+    """Return cohort key for series group edit (3D / XR / US / MG / TEXT)."""
 
     resolved = (
         modality if isinstance(modality, Modality) else Modality.from_code(modality if isinstance(modality, str) else None)
@@ -1866,7 +2037,7 @@ def study_ready_for_description_edit(anon_model: AnonymizerModel, anon_study_uid
     True when Dataset may open Set description for a study.
 
     Requires every tseg ∪ planar Harmonize child series to already be marked
-    harmonized — same readiness as ``maybe_offer_study_description_harmonize``.
+    harmonized — same readiness as maybe_offer_study_description_harmonize.
     Report-only studies are not study-LOINC editable (anomaly / parent imaging study).
     """
     return anon_model.study_all_series_harmonized(anon_study_uid)
@@ -1933,7 +2104,7 @@ def series_description_group_choices(
     Shared RadLex menu for a homogeneous series multi-select.
 
     Default: nearest variants (same as single-select before Expand).
-    ``full_catalog``: modality-relevant Playbook catalog.
+    full_catalog: modality-relevant Playbook catalog.
     """
     if not modalities:
         return []
@@ -1998,7 +2169,7 @@ def study_description_group_choices(
 
 
 def _series_description_looks_playbook(*, modality: object | None, description: str) -> bool:
-    """True when ``description`` already looks like a RadLex Playbook series string."""
+    """True when description already looks like a RadLex Playbook series string."""
 
     text = (description or "").strip()
     if not text:
@@ -2081,10 +2252,10 @@ def find_similar_study_uids(
     candidates: Sequence[tuple[str, str, str | None]] | None = None,
 ) -> list[str]:
     """
-    Other studies similar to ``anon_study_uid`` (excludes self).
+    Other studies similar to anon_study_uid (excludes self).
 
     Prefer the same harmonized series-description fingerprint when available.
-    Also match ``candidates`` of ``(uid, study_description, loinc_prefix)`` with the
+    Also match candidates of (uid, study_description, loinc_prefix) with the
     same non-empty study description and LOINC prefix — so Dataset Select similar
     works before every series is harmonized (mirrors series description matching).
     """
@@ -2146,7 +2317,7 @@ def find_similar_series_uids(
     """
     Other series UIDs with the same cohort and description text.
 
-    ``candidates`` is ``(anon_series_uid, modality, description)`` from the Dataset index.
+    candidates is (anon_series_uid, modality, description) from the Dataset index.
     """
     seed_key = series_description_cohort_key(seed_modality)
     seed_text = (seed_description or "").strip()
@@ -2267,18 +2438,18 @@ def auto_apply_best_study_descriptions(
     study-level description. Always takes the top-ranked match (no confirmation UI);
     users can change the choice later from Dataset.
 
-    When ``prefer_description_mappings`` is True and ``study_loinc_overrides`` maps the
+    When prefer_description_mappings is True and study_loinc_overrides maps the
     sticky original StudyDescription to a LOINC number, apply that before ranking.
 
     Args:
         images_dir: Project images root.
         anon_model: Anonymizer model.
         anon_study_uids: Studies to consider.
-        prefer_description_mappings: Whether to consult ``study_loinc_overrides``.
+        prefer_description_mappings: Whether to consult study_loinc_overrides.
         study_loinc_overrides: Sticky original → LOINC number (from view CSV store).
 
     Returns:
-        List of ``(offer, updated_uids)`` for groups that were written.
+        List of (offer, updated_uids) for groups that were written.
     """
     overrides = study_loinc_overrides or {}
     results: list[tuple[StudyDescriptionOffer, list[str]]] = []
@@ -2355,7 +2526,7 @@ def harmonize_and_apply_series(
 ) -> HarmonizeApplyOutcome:
     """Run harmonize for one CT|MR|XR|US|MG series and auto-apply the merged description.
 
-    When ``prefer_description_mappings`` is True and ``series_description_overrides``
+    When prefer_description_mappings is True and series_description_overrides
     matches the sticky original, apply the mapped text without running the anatomy model.
     Interactive Series View does not pass this flag — the pre-run prompt owns that choice.
 
@@ -2747,7 +2918,7 @@ def harmonize_series(
     """
     Run harmonize per series with an exclusive modality branch:
 
-    - CT|MR → TotalSegmentator path (``_harmonize_series_tseg``).
+    - CT|MR → TotalSegmentator path (_harmonize_series_tseg).
     - CR|DX|US|MG → metadata Playbook only (never TotalSegmentator).
     - SR|DOC|PDF → report metadata SeriesDescription (Report View).
     - Other modalities (SC/OT/…) → error result.
@@ -2839,7 +3010,7 @@ def _harmonize_series_tseg(
     """
     CT|MR-only Harmonize: geometry → TS segmentation → TS contrast → Playbook merge.
 
-    Extracted from the historical ``harmonize_series`` body — callers must not pass XR/US/MG here.
+    Extracted from the historical harmonize_series body — callers must not pass XR/US/MG here.
     """
     if not series_directories:
         return []

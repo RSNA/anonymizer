@@ -44,8 +44,6 @@ stamp_dates_modified(ds: Dataset) -> None
 stamp_rebase_registration(ds: Dataset, phi_study_date: str | None, basedate: str | None) -> None
     Stamp TCIA REGISTRATION provenance from StudyDate and lookup basedate.
 """
-from __future__ import annotations
-
 import hashlib
 import logging
 import re

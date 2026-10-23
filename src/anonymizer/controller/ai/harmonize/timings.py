@@ -1,7 +1,13 @@
-"""Per-series Harmonize wall-time stage measurements."""
+"""Per-series Harmonize wall-time stage measurements.
 
-from __future__ import annotations
+Public API
+----------
+HarmonizeStageTimings
+    Wall times in seconds for one Harmonize series run.
 
+HarmonizeTimingCollector
+    Collects stage timings across a harmonize_series call.
+"""
 from dataclasses import asdict, dataclass, field
 
 
@@ -28,7 +34,7 @@ class HarmonizeStageTimings:
 
 @dataclass
 class HarmonizeTimingCollector:
-    """Collects stage timings across a ``harmonize_series`` call."""
+    """Collects stage timings across a harmonize_series call."""
 
     results: list[HarmonizeStageTimings] = field(default_factory=list)
 

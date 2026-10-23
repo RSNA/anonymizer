@@ -32,8 +32,6 @@ filter_assessment_rows(rows: Sequence[SeriesMetadataAssessmentRow], *, query: st
 assessment_summary(rows: Sequence[SeriesMetadataAssessmentRow]) -> tuple[int, int, int]
     Return (carriers, unexpected_count, varies_count).
 """
-from __future__ import annotations
-
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
@@ -157,6 +155,24 @@ def build_assessment_note(row: SeriesMetadataAssessmentRow) -> str:
         elif row.script_operation and not row.date_shift_covered:
             parts.append(f"kept ({row.script_operation})")
     return " · ".join(parts)
+
+
+@dataclass
+class _Agg:
+    tag: str
+    vr: str
+    name: str
+    text: str
+    is_private: bool
+    tag_path: str
+    iod_unexpected: bool
+    texts: set[str]
+    sop_uids: list[str]
+    first_sop_uid: str
+    is_anonymizer_field: bool
+    date_shift_covered: bool
+    script_operation: str | None
+    tcia_action: str | None
 
 
 def consolidate_series_metadata(
@@ -299,21 +315,3 @@ def assessment_summary(rows: Sequence[SeriesMetadataAssessmentRow]) -> tuple[int
     unexpected = sum(1 for r in rows if r.iod_unexpected)
     varies = sum(1 for r in rows if r.varies)
     return len(rows), unexpected, varies
-
-
-@dataclass
-class _Agg:
-    tag: str
-    vr: str
-    name: str
-    text: str
-    is_private: bool
-    tag_path: str
-    iod_unexpected: bool
-    texts: set[str]
-    sop_uids: list[str]
-    first_sop_uid: str
-    is_anonymizer_field: bool
-    date_shift_covered: bool
-    script_operation: str | None
-    tcia_action: str | None

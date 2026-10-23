@@ -1,7 +1,5 @@
 """Unit tests for LOINC study-description ranking and fingerprints."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -29,12 +27,18 @@ from anonymizer.controller.ai.harmonize.loinc_study import (
 )
 from anonymizer.controller.series.series_io import apply_study_description
 
-_CSV = loinc_study_description_csv_path()
+
+@pytest.fixture
+def loinc_csv_path() -> Path:
+    """Resolve LOINC StudyDescription CSV after language/session setup."""
+    path = loinc_study_description_csv_path()
+    if not path.is_file():
+        pytest.skip("LOINC StudyDescription CSV missing")
+    return path
 
 
-@pytest.mark.skipif(not _CSV.is_file(), reason="LOINC StudyDescription CSV missing")
-def test_load_ct_loinc_rows():
-    rows = load_ct_loinc_study_descriptions(str(_CSV))
+def test_load_ct_loinc_rows(loinc_csv_path: Path):
+    rows = load_ct_loinc_study_descriptions(str(loinc_csv_path))
     assert len(rows) > 100
     assert all(name.startswith("CT ") for _, name in rows)
 
@@ -125,12 +129,11 @@ def test_fingerprint_is_sorted_multiset():
     assert fp_a == ("Abd Ax W", "Ch Ax W", "Ch Ax W")
 
 
-@pytest.mark.skipif(not _CSV.is_file(), reason="LOINC StudyDescription CSV missing")
-def test_rank_prefers_chest_and_abdomen_without_fractions():
+def test_rank_prefers_chest_and_abdomen_without_fractions(loinc_csv_path: Path):
     matches = rank_loinc_study_descriptions(
         ["Ch Ax PortVen", "Abd Ax PortVen"],
         top_n=8,
-        csv_path=str(_CSV),
+        csv_path=str(loinc_csv_path),
     )
     assert matches
     top = matches[0].long_common_name
@@ -139,12 +142,11 @@ def test_rank_prefers_chest_and_abdomen_without_fractions():
     assert all("Chest" in m.long_common_name and "Abdomen" in m.long_common_name for m in matches)
 
 
-@pytest.mark.skipif(not _CSV.is_file(), reason="LOINC StudyDescription CSV missing")
-def test_rank_prefers_chest_only_when_abdomen_minor():
+def test_rank_prefers_chest_only_when_abdomen_minor(loinc_csv_path: Path):
     matches = rank_loinc_study_descriptions(
         ["Ch Ax LateArt", "Ch+Abd Ax PortVen"],
         top_n=8,
-        csv_path=str(_CSV),
+        csv_path=str(loinc_csv_path),
         region_fractions={"Chest": 0.85, "Abdomen": 0.15},
     )
     assert matches[0].long_common_name.startswith("CT Chest W contrast")
@@ -153,19 +155,17 @@ def test_rank_prefers_chest_only_when_abdomen_minor():
     assert any("Chest and Abdomen" in name for name in names)
 
 
-@pytest.mark.skipif(not _CSV.is_file(), reason="LOINC StudyDescription CSV missing")
-def test_rank_top_n_length():
-    matches = rank_loinc_study_descriptions(["Brain Ax WO"], top_n=5, csv_path=str(_CSV))
+def test_rank_top_n_length(loinc_csv_path: Path):
+    matches = rank_loinc_study_descriptions(["Brain Ax WO"], top_n=5, csv_path=str(loinc_csv_path))
     assert 1 <= len(matches) <= 5
 
 
-@pytest.mark.skipif(not _CSV.is_file(), reason="LOINC StudyDescription CSV missing")
-def test_rank_brain_maps_to_head_wo_not_ankle():
+def test_rank_brain_maps_to_head_wo_not_ankle(loinc_csv_path: Path):
     """Playbook Brain must rank CT Head WO; never fill top-N with unrelated anatomy."""
     aggregate, matches, ambiguous = build_study_description_ranking(
         ["Brain Ax WO", "Brain Ax WO"],
         top_n=8,
-        csv_path=str(_CSV),
+        csv_path=str(loinc_csv_path),
     )
     assert aggregate.anatomy_parts == ("Head",)
     assert matches
@@ -194,7 +194,6 @@ _UNRELATED_MARKERS = (
 )
 
 
-@pytest.mark.skipif(not _CSV.is_file(), reason="LOINC StudyDescription CSV missing")
 @pytest.mark.parametrize(
     ("series_descriptions", "must_include", "forbidden_other_regions"),
     [
@@ -217,8 +216,11 @@ def test_rank_anatomy_family_stays_on_topic(
     series_descriptions: list[str],
     must_include: tuple[str, ...],
     forbidden_other_regions: tuple[str, ...],
+    loinc_csv_path: Path,
 ):
-    matches = rank_loinc_study_descriptions(series_descriptions, top_n=8, csv_path=str(_CSV))
+    matches = rank_loinc_study_descriptions(
+        series_descriptions, top_n=8, csv_path=str(loinc_csv_path)
+    )
     assert matches, f"expected LOINC matches for {series_descriptions}"
     top = matches[0].long_common_name
     assert any(token in top for token in must_include), top
@@ -229,12 +231,11 @@ def test_rank_anatomy_family_stays_on_topic(
         assert any(token in name for token in must_include), name
 
 
-@pytest.mark.skipif(not _CSV.is_file(), reason="LOINC StudyDescription CSV missing")
-def test_clear_winner_not_ambiguous_for_chest_dominant():
+def test_clear_winner_not_ambiguous_for_chest_dominant(loinc_csv_path: Path):
     aggregate, matches, ambiguous = build_study_description_ranking(
         ["Ch Ax LateArt", "Ch+Abd Ax PortVen"],
         top_n=8,
-        csv_path=str(_CSV),
+        csv_path=str(loinc_csv_path),
         region_fractions={"Chest": 0.85, "Abdomen": 0.15},
     )
     assert aggregate.preferred_anatomy_parts == ("Chest",)
@@ -421,11 +422,11 @@ def test_aggregate_breast_postprocess_mr_series():
     assert aggregate.diagnostic_series_count == 2
 
 
-@pytest.mark.skipif(not _CSV.is_file(), reason="LOINC StudyDescription CSV missing")
-def test_rank_mr_breast_study_description():
+def test_rank_mr_breast_study_description(loinc_csv_path: Path):
     _aggregate, matches, ambiguous = build_study_description_ranking(
         ["Breast Ax WO Postprocess"],
         top_n=5,
+        csv_path=str(loinc_csv_path),
         loinc_prefix="MR ",
     )
     assert _aggregate.anatomy_parts == ("Breast",)

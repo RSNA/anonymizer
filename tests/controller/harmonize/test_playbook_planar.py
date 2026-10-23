@@ -3,8 +3,6 @@
 Isolation: CT/MR TotalSegmentator path must not run for these series.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -13,19 +11,19 @@ from pydicom import Dataset, dcmread
 from pydicom.dataset import FileDataset, FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian, SecondaryCaptureImageStorage, generate_uid
 
+from anonymizer.controller.ai.feature_availability import harmonize_allowed_for_modality
 from anonymizer.controller.ai.harmonize.pipeline import (
     _load_planar_series_dataset,
     _load_tseg_series_dataset,
     harmonize_series,
 )
-from anonymizer.controller.ai.feature_availability import harmonize_allowed_for_modality
-from anonymizer.controller.ai.harmonize.profile_2d import (
-    is_2d_harmonize_modality,
-    profile_2d_for_modality,
-)
 from anonymizer.controller.ai.harmonize.playbook_planar import (
     build_planar_harmonized_series_description,
     format_planar_series_description,
+)
+from anonymizer.controller.ai.harmonize.profile_2d import (
+    is_2d_harmonize_modality,
+    profile_2d_for_modality,
 )
 from anonymizer.utils.modalities import ContentClass, Modality, get_modality_catalog
 from anonymizer.view.ai.harmonize_description import harmonize_button_visible

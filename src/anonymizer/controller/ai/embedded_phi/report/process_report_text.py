@@ -1,50 +1,49 @@
 """Native report text PHI for Structured Reports and Encapsulated PDF (DOC/PDF).
-
 Modalities
 ----------
-- **SR**: ``Modality == "SR"`` or ``SOPClassUID`` under ``1.2.840.10008.5.1.4.1.1.88.*``.
-  Text from depth-first ``ContentSequence`` TEXT (``TextValue``) and PNAME
-  (``PersonName``) items.
-- **DOC / PDF**: ``Modality in {"DOC", "PDF"}`` or Encapsulated PDF SOP
-  ``1.2.840.10008.5.1.4.1.1.104.1``. Text from the ``EncapsulatedDocument`` PDF
-  **text layer** (empty when raster-only; no OCR).
+- **SR**: Modality == "SR" or SOPClassUID under 1.2.840.10008.5.1.4.1.1.88.*.
 
 Public API
 ----------
-``detect_phi_in_text(text, ds, *, phi_header=None, whitelist=())``
-    Study-PHI string match on original unicode, then NER on a same-length
-    radiology-filtered mask (anon surfaces / UIDs / dates / whitelist terms);
-    metadata spans win on overlap. Source text is never rewritten by detect.
+METADATA_PHI_FIELDS
+    Metadata phi fields.
 
-``detect_phi(ds, *, phi_header=None, whitelist=())``
-    Extract report unicode, then ``detect_phi_in_text``.
+METADATA_LABEL_SCORED_FAMILY
+    Metadata label scored family.
 
-``merge_phi_entities(meta, ner)``
-    Metadata spans win; drop overlapping NER spans.
+BASIC_TEXT_SR_SOP_CLASS_UID
+    Basic text sr sop class uid.
 
-``remove_phi(text, entities, *, synthetic=False)``
-    Replace spans in unicode. Metadata entities (``replacement`` set) always
-    write the anonymized DICOM value; NER entities blank or synthesize.
+detect_phi_in_text(text: str, ds: Dataset, *, locale: str='en_US', phi_header: object | None=None, whitelist: Sequence[str] | None=None) -> list[Entity]
+    Report View PHI pipeline on arbitrary unicode (source text unchanged).
 
-``write_report_text(ds, text)``
-    De-identify ``ds`` in place and return a Basic Text SR (SOP ``…88.11``)
-    for ML/labelling. DOC/PDF sources get a plain-text PDF rewrite of
-    ``EncapsulatedDocument`` (internal helper; not a graphic preview).
+detect_phi(ds: Dataset, *, locale: str='en_US', phi_header: object | None=None, whitelist: Sequence[str] | None=None) -> tuple[str, list[Entity]]
+    Extract report unicode from ds and find PHI spans (text unchanged).
 
-``render_pdf_pages(data, *, scale=1.5)``
-    Rasterize PDF bytes to PIL images for Report View **graphic preview**
-    only (no PHI geometry). Distinct from the internal plain-text PDF
-    builder used by ``write_report_text``.
+entities_from_study_phi(text: str, ds: Dataset, phi_header: object | None) -> list[Entity]
+    Metadata PHI spans: original study/patient PHI strings found in report text.
 
-Supporting exports (View / OCR callers)
----------------------------------------
-``extract_report_text(ds)`` — unicode extract without NER.
-``build_basic_text_sr(source, lines)`` — Basic Text SR factory (also OCR→SR).
-``encapsulated_pdf_bytes(ds)`` — raw PDF bytes from ``EncapsulatedDocument``.
+merge_phi_entities(meta: Sequence[Entity], ner: Sequence[Entity]) -> tuple[list[Entity], int]
+    Metadata spans win; keep NER spans that do not overlap them.
+
+remove_phi(text: str, entities: Sequence[Entity], *, synthetic: bool=False) -> str
+    Replace PHI spans in text (no Dataset I/O).
+
+write_report_text(ds: Dataset, text: str) -> Dataset
+    Persist cleansed report unicode for ML/labelling and de-identify ds.
+
+render_pdf_pages(data: bytes, *, scale: float=1.5) -> list[Image.Image]
+    Rasterize PDF bytes for Report View graphic preview.
+
+extract_report_text(ds: Dataset) -> str
+    Extract report unicode from ds without running NER.
+
+build_basic_text_sr(source: Dataset, lines: Sequence[str], *, series_description: str='De-identified Report', series_number: int=9000) -> Dataset
+    Return an (unsaved) Basic Text SR with one TEXT item per non-empty line.
+
+encapsulated_pdf_bytes(ds: Dataset) -> bytes | None
+    Return raw PDF bytes from EncapsulatedDocument, or None when absent / not a PDF.
 """
-
-from __future__ import annotations
-
 import datetime as _dt
 import io
 import logging
@@ -81,7 +80,7 @@ _MIN_PHI_NEEDLE = 2
 METADATA_PHI_FIELDS: tuple[tuple[str, str, str], ...] = (
     ("patient_id", "PatientID", "ID"),
     ("accession_number", "AccessionNumber", "ID"),
-    ("patient_name", "PatientName", "NAME"),
+    ("patient_name", "PatientName", "FIRST_NAME"),
     ("study_date", "StudyDate", "DATE"),
     ("patient_birth_date", "PatientBirthDate", "DATE"),
 )
@@ -106,7 +105,7 @@ _INHERIT_KEYWORDS = (
 )
 
 # Join nonempty TEXT/PNAME slots. Prefer this over bare newlines when a slot may
-# contain ``\\n``; display/NER use the same string (compact: no blank slots).
+# contain \\n; display/NER use the same string (compact: no blank slots).
 _SLOT_SEP = "\x1e"
 
 _TEXT_ATTRS = {"TEXT": "TextValue", "PNAME": "PersonName"}
@@ -138,11 +137,11 @@ def detect_phi_in_text(
     """
     Report View PHI pipeline on arbitrary unicode (source text unchanged).
 
-    1. Metadata: match original PHI strings from ``phi_header``; each hit is
-       labeled with the DICOM keyword and carries ``replacement`` = anonymized
-       value already on ``ds``.
+    1. Metadata: match original PHI strings from phi_header; each hit is
+       labeled with the DICOM keyword and carries replacement = anonymized
+       value already on ds.
     2. Radiology pre-NER mask (anon surfaces / UIDs / compact dates / whitelist).
-    3. NER on the masked unicode (same length → offsets still match ``text``);
+    3. NER on the masked unicode (same length → offsets still match text);
        spans overlapping metadata are dropped.
     """
     body = str(text or "")
@@ -179,24 +178,24 @@ def detect_phi(
     whitelist: Sequence[str] | None = None,
 ) -> tuple[str, list[Entity]]:
     """
-    Extract report unicode from ``ds`` and find PHI spans (text unchanged).
+    Extract report unicode from ds and find PHI spans (text unchanged).
 
-    Delegates scoring to ``detect_phi_in_text`` (study-PHI match then filtered NER).
+    Delegates scoring to detect_phi_in_text (study-PHI match then filtered NER).
 
-    SR: Modality SR or SOP Class ``1.2.840.10008.5.1.4.1.1.88.*``.
-    DOC/PDF: Modality DOC|PDF or Encapsulated PDF SOP ``…104.1``.
+    SR: Modality SR or SOP Class 1.2.840.10008.5.1.4.1.1.88.*.
+    DOC/PDF: Modality DOC|PDF or Encapsulated PDF SOP …104.1.
 
     Args:
         ds: DICOM dataset (SR or Encapsulated PDF / DOC); headers already anonymized.
-        locale: NER locale pack (default ``en_US``).
-        phi_header: ``StudyPhiHeader`` (or duck-type) with original PHI field strings.
+        locale: NER locale pack (default en_US).
+        phi_header: StudyPhiHeader (or duck-type) with original PHI field strings.
         whitelist: Optional radiology terms masked before NER.
 
     Returns:
-        ``(text, entities)`` with entity offsets into ``text``.
+        (text, entities) with entity offsets into text.
 
     Raises:
-        ValueError: if ``ds`` is not an SR or DOC/PDF encapsulated report.
+        ValueError: if ds is not an SR or DOC/PDF encapsulated report.
     """
     kind = _report_kind(ds)
     text = extract_report_text(ds)
@@ -237,8 +236,8 @@ def entities_from_study_phi(
     """
     Metadata PHI spans: original study/patient PHI strings found in report text.
 
-    ``Entity.label`` is the DICOM keyword (``PatientID``, ``AccessionNumber``, …).
-    ``Entity.replacement`` is the anonymized value already on ``ds`` for that tag.
+    Entity.label is the DICOM keyword (PatientID, AccessionNumber, …).
+    Entity.replacement is the anonymized value already on ds for that tag.
     """
     if phi_header is None:
         logger.info("report: metadata-phi skip — no phi_header")
@@ -323,8 +322,8 @@ def _phi_string_variants(value: str, *, family: str) -> list[str]:
         out.append(c)
 
     _add(text)
-    if family == "NAME":
-        # DICOM PN: Family^Given^Middle^Prefix^Suffix
+    if family == "FIRST_NAME":
+        # Person-name family (DICOM PN): Family^Given^Middle^Prefix^Suffix
         if "^" in text:
             parts = [p.strip() for p in text.split("^") if p.strip()]
             if parts:
@@ -382,7 +381,7 @@ def merge_phi_entities(
     Metadata spans win; keep NER spans that do not overlap them.
 
     Returns:
-        ``(merged_entities, ner_dropped_overlap_count)``.
+        (merged_entities, ner_dropped_overlap_count).
     """
     occupied = [(e.start, e.end) for e in meta]
     merged = list(meta)
@@ -414,14 +413,14 @@ def remove_phi(
     synthetic: bool = False,
 ) -> str:
     """
-    Replace PHI spans in ``text`` (no Dataset I/O).
+    Replace PHI spans in text (no Dataset I/O).
 
-    Metadata entities (``replacement`` set from detect) always write the
-    anonymized DICOM value. NER entities blank or synthesize per ``synthetic``.
+    Metadata entities (replacement set from detect) always write the
+    anonymized DICOM value. NER entities blank or synthesize per synthetic.
 
     Args:
-        text: Report unicode from ``detect_phi``.
-        entities: Spans with offsets into ``text`` (metadata + NER, merged).
+        text: Report unicode from detect_phi.
+        entities: Spans with offsets into text (metadata + NER, merged).
         synthetic: If False, blank NER spans; if True, synthetic NER replacements.
 
     Returns:
@@ -451,25 +450,25 @@ def remove_phi(
 
 def write_report_text(ds: Dataset, text: str) -> Dataset:
     """
-    Persist cleansed report unicode for ML/labelling and de-identify ``ds``.
+    Persist cleansed report unicode for ML/labelling and de-identify ds.
 
-    Primary deliverable: a Basic Text SR (SOP ``…88.11``) with one TEXT
+    Primary deliverable: a Basic Text SR (SOP …88.11) with one TEXT
     content item per non-empty line. Caller saves that SR as a sibling series.
 
-    Also mutates ``ds`` in place:
+    Also mutates ds in place:
     - SR: write fragments back into TEXT/PNAME in ContentSequence walk order.
-    - DOC/PDF: replace EncapsulatedDocument with a plain-text PDF of ``text``
-      (via ``_render_plain_text_pdf`` — text operators, not graphic preview).
+    - DOC/PDF: replace EncapsulatedDocument with a plain-text PDF of text
+      (via _render_plain_text_pdf — text operators, not graphic preview).
 
     Args:
         ds: Source SR or DOC/PDF dataset (patient/study attrs inherited by the SR).
-        text: Cleansed report unicode from ``remove_phi``.
+        text: Cleansed report unicode from remove_phi.
 
     Returns:
-        Unsaved Basic Text SR dataset ready for ``save_as``.
+        Unsaved Basic Text SR dataset ready for save_as.
 
     Raises:
-        ValueError: if ``ds`` is unsupported or SR slot count mismatches.
+        ValueError: if ds is unsupported or SR slot count mismatches.
     """
     kind = _report_kind(ds)
     if kind == "sr":
@@ -490,7 +489,7 @@ def render_pdf_pages(data: bytes, *, scale: float = 1.5) -> list[Image.Image]:
     Rasterize PDF bytes for Report View graphic preview.
 
     This is display-only (pypdfium2 page bitmaps). It does **not** build or
-    rewrite PDF text; DOC/PDF de-id write-back uses ``_render_plain_text_pdf``.
+    rewrite PDF text; DOC/PDF de-id write-back uses _render_plain_text_pdf.
 
     Args:
         data: Raw PDF bytes from EncapsulatedDocument.
@@ -517,11 +516,11 @@ def render_pdf_pages(data: bytes, *, scale: float = 1.5) -> list[Image.Image]:
 
 def extract_report_text(ds: Dataset) -> str:
     """
-    Extract report unicode from ``ds`` without running NER.
+    Extract report unicode from ds without running NER.
 
-    SR: Modality SR or SOP Class ``1.2.840.10008.5.1.4.1.1.88.*`` —
+    SR: Modality SR or SOP Class 1.2.840.10008.5.1.4.1.1.88.* —
     TEXT/PNAME ContentSequence values joined with a private slot separator.
-    DOC/PDF: Modality DOC|PDF or Encapsulated PDF SOP ``…104.1`` —
+    DOC/PDF: Modality DOC|PDF or Encapsulated PDF SOP …104.1 —
     EncapsulatedDocument PDF text layer (empty when raster-only / no text layer).
 
     Args:
@@ -531,7 +530,7 @@ def extract_report_text(ds: Dataset) -> str:
         Report unicode (may be empty).
 
     Raises:
-        ValueError: if ``ds`` is not an SR or DOC/PDF encapsulated report.
+        ValueError: if ds is not an SR or DOC/PDF encapsulated report.
     """
     kind = _report_kind(ds)
     if kind == "sr":
@@ -552,11 +551,11 @@ def build_basic_text_sr(
     Args:
         source: Dataset whose patient/study attributes are copied onto the SR.
         lines: Report lines (empty strings skipped).
-        series_description: ``SeriesDescription`` for the new SR series.
-        series_number: ``SeriesNumber`` for the new SR series.
+        series_description: SeriesDescription for the new SR series.
+        series_number: SeriesNumber for the new SR series.
 
     Returns:
-        Unsaved Basic Text SR dataset (SOP ``…88.11``).
+        Unsaved Basic Text SR dataset (SOP …88.11).
     """
     sr = Dataset()
     sr.file_meta = FileMetaDataset()
@@ -600,13 +599,13 @@ def build_basic_text_sr(
 
 def encapsulated_pdf_bytes(ds: Dataset) -> bytes | None:
     """
-    Return raw PDF bytes from ``EncapsulatedDocument``, or ``None`` when absent / not a PDF.
+    Return raw PDF bytes from EncapsulatedDocument, or None when absent / not a PDF.
 
     Args:
         ds: DICOM dataset that may carry an Encapsulated Document.
 
     Returns:
-        PDF bytes with trailing null pad stripped, or ``None``.
+        PDF bytes with trailing null pad stripped, or None.
     """
     blob = ds.get("EncapsulatedDocument")
     if not blob:
@@ -642,13 +641,13 @@ def _code(value: str, scheme: str, meaning: str) -> Dataset:
 
 def _report_kind(ds: Dataset) -> str:
     """
-    Classify ``ds`` as ``\"sr\"`` or ``\"pdf\"``.
+    Classify ds as "sr" or "pdf".
 
     Args:
         ds: DICOM dataset.
 
     Returns:
-        ``\"sr\"`` or ``\"pdf\"``.
+        "sr" or "pdf".
 
     Raises:
         ValueError: if the dataset is not a supported report modality.
@@ -666,15 +665,15 @@ def _sr_slot_attr(item: Dataset) -> str | None:
     """
     Return the text slot attribute on an SR content item, if any.
 
-    Prefer ``ValueType`` TEXT/PNAME. When ``ValueType`` was stripped at ingest
-    (legacy Strict/Clinical ``@remove`` on ``0040,A040``) but ``TextValue`` or
-    ``PersonName`` remains, fall back to that attribute so extract still works.
+    Prefer ValueType TEXT/PNAME. When ValueType was stripped at ingest
+    (legacy Basic/Retain @remove on 0040,A040) but TextValue or
+    PersonName remains, fall back to that attribute so extract still works.
 
     Args:
         item: One ContentSequence content item.
 
     Returns:
-        ``\"TextValue\"``, ``\"PersonName\"``, or ``None``.
+        "TextValue", "PersonName", or None.
     """
     vt = str(item.get("ValueType", "") or "").strip().upper()
     if vt in _TEXT_ATTRS:
@@ -689,24 +688,24 @@ def _sr_slot_attr(item: Dataset) -> str | None:
 
 def _iter_sr_text_items(ds: Dataset) -> Iterator[tuple[Dataset, str]]:
     """
-    Yield ``(item, attr_name)`` for each TEXT/PNAME content item (depth-first).
+    Yield (item, attr_name) for each TEXT/PNAME content item (depth-first).
 
     Args:
         ds: SR dataset (root may hold ContentSequence or be a CONTAINER).
 
     Yields:
-        Pairs of content-item dataset and attribute name (``TextValue`` or ``PersonName``).
+        Pairs of content-item dataset and attribute name (TextValue or PersonName).
     """
 
     def _walk(container: Dataset) -> Iterator[tuple[Dataset, str]]:
         """
-        Recurse into ``ContentSequence`` of ``container``.
+        Recurse into ContentSequence of container.
 
         Args:
-            container: Dataset that may hold nested ``ContentSequence``.
+            container: Dataset that may hold nested ContentSequence.
 
         Yields:
-            ``(item, attr_name)`` for each TEXT/PNAME content item.
+            (item, attr_name) for each TEXT/PNAME content item.
         """
         for item in container.get("ContentSequence", []) or []:
             attr = _sr_slot_attr(item)
@@ -721,7 +720,7 @@ def _normalize_sr_slot_text(raw: str) -> str:
     """
     Normalize one SR text slot for display / NER / write-back.
 
-    Collapses ``\\r\\n`` / ``\\r`` to ``\\n`` (dose Comment tables often use CR/LF)
+    Collapses \\r\\n / \\r to \\n (dose Comment tables often use CR/LF)
     and strips outer whitespace.
     """
     body = str(raw or "").replace("\r\n", "\n").replace("\r", "\n").strip()
@@ -732,7 +731,7 @@ def _normalize_sr_slot_text(raw: str) -> str:
 
 
 def _sr_slot_is_unique_keep(value: str) -> bool:
-    """True when ``value`` must always appear even if seen before (tables / prose)."""
+    """True when value must always appear even if seen before (tables / prose)."""
     if "|" in value or "\n" in value:
         return True
     return len(value) > 80
@@ -754,7 +753,7 @@ def _sr_compact_slot_plan(
         ds: SR dataset.
 
     Returns:
-        ``(nonempty_items, compact_values, item_to_compact_index)``.
+        (nonempty_items, compact_values, item_to_compact_index).
     """
     items: list[tuple[Dataset, str]] = []
     compact: list[str] = []
@@ -777,7 +776,7 @@ def _sr_compact_slot_plan(
 
 
 def _join_sr_compact_parts(parts: list[str]) -> str:
-    """Join compact parts; use ``_SLOT_SEP`` when any part embeds newlines."""
+    """Join compact parts; use _SLOT_SEP when any part embeds newlines."""
     if not parts:
         return ""
     if any("\n" in p for p in parts):
@@ -786,7 +785,7 @@ def _join_sr_compact_parts(parts: list[str]) -> str:
 
 
 def _split_sr_compact_text(text: str, *, compact_count: int) -> list[str]:
-    """Split cleansed extract back into ``compact_count`` fragments."""
+    """Split cleansed extract back into compact_count fragments."""
     if compact_count <= 0:
         return []
     if _SLOT_SEP in text:
@@ -800,7 +799,7 @@ def _split_sr_compact_text(text: str, *, compact_count: int) -> list[str]:
 
 def _extract_sr_text(ds: Dataset) -> str:
     """
-    Join TEXT/PNAME values from ``ContentSequence`` into compact report unicode.
+    Join TEXT/PNAME values from ContentSequence into compact report unicode.
 
     Args:
         ds: SR dataset.
@@ -859,7 +858,7 @@ def _write_sr_slots(ds: Dataset, text: str) -> None:
 
     Args:
         ds: SR dataset mutated in place.
-        text: Cleansed unicode from extract (``\\n``- or ``_SLOT_SEP``-joined).
+        text: Cleansed unicode from extract (\\n- or _SLOT_SEP-joined).
 
     Raises:
         ValueError: if fragment count does not match the compact plan.
@@ -925,7 +924,7 @@ def _extract_pdf_text_from_bytes(data: bytes) -> str:
         data: Raw PDF bytes.
 
     Returns:
-        Normalized text layer, or ``\"\"`` if none / unreadable.
+        Normalized text layer, or "" if none / unreadable.
     """
     if PdfReader is None:  # pragma: no cover
         logger.warning("report: pypdf not installed; PDF text extraction skipped")
@@ -942,13 +941,13 @@ def _extract_pdf_text_from_bytes(data: bytes) -> str:
 
 def _extract_pdf_text_from_ds(ds: Dataset) -> str:
     """
-    Extract EncapsulatedDocument PDF text layer from ``ds``.
+    Extract EncapsulatedDocument PDF text layer from ds.
 
     Args:
         ds: DOC/PDF dataset.
 
     Returns:
-        Text layer unicode, or ``\"\"`` when absent / raster-only.
+        Text layer unicode, or "" when absent / raster-only.
     """
     data = encapsulated_pdf_bytes(ds)
     if not data:
@@ -964,14 +963,14 @@ def _pdf_escape(text: str) -> str:
         text: Latin-1-safe line content.
 
     Returns:
-        Escaped string for ``Tj``.
+        Escaped string for Tj.
     """
     return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
 
 def _wrap_lines(text: str) -> list[str]:
     """
-    Wrap ``text`` into fixed-width lines for the plain-text PDF builder.
+    Wrap text into fixed-width lines for the plain-text PDF builder.
 
     Args:
         text: Full report unicode.
@@ -996,16 +995,16 @@ def _wrap_lines(text: str) -> list[str]:
 
 def _render_plain_text_pdf(text: str) -> bytes:
     """
-    Build a minimal single-font PDF from ``text`` (text operators, not images).
+    Build a minimal single-font PDF from text (text operators, not images).
 
-    Used only by ``write_report_text`` to de-id DOC/PDF ``EncapsulatedDocument``.
-    Not a graphic preview — use ``render_pdf_pages`` for display rasters.
+    Used only by write_report_text to de-id DOC/PDF EncapsulatedDocument.
+    Not a graphic preview — use render_pdf_pages for display rasters.
 
     Args:
         text: Unicode to embed (non–Latin-1 glyphs replaced).
 
     Returns:
-        PDF-1.4 bytes with extractable ``Tj`` text.
+        PDF-1.4 bytes with extractable Tj text.
     """
     lines = _wrap_lines(text)
     pages: list[list[str]] = []
@@ -1019,7 +1018,7 @@ def _render_plain_text_pdf(text: str) -> bytes:
         Append a PDF object body and return its 1-based object number.
 
         Args:
-            body: Raw PDF object contents (without ``obj``/``endobj`` wrappers).
+            body: Raw PDF object contents (without obj/endobj wrappers).
 
         Returns:
             1-based object id for cross-references.
@@ -1079,7 +1078,7 @@ def _render_plain_text_pdf(text: str) -> bytes:
 
 def _write_pdf_bytes(ds: Dataset, text: str) -> None:
     """
-    Replace ``EncapsulatedDocument`` with a plain-text PDF of ``text``.
+    Replace EncapsulatedDocument with a plain-text PDF of text.
 
     Args:
         ds: DOC/PDF dataset mutated in place.

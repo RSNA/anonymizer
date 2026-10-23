@@ -1,7 +1,5 @@
 """Read-only preview of effective modality whitelists for AI batch OCR."""
 
-from __future__ import annotations
-
 import tkinter as tk
 from collections.abc import Sequence
 from pathlib import Path

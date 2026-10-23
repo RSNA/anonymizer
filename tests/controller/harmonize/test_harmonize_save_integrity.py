@@ -1,7 +1,5 @@
 """Verify harmonize description save paths do not alter DICOM pixel data."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import numpy as np

@@ -1,7 +1,5 @@
 """MR Harmonize / Face Blur gate tests — keep CT suites untouched."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 

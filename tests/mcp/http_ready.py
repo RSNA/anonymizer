@@ -1,7 +1,5 @@
 """Wait until a spawned MCP HTTP process accepts TCP on host:port."""
 
-from __future__ import annotations
-
 import socket
 import subprocess
 import time

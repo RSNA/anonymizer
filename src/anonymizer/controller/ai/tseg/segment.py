@@ -1,7 +1,91 @@
-"""TotalSegmentator segmentation, anatomy regions, and series analysis entry point."""
+"""TotalSegmentator segmentation, anatomy regions, and series analysis entry point.
 
-from __future__ import annotations
+Public API
+----------
+HARMONIZE_CANCELLED_MESSAGE
+    Harmonize cancelled message (default 'Cancelled').
 
+NO_ANATOMY_REGIONS_ERROR
+    No anatomy regions error.
+
+anatomy_metadata_fallback_allowed(tseg: TS_result) -> bool
+    True when TS anatomy finished without regions but did not fail (infra/license/cancel).
+
+harmonize_cancel_requested(cancelled: Callable[[], bool] | None) -> bool
+    Harmonize cancel requested.
+
+AnalysisProgress
+    AnalysisProgress type.
+
+ProgressCallback
+    Progresscallback.
+
+TS_result
+    Ts result dataclass/type.
+
+format_anatomy_regions_summary(result: TS_result) -> str
+    Compact anatomy summary for batch progress when segmentation cache is reused.
+
+format_anatomy_regions_progress_message(result: TS_result, *, seg_cached: bool) -> str
+    Format anatomy regions progress message.
+
+FaceSegResult
+    FaceSegResult type.
+
+dicom_series_to_nifti(series_directory: Path, output_path: Path) -> int
+    Convert one DICOM series directory to NIfTI. Returns slice count.
+
+reconcile_structure_voxels_from_masks(seg_dir: Path, structure_voxels: dict[str, int]) -> dict[str, int]
+    Replace stats-mm³ placeholders with true voxel counts for on-disk masks.
+
+collect_structure_voxels(segmentation_dir: Path, structures: list[str]) -> dict[str, int]
+    Collect structure voxels.
+
+cached_body_parts_label(series_directory: Path) -> str | None
+    ROI anatomy label from 0_TS_SEG segmentation cache, if available.
+
+run_segmentation(nifti_path: Path, output_dir: Path, *, mode: str=DEFAULT_SEGMENTATION_MODE, device: str | None=None, roi_subset: list[str] | None=None, task: str | None=None, progress: ProgressCallback | None=None, analysis_started: float | None=None, n_slices: int | None=None, cancelled: Callable[[], bool] | None=None) -> float
+    Run TotalSegmentator anatomy task. Returns inference wall time in seconds.
+
+run_face_segmentation(nifti_path: Path, output_dir: Path, *, device: str | None=None, progress: ProgressCallback | None=None, analysis_started: float | None=None, face_task: str | None=None, face_mask_filename: str | None=None) -> float
+    Run TotalSegmentator face task. Returns inference wall time in seconds.
+
+run_brain_structures_segmentation(nifti_path: Path, output_dir: Path, *, device: str | None=None, progress: ProgressCallback | None=None, analysis_started: float | None=None) -> float
+    Run TotalSegmentator brain_structures task. Returns inference wall time in seconds.
+
+analyze_tseg_face(series_directory: Path, *, progress: ProgressCallback | None=None, force: bool=False, profile=None) -> FaceSegResult
+    DICOM→NIfTI, TotalSegmentator face task, and cached face mask path.
+
+series_cache_dir(series_directory: Path) -> Path
+    Per-series cache under <series>/0_TS_SEG/ (NIfTI, seg masks, contrast stats).
+
+estimate_tseg_contrast_remaining_sec(series_directory: Path) -> float
+    Rough ETA for contrast analysis from per-series 0_TS_SEG state.
+
+face_mask_cache_path(series_directory: Path, *, profile=None) -> Path
+    Cached face mask under <series>/0_TS_SEG/seg/ (CT face.nii.gz / MR face_mr.nii.gz).
+
+write_roi_subset_manifest(cache_dir: Path, structures: list[str], *, anatomy_task: str='total', modality: str='CT', roi_tier: str | None=None, segmentation_mode: str | None=None) -> None
+    Record which TotalSegmentator ROI classes were requested for this series cache.
+
+read_cached_segmentation_mode(cache_dir: Path) -> str | None
+    Return stored Harmonize segmentation thickness (1.5mm / 3mm / 6mm), if any.
+
+invalidate_stale_tseg_volume_cache(series_directory: Path, nifti_path: Path, *, face_mask_path: Path | None=None) -> None
+    Drop cached NIfTI and face mask when the DICOM stack has changed.
+
+analyze_tseg_regions(series_directory: Path, *, geometry: SeriesGeometryResult | None=None, progress: ProgressCallback | None=None, include_brain_structures: bool=False, profile=None, cancelled: Callable[[], bool] | None=None) -> tuple[TS_result, Path | None]
+    DICOM→NIfTI, TotalSegmentator ROI segmentation, and region summary.
+
+analyze_tseg_ct_single_pass(series_directory: Path, *, geometry: SeriesGeometryResult | None=None, progress: ProgressCallback | None=None, include_brain_structures: bool=False, cancelled: Callable[[], bool] | None=None) -> tuple[TS_result, Path | None, bool]
+    CT Harmonize path: one full total+statistics=True pass.
+
+analyze_tseg_contrast(series_directory: Path, nifti_path: Path, region_result: TS_result, *, progress: ProgressCallback | None=None) -> TS_result
+    Run TotalSegmentator organ HU statistics + XGBoost contrast-phase classification.
+
+analyze_series(series_directories: list[Path], *, progress: ProgressCallback | None=None) -> list[TS_result]
+    Run TotalSegmentator anatomy and XGBoost contrast analysis on CT series directories.
+"""
 import json
 import logging
 import time
@@ -115,9 +199,23 @@ _SEG_BASE_SECONDS = 30.0
 _FACE_SEG_ESTIMATE_SECONDS = 90.0
 _FACE_LICENSE_ERROR = "TotalSegmentator face task requires academic license (totalseg_set_license -l aca_...)"
 
-# Returned in ``TS_result.error`` when harmonize cancellation is requested cooperatively.
+# Returned in TS_result.error when harmonize cancellation is requested cooperatively.
 HARMONIZE_CANCELLED_MESSAGE = "Cancelled"
 NO_ANATOMY_REGIONS_ERROR = "No anatomy regions detected in volume"
+
+
+@dataclass(frozen=True)
+class TS_result:
+    series_directory: Path
+    dominant_region: str
+    body_parts_present: str
+    multi_region: bool
+    region_fraction: float
+    iv_contrast: bool
+    contrast_phase: str
+    phase_probability: float
+    structures_present: dict[str, int] = field(default_factory=dict)
+    error: str | None = None
 
 
 def anatomy_metadata_fallback_allowed(tseg: TS_result) -> bool:
@@ -143,19 +241,6 @@ class AnalysisProgress:
 
 
 ProgressCallback = Callable[[AnalysisProgress], None]
-
-@dataclass(frozen=True)
-class TS_result:
-    series_directory: Path
-    dominant_region: str
-    body_parts_present: str
-    multi_region: bool
-    region_fraction: float
-    iv_contrast: bool
-    contrast_phase: str
-    phase_probability: float
-    structures_present: dict[str, int] = field(default_factory=dict)
-    error: str | None = None
 
 
 def format_anatomy_regions_summary(result: TS_result) -> str:
@@ -210,7 +295,7 @@ def _require_totalsegmentator():
 
 
 def _anatomy_mask_stem(path: Path) -> str:
-    """Return structure name for ``*.nii.gz`` (``Path.stem`` would leave ``.nii``)."""
+    """Return structure name for *.nii.gz (Path.stem would leave .nii)."""
     name = path.name
     if name.endswith(".nii.gz"):
         return name[: -len(".nii.gz")]
@@ -223,11 +308,11 @@ def reconcile_structure_voxels_from_masks(
 ) -> dict[str, int]:
     """Replace stats-mm³ placeholders with true voxel counts for on-disk masks.
 
-    CT single-pass initially maps TotalSegmentator statistics ``volume`` (mm³) into
-    ``structure_voxels``. Those values are only a temporary mass proxy for body-part
-    logic. Before ``finalize_seg_cache`` (and for Dataset analytics), every exported
+    CT single-pass initially maps TotalSegmentator statistics volume (mm³) into
+    structure_voxels. Those values are only a temporary mass proxy for body-part
+    logic. Before finalize_seg_cache (and for Dataset analytics), every exported
     anatomy mask must be re-counted so sidecars store raw voxels that
-    ``voxels_to_ml`` can convert with spacing.
+    voxels_to_ml can convert with spacing.
     """
     seg_dir = Path(seg_dir)
     updated = dict(structure_voxels)
@@ -254,7 +339,7 @@ def collect_structure_voxels(segmentation_dir: Path, structures: list[str]) -> d
 
 
 def cached_body_parts_label(series_directory: Path) -> str | None:
-    """ROI anatomy label from ``0_TS_SEG`` segmentation cache, if available."""
+    """ROI anatomy label from 0_TS_SEG segmentation cache, if available."""
     cache_dir = series_cache_dir(series_directory)
     seg_dir = cache_dir / "seg"
     structures = list(ROI_SUBSET)
@@ -329,7 +414,7 @@ def run_segmentation(
 ) -> float:
     """Run TotalSegmentator anatomy task. Returns inference wall time in seconds.
 
-    Defaults match today's CT path (``task=\"total\"``, ``ROI_SUBSET``).
+    Defaults match today's CT path (task="total", ROI_SUBSET).
     """
     totalsegmentator = _require_totalsegmentator()
     subset = roi_subset or list(ROI_SUBSET)
@@ -391,7 +476,7 @@ def run_face_segmentation(
 ) -> float:
     """Run TotalSegmentator face task. Returns inference wall time in seconds.
 
-    Defaults match today's CT path (``face`` / ``face.nii.gz``).
+    Defaults match today's CT path (face / face.nii.gz).
     """
     totalsegmentator = _require_totalsegmentator()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -445,7 +530,7 @@ def run_brain_structures_segmentation(
     progress: ProgressCallback | None = None,
     analysis_started: float | None = None,
 ) -> float:
-    """Run TotalSegmentator ``brain_structures`` task. Returns inference wall time in seconds."""
+    """Run TotalSegmentator brain_structures task. Returns inference wall time in seconds."""
     totalsegmentator = _require_totalsegmentator()
     output_dir.mkdir(parents=True, exist_ok=True)
     started = analysis_started if analysis_started is not None else time.perf_counter()
@@ -497,7 +582,7 @@ def _maybe_run_brain_structures(
     progress: ProgressCallback | None,
     analysis_started: float,
 ) -> dict[str, int]:
-    """Run licensed ``brain_structures`` when requested and those masks are missing."""
+    """Run licensed brain_structures when requested and those masks are missing."""
     if not (
         include_brain_structures
         and ENABLE_TSEG_BRAIN_STRUCTURES
@@ -543,9 +628,9 @@ def analyze_tseg_face(
     """
     DICOM→NIfTI, TotalSegmentator face task, and cached face mask path.
 
-    Reuses ``<series_directory>/0_TS_SEG/volume.nii.gz`` when present (same as
-    anatomy regions). Face mask is cached at ``seg/face.nii.gz`` (CT) or
-    ``seg/face_mr.nii.gz`` (MR).
+    Reuses <series_directory>/0_TS_SEG/volume.nii.gz when present (same as
+    anatomy regions). Face mask is cached at seg/face.nii.gz (CT) or
+    seg/face_mr.nii.gz (MR).
     """
 
     series_directory = Path(series_directory)
@@ -674,12 +759,12 @@ def _error_result(series_directory: Path, error: str) -> TS_result:
 
 
 def series_cache_dir(series_directory: Path) -> Path:
-    """Per-series cache under ``<series>/0_TS_SEG/`` (NIfTI, seg masks, contrast stats)."""
+    """Per-series cache under <series>/0_TS_SEG/ (NIfTI, seg masks, contrast stats)."""
     return resolve_series_cache_dir(series_directory)
 
 
 def estimate_tseg_contrast_remaining_sec(series_directory: Path) -> float:
-    """Rough ETA for contrast analysis from per-series ``0_TS_SEG`` state."""
+    """Rough ETA for contrast analysis from per-series 0_TS_SEG state."""
     cache_dir = series_cache_dir(series_directory)
     contrast_stats_path = cache_dir / CONTRAST_STATS_FILENAME
     contrast_stats_hn_path = cache_dir / CONTRAST_STATS_HN_FILENAME
@@ -716,7 +801,7 @@ def estimate_tseg_contrast_remaining_sec(series_directory: Path) -> float:
 
 
 def face_mask_cache_path(series_directory: Path, *, profile=None) -> Path:
-    """Cached face mask under ``<series>/0_TS_SEG/seg/`` (CT ``face.nii.gz`` / MR ``face_mr.nii.gz``)."""
+    """Cached face mask under <series>/0_TS_SEG/seg/ (CT face.nii.gz / MR face_mr.nii.gz)."""
 
     resolved = profile if profile is not None else ct_modality_profile()
     return series_cache_dir(series_directory) / "seg" / resolved.face_mask_filename
@@ -774,7 +859,7 @@ def write_roi_subset_manifest(
 
 
 def read_cached_segmentation_mode(cache_dir: Path) -> str | None:
-    """Return stored Harmonize segmentation thickness (``1.5mm`` / ``3mm`` / ``6mm``), if any."""
+    """Return stored Harmonize segmentation thickness (1.5mm / 3mm / 6mm), if any."""
 
     path = Path(cache_dir) / ROI_SUBSET_MANIFEST_FILENAME
     if not path.is_file():
@@ -864,7 +949,7 @@ def _expected_stackable_slice_count(series_directory: Path) -> int | None:
 
 
 def _tseg_volume_cache_stale(series_directory: Path, nifti_path: Path) -> bool:
-    """True when cached ``volume.nii.gz`` no longer matches the stackable DICOM slice count."""
+    """True when cached volume.nii.gz no longer matches the stackable DICOM slice count."""
     expected_slices = _expected_stackable_slice_count(series_directory)
     if expected_slices is None:
         return False
@@ -929,11 +1014,11 @@ def analyze_tseg_regions(
     """
     DICOM→NIfTI, TotalSegmentator ROI segmentation, and region summary.
 
-    Intermediate artifacts are cached under ``<series_directory>/0_TS_SEG/`` and
-    reused when present. Returns ``(result, nifti_path)``. Contrast fields on
-    ``result`` are empty when regions succeeded; contrast uses a separate pass.
+    Intermediate artifacts are cached under <series_directory>/0_TS_SEG/ and
+    reused when present. Returns (result, nifti_path). Contrast fields on
+    result are empty when regions succeeded; contrast uses a separate pass.
 
-    ``profile`` defaults to the series modality profile (CT when omitted and
+    profile defaults to the series modality profile (CT when omitted and
     series is CT). CT defaults match pre-MR behavior.
     """
     if harmonize_cancel_requested(cancelled):
@@ -1232,12 +1317,12 @@ def analyze_tseg_ct_single_pass(
     cancelled: Callable[[], bool] | None = None,
 ) -> tuple[TS_result, Path | None, bool]:
     """
-    CT Harmonize path: one full ``total``+``statistics=True`` pass.
+    CT Harmonize path: one full total+statistics=True pass.
 
     Keeps the multilabel segmentation in memory, writes only Series View overlay
-    masks under ``seg/``, plus ``contrast_stats.json`` and anatomy sidecars.
-    Contrast phase is still applied by ``analyze_tseg_contrast`` (reuses the stats
-    cache). Returns ``(result, nifti_path, used_single_pass)``.
+    masks under seg/, plus contrast_stats.json and anatomy sidecars.
+    Contrast phase is still applied by analyze_tseg_contrast (reuses the stats
+    cache). Returns (result, nifti_path, used_single_pass).
     """
 
     series_directory = Path(series_directory)
@@ -1465,9 +1550,9 @@ def analyze_tseg_contrast(
     """
     Run TotalSegmentator organ HU statistics + XGBoost contrast-phase classification.
 
-    Contrast organ statistics are cached under ``<series>/0_TS_SEG/contrast_stats.json``;
-    head/neck vessel statistics under ``contrast_stats_hn.json``; XGBoost output under
-    ``contrast_phase.json``.
+    Contrast organ statistics are cached under <series>/0_TS_SEG/contrast_stats.json;
+    head/neck vessel statistics under contrast_stats_hn.json; XGBoost output under
+    contrast_phase.json.
     """
     series_directory = Path(series_directory)
     analysis_started = time.perf_counter()
@@ -1578,7 +1663,7 @@ def analyze_series(
     """
     Run TotalSegmentator anatomy and XGBoost contrast analysis on CT series directories.
 
-    MR series skip contrast phase (no IV phase model) and return ``native`` / WO.
+    MR series skip contrast phase (no IV phase model) and return native / WO.
     """
 
     if not series_directories:

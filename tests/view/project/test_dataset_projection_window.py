@@ -1,7 +1,5 @@
 """Unit tests for DatasetView projection window management."""
 
-from __future__ import annotations
-
 from unittest.mock import MagicMock, patch
 
 from anonymizer.controller.phi.phi_io import PHI_IndexRecord

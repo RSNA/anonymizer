@@ -1,7 +1,5 @@
 """Main-thread poller for background WorkState jobs."""
 
-from __future__ import annotations
-
 import contextlib
 import logging
 import threading

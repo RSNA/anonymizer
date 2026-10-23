@@ -1,7 +1,5 @@
 """Gate: MCP tool handlers stay thin; no private controller helpers anywhere in mcp/."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest

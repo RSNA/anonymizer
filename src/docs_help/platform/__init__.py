@@ -1,7 +1,5 @@
 """OS detection and window-grab dispatch for MkDocs help screenshots."""
 
-from __future__ import annotations
-
 import logging
 import sys
 from pathlib import Path
@@ -35,26 +33,6 @@ CaptureOs = Literal["macos", "windows"]
 
 # Re-export shared helpers for callers that historically imported from grab.
 DOCS_SHOT_MAX_WIDTH = common.DOCS_SHOT_MAX_WIDTH
-
-__all__ = [
-    "CaptureOs",
-    "DOCS_SHOT_MAX_WIDTH",
-    "close_toplevel",
-    "detect_os",
-    "display_scale",
-    "grab_stacked_windows",
-    "grab_widget",
-    "grab_widgets_union",
-    "normalize_for_docs",
-    "require_host_platform",
-    "screen_capture_available",
-    "settle",
-    "to_logical_size",
-    "trim_solid_edge",
-    "trim_transparent",
-    "union_logical_bbox",
-    "wait_mapped",
-]
 
 
 def detect_os() -> CaptureOs:

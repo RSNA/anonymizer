@@ -1,7 +1,5 @@
 """Extra coverage: series_io validation errors, model cache probes, readiness."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import numpy as np

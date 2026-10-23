@@ -1,7 +1,5 @@
 """Unit tests for spatial OCR exclude rectangles."""
 
-from __future__ import annotations
-
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     filter_ocr_outside_exclude_rects,
     rects_intersect,

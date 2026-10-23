@@ -1,7 +1,5 @@
 """Map model-specific entity labels → scored classes."""
 
-from __future__ import annotations
-
 _TO_SCORED: dict[str, str] = {
     # Names
     "PERSON": "NAME",

@@ -1,7 +1,40 @@
-"""OCR whitelist and exclude-zone project file I/O."""
+"""OCR whitelist and exclude-zone project file I/O.
 
-from __future__ import annotations
+Public API
+----------
+default_whitelist_path(modality_code: str) -> Path
+    Bundled default whitelist path for a modality.
 
+project_whitelist_path(project_dir: Path, modality_code: str) -> Path
+    Project override whitelist path for a modality.
+
+project_whitelist_options_path(project_dir: Path, modality_code: str) -> Path
+    Project whitelist options JSON path for a modality.
+
+project_exclude_zones_path(project_dir: Path, modality_code: str) -> Path
+    Project exclude-rects JSON path for a modality.
+
+load_whitelist_from_txt(filepath: Path) -> list[str]
+    Load unique upper-cased whitelist terms from a text file.
+
+save_whitelist_to_txt(filepath: Path, whitelist: list[str]) -> None
+    Write whitelist terms one per line.
+
+save_project_whitelist(project_dir: Path, modality_code: str, whitelist: list[str]) -> Path
+    Save the project whitelist under project_dir/whitelists/<modality>.txt.
+
+load_project_whitelist(project_dir: Path, modality_code: str) -> list[str]
+    Load the project whitelist for a modality.
+
+load_project_exclude_rects(project_dir: Path, modality_code: str) -> list[dict]
+    Load normalized exclude rects for a modality.
+
+save_project_exclude_rects(project_dir: Path, modality_code: str, rects: list[dict]) -> Path
+    Write exclude rects for a modality (creates whitelists/).
+
+load_default_whitelist(modality_code: str) -> list[str]
+    Load the bundled default whitelist for a modality.
+"""
 import json
 from pathlib import Path
 
@@ -16,9 +49,9 @@ def default_whitelist_path(modality_code: str) -> Path:
         modality_code: DICOM modality code (file stem uses lower-case).
 
     Returns:
-        Path under the current locale ``whitelists/`` directory.
+        Path under the current locale whitelists/ directory.
     """
-    return locales_dir() / str(get_current_language_code() or "en_US") / "whitelists" / (modality_code.lower() + ".txt")
+    return locales_dir() / get_current_language_code() / "whitelists" / (modality_code.lower() + ".txt")
 
 
 def project_whitelist_path(project_dir: Path, modality_code: str) -> Path:
@@ -30,7 +63,7 @@ def project_whitelist_path(project_dir: Path, modality_code: str) -> Path:
         modality_code: DICOM modality code.
 
     Returns:
-        Path under ``project_dir/whitelists/``.
+        Path under project_dir/whitelists/.
     """
     return project_dir / Path("whitelists/" + modality_code.lower() + ".txt")
 
@@ -44,7 +77,7 @@ def project_whitelist_options_path(project_dir: Path, modality_code: str) -> Pat
         modality_code: DICOM modality code.
 
     Returns:
-        Options JSON path under ``project_dir/whitelists/``.
+        Options JSON path under project_dir/whitelists/.
     """
     return project_dir / Path("whitelists/" + modality_code.lower() + ".options.json")
 
@@ -58,7 +91,7 @@ def project_exclude_zones_path(project_dir: Path, modality_code: str) -> Path:
         modality_code: DICOM modality code.
 
     Returns:
-        Exclude JSON path under ``project_dir/whitelists/``.
+        Exclude JSON path under project_dir/whitelists/.
     """
     return project_dir / Path("whitelists/" + modality_code.lower() + ".exclude.json")
 
@@ -68,13 +101,13 @@ def load_whitelist_from_txt(filepath: Path) -> list[str]:
     Load unique upper-cased whitelist terms from a text file.
 
     Args:
-        filepath: Whitelist ``.txt`` path.
+        filepath: Whitelist .txt path.
 
     Returns:
         Ordered list of unique upper-case terms (comments and blanks skipped).
 
     Raises:
-        ValueError: If ``filepath`` is not a file.
+        ValueError: If filepath is not a file.
     """
     whitelist = []
     if not filepath.is_file():
@@ -95,7 +128,7 @@ def save_whitelist_to_txt(filepath: Path, whitelist: list[str]) -> None:
     Write whitelist terms one per line.
 
     Args:
-        filepath: Destination ``.txt`` path.
+        filepath: Destination .txt path.
         whitelist: Terms to write.
     """
     with open(filepath, "w", encoding="utf-8") as f:
@@ -105,7 +138,7 @@ def save_whitelist_to_txt(filepath: Path, whitelist: list[str]) -> None:
 
 def save_project_whitelist(project_dir: Path, modality_code: str, whitelist: list[str]) -> Path:
     """
-    Save the project whitelist under ``project_dir/whitelists/<modality>.txt``.
+    Save the project whitelist under project_dir/whitelists/<modality>.txt.
 
     Args:
         project_dir: Project storage directory.
@@ -116,7 +149,7 @@ def save_project_whitelist(project_dir: Path, modality_code: str, whitelist: lis
         Path written.
 
     Raises:
-        ValueError: If whitelist is empty or ``project_dir`` is not a directory.
+        ValueError: If whitelist is empty or project_dir is not a directory.
     """
     if not whitelist:
         raise ValueError("Whitelist is empty")
@@ -144,7 +177,7 @@ def load_project_whitelist(project_dir: Path, modality_code: str) -> list[str]:
 
 
 def _normalized_exclude_rect(rect: object) -> dict | None:
-    """Return a normalized ``x1/y1/x2/y2`` dict, or None if invalid."""
+    """Return a normalized x1/y1/x2/y2 dict, or None if invalid."""
     if not isinstance(rect, dict):
         return None
     try:
@@ -162,8 +195,8 @@ def load_project_exclude_rects(project_dir: Path, modality_code: str) -> list[di
     """
     Load normalized exclude rects for a modality.
 
-    Missing file → empty list. Accepts ``{"rects": [...]}`` and the older
-    named ``{"zones": [{"rects": [...]}]}`` shape.
+    Missing file → empty list. Accepts {"rects": [...]} and the older
+    named {"zones": [{"rects": [...]}]} shape.
 
     Args:
         project_dir: Project storage directory.
@@ -173,11 +206,12 @@ def load_project_exclude_rects(project_dir: Path, modality_code: str) -> list[di
         List of normalized rect dicts.
     """
     path = project_exclude_zones_path(project_dir, modality_code)
-    if not path.is_file():
-        return []
     try:
+        if not path.is_file():
+            return []
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        # TypeError: non-Path project_dir (e.g. test doubles) or non-text read.
         return []
     if not isinstance(data, dict):
         return []
@@ -198,9 +232,9 @@ def load_project_exclude_rects(project_dir: Path, modality_code: str) -> list[di
 
 def save_project_exclude_rects(project_dir: Path, modality_code: str, rects: list[dict]) -> Path:
     """
-    Write exclude rects for a modality (creates ``whitelists/``).
+    Write exclude rects for a modality (creates whitelists/).
 
-    Empty ``rects`` removes the modality exclude file when present.
+    Empty rects removes the modality exclude file when present.
 
     Args:
         project_dir: Project storage directory.
@@ -211,7 +245,7 @@ def save_project_exclude_rects(project_dir: Path, modality_code: str, rects: lis
         Path written or removed.
 
     Raises:
-        ValueError: If ``project_dir`` is not a directory.
+        ValueError: If project_dir is not a directory.
     """
     if not project_dir.is_dir():
         raise ValueError(f"{project_dir} is not a valid directory")

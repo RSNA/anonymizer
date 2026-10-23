@@ -1,7 +1,10 @@
-"""Apply window level / width to in-memory frames for display and OCR."""
+"""Apply window level / width to in-memory frames for display and OCR.
 
-from __future__ import annotations
-
+Public API
+----------
+apply_windowing(wl: float, ww: float, image_array_raw: ndarray) -> NDArray[np.uint8]
+    Apply WL/WW to a series-buffer frame and return uint8 BGR for display or OCR.
+"""
 import logging
 
 import numpy as np
@@ -10,8 +13,6 @@ from numpy import ndarray
 from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
-
-__all__ = ["apply_windowing"]
 
 
 def apply_windowing(

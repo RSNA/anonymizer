@@ -1,7 +1,5 @@
 """Tests for @lookup operands and Lookup_Miss quarantine."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest

@@ -1,11 +1,10 @@
 """Unit tests: Metadata tree dialog panel + Detect PHI highlights."""
 
-from __future__ import annotations
-
 import contextlib
 import tkinter as tk
 from unittest.mock import patch
 
+from pydicom import dcmread
 from pydicom.dataset import Dataset, FileMetaDataset
 from pydicom.sequence import Sequence
 from pydicom.uid import ExplicitVRLittleEndian, SecondaryCaptureImageStorage, generate_uid
@@ -14,7 +13,11 @@ from anonymizer.controller.ai.embedded_phi.ner.engine import Entity
 from anonymizer.view.series.metadata_assessment_dialog import (
     MetadataAssessmentDialog,
     MetadataTreePanel,
+    _content_display_text,
     _format_detection_status,
+    _metadata_window_title,
+    _phi_hover_text,
+    metadata_dialog_size,
 )
 
 
@@ -67,21 +70,116 @@ def test_apply_phi_entities_colors_content_rows(tk_root: tk.Tk) -> None:
     panel.set_dataset(_sc_dataset(patient_name="Doe^Jane"))
     content = "Doe^Jane"
     assert content in panel.content_texts()
-    ents = (Entity(label="NAME", start=0, end=len(content)),)
+    ents = (Entity(label="FIRST_NAME", start=0, end=len(content)),)
     count = panel.apply_phi_entities({content: ents})
     assert count == 1
     hit_iids = [iid for iid, text in panel._content_by_iid.items() if text == content]
     assert hit_iids
     tags = panel.tree.item(hit_iids[0], "tags")
-    assert "phi_NAME" in tags
+    # Dataset View pattern: the highlight tag is the row's only tag, so no
+    # zebra stripe can override its entity background / white foreground.
+    assert tags == ("phi_FIRST_NAME",)
+    # Category is visible in the Content column itself (Treeview tags are
+    # row-wide; they cannot color only the matched span inside one cell).
+    values = panel.tree.item(hit_iids[0], "values")
+    assert "[FIRST_NAME]" in str(values[1])
+
+
+def test_phi_hover_text_shows_detected_phi_after_class() -> None:
+    content = "Jane Doe 06.16.1976"
+    ents = (
+        Entity(label="DATE", start=9, end=19),
+        Entity(label="FIRST_NAME", start=0, end=4),
+        Entity(label="LAST_NAME", start=5, end=8),
+    )
+    assert _phi_hover_text(content, ents) == "FIRST_NAME: Jane · LAST_NAME: Doe · DATE: 06.16.1976"
+    assert _phi_hover_text("Portable", ()) == ""
+
+
+def test_content_display_text_marks_phi_categories() -> None:
+    ents = (Entity(label="LOCATION", start=3, end=9), Entity(label="FIRST_NAME", start=0, end=2))
+    assert _content_display_text("US biopsy", ents) == "US biopsy  [FIRST_NAME · LOCATION]"
+    assert _content_display_text("Portable", ()) == "Portable"
+
+
+def test_metadata_dialog_size_caps_height_at_85_percent_screen() -> None:
+    # Content needs more room → grow, but never past 85% of screen height.
+    width, height = metadata_dialog_size(
+        screen_width=1440, screen_height=900, required_width=1500, required_height=5000
+    )
+    assert height == int(900 * 0.85)
+    assert width == 1400
+    # Small content keeps the default size.
+    assert metadata_dialog_size(
+        screen_width=1440, screen_height=900, required_width=800, required_height=500
+    ) == (960, 600)
+
+
+def test_field_name_column_fits_longest_name(tk_root: tk.Tk) -> None:
+    ds = _sc_dataset()
+    ds.ManufacturerModelName = "LOGIQE9"
+    panel = MetadataTreePanel(tk_root)
+    panel.set_dataset(ds)
+    longest = "Manufacturer's Model Name"
+    width = int(panel.tree.column("#0", option="width"))
+    assert width >= len(longest) * panel._char_width_px
+
+
+def test_value_children_detect_as_parent_field(tk_root: tk.Tk) -> None:
+    panel = MetadataTreePanel(tk_root)
+    panel.set_dataset(_sc_dataset())
+    items = panel.content_ner_items()
+    # Multi-value children are one field: only the parent's joined Content
+    # is a NER/remove unit, carrying the parent VR.
+    assert not any(item.tag_path.endswith(("ImageType[0]", "ImageType[1]")) for item in items)
+    image_type = [item for item in items if item.tag_path == "ImageType"]
+    assert len(image_type) == 1
+    assert image_type[0].vr == "CS"
+
+
+def test_metadata_window_title_names_series() -> None:
+    ds = _sc_dataset()
+    ds.SeriesDescription = "US biopsy"
+    assert _metadata_window_title(ds) == "Metadata — US biopsy (OT)"
+    ds.SeriesDescription = ""
+    ds.SeriesInstanceUID = "1.2.840.1234567890"
+    title = _metadata_window_title(ds)
+    assert title.startswith("Metadata — …")
+    assert title.endswith("(OT)")
+
+
+def test_format_detection_status_reports_private_uid_date_handling() -> None:
+    status = _format_detection_status({}, private_uid_count=2, private_date_count=3)
+    assert status.startswith("No PHI detected.")
+    assert "Private data: 2 UID, 3 date fields" in status
+    assert "UID remapping / date delta" in status
+    assert "not scored by Detect PHI" in status
 
 
 def test_format_detection_status_empty_and_counts() -> None:
     assert _format_detection_status({}) == "No PHI detected."
-    ents = {"x": (Entity(label="NAME", start=0, end=1), Entity(label="ID", start=2, end=3))}
+    ents = {"x": (Entity(label="FIRST_NAME", start=0, end=1), Entity(label="ID", start=2, end=3))}
     status = _format_detection_status(ents)
     assert "Detection complete" in status
-    assert "2" in status
+    assert "(2 in 1 field)" in status
+    multi = {
+        "a": (Entity(label="FIRST_NAME", start=0, end=1),),
+        "b": (Entity(label="LOCATION", start=0, end=1), Entity(label="ID", start=2, end=3)),
+    }
+    assert "(3 in 2 fields)" in _format_detection_status(multi)
+    # Explicit field count (tree rows) wins over distinct Content values.
+    assert "(3 in 4 fields)" in _format_detection_status(multi, field_count=4)
+
+
+def test_panel_apply_cleaned_texts_writes_dataset(tk_root: tk.Tk) -> None:
+    ds = _sc_dataset(patient_name="Doe^Jane")
+    panel = MetadataTreePanel(tk_root)
+    panel.set_dataset(ds)
+    changed = panel.apply_cleaned_texts({"Doe^Jane": ""})
+    assert changed == 1
+    assert str(ds.PatientName) == ""
+    assert panel.pending_cleaned_by_tag_path() == {"PatientName": ""}
+    assert "Doe^Jane" not in panel.content_texts()
 
 
 def test_detect_button_wires_ner(tk_root: tk.Tk) -> None:
@@ -93,7 +191,7 @@ def test_detect_button_wires_ner(tk_root: tk.Tk) -> None:
     assert dialog.detect_button.cget("text") == "Detect PHI"
     assert dialog.close_button.cget("text") == "Close"
     name = "Smith^Ada"
-    fake = {name: (Entity(label="NAME", start=0, end=len(name)),)}
+    fake = {name: (Entity(label="FIRST_NAME", start=0, end=len(name)),)}
 
     class _ImmediateThread:
         def __init__(self, target=None, **_kwargs) -> None:  # noqa: ANN001
@@ -122,5 +220,52 @@ def test_detect_button_wires_ner(tk_root: tk.Tk) -> None:
     assert not dialog._detecting
     hit_iids = [iid for iid, text in dialog.panel._content_by_iid.items() if text == name]
     assert hit_iids
-    assert "phi_NAME" in dialog.tree.item(hit_iids[0], "tags")
+    assert "phi_FIRST_NAME" in dialog.tree.item(hit_iids[0], "tags")
+    dialog._on_close()
+
+
+def test_metadata_remove_phi_then_save_writes_file(tk_root: tk.Tk, tmp_path) -> None:  # noqa: ANN001
+    ds = _sc_dataset(patient_name="Smith^Ada")
+    path = tmp_path / "slice.dcm"
+    ds.save_as(path, enforce_file_format=True)
+    dialog = MetadataAssessmentDialog(tk_root, dataset=ds, dataset_path=path)
+    dialog.withdraw()
+    with contextlib.suppress(tk.TclError):
+        dialog.grab_release()
+    name = "Smith^Ada"
+    fake = {name: (Entity(label="FIRST_NAME", start=0, end=len(name)),)}
+
+    class _ImmediateThread:
+        def __init__(self, target=None, **_kwargs) -> None:  # noqa: ANN001
+            self._target = target
+
+        def start(self) -> None:
+            if self._target is not None:
+                self._target()
+
+    with (
+        patch(
+            "anonymizer.view.series.metadata_assessment_dialog.report_text_phi_ready",
+            return_value=True,
+        ),
+        patch(
+            "anonymizer.view.series.metadata_assessment_dialog.detect_phi_in_texts",
+            return_value=fake,
+        ),
+        patch(
+            "anonymizer.view.series.metadata_assessment_dialog.threading.Thread",
+            side_effect=_ImmediateThread,
+        ),
+    ):
+        dialog._on_detect()
+        dialog._poll_detect()
+    # Report View flow: Remove appears after Detect, then Save persists.
+    # grid_info (not winfo_ismapped): dialog is withdrawn in this test.
+    assert dialog.remove_button.grid_info()
+    dialog._on_remove()
+    assert dialog._dirty
+    assert name not in dialog.panel.content_texts()
+    dialog._on_save()
+    assert not dialog._dirty
+    assert str(dcmread(path).PatientName) != name
     dialog._on_close()

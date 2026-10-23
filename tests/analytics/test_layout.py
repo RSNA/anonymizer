@@ -1,7 +1,5 @@
 """Analytics board layout rules: relevance, layout manager, AI zero omission."""
 
-from __future__ import annotations
-
 from datetime import datetime
 
 from anonymizer.controller.analytics.dataset import (

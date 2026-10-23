@@ -1,7 +1,5 @@
 """CustomTkinter safety helpers for Tk 9.0 on macOS (stale scaling tracker windows)."""
 
-from __future__ import annotations
-
 import contextlib
 import logging
 import sys
@@ -35,8 +33,8 @@ def mark_ctk_window_destroyed(window: tk.Misc) -> None:
 def dispose_photo_image(widget: tk.Misc, photo_image) -> None:
     """Release a Tk PhotoImage on the main thread (avoids bus errors when GC runs elsewhere).
 
-    After Tcl ``image delete``, neutralize the Python wrapper so ``PIL.ImageTk.PhotoImage.__del__``
-    (and ``tkinter.Image.__del__``) become no-ops if a worker thread triggers GC later.
+    After Tcl image delete, neutralize the Python wrapper so PIL.ImageTk.PhotoImage.__del__
+    (and tkinter.Image.__del__) become no-ops if a worker thread triggers GC later.
     """
     if photo_image is None:
         return
@@ -58,9 +56,9 @@ def dispose_photo_image(widget: tk.Misc, photo_image) -> None:
 def _neutralize_photo_image(photo_image) -> None:
     """Make PhotoImage finalizers skip Tcl (safe if GC runs off the main thread).
 
-    ``PIL.ImageTk.PhotoImage.__del__`` returns early on ``AttributeError`` when
-    accessing ``self.__photo.name``. Clearing ``_PhotoImage__photo`` takes that path.
-    For bare ``tkinter.PhotoImage``, clearing ``name`` skips ``Image.__del__``'s delete.
+    PIL.ImageTk.PhotoImage.__del__ returns early on AttributeError when
+    accessing self.__photo.name. Clearing _PhotoImage__photo takes that path.
+    For bare tkinter.PhotoImage, clearing name skips Image.__del__'s delete.
     """
     with contextlib.suppress(Exception):
         inner = getattr(photo_image, "_PhotoImage__photo", None)
@@ -186,9 +184,9 @@ def release_ctk_image(widget: tk.Misc, ctk_image) -> None:
 def release_mpl_frame_images(frame: tk.Misc) -> None:
     """Release chart images on the main thread before widget destroy.
 
-    Same lifecycle as ``ImageViewer.release_resources`` / ``clear_cache``:
+    Same lifecycle as ImageViewer.release_resources / clear_cache:
     1. clear widget image bindings
-    2. ``dispose_photo_image`` each Tk PhotoImage
+    2. dispose_photo_image each Tk PhotoImage
     3. close PIL buffers
     4. drop Python refs
     """
@@ -274,7 +272,7 @@ def install_safe_tk_font_destructor() -> None:
 def install_safe_tk_variable_destructor() -> None:
     """Avoid bus errors when StringVar/BooleanVar are GC'd off the main thread.
 
-    Volumes dropdown checkboxes hold many ``BooleanVar``s; clearing them can
+    Volumes dropdown checkboxes hold many BooleanVars; clearing them can
     finalize on a worker (e.g. pynetdicom) and crash Tcl with a bus error.
     """
     global _VARIABLE_DEL_PATCHED
@@ -306,12 +304,12 @@ def install_safe_tk_variable_destructor() -> None:
 
 
 def install_safe_scrollable_frame_widget_resolve() -> None:
-    """Resolve Tk path-name ``event.widget`` strings before CTk's master walk.
+    """Resolve Tk path-name event.widget strings before CTk's master walk.
 
-    ``CTkScrollableFrame`` ``bind_all`` MouseWheel handlers sometimes receive
-    ``event.widget`` as a path string (``.!ctkframe...``) instead of a widget.
-    Stock ``_check_if_valid_scroll`` then does ``widget.master`` and raises
-    ``AttributeError: 'str' object has no attribute 'master'``.
+    CTkScrollableFrame bind_all MouseWheel handlers sometimes receive
+    event.widget as a path string (.!ctkframe...) instead of a widget.
+    Stock _check_if_valid_scroll then does widget.master and raises
+    AttributeError: 'str' object has no attribute 'master'.
     """
     global _SCROLL_WIDGET_RESOLVE_PATCHED
     if _SCROLL_WIDGET_RESOLVE_PATCHED:

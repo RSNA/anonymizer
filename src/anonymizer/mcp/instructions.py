@@ -1,7 +1,5 @@
 """Load MCP InitializeResult.instructions (behavior rules + generated Tool API)."""
 
-from __future__ import annotations
-
 from functools import lru_cache
 from importlib import resources
 from pathlib import Path
@@ -12,7 +10,7 @@ _ASSET_NAME = "instructions.md"
 
 
 def _read_behavior_asset() -> str:
-    """Load ``assets/instructions.md`` (behavior rules only)."""
+    """Load assets/instructions.md (behavior rules only)."""
     try:
         return resources.files("anonymizer.mcp.assets").joinpath(_ASSET_NAME).read_text(
             encoding="utf-8"

@@ -10,8 +10,6 @@
 Step 6 (``ner_residual_cleanup``) runs after this module.
 """
 
-from __future__ import annotations
-
 import logging
 from collections import Counter
 from collections.abc import Callable
@@ -22,9 +20,6 @@ from pydicom.dataset import Dataset
 from anonymizer.controller.ai.embedded_phi.metadata.extract import (
     TEXT_VRS,
     element_display_name,
-)
-from anonymizer.controller.ai.embedded_phi.metadata.process_private_tags_tcia import (
-    _is_private_creator,
 )
 from anonymizer.controller.ai.embedded_phi.ner.engine import (
     Entity,
@@ -41,7 +36,7 @@ from prototyping.pseudo_phi_deid.taxonomy import normalize_raw, resolve_action
 
 logger = logging.getLogger(__name__)
 
-ResolveTagKeep = Callable[[str], str | None]
+OperationForTag = Callable[[str, Dataset, DataElement], str]
 
 
 def _caret_space(text: str) -> str:
@@ -53,20 +48,21 @@ def _tag_hex(elem: DataElement) -> str:
 
 
 def exclude_from_ner(
+    ds: Dataset,
     path: str,
     elem: DataElement,
     *,
-    resolve_tag_keep: ResolveTagKeep | None = None,
+    operation_for_tag: OperationForTag | None = None,
 ) -> bool:
     """Drop private creators and ``@safe()``; NER only keep / ``@process`` / ``@always``."""
-    if _is_private_creator(elem.tag):
+    if elem.tag.is_private_creator:
         return True
-    if resolve_tag_keep is None:
+    if operation_for_tag is None:
         return False
-    op = resolve_tag_keep(_tag_hex(elem)) or ""
+    op = operation_for_tag(_tag_hex(elem), ds, elem)
     if op.startswith("@safe"):
         return True
-    return not (op == "" or op.startswith(("@keep", "@process", "@always")))
+    return not op.startswith(("@keep", "@process", "@always"))
 
 
 def ner_field_label(ds: Dataset, path: str, elem: DataElement) -> str:
@@ -106,14 +102,14 @@ def prepare_ner_fields(
     *,
     field_wrap: bool = True,
     caret_space: bool = True,
-    resolve_tag_keep: ResolveTagKeep | None = None,
+    operation_for_tag: OperationForTag | None = None,
 ) -> tuple[list[str], list[tuple[str, str, DataElement, int]], dict[str, int]]:
     fields = collect_text_fields(ds)
     segments: list[str] = []
     meta: list[tuple[str, str, DataElement, int]] = []
     dropped = 0
     for path, val, elem in fields:
-        if exclude_from_ner(path, elem, resolve_tag_keep=resolve_tag_keep):
+        if exclude_from_ner(ds, path, elem, operation_for_tag=operation_for_tag):
             dropped += 1
             continue
         plain = _caret_space(val) if caret_space else val.strip()
@@ -138,13 +134,13 @@ def scrub_dataset(
     anon_ptid: str = "ANON",
     detect_only: bool = False,
     max_chars: int = _DEFAULT_SEGMENT_MAX_CHARS,
-    resolve_tag_keep: ResolveTagKeep | None = None,
+    operation_for_tag: OperationForTag | None = None,
 ) -> tuple[Dataset, dict[str, int], list[dict]]:
     segments, meta, prep = prepare_ner_fields(
         ds,
         field_wrap=field_wrap,
         caret_space=caret_space,
-        resolve_tag_keep=resolve_tag_keep,
+        operation_for_tag=operation_for_tag,
     )
     logger.info(
         "step4.prepare: extracted=%d kept=%d dropped=%d",

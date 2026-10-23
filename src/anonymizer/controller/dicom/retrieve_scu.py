@@ -1,7 +1,16 @@
-"""C-MOVE / C-GET retrieve SCU with Get preference when negotiated."""
+"""C-MOVE / C-GET retrieve SCU with Get preference when negotiated.
 
-from __future__ import annotations
+Public API
+----------
+RetrieveModality
+    Retrievemodality.
 
+RetrieveLevel
+    Retrievelevel.
+
+RetrieveMixin
+    Study-Root retrieve (prefer C-GET when accepted, else C-MOVE).
+"""
 import logging
 import threading
 import time
@@ -60,7 +69,7 @@ class RetrieveMixin:
         ext_neg=None,
         log_retrieve_choice: bool = False,
     ) -> bool:
-        """Associate and check whether ``sop_uid`` was accepted. Logs at INFO."""
+        """Associate and check whether sop_uid was accepted. Logs at INFO."""
         label = self._qr_support_cache_key(scp)
         cached = cache.get(label)
         if cached is not None:
@@ -151,7 +160,7 @@ class RetrieveMixin:
         )
 
     def probe_study_root_qr_support(self, scp: str | DICOMNode) -> tuple[bool, bool]:
-        """Return ``(c_get_accepted, c_move_accepted)`` for a remote SCP (Test Connection / diagnostics)."""
+        """Return (c_get_accepted, c_move_accepted) for a remote SCP (Test Connection / diagnostics)."""
         return self._probe_qr_get_support(scp), self._probe_qr_move_support(scp)
 
     def _wait_pending_instances(

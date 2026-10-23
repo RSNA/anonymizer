@@ -1,7 +1,5 @@
 """Guard MVC layering and top-level anonymizer imports."""
 
-from __future__ import annotations
-
 import ast
 from pathlib import Path
 
@@ -130,4 +128,22 @@ def test_touched_controller_modules_top_level_imports() -> None:
                 continue
             rel = path.relative_to(_REPO_ROOT)
             offenders.append(f"{rel}:{lineno}: {module}")
+    assert offenders == []
+
+
+def test_no_dunder_all_in_product_tree() -> None:
+    """Product code must not define __all__; Public API headers own the export surface."""
+    offenders: list[str] = []
+    for path in _iter_python_files(_SRC_ROOT):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in tree.body:
+            targets: list[ast.expr] = []
+            if isinstance(node, ast.Assign):
+                targets = list(node.targets)
+            elif isinstance(node, ast.AnnAssign) and node.target is not None:
+                targets = [node.target]
+            for target in targets:
+                if isinstance(target, ast.Name) and target.id == "__all__":
+                    rel = path.relative_to(_REPO_ROOT)
+                    offenders.append(f"{rel}:{node.lineno}")
     assert offenders == []

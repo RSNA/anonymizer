@@ -1,7 +1,19 @@
-"""DICOM Segmentation IOD export from multi-class label volumes."""
+"""DICOM Segmentation IOD export from multi-class label volumes.
 
-from __future__ import annotations
+Public API
+----------
+count_exportable_segment_labels(cache_dir: Path) -> int
+    Count unique exportable segment labels under a series 0_TS_SEG cache.
 
+count_patient_exportable_segment_labels(patient_dir: Path) -> int
+    Sum exportable segment labels across all series under a patient directory.
+
+build_dicom_seg_export_session(cache_dir: Path) -> AnnotateSession | None
+    Build an in-memory annotate session for DICOM-SEG export.
+
+export_dicom_seg(cache_dir: Path, dest_path: Path, *, series_dir: Path | None=None, session: AnnotateSession | None=None) -> Path
+    Write a DICOM Segmentation file from label volumes + label map.
+"""
 import datetime as dt
 import logging
 from pathlib import Path
@@ -36,10 +48,10 @@ _FACE_MASK_STEMS = frozenset({"face", "face_mr"})
 
 
 def count_exportable_segment_labels(cache_dir: Path) -> int:
-    """Count unique exportable segment labels under a series ``0_TS_SEG`` cache.
+    """Count unique exportable segment labels under a series 0_TS_SEG cache.
 
     Matches DICOM-SEG inventory rules without loading NIfTI volumes: user
-    ``label_map.json`` names, plus ``seg/*.nii.gz`` and ``annotations/edits/*.nii.gz``
+    label_map.json names, plus seg/*.nii.gz and annotations/edits/*.nii.gz
     stems not already present (Face Blur stems excluded). Dedupes by normalized name.
     """
     cache_dir = Path(cache_dir)
@@ -97,9 +109,9 @@ def _paint_binary_label(
     occupied_names: set[str],
     binary_masks: dict[int, np.ndarray],
 ) -> str | None:
-    """Add ``mask`` as a new segment label; skip empty / duplicate names.
+    """Add mask as a new segment label; skip empty / duplicate names.
 
-    TotalSegmentator masks are stored independently in ``binary_masks`` so
+    TotalSegmentator masks are stored independently in binary_masks so
     overlapping structures (e.g. brain ⊃ frontal_lobe) keep full coverage in
     DICOM-SEG frames. Returns the label name when painted, else None.
     """
@@ -135,9 +147,9 @@ def _paint_binary_label(
 def build_dicom_seg_export_session(cache_dir: Path) -> AnnotateSession | None:
     """Build an in-memory annotate session for DICOM-SEG export.
 
-    Combines user ROI labels (``annotations/``) with TotalSegmentator overlay
-    masks under ``seg/`` (brain structures, organs, …). Does **not** write
-    ``annotations/``. Face Blur masks are excluded. Returns None when there is
+    Combines user ROI labels (annotations/) with TotalSegmentator overlay
+    masks under seg/ (brain structures, organs, …). Does **not** write
+    annotations/. Face Blur masks are excluded. Returns None when there is
     no volume grid or no segment content to export.
     """
     cache_dir = Path(cache_dir)
@@ -174,7 +186,7 @@ def build_dicom_seg_export_session(cache_dir: Path) -> AnnotateSession | None:
             if painted:
                 automatic_names.add(normalize_label_name(painted))
 
-    # Prefer edited TS masks over raw ``seg/`` for the same structure name.
+    # Prefer edited TS masks over raw seg/ for the same structure name.
     for name, edit_mask in sorted(session.ts_edits.items()):
         key = normalize_label_name(name)
         if key in automatic_names:
@@ -221,7 +233,7 @@ def _source_refs_from_series(series_dir: Path) -> tuple[Dataset | None, list[Dat
     """Return a template dataset and per-frame referenced SOP items when possible.
 
     Uses Series View frame order (stackable slices, or expanded multi-frame / planar
-    listing) so ``zi`` aligns with label volume depth.
+    listing) so zi aligns with label volume depth.
     """
 
 
@@ -302,11 +314,11 @@ def export_dicom_seg(
 ) -> Path:
     """Write a DICOM Segmentation file from label volumes + label map.
 
-    When ``session`` is omitted, builds one via :func:`build_dicom_seg_export_session`
-    (user ROI annotations plus TotalSegmentator ``seg/`` masks).
+    When session is omitted, builds one via :func:`build_dicom_seg_export_session`
+    (user ROI annotations plus TotalSegmentator seg/ masks).
 
     One segment per label_map entry. Frames are binary bit-packed axial slices that
-    contain the label. Source series UIDs are referenced when ``series_dir`` is given.
+    contain the label. Source series UIDs are referenced when series_dir is given.
     """
     cache_dir = Path(cache_dir)
     dest_path = Path(dest_path)

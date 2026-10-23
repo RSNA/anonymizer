@@ -1,7 +1,5 @@
 """Tests for AI batch process orchestrator."""
 
-from __future__ import annotations
-
 import json
 import shutil
 from pathlib import Path
@@ -1052,7 +1050,7 @@ def test_apply_remove_pixel_phi_series_uses_saved_modality_whitelist(
 def test_whitelist_for_batch_ocr() -> None:
     assert whitelist_for_batch_ocr(use_modality_whitelist=True) is None
     assert whitelist_for_batch_ocr(use_modality_whitelist=False) == []
-    assert whitelist_for_batch_ocr(ocr_remove_mode=OcrRemoveMode.PHI_ONLY) == []
+    assert whitelist_for_batch_ocr(ocr_remove_mode=OcrRemoveMode.PHI_ONLY) is None
 
 
 @patch("anonymizer.controller.ai.batch_process._load_series_dataset")
@@ -1198,7 +1196,7 @@ def test_apply_remove_pixel_phi_series_phi_only_and_named_zones(
         on_log_detail=details.append,
     )
 
-    assert mock_remove.call_args.kwargs["whitelist"] == []
+    assert mock_remove.call_args.kwargs["whitelist"] is None
     assert mock_remove.call_args.kwargs["apply_phi_ner_filter"] is True
     assert mock_remove.call_args.kwargs["use_exclude_areas"] is True
     assert details
@@ -1661,3 +1659,54 @@ def test_ai_batch_failed_outcome_appears_in_work_state_logs(
     assert len(summary.outcomes) == 1
     assert summary.outcomes[0].status == "failed"
     assert f"Failed: {fail_msg}" in joined
+
+
+def test_report_text_series_records_clean_structured_content(tmp_path: Path) -> None:
+    """Batch report-text cleaning records 113104 on the source and cleaned SR."""
+    from pydicom import dcmread
+
+    from anonymizer.controller.ai import batch_process
+    from anonymizer.controller.ai.embedded_phi.ner.engine import Entity
+
+    series_dir = tmp_path / "1.2.3.series"
+    series_dir.mkdir()
+    from pydicom.dataset import FileMetaDataset
+    from pydicom.uid import ExplicitVRLittleEndian
+
+    ds = Dataset()
+    ds.file_meta = FileMetaDataset()
+    ds.file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
+    ds.file_meta.MediaStorageSOPClassUID = "1.2.840.10008.5.1.4.1.1.88.11"
+    ds.file_meta.MediaStorageSOPInstanceUID = "1.2.3.instance"
+    ds.SOPClassUID = "1.2.840.10008.5.1.4.1.1.88.11"
+    ds.SOPInstanceUID = "1.2.3.instance"
+    ds.StudyInstanceUID = "1.2.3.study"
+    ds.SeriesInstanceUID = "1.2.3.series"
+    ds.Modality = "SR"
+    ds.PatientID = "ANON-1"
+    src_path = series_dir / "instance.dcm"
+    ds.save_as(str(src_path), enforce_file_format=True)
+
+    anon_model = _pending_anon_model()
+    anon_model.get_study_phi_header_by_anon_study_uid.return_value = None
+    text = "Patient John Doe seen"
+    with patch.object(
+        batch_process,
+        "detect_phi",
+        return_value=(text, [Entity(label="NAME", start=8, end=16)]),
+    ):
+        outcome = batch_process._apply_report_text_phi_series(
+            series_dir, anon_model=anon_model
+        )
+    assert outcome.status != "failed", outcome.message
+
+    cleaned_src = dcmread(str(src_path))
+    src_codes = {str(i.CodeValue) for i in cleaned_src.DeidentificationMethodCodeSequence}
+    assert "113104" in src_codes
+    sr_dirs = [p for p in tmp_path.iterdir() if p.is_dir() and p.name != series_dir.name]
+    assert sr_dirs
+    sr_files = list(sr_dirs[0].glob("*.dcm"))
+    assert sr_files
+    sr_ds = dcmread(str(sr_files[0]))
+    sr_codes = {str(i.CodeValue) for i in sr_ds.DeidentificationMethodCodeSequence}
+    assert "113104" in sr_codes

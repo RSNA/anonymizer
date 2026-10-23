@@ -1,7 +1,5 @@
 """Download, configure, start, and stop a managed Orthanc instance for dicom_integration tests."""
 
-from __future__ import annotations
-
 import json
 import logging
 import os

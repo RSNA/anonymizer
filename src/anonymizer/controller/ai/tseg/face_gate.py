@@ -1,7 +1,25 @@
-"""Face blur eligibility vocabulary (gate decisions/reasons/messages); leaf shared by tseg and blur_face."""
+"""Face blur eligibility vocabulary (gate decisions/reasons/messages); leaf shared by tseg and blur_face.
 
-from __future__ import annotations
+Public API
+----------
+MIN_FACE_MASK_VOXELS
+    Min face mask voxels.
 
+FaceBlurGateDecision
+    FaceBlurGateDecision type.
+
+FaceBlurGateReason
+    FaceBlurGateReason type.
+
+FaceBlurEligibility
+    FaceBlurEligibility type.
+
+face_blur_gate_message(reason: FaceBlurGateReason) -> str
+    Return the translated user-facing message for a gate reason.
+
+face_mask_is_substantial(face_voxel_count: int) -> bool
+    Face mask is substantial.
+"""
 from dataclasses import dataclass
 from enum import StrEnum, auto
 

@@ -1,20 +1,31 @@
-"""Shared mutable state for background algorithm jobs (worker writes, UI polls)."""
+"""Shared mutable state for background algorithm jobs (worker writes, UI polls).
 
-from __future__ import annotations
+Public API
+----------
+Algorithm
+    Background algorithm id (remove pixel PHI, harmonize, face blur).
 
+WorkState
+    Lock-protected job progress; bound to one series volume during processing.
+"""
 import logging
 import threading
 from dataclasses import dataclass, field
+from enum import StrEnum, auto
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from numpy import ndarray
 from pydicom import Dataset
 
-if TYPE_CHECKING:
-    from anonymizer.controller.jobs.runner import Algorithm
-
 logger = logging.getLogger(__name__)
+
+
+class Algorithm(StrEnum):
+    """Background algorithm id for Series View / batch runners."""
+
+    REMOVE_PIXEL_PHI = auto()
+    HARMONIZE = auto()
+    FACE_BLUR = auto()
 
 
 @dataclass

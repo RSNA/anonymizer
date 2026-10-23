@@ -1,22 +1,46 @@
-"""Download / probe / remove EasyOCR weights under ``assets/ai/ocr/model``."""
+"""Download / probe / remove EasyOCR weights under assets/ai/ocr/model.
 
-from __future__ import annotations
+Public API
+----------
+OCR_MODEL_DIR
+    Ocr model dir.
 
+OCR_LANGS
+    Ocr langs.
+
+DOWNLOAD_ID
+    Download id (default 'embedded_phi').
+
+OcrModelStatus
+    OcrModelStatus type.
+
+probe_ocr_models() -> tuple[OcrModelStatus, str]
+    Return OCR model cache status under assets/ai/ocr/model.
+
+download_ocr_models(*, verbose: bool=False) -> tuple[bool, str]
+    Download EasyOCR weights into assets/ai/ocr/model.
+
+ocr_models_ready() -> bool
+    Ocr models ready.
+
+remove_ocr_models() -> None
+    Delete cached EasyOCR weights under assets/ai/ocr/model.
+"""
 import logging
 import os
 import shutil
 from enum import StrEnum
+from pathlib import Path
 
 from easyocr import Reader
 
 from anonymizer.controller.ai.model_download import update_model_download
 from anonymizer.utils.network import ensure_ssl_certifi
-from anonymizer.utils.package_paths import ai_feature_dir
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 
-OCR_MODEL_DIR = ai_feature_dir("ocr", "model")
+OCR_MODEL_DIR = Path("assets/ai/ocr/model")
 OCR_LANGS = ("en", "de", "fr", "es")
 _MIN_OCR_MODEL_FILES = 2
 DOWNLOAD_ID = "embedded_phi"

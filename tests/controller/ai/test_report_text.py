@@ -1,7 +1,5 @@
 """process_report_text: SR/PDF extract, detect, remove, write (Basic Text SR)."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import patch
 
@@ -18,13 +16,13 @@ from anonymizer.controller.ai.embedded_phi.classify_series import (
 )
 from anonymizer.controller.ai.embedded_phi.ner.engine import Entity, replace_entities
 from anonymizer.controller.ai.embedded_phi.pixel.ocr_transcript_sr import (
-    BASIC_TEXT_SR_SOP_CLASS_UID,
-    build_basic_text_sr,
     cleansed_ocr_lines,
     write_ocr_report_sr,
 )
 from anonymizer.controller.ai.embedded_phi.report.process_report_text import (
+    BASIC_TEXT_SR_SOP_CLASS_UID,
     _render_plain_text_pdf,
+    build_basic_text_sr,
     detect_phi,
     encapsulated_pdf_bytes,
     entities_from_study_phi,

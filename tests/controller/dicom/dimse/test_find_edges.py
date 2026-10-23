@@ -1,7 +1,5 @@
 """Simulator edge cases for C-FIND SCU (no Orthanc)."""
 
-from __future__ import annotations
-
 import time
 from queue import Empty, Queue
 

@@ -1,7 +1,5 @@
 """Tests for volume axis classification."""
 
-from __future__ import annotations
-
 import numpy as np
 import SimpleITK as sitk
 

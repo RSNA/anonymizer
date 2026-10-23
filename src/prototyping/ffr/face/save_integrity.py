@@ -16,8 +16,6 @@ Usage::
     uv run python -m prototyping.ffr.face.save_integrity /path/to/series --check-only
 """
 
-from __future__ import annotations
-
 import argparse
 import logging
 import shutil

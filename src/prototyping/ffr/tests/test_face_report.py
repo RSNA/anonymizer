@@ -1,7 +1,5 @@
 """Tests for face blur HTML/PDF reports."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import numpy as np

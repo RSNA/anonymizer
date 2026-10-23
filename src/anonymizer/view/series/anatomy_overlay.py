@@ -1,7 +1,5 @@
 """Convert TotalSegmentator anatomy NIfTI masks into series overlay polygons."""
 
-from __future__ import annotations
-
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
@@ -118,8 +116,8 @@ def collect_primary_segment_voxels(
 ) -> dict[str, int]:
     """Primary overlay groups for Series View latch buttons.
 
-    Prefer ``primary_segment_voxels.json``. When that sidecar is missing (e.g. cancel
-    mid-Harmonize), infer presence from on-disk ``*.nii.gz`` names only — never decode
+    Prefer primary_segment_voxels.json. When that sidecar is missing (e.g. cancel
+    mid-Harmonize), infer presence from on-disk *.nii.gz names only — never decode
     NIfTI volumes on the UI thread.
     """
 
@@ -182,7 +180,7 @@ def load_structure_mask_array(
     reference_volume_path: Path | None = None,
     reference_image: sitk.Image | None = None,
 ) -> np.ndarray:
-    """Load a binary-ish mask volume as ``(Z, Y, X)`` uint8 (0/1), aligned to CT when possible."""
+    """Load a binary-ish mask volume as (Z, Y, X) uint8 (0/1), aligned to CT when possible."""
     image = sitk.ReadImage(str(mask_path))
     try:
         reference = reference_image
@@ -234,7 +232,7 @@ def load_primary_segment_mask(
 ) -> np.ndarray:
     """Union preferred or fallback TS masks for a primary group into one binary volume.
 
-    When ``edited_mask`` is provided (``annotations/edits/``), it is used instead of ``seg/``.
+    When edited_mask is provided (annotations/edits/), it is used instead of seg/.
     """
     if edited_mask is not None:
         return (edited_mask > 0).astype(np.uint8)
@@ -380,7 +378,7 @@ def contour_mask_slices(
     color_bgr: tuple[int, int, int],
     should_cancel: Callable[[], bool] | None = None,
 ) -> dict[int, list[Segmentation]]:
-    """Contour selected Z slices; skip empties; stop early when ``should_cancel`` is true."""
+    """Contour selected Z slices; skip empties; stop early when should_cancel is true."""
     if mask.ndim != 3:
         raise ValueError(f"Expected 3D mask, got shape {mask.shape}")
     by_slice: dict[int, list[Segmentation]] = {}

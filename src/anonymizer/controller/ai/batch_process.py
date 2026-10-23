@@ -1,7 +1,178 @@
-"""Sequential AI batch processing for PHI Index study selection."""
+"""Sequential AI batch processing for PHI Index study selection.
 
-from __future__ import annotations
+Runs pixel PHI, report text, face blur, and harmonize algorithms across
+selected studies with shared progress and skip messaging.
 
+Public API
+----------
+AiBatchAlgorithm
+    AiBatchAlgorithm type.
+
+CANONICAL_ALGORITHM_ORDER
+    Canonical algorithm order.
+
+AI_BATCH_TO_RUNNER
+    Ai batch to runner.
+
+AiBatchProcessOptions
+    AiBatchProcessOptions type.
+
+whitelist_for_batch_ocr(*, ocr_remove_mode: OcrRemoveMode | None=None, use_modality_whitelist: bool | None=None) -> list[str] | None
+    OCR whitelist arg: None loads effective whitelist, [] disables filtering.
+
+modalities_in_selected_studies(images_dir: Path, studies: Sequence[tuple[str, str]]) -> tuple[str, ...]
+    Collect unique DICOM modalities for series under the selected studies.
+
+effective_modality_whitelists(project_dir: Path | None, modalities: Sequence[str]) -> dict[str, list[str]]
+    Return effective whitelist terms per modality (same as batch OCR uses).
+
+effective_modality_whitelist_match_settings(project_dir: Path | None, modalities: Sequence[str]) -> dict[str, OcrWhitelistMatchSettings]
+    Return per-modality OCR whitelist match settings (sidecar or defaults).
+
+format_modality_whitelist_heading(modality: str, term_count: int) -> str
+    Single-line modality section heading for whitelist preview.
+
+format_exclude_areas_modality_detail(modality: str, rects: Sequence[dict]) -> str
+    One-line exclude-area summary for a modality (count only; no rect coordinates).
+
+collect_exclude_areas_by_modality(project_dir: Path | None, modalities: Sequence[str]) -> dict[str, list[dict]]
+    Load saved exclude rects for each modality code (empty list when missing).
+
+format_batch_exclude_areas_log_lines(project_dir: Path | None, modalities: Sequence[str]) -> list[str]
+    Workflow lines when AI Batch Enable Exclude Areas is on.
+
+format_modality_whitelist_preview(whitelists_by_modality: dict[str, list[str]], *, no_modalities_message: str, no_terms_label: str, match_settings_by_modality: dict[str, OcrWhitelistMatchSettings] | None=None) -> str
+    Format read-only whitelist preview text grouped by modality.
+
+AiBatchOutcome
+    AiBatchOutcome type.
+
+AiBatchAlgorithmTotals
+    AiBatchAlgorithmTotals type.
+
+AiBatchSummary
+    AiBatchSummary type.
+
+batch_run_artifact_stem(*, site_id: str, project_name: str, when: datetime | None=None) -> str
+    Filename stem for AI batch run log/JSON under private/batch_runs/.
+
+BatchRunCapture
+    Tees workflow log lines to a project file and writes a JSON result on finish.
+
+AiBatchProgressCallback
+    Aibatchprogresscallback.
+
+AiBatchCancelledCallback
+    Aibatchcancelledcallback.
+
+AiBatchWorkflowLogCallback
+    Aibatchworkflowlogcallback.
+
+AiBatchMemoryCallback
+    Aibatchmemorycallback.
+
+SeriesItem
+    Seriesitem.
+
+missing_series_description_label() -> str
+    Missing series description label.
+
+format_ai_batch_position(*, study_index: int, study_total: int, series_index: int, series_total: int) -> str
+    Format ai batch position.
+
+strip_progress_pct_suffix(text: str) -> str
+    Remove a trailing  (NN%) suffix from progress status text.
+
+format_ai_batch_status_line(*, study_index: int, study_total: int, series_index: int, series_total: int, ds=None) -> str
+    Progress label: current study/series position and description only.
+
+format_batch_workflow_log_line(message: str) -> str
+    Format batch workflow log line.
+
+format_batch_phase_banner(algorithm: AiBatchAlgorithm) -> str
+    Format batch phase banner.
+
+format_batch_step_subline(message: str) -> str
+    Format batch step subline.
+
+format_ai_batch_completion_summary(summary: AiBatchSummary) -> str
+    User-facing batch completion summary with per-algorithm modified/failed/skipped counts.
+
+should_log_harmonize_batch_step(progress: HarmonizeProgress) -> bool
+    Keep batch harmonize logs concise; manual Harmonize dialog shows every stage.
+
+format_batch_log_series_label(*, study_index: int, study_total: int, series_index: int, series_total: int, ds=None) -> str
+    Study/series label for the workflow log (matches progress status line).
+
+format_batch_series_context(*, study_index: int, study_total: int, series_index: int, series_total: int, ds=None) -> str
+    Format batch series context.
+
+format_batch_series_header(*, study_index: int, study_total: int, series_index: int, series_total: int, ds=None) -> str
+    Format batch series header.
+
+face_blur_skip_counts_as_complete(outcome: AiBatchOutcome) -> bool
+    Ineligible face-blur skips log as Skipped but count as complete in batch totals.
+
+harmonize_skip_counts_as_complete(outcome: AiBatchOutcome) -> bool
+    Ineligible Harmonize skips (SC/OT/DOC, etc.) count as complete in batch totals.
+
+format_batch_outcome_subline(outcome: AiBatchOutcome) -> str
+    Format batch outcome subline.
+
+format_batch_algorithm_result_line(*, study_index: int, study_total: int, series_index: int, series_total: int, algorithm: AiBatchAlgorithm, outcome: AiBatchOutcome, ds=None) -> str
+    Format batch algorithm result line.
+
+format_remove_pixel_phi_series_message(*, modified_count: int, total: int, texts_removed: Sequence[str], pixels_changed: int=0, removal_mode: PixelPhiRemovalMode=PixelPhiRemovalMode.BLACKOUT, ocr_remove_mode: OcrRemoveMode=...) -> str
+    Series outcome line: Series View wording, counts only (never OCR/PHI strings).
+
+format_remove_pixel_phi_instance_detail(*, instance_index: int, instance_total: int, modified: bool, texts: Sequence[str], removal_mode: PixelPhiRemovalMode=PixelPhiRemovalMode.BLACKOUT, pixels_changed: int=0, ocr_remove_mode: OcrRemoveMode=...) -> str
+    Per-instance detail: Series View wording, counts only (never OCR/PHI strings).
+
+normalize_selected_algorithms(algorithms: Sequence[AiBatchAlgorithm]) -> tuple[AiBatchAlgorithm, ...]
+    Return selected algorithms in fixed execution order.
+
+algorithm_display_name(algorithm: AiBatchAlgorithm) -> str
+    Algorithm display name.
+
+format_ai_batch_phase_label(algorithm: AiBatchAlgorithm, *, algorithm_index: int, algorithms_total: int) -> str
+    Current algorithm phase label for the batch progress dialog.
+
+enumerate_series_for_studies(images_dir: Path, studies: Sequence[tuple[str, str]]) -> list[tuple[int, int, Path]]
+    Return (study_index, study_total, series_path) preserving study selection order.
+
+series_needs_pixel_phi(anon_model: AnonymizerModel | None, series_path: Path) -> bool
+    Series needs pixel phi.
+
+series_needs_harmonize(anon_model: AnonymizerModel | None, series_path: Path) -> bool
+    True when series is CT|MR|XR|US|MG and not yet marked harmonized in the model.
+
+series_needs_face_blur(anon_model: AnonymizerModel | None, series_path: Path) -> bool
+    Series needs face blur.
+
+skip_message_for_face_blur_series(anon_model: AnonymizerModel | None, series_path: Path) -> str
+    Skip message for face blur series.
+
+skip_message_for_harmonize_series(anon_model: AnonymizerModel | None, series_path: Path) -> str
+    Skip message for harmonize series.
+
+batch_skip_message_for_series(algorithm: AiBatchAlgorithm, *, anon_model: AnonymizerModel | None, series_path: Path) -> str
+    Batch skip message for series.
+
+filter_pending_series(series_items: list[SeriesItem], anon_model: AnonymizerModel | None, algorithm: AiBatchAlgorithm) -> list[SeriesItem]
+    Filter pending series.
+
+skip_message_for_algorithm(algorithm: AiBatchAlgorithm) -> str
+    Skip message for algorithm.
+
+count_pending_series(series_items: list[SeriesItem], anon_model: AnonymizerModel | None, algorithms: tuple[AiBatchAlgorithm, ...]) -> dict[AiBatchAlgorithm, int]
+    Count pending series.
+
+apply_remove_pixel_phi_series(series_path: Path, *, anon_model: AnonymizerModel, ocr_reader: Reader, on_log_detail: Callable[[str], None] | None=None, removal_mode: PixelPhiRemovalMode=PixelPhiRemovalMode.BLACKOUT, project_dir: Path | None=None, ocr_remove_mode: OcrRemoveMode | None=None, use_modality_whitelist: bool | None=None, ocr_use_exclude_areas: bool=False) -> AiBatchOutcome
+    Public series-level pixel PHI removal (wraps _apply_remove_pixel_phi_series).
+
+ai_batch_process(images_dir: Path, studies: Sequence[tuple[str, str]], options: AiBatchProcessOptions, *, anon_model: AnonymizerModel | None=None, anon_controller: AnonymizerController | None=None, project_model: ProjectModel | None=None, progress: AiBatchProgressCallback | None=None, cancelled: AiBatchCancelledCallback | None=None, on_log: AiBatchWorkflowLogCallback | None=None, memory_callback: AiBatchMemoryCallback | None=None, work_state: WorkState | None=None) -> AiBatchSummary
+    Run selected AI algorithms in fixed order, one algorithm phase at a time.
+"""
 import contextlib
 import json
 import logging
@@ -11,8 +182,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum, auto
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Self
 
+from easyocr import Reader
+from pydicom import dcmread
 from pydicom.errors import InvalidDicomError
 
 from anonymizer.controller.ai.blur_face import (
@@ -46,6 +219,7 @@ from anonymizer.controller.ai.embedded_phi.report.process_report_text import det
 from anonymizer.controller.ai.harmonize import (
     HarmonizeProgress,
     auto_apply_best_study_descriptions,
+    format_harmonize_batch_contrast_log_lines,
     format_harmonize_progress_message,
     harmonize_and_apply_series,
 )
@@ -57,6 +231,7 @@ from anonymizer.controller.ai.harmonize.pipeline import (
 from anonymizer.controller.ai.tseg.config import segmentation_mode_for_modality
 from anonymizer.controller.ai.tseg.contrast import release_working_memory
 from anonymizer.controller.ai.tseg.dicom_geometry import resolve_series_geometry, stackable_dicom_paths
+from anonymizer.controller.anonymizer import AnonymizerController
 from anonymizer.controller.jobs.runner import (
     Algorithm,
     OcrRemoveMode,
@@ -68,22 +243,15 @@ from anonymizer.controller.jobs.runner import (
     remove_text_button_label,
     whitelist_arg_for_ocr_remove_mode,
 )
-from anonymizer.controller.series.series_io import load_series_frames, save_series_frames
-from anonymizer.utils.memory import MemoryGuard, MemorySnapshot, capture_memory_snapshot, collect_garbage_safe
-from anonymizer.utils.translate import _
-
-if TYPE_CHECKING:
-    from easyocr import Reader
-
-    from anonymizer.controller.anonymizer import AnonymizerController
-    from anonymizer.controller.jobs.work_state import WorkState
-    from anonymizer.model.anonymizer import AnonymizerModel
-    from anonymizer.model.project import ProjectModel
-from pydicom import dcmread
-
-from anonymizer.controller.ai.harmonize import format_harmonize_batch_contrast_log_lines
+from anonymizer.controller.jobs.work_state import WorkState
 from anonymizer.controller.series.create_projections import invalidate_projection_cache
+from anonymizer.controller.series.series_io import load_series_frames, save_series_frames
+from anonymizer.model.anonymizer import AnonymizerModel
+from anonymizer.model.project import ProjectModel
+from anonymizer.utils.dicom import DeidMethodCode, record_deid_method_codes
+from anonymizer.utils.memory import MemoryGuard, MemorySnapshot, capture_memory_snapshot, collect_garbage_safe
 from anonymizer.utils.storage.dicom_tree import get_dcm_files
+from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 
@@ -308,7 +476,7 @@ class BatchRunCapture:
     finished_at: str | None = None
 
     @classmethod
-    def open_for_project(cls, project_model: ProjectModel) -> BatchRunCapture:
+    def open_for_project(cls, project_model: ProjectModel) -> Self:
         runs_dir = project_model.batch_runs_dir()
         runs_dir.mkdir(parents=True, exist_ok=True)
         started = datetime.now()
@@ -416,7 +584,7 @@ def format_ai_batch_position(
 
 
 def strip_progress_pct_suffix(text: str) -> str:
-    """Remove a trailing `` (NN%)`` suffix from progress status text."""
+    """Remove a trailing  (NN%) suffix from progress status text."""
     return re.sub(r" \(\d+%\)$", "", text.rstrip())
 
 
@@ -981,7 +1149,7 @@ def _apply_report_text_phi_series(
     synthetic: bool = False,
 ) -> AiBatchOutcome:
     """
-    De-identify native SR / Encapsulated PDF series via ``process_report_text``.
+    De-identify native SR / Encapsulated PDF series via process_report_text.
 
     Args:
         series_path: Series directory.
@@ -1033,6 +1201,8 @@ def _apply_report_text_phi_series(
             removed_texts = [text[e.start : e.end] for e in entities if text[e.start : e.end].strip()]
             cleaned = remove_phi(text, entities, synthetic=synthetic)
             sr = write_report_text(ds, cleaned)
+            record_deid_method_codes(ds, {DeidMethodCode.CLEAN_STRUCTURED_CONTENT})
+            record_deid_method_codes(sr, {DeidMethodCode.CLEAN_STRUCTURED_CONTENT})
             ds.save_as(dcm_path, enforce_file_format=True)
             out_dir = series_path.parent / str(sr.SeriesInstanceUID)
             out_dir.mkdir(parents=True, exist_ok=True)
@@ -1243,7 +1413,7 @@ def apply_remove_pixel_phi_series(
     use_modality_whitelist: bool | None = None,
     ocr_use_exclude_areas: bool = False,
 ) -> AiBatchOutcome:
-    """Public series-level pixel PHI removal (wraps ``_apply_remove_pixel_phi_series``)."""
+    """Public series-level pixel PHI removal (wraps _apply_remove_pixel_phi_series)."""
     return _apply_remove_pixel_phi_series(
         series_path,
         anon_model=anon_model,
@@ -1305,7 +1475,7 @@ def _auto_apply_study_descriptions_for_uids(
     """
     Best-guess LOINC StudyDescription (same API as Series View).
 
-    ``maybe_offer_study_description_harmonize`` only returns an offer when that
+    maybe_offer_study_description_harmonize only returns an offer when that
     study's series are fully RadLex-harmonized, so it is safe to call after each
     series in a study.
     """
@@ -1452,7 +1622,7 @@ def _handle_batch_series_preamble(
     """
     Load metadata, skip already-processed series, or return ds for processing.
 
-    Returns ``ds`` for processing, or ``None`` when the series was skipped (outcome recorded).
+    Returns ds for processing, or None when the series was skipped (outcome recorded).
     """
     ds = _load_series_metadata(series_path)
     if series_path not in pending_paths:

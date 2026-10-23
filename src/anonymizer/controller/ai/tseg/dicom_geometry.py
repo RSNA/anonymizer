@@ -1,11 +1,142 @@
 """DICOM series geometry: acquisition plane, 2D/3D dimensionality, and provenance.
 
-Used by the tseg pipeline and Harmonize to sort slices correctly, cache metadata under
-``0_TS_SEG/geometry.json``, and decide whether TotalSegmentator should run.
+Public API
+----------
+PlaneLabel
+    Planelabel.
+
+DimensionalityLabel
+    Dimensionalitylabel.
+
+ProvenanceLabel
+    Provenancelabel.
+
+PLANE_AXES_LPS
+    Plane axes lps.
+
+SECONDARY_CAPTURE_SOP
+    Secondary capture sop.
+
+IMAGE_STORAGE_SOP_PREFIX
+    Image storage sop prefix.
+
+NON_STACKABLE_SOP_PREFIXES
+    Non stackable sop prefixes.
+
+StackMetrics
+    StackMetrics type.
+
+SeriesGeometryResult
+    SeriesGeometryResult type.
+
+list_dicom_paths(series_directory: Path) -> list[Path]
+    List dicom paths.
+
+slice_normal_from_iop(image_orientation_patient) -> tuple[float, float, float]
+    Slice normal in patient LPS from ImageOrientationPatient (6 values).
+
+project_ipp_onto_normal(image_position_patient, slice_normal: tuple[float, float, float]) -> float
+    Scalar position of an instance along the slice stack direction.
+
+classify_plane(slice_normal: tuple[float, float, float], *, oblique_threshold: float=OBLIQUE_DOT_THRESHOLD, ambiguity_delta: float=PLANE_AMBIGUITY_DOT_DELTA) -> tuple[PlaneLabel, float, dict[str, float]]
+    Classify acquisition plane from a unit slice normal in LPS.
+
+infer_provenance(headers: list[Dataset], *, series_description: str | None=None, protocol_name: str | None=None, derivation_description: str | None=None) -> tuple[ProvenanceLabel, float, tuple[str, ...] | None, tuple[str, ...]]
+    Infer original vs derived provenance from DICOM headers.
+
+compute_stack_metrics(headers: list[Dataset], slice_normal: tuple[float, float, float] | None) -> StackMetrics
+    Compute slice count, spacing, extent, and regularity along the stack direction.
+
+infer_dimensionality(headers: list[Dataset], stack: StackMetrics, *, series_description: str | None=None) -> DimensionalityLabel
+    Classify whether the series is a diagnostic volume, localizer, or single-slice 2D.
+
+ts_regions_eligible(geometry: SeriesGeometryResult) -> bool
+    Return True when TotalSegmentator anatomy segmentation should run.
+
+read_series_headers(series_directory: Path) -> list[Dataset]
+    Load DICOM headers (no pixels) for all instances in a series directory.
+
+validate_uniform_slice_dimensions(paths: list[Path], headers: list[Dataset], *, max_listed: int=20) -> str | None
+    Return None when all slices share the same Rows/Columns.
+
+sorted_dicom_paths(series_directory: Path) -> list[Path]
+    Return DICOM paths sorted along the acquisition stack direction.
+
+is_stackable_image_header(header: Dataset) -> bool
+    Return True when a lightweight header describes one grayscale/stackable slice.
+
+stackable_dicom_paths(series_directory: Path) -> list[Path]
+    Return stackable image slice paths sorted along the acquisition direction.
+
+filter_dicom_paths_with_pixel_data(paths: Sequence[Path]) -> list[Path]
+    Keep only stackable slice paths whose pixel data can be decoded.
+
+build_sitk_volume_from_series_frames(reference_ds: Dataset, frames: np.ndarray, slice_paths: Sequence[Path], *, slice_spacing_mm: float | None=None) -> sitk.Image
+    Build a 3D SimpleITK volume from a load_series_frames stack.
+
+build_sitk_volume_from_pydicom(slice_paths: Sequence[Path]) -> sitk.Image
+    Assemble a 3D SimpleITK volume from per-slice pydicom reads (same decoder path as Series View).
+
+read_sitk_volume_from_dicom_paths(slice_paths: Sequence[Path]) -> sitk.Image
+    Load a DICOM stack into SimpleITK using pydicom per-slice reads.
+
+headers_in_stack_order(headers: list[Dataset]) -> list[Dataset]
+    Sort loaded headers along the slice normal derived from the first instance.
+
+analyze_series_geometry(series_directory: Path) -> SeriesGeometryResult
+    Infer plane, dimensionality, and provenance for one DICOM series directory.
+
+tseg_cache_dir(series_directory: Path) -> Path
+    Tseg cache dir.
+
+geometry_cache_path(series_directory: Path) -> Path
+    Geometry cache path.
+
+geometry_to_dict(geometry: SeriesGeometryResult) -> dict
+    Geometry to dict.
+
+geometry_from_dict(payload: dict) -> SeriesGeometryResult
+    Geometry from dict.
+
+write_geometry_cache(series_directory: Path, geometry: SeriesGeometryResult) -> Path
+    Write geometry cache.
+
+load_geometry_cache(series_directory: Path) -> SeriesGeometryResult | None
+    Load geometry cache.
+
+ensure_series_geometry(series_directory: Path, *, ds: Dataset | None=None, modality: str | None=None, cached: SeriesGeometryResult | None=None) -> SeriesGeometryResult | None
+    Return CT|MR series geometry from memory, cache, or on-demand analysis.
+
+provenance_label(provenance: ProvenanceLabel) -> str
+    Provenance label.
+
+plane_label(plane: PlaneLabel) -> str
+    Plane label.
+
+dimensionality_label(dimensionality: DimensionalityLabel) -> str
+    Dimensionality label.
+
+ts_suitability_label(ts_suitable: bool) -> str
+    Ts suitability label.
+
+geometry_skip_reason_label(geometry: SeriesGeometryResult) -> str
+    Plain-language reason anatomy segmentation is unavailable.
+
+geometry_analysis_progress_prefix() -> str
+    Geometry analysis progress prefix.
+
+format_geometry_summary(geometry: SeriesGeometryResult) -> str
+    Compact one-line summary for projection tiles and cached geometry captions.
+
+format_series_view_geometry_line(geometry: SeriesGeometryResult) -> str
+    Detailed one-line geometry caption for Series View row 2.
+
+format_geometry_progress_message(geometry: SeriesGeometryResult) -> str
+    Progress/status text after geometry analysis in Harmonize.
+
+resolve_series_geometry(series_directory: Path, *, use_cache: bool=True, write_cache: bool=True) -> SeriesGeometryResult
+    Load cached geometry or analyze headers and optionally persist to 0_TS_SEG/geometry.json.
 """
-
-from __future__ import annotations
-
 import json
 import logging
 import math
@@ -13,7 +144,6 @@ from collections import Counter
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Literal
 
 import numpy as np
 import SimpleITK as sitk
@@ -28,6 +158,12 @@ from anonymizer.controller.ai.tseg.config import (
     MIN_THROUGH_PLANE_EXTENT_MM,
     OBLIQUE_DOT_THRESHOLD,
     PLANE_AMBIGUITY_DOT_DELTA,
+)
+from anonymizer.controller.ai.tseg.geometry_types import (
+    DimensionalityLabel,
+    PlaneLabel,
+    ProvenanceLabel,
+    StackMetrics,
 )
 from anonymizer.controller.ai.tseg.series_classification import (
     MPR_KEYWORDS,
@@ -45,23 +181,6 @@ from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 
-PlaneLabel = Literal["axial", "sagittal", "coronal", "oblique", "unknown"]
-DimensionalityLabel = Literal[
-    "volume_3d",
-    "localizer_2d",
-    "single_slice_2d",
-    "multiframe_volume",
-    "projection_2d",
-    "unknown",
-]
-ProvenanceLabel = Literal[
-    "original",
-    "derived_reformat",
-    "derived_3d_render",
-    "derived_secondary",
-    "unknown",
-]
-
 PLANE_AXES_LPS: dict[str, tuple[float, float, float]] = {
     "axial": (0.0, 0.0, 1.0),
     "coronal": (0.0, 1.0, 0.0),
@@ -74,14 +193,6 @@ NON_STACKABLE_SOP_PREFIXES = (
     "1.2.840.10008.5.1.4.1.1.88",  # Structured Report
     "1.2.840.10008.5.1.4.1.1.104",  # Encapsulated PDF
 )
-
-
-@dataclass(frozen=True)
-class StackMetrics:
-    n_slices: int
-    slice_spacing_mm: float | None
-    through_plane_extent_mm: float | None
-    spacing_regularity: float | None
 
 
 @dataclass(frozen=True)
@@ -180,7 +291,7 @@ def _dot(
 
 
 def slice_normal_from_iop(image_orientation_patient) -> tuple[float, float, float]:
-    """Slice normal in patient LPS from ``ImageOrientationPatient`` (6 values)."""
+    """Slice normal in patient LPS from ImageOrientationPatient (6 values)."""
     values = [float(value) for value in image_orientation_patient]
     if len(values) != 6:
         raise ValueError(f"ImageOrientationPatient must have 6 values, got {len(values)}")
@@ -628,9 +739,9 @@ def build_sitk_volume_from_series_frames(
     slice_spacing_mm: float | None = None,
 ) -> sitk.Image:
     """
-    Build a 3D SimpleITK volume from a ``load_series_frames`` stack.
+    Build a 3D SimpleITK volume from a load_series_frames stack.
 
-    Uses the same geometry tags as ``build_sitk_volume_from_pydicom`` so TS and face blur
+    Uses the same geometry tags as build_sitk_volume_from_pydicom so TS and face blur
     align with Series View pixels (modality LUT, MONOCHROME1 inversion, resize).
     """
     paths = tuple(Path(path) for path in slice_paths)
@@ -710,8 +821,8 @@ def read_sitk_volume_from_dicom_paths(slice_paths: Sequence[Path]) -> sitk.Image
     """
     Load a DICOM stack into SimpleITK using pydicom per-slice reads.
 
-    Series View already loads the same slices via pydicom (``load_series_frames``).
-    SimpleITK ``ImageSeriesReader`` can fail on transfer syntaxes or instances that
+    Series View already loads the same slices via pydicom (load_series_frames).
+    SimpleITK ImageSeriesReader can fail on transfer syntaxes or instances that
     pydicom decodes fine, so we prefer the pydicom path for consistency.
     """
     paths = tuple(Path(path) for path in slice_paths)
@@ -1046,7 +1157,7 @@ def resolve_series_geometry(
     use_cache: bool = True,
     write_cache: bool = True,
 ) -> SeriesGeometryResult:
-    """Load cached geometry or analyze headers and optionally persist to ``0_TS_SEG/geometry.json``."""
+    """Load cached geometry or analyze headers and optionally persist to 0_TS_SEG/geometry.json."""
     series_directory = Path(series_directory).resolve()
     if use_cache:
         cached = load_geometry_cache(series_directory)

@@ -1,7 +1,5 @@
 """Unit coverage for mcp.ops pure helpers (no GPU / AWS)."""
 
-from __future__ import annotations
-
 import pytest
 
 from anonymizer.mcp.ops import HeadlessOpsError, _filter_series_rows, _pick_index, _reject_relative_selector

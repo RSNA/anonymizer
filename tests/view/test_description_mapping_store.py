@@ -1,7 +1,5 @@
 """Tests for view-owned description mapping CSVs."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from anonymizer.view.project.description_mapping_store import (

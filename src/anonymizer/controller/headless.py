@@ -1,5 +1,13 @@
-"""Headless project loading (no GUI, no MCP) shared by the CLI and MCP session."""
+"""Headless project loading (no GUI, no MCP) shared by the CLI and MCP session.
 
+Public API
+----------
+load_model(json_filepath: Path) -> ProjectModel
+    Load model.
+
+create_headless_controller(project_model_path: Path) -> ProjectController | None
+    Create headless controller.
+"""
 import logging
 import os
 from pathlib import Path

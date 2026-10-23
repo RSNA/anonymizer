@@ -1,24 +1,20 @@
-"""CXR-specific preprocess helpers; reuse xp_bodypart pad/normalize."""
+"""CXR-specific preprocess helpers; reuse xp_bodypart pad/normalize.
 
-from __future__ import annotations
-
+Public API
+----------
+upright_array(pixels: np.ndarray, rotation_label: str) -> np.ndarray
+    Return a copy of pixels rotated so the radiograph is upright.
+"""
 import numpy as np
 
 from anonymizer.controller.ai.harmonize.xp_bodypart.preprocess import (
-    tensor_from_grayscale_array,
     uint8_grayscale_from_array,
 )
 from anonymizer.controller.ai.harmonize.xr_chest_view.labels import normalize_rotation_label
 
-__all__ = [
-    "tensor_from_grayscale_array",
-    "uint8_grayscale_from_array",
-    "upright_array",
-]
-
 
 def upright_array(pixels: np.ndarray, rotation_label: str) -> np.ndarray:
-    """Return a copy of ``pixels`` rotated so the radiograph is upright.
+    """Return a copy of pixels rotated so the radiograph is upright.
 
     Applies the inverse of the predicted presentation rotation:
     Inverted → 180°, Left-rotation → +90° CW (np.rot90 k=-1),

@@ -1,7 +1,28 @@
-"""DICOM modality catalog and Harmonize ContentClass routing."""
+"""DICOM modality catalog and Harmonize ContentClass routing.
 
-from __future__ import annotations
+Public API
+----------
+Modality
+    DICOM modality attribute values used by this project.
 
+ContentClass
+    How a series is processed for Harmonize.
+
+StudyImagingComposition
+    Makeup of a study's imaging series for LOINC path selection.
+
+ModalityCatalogEntry
+    One row in get_modality_catalog().
+
+get_modality_catalog() -> dict[Modality, ModalityCatalogEntry]
+    Return modality → description, SOP Class UIDs, ContentClass, and Harmonize flag.
+
+DEFAULT_PROJECT_MODALITIES
+    Default project modalities.
+
+XR_MODALITIES
+    Xr modalities.
+"""
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Self
@@ -39,7 +60,7 @@ class Modality(StrEnum):
             value: Exact DICOM modality code (e.g. from Series.modality).
 
         Returns:
-            Matching ``Modality``, or None.
+            Matching Modality, or None.
         """
         if value is None:
             return None
@@ -47,6 +68,17 @@ class Modality(StrEnum):
             return cls(value)
         except ValueError:
             return None
+
+
+DEFAULT_PROJECT_MODALITIES: tuple[Modality, ...] = (
+    Modality.CR,
+    Modality.DX,
+    Modality.CT,
+    Modality.MR,
+)
+
+# CR and DX share the same 2D Harmonize / LOINC XR treatment.
+XR_MODALITIES: frozenset[Modality] = frozenset({Modality.CR, Modality.DX})
 
 
 class ContentClass(StrEnum):
@@ -68,7 +100,7 @@ class StudyImagingComposition(StrEnum):
 
 @dataclass(frozen=True)
 class ModalityCatalogEntry:
-    """One row in ``get_modality_catalog()``."""
+    """One row in get_modality_catalog()."""
 
     description: str
     sop_class_uids: tuple[str, ...]
@@ -233,13 +265,3 @@ def get_modality_catalog() -> dict[Modality, ModalityCatalogEntry]:
         ),
     }
 
-
-DEFAULT_PROJECT_MODALITIES: tuple[Modality, ...] = (
-    Modality.CR,
-    Modality.DX,
-    Modality.CT,
-    Modality.MR,
-)
-
-# CR and DX share the same 2D Harmonize / LOINC XR treatment.
-XR_MODALITIES: frozenset[Modality] = frozenset({Modality.CR, Modality.DX})

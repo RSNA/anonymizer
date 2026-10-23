@@ -1,7 +1,5 @@
 """Read-only report text panel: unicode body with entity highlights (click to exclude)."""
 
-from __future__ import annotations
-
 from collections.abc import Callable, Sequence
 from tkinter import Misc
 
@@ -39,11 +37,11 @@ class ReportCanvas(ctk.CTkTextbox):
 
     def show_text(self, text: str, *, empty_message: str = "") -> None:
         """
-        Replace panel contents with ``text``.
+        Replace panel contents with text.
 
         Args:
             text: Report unicode to display.
-            empty_message: Shown when ``text`` is empty.
+            empty_message: Shown when text is empty.
         """
         self.configure(state="normal")
         self.delete("1.0", "end")
@@ -61,7 +59,7 @@ class ReportCanvas(ctk.CTkTextbox):
 
         Args:
             entities: PHI spans with offsets into the displayed text.
-            is_excluded: Returns True when ``entity.start`` is excluded from Remove.
+            is_excluded: Returns True when entity.start is excluded from Remove.
         """
         tk_text = self._textbox
         for label in SCORED_LABELS:

@@ -1,7 +1,5 @@
 """Unit tests for shared pre-NER radiology filters."""
 
-from __future__ import annotations
-
 from pydicom.dataset import Dataset
 
 from anonymizer.controller.ai.embedded_phi.ner.engine import Entity
@@ -52,6 +50,17 @@ def test_mask_text_for_ner_masks_anon_uid_date_whitelist() -> None:
     assert "whitelist" in reasons
 
 
+def test_mask_text_for_ner_masks_clock_time_keeps_date() -> None:
+    """Only the date component reaches the model — clock times are masked."""
+    body = "Software 06.00.00 2010/04/16 09:50:45 and 9:05 PM done"
+    result = mask_text_for_ner(body, log_context="test")
+    assert len(result.text) == len(body)
+    assert "2010/04/16" in result.text
+    assert "09:50:45" not in result.text
+    assert "9:05 PM" not in result.text
+    assert {h.text for h in result.hits if h.reason == "time"} == {"09:50:45", "9:05 PM"}
+
+
 def test_prepare_metadata_ner_segments_wraps_and_skips() -> None:
     items = [
         MetadataNerItem(
@@ -84,8 +93,35 @@ def test_prepare_metadata_ner_segments_wraps_and_skips() -> None:
     value = seg.ner_text[seg.value_start : seg.value_end]
     assert len(value) == len(seg.original_text)
     assert "Douglas Davidson" in value
-    # OCR whitelist is not applied to metadata cells — "AP" stays for OpenMed.
+    # No whitelist passed here — "AP" stays for OpenMed.
     assert " AP " in f" {value} "
+
+
+def test_prepare_metadata_ner_segments_masks_whitelist_before_ner() -> None:
+    items = [
+        MetadataNerItem(text="US Biopsy Axilla", field_name="Series Description", vr="LO"),
+        MetadataNerItem(text="US Axilla", field_name="Study Description", vr="LO"),
+        MetadataNerItem(
+            text="Long code meaning",
+            field_name="Code Value",
+            vr="LO",
+            tag_path="ProcedureCodeSequence[0].CodeValue",
+        ),
+    ]
+    prepared = prepare_metadata_ner_segments(
+        items,
+        whitelist=["US", "AXILLA"],
+        anon_values=frozenset(),
+        log_context="test",
+    )
+    # Whitelist-only cell is skipped; code field is skipped; keeper is masked.
+    assert len(prepared) == 1
+    seg = prepared[0]
+    value = seg.ner_text[seg.value_start : seg.value_end]
+    assert "Axilla" not in value
+    assert "US " not in value
+    assert "Biopsy" in value
+    assert len(value) == len(seg.original_text)
 
 
 def test_remap_ner_entities_to_original() -> None:
@@ -98,13 +134,13 @@ def test_remap_ner_entities_to_original() -> None:
     # Spans relative to ner_text
     ents = [
         Entity(
-            label="NAME",
+            label="FIRST_NAME",
             start=seg.value_start,
             end=seg.value_end,
             score=0.9,
             raw_label="first_name",
         ),
-        Entity(label="NAME", start=0, end=3, score=0.1, raw_label="noise"),  # in prefix
+        Entity(label="FIRST_NAME", start=0, end=3, score=0.1, raw_label="noise"),  # in prefix
     ]
     mapped = remap_ner_entities_to_original(ents, seg)
     assert len(mapped) == 1

@@ -1,11 +1,58 @@
-"""Download / probe / remove XR chest view weights under ``assets/ai/xr_chest_view``.
+"""Download / probe / remove XR chest view weights under assets/ai/xr_chest_view.
 
-Upstream model: MedicalAILabo CXp-Projection-Rotation-Mislabel-Checker
-(chest X-ray AP/PA/Lateral + rotation). Product name: **XR chest view**.
+Public API
+----------
+XR_CHEST_VIEW_DIR
+    Xr chest view dir.
+
+XR_CHEST_VIEW_WEIGHT_NAME
+    Xr chest view weight name.
+
+XR_CHEST_VIEW_WEIGHT_PATH
+    Xr chest view weight path.
+
+XR_CHEST_VIEW_PARAMS_PATH
+    Xr chest view params path.
+
+CXP_VIEW_DIR
+    Cxp view dir.
+
+CXP_VIEW_WEIGHT_NAME
+    Cxp view weight name.
+
+CXP_VIEW_WEIGHT_PATH
+    Cxp view weight path.
+
+CXP_VIEW_PARAMS_PATH
+    Cxp view params path.
+
+DOWNLOAD_ID
+    Download id (default 'harmonize_cxr_view').
+
+MODEL_SLOT
+    Model slot.
+
+clear_model_cache() -> None
+    Drop in-memory weights (after remove/download).
+
+XrChestViewModelStatus
+    XrChestViewModelStatus type.
+
+CxpViewModelStatus
+    Cxpviewmodelstatus.
+
+probe_xr_chest_view_models() -> tuple[XrChestViewModelStatus, str]
+    Probe xr chest view models.
+
+xr_chest_view_ready() -> bool
+    Xr chest view ready.
+
+download_xr_chest_view_models(*, verbose: bool=False) -> tuple[bool, str]
+    Download XR chest view weights into assets/ai/xr_chest_view.
+
+remove_xr_chest_view_models() -> None
+    Remove xr chest view models.
 """
-
-from __future__ import annotations
-
 import logging
 import shutil
 from enum import StrEnum
@@ -15,12 +62,11 @@ import requests
 
 from anonymizer.controller.ai.harmonize.model_slot import ModelSlot
 from anonymizer.controller.ai.model_download import update_model_download
-from anonymizer.utils.package_paths import ai_feature_dir
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 
-XR_CHEST_VIEW_DIR = ai_feature_dir("xr_chest_view")
+XR_CHEST_VIEW_DIR = Path("assets/ai/xr_chest_view")
 # Upstream weight filename (HF Space); keep name for download URL compatibility.
 XR_CHEST_VIEW_WEIGHT_NAME = "cxp_projection_rotation.pt"
 XR_CHEST_VIEW_WEIGHT_PATH = XR_CHEST_VIEW_DIR / XR_CHEST_VIEW_WEIGHT_NAME
@@ -41,7 +87,7 @@ DOWNLOAD_ID = "harmonize_cxr_view"
 
 _downloading = False
 
-# Loaded weights live here (not in ``predict``) so download/remove can clear without importing inference.
+# Loaded weights live here (not in predict) so download/remove can clear without importing inference.
 MODEL_SLOT: ModelSlot = ModelSlot(label="CXp view")
 
 
@@ -103,7 +149,7 @@ def _download_file(url: str, dest: Path, *, label: str) -> None:
 
 
 def download_xr_chest_view_models(*, verbose: bool = False) -> tuple[bool, str]:
-    """Download XR chest view weights into ``assets/ai/xr_chest_view``."""
+    """Download XR chest view weights into assets/ai/xr_chest_view."""
     del verbose
     global _downloading
     status, _detail = probe_xr_chest_view_models()

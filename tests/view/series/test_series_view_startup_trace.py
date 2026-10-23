@@ -1,6 +1,8 @@
-"""Assert SeriesView startup load trace order and sizes across synthetic modalities."""
+"""Assert SeriesView startup load trace order and sizes across synthetic modalities.
 
-from __future__ import annotations
+Design-time / local only (``view_dev``): needs a working Tk display; excluded from
+default ``pytest`` via addopts.
+"""
 
 import logging
 import tkinter as tk
@@ -29,6 +31,8 @@ from tests.view.series.support.startup_trace import (
     build_startup_trace_series,
     parse_series_view_load_trace,
 )
+
+pytestmark = pytest.mark.view_dev
 
 DAVIDSON_CXR_SERIES_DIR = CONTROLLER_TEST_DCM_FILES_DIR / "davidson_cxr"
 
