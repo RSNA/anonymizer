@@ -1,5 +1,46 @@
-"""Extract free-text and date PHI carriers from DICOM metadata (SOP-agnostic)."""
+"""Extract free-text and date PHI carriers from DICOM metadata (SOP-agnostic).
 
+Public API
+----------
+TEXT_VRS
+    Text vrs.
+
+DATE_VRS
+    Date vrs.
+
+SKIP_TEXT_KEYWORDS
+    Skip text keywords.
+
+VR_SEQ_TEXT
+    Vr seq text (default 'SEQ(text)').
+
+ResolveKeep
+    Resolvekeep.
+
+SpanFragment
+    One leaf value inside a compiled SEQ(text) cell.
+
+MetadataPhiRow
+    One Metadata assessment row (flat text/date or compiled sequence text).
+
+is_anonymizer_stamp_row(row: MetadataPhiRow) -> bool
+    Detect PatientIdentityRemoved / DeidentificationMethod(+CodeSeq) / 0013 site block.
+
+is_anonymizer_field(*, tag: str='', name: str='', tag_path: str='') -> bool
+    True for de-identification stamps / anonymizer-added private group (0013).
+
+extract_metadata_phi_rows(ds: Dataset, *, resolve_keep: ResolveKeep | None=None) -> list[MetadataPhiRow]
+    Walk ds and return PHI-oriented metadata rows (top-level + SEQ(text)).
+
+apply_text_at_path(ds: Dataset, tag_path: str, new_text: str) -> None
+    Set the leaf string at tag_path (e.g. ContentSequence[0].TextValue).
+
+scrub_span_in_row(ds: Dataset, row: MetadataPhiRow, start: int, end: int, replacement: str) -> str
+    Replace [start:end) inside a SEQ(text) row by writing replacement
+
+element_display_name(ds: Dataset, elem: DataElement) -> str
+    Public Name column label (TCIA / creator / dictionary); never bare Private.
+"""
 from __future__ import annotations
 
 import logging
@@ -12,15 +53,21 @@ from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence as DicomSequence
 from pydicom.tag import BaseTag, Tag
 
-from anonymizer.controller.ai.embedded_phi.metadata.tcia_kb import match_tcia_private, private_creator_string
-from anonymizer.controller.ingest.anonymizer_script import display_tag_vr, format_dicom_tag, is_date_shift_operation
+from anonymizer.controller.dates import is_date_delta_operation
+from anonymizer.controller.private_tags import (
+    PrivateTagEntry,
+    lookup_private_tag,
+    private_creator_string,
+)
+from anonymizer.utils.dicom_dictionary import display_tag_vr, format_dicom_tag
 
 logger = logging.getLogger(__name__)
 
 TEXT_VRS = frozenset({"LO", "LT", "ST", "SH", "UT", "UC", "UR", "PN"})
 DATE_VRS = frozenset({"DA", "DT"})
 # Code-set plumbing — not free-text PHI carriers inside Concept Name sequences.
-_SKIP_TEXT_KEYWORDS = frozenset(
+# Public: the metadata NER pre-filter skips these same keywords (single source).
+SKIP_TEXT_KEYWORDS = frozenset(
     {
         "CodeValue",
         "CodingSchemeDesignator",
@@ -38,17 +85,27 @@ _SEQ_VR = "SQ"
 VR_SEQ_TEXT = "SEQ(text)"
 _FRAGMENT_SEP = " • "
 _HEX_NAME = re.compile(r"^\([0-9A-Fa-f]{4},[0-9A-Fa-f]{4}\)$")
+_PLAIN_HEX_NAME = re.compile(r"^[0-9A-Fa-f]{4},[0-9A-Fa-f]{4}$")
 _PATH_SEGMENT = re.compile(
-    r"^(?P<name>[A-Za-z_][A-Za-z0-9_]*|\([0-9A-Fa-f]{4},[0-9A-Fa-f]{4}\))"
+    r"^(?P<name>[A-Za-z_][A-Za-z0-9_]*|\([0-9A-Fa-f]{4},[0-9A-Fa-f]{4}\)|[0-9A-Fa-f]{4},[0-9A-Fa-f]{4})"
     r"(?:\[(?P<index>\d+)\])?$"
 )
+
+
+def _tag_from_path_name(name: str) -> BaseTag | None:
+    """DICOM tag for a (GGGG,EEEE) or GGGG,EEEE path segment, else None."""
+    if _HEX_NAME.match(name):
+        return Tag(int(name[1:5], 16), int(name[6:10], 16))
+    if _PLAIN_HEX_NAME.match(name):
+        return Tag(int(name[:4], 16), int(name[5:], 16))
+    return None
 
 ResolveKeep = Callable[[str], str | None]
 
 
 @dataclass(frozen=True)
 class SpanFragment:
-    """One leaf value inside a compiled ``SEQ(text)`` cell."""
+    """One leaf value inside a compiled SEQ(text) cell."""
 
     start: int
     end: int
@@ -104,7 +161,7 @@ class MetadataPhiRow:
 
     @property
     def tag_hex(self) -> str:
-        """Eight-hex tag without comma (``GGGGEEEE``)."""
+        """Eight-hex tag without comma (GGGGEEEE)."""
         return self.tag.replace(",", "").upper()
 
     @property
@@ -140,7 +197,7 @@ def extract_metadata_phi_rows(
     *,
     resolve_keep: ResolveKeep | None = None,
 ) -> list[MetadataPhiRow]:
-    """Walk ``ds`` and return PHI-oriented metadata rows (top-level + SEQ(text))."""
+    """Walk ds and return PHI-oriented metadata rows (top-level + SEQ(text))."""
     rows: list[MetadataPhiRow] = []
     for elem in ds:
         if elem.VR == _SEQ_VR:
@@ -169,10 +226,10 @@ def extract_metadata_phi_rows(
 
 
 def apply_text_at_path(ds: Dataset, tag_path: str, new_text: str) -> None:
-    """Set the leaf string at ``tag_path`` (e.g. ``ContentSequence[0].TextValue``)."""
+    """Set the leaf string at tag_path (e.g. ContentSequence[0].TextValue)."""
     parent, name = _resolve_leaf_parent(ds, tag_path)
-    if _HEX_NAME.match(name):
-        tag = Tag(int(name[1:5], 16), int(name[6:10], 16))
+    tag = _tag_from_path_name(name)
+    if tag is not None:
         parent[tag].value = new_text
         return
     if name in parent:
@@ -189,7 +246,7 @@ def scrub_span_in_row(
     replacement: str,
 ) -> str:
     """
-    Replace ``[start:end)`` inside a ``SEQ(text)`` row by writing ``replacement``
+    Replace [start:end) inside a SEQ(text) row by writing replacement
     to the owning leaf; return the rebuilt compiled text.
     """
     if not row.is_seq_text:
@@ -220,8 +277,8 @@ def _build_seq_text_row(ds: Dataset, elem: DataElement) -> MetadataPhiRow | None
     compiled, spans = _compile_fragments(leaves)
     tag_hex = f"{int(elem.tag):08X}"
     is_private = bool(elem.tag.is_private)
-    creator = _private_creator(ds, elem.tag) if is_private else ""
-    tcia = match_tcia_private(tag_hex, creator=creator) if is_private else None
+    creator = private_creator_string(ds, elem.tag) if is_private else ""
+    tcia = _private_kb_entry(elem.tag, creator) if is_private else None
     name = _display_name(
         elem,
         is_private=is_private,
@@ -235,7 +292,7 @@ def _build_seq_text_row(ds: Dataset, elem: DataElement) -> MetadataPhiRow | None
         text=compiled,
         is_private=is_private,
         tag_path=root_token,
-        tcia_action=tcia.action if tcia else None,
+        tcia_action=tcia.action.value if tcia else None,
         spans=spans,
     )
 
@@ -255,8 +312,8 @@ def _leaf_row(
         return None
     tag_hex = f"{int(elem.tag):08X}"
     is_private = bool(elem.tag.is_private)
-    creator = _private_creator(root_ds, elem.tag) if is_private else ""
-    tcia = match_tcia_private(tag_hex, creator=creator) if is_private else None
+    creator = private_creator_string(root_ds, elem.tag) if is_private else ""
+    tcia = _private_kb_entry(elem.tag, creator) if is_private else None
     name = _display_name(
         elem,
         is_private=is_private,
@@ -268,7 +325,7 @@ def _leaf_row(
     if resolve_keep is not None:
         script_operation = resolve_keep(tag_hex)
         if vr in DATE_VRS:
-            covered = is_date_shift_operation(script_operation)
+            covered = is_date_delta_operation(script_operation)
     return MetadataPhiRow(
         tag=format_dicom_tag(tag_hex),
         vr=vr if vr in DATE_VRS else (display_tag_vr(tag_hex) or vr),
@@ -277,7 +334,7 @@ def _leaf_row(
         is_private=is_private,
         tag_path=path,
         date_shift_covered=covered,
-        tcia_action=tcia.action if tcia else None,
+        tcia_action=tcia.action.value if tcia else None,
         script_operation=script_operation,
     )
 
@@ -295,7 +352,7 @@ def _iter_seq_text_leaves(seq: DicomSequence, *, prefix: str) -> Iterator[_LeafT
                 yield from _iter_seq_text_leaves(elem.value, prefix=path)
                 continue
             if str(elem.VR or "") in TEXT_VRS:
-                if elem.keyword and elem.keyword in _SKIP_TEXT_KEYWORDS:
+                if elem.keyword and elem.keyword in SKIP_TEXT_KEYWORDS:
                     continue
                 text = _as_str(elem.value)
                 if text:
@@ -367,11 +424,10 @@ def _elem_path_token(elem: DataElement) -> str:
 
 
 def element_display_name(ds: Dataset, elem: DataElement) -> str:
-    """Public Name column label (TCIA / creator / dictionary); never bare ``Private``."""
+    """Public Name column label (TCIA / creator / dictionary); never bare Private."""
     is_private = bool(elem.tag.is_private)
-    creator = _private_creator(ds, elem.tag) if is_private else ""
-    tag_hex = f"{int(elem.tag):08X}"
-    tcia = match_tcia_private(tag_hex, creator=creator) if is_private else None
+    creator = private_creator_string(ds, elem.tag) if is_private else ""
+    tcia = _private_kb_entry(elem.tag, creator) if is_private else None
     return _display_name(
         elem,
         is_private=is_private,
@@ -414,10 +470,13 @@ def _is_generic_private_name(name: str) -> bool:
     return bool(text.startswith("[") and text.endswith("]"))
 
 
-def _private_creator(ds: Dataset, tag: BaseTag) -> str:
-    """Return private creator string for ``tag``'s block, if present on ``ds``."""
-
-    return private_creator_string(ds, tag)
+def _private_kb_entry(tag: BaseTag, creator: str) -> PrivateTagEntry | None:
+    """Knowledge-base row for a private data element, or None."""
+    return lookup_private_tag(
+        creator=creator,
+        group=tag.group,
+        element_suffix=tag.element & 0xFF,
+    )
 
 
 def _as_str(value: object) -> str:
@@ -455,8 +514,8 @@ def _resolve_leaf_parent(ds: Dataset, tag_path: str) -> tuple[Dataset, str]:
 
 
 def _get_named(obj: object, name: str) -> object:
-    if _HEX_NAME.match(name):
-        tag = Tag(int(name[1:5], 16), int(name[6:10], 16))
+    tag = _tag_from_path_name(name)
+    if tag is not None:
         if not isinstance(obj, Dataset):
             raise ValueError(f"Cannot index tag {name} on {type(obj)}")
         return obj[tag].value

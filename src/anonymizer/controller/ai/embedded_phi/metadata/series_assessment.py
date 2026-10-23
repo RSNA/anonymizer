@@ -1,17 +1,49 @@
-"""Series-level consolidation of per-SOP metadata PHI rows for assessment UI."""
+"""Series-level consolidation of per-SOP metadata PHI rows for assessment UI.
 
+Public API
+----------
+DISPLAY_VR_SEQ
+    Display vr seq (default 'SEQ').
+
+SeriesMetadataAssessmentRow
+    One series-consolidated Metadata assessment row.
+
+display_metadata_vr(vr: str) -> str
+    Map internal VR for UI columns (SEQ(text) → SEQ).
+
+date_shift_note(operation: str | None, *, covered: bool) -> str | None
+    Human-readable date-delta note from script keep operand.
+
+anonymizer_field_note(tag_hex: str, tag_path: str) -> str
+    Short note for anonymizer stamp / added fields.
+
+build_assessment_note(row: SeriesMetadataAssessmentRow) -> str
+    Compose Note column: anonymizer / IOD / varies / date-delta explanations.
+
+consolidate_series_metadata(metadata_by_sop: Mapping[str, Sequence[MetadataPhiRow]], *, sop_order: Sequence[str] | None=None) -> tuple[SeriesMetadataAssessmentRow, ...]
+    Collapse per-SOP extract rows into one series assessment list.
+
+order_assessment_display_rows(rows: Sequence[SeriesMetadataAssessmentRow]) -> list[SeriesMetadataAssessmentRow | None]
+    Public rows, optional Private divider (None), then private rows.
+
+filter_assessment_rows(rows: Sequence[SeriesMetadataAssessmentRow], *, query: str='', attention_only: bool=False, show_anonymizer_fields: bool=False) -> list[SeriesMetadataAssessmentRow]
+    Filter assessment rows.
+
+assessment_summary(rows: Sequence[SeriesMetadataAssessmentRow]) -> tuple[int, int, int]
+    Return (carriers, unexpected_count, varies_count).
+"""
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from anonymizer.controller.ai.embedded_phi.metadata.extract import VR_SEQ_TEXT, MetadataPhiRow, is_anonymizer_stamp_row
-from anonymizer.controller.ingest.anonymizer_script import (
+from anonymizer.controller.dates import (
     incrementdate_days,
-    is_date_shift_operation,
-    operand_id_for_operation,
+    is_date_delta_operation,
     rebasedate_origin,
 )
+from anonymizer.controller.script.operands import OperandId, operand_id_for_operation
 
 # UI label for compiled sequence free-text carriers (internal VR stays SEQ(text)).
 DISPLAY_VR_SEQ = "SEQ"
@@ -61,34 +93,34 @@ class SeriesMetadataAssessmentRow:
 
 
 def display_metadata_vr(vr: str) -> str:
-    """Map internal VR for UI columns (``SEQ(text)`` → ``SEQ``)."""
+    """Map internal VR for UI columns (SEQ(text) → SEQ)."""
     return DISPLAY_VR_SEQ if vr == VR_SEQ_TEXT else str(vr or "")
 
 
 def date_shift_note(operation: str | None, *, covered: bool) -> str | None:
-    """Human-readable date-processing note from script keep operand."""
+    """Human-readable date-delta note from script keep operand."""
     op = str(operation or "").strip()
-    if not covered and not is_date_shift_operation(op):
+    if not covered and not is_date_delta_operation(op):
         return None
     if not op:
-        return "date-shifted by script" if covered else None
+        return "date delta by script" if covered else None
     oid = operand_id_for_operation(op)
     lower = op.lower()
-    if oid == "hashdate" or "@hashdate" in lower:
-        return "date-shifted (@hashdate)"
-    if oid == "lookup_dateoffset" or "dateoffset" in lower:
-        return "date-shifted (@lookup dateoffset)"
-    if oid == "incrementdate":
+    if oid == OperandId.HASHDATE or "@hashdate" in lower:
+        return "date delta (@hashdate)"
+    if oid == OperandId.LOOKUP_DATEOFFSET or "dateoffset" in lower:
+        return "date delta (@lookup dateoffset)"
+    if oid == OperandId.INCREMENTDATE:
         days = incrementdate_days(op)
         if days is not None:
-            return f"date-shifted (@incrementdate {days})"
-        return "date-shifted (@incrementdate)"
-    if oid == "rebasedate":
+            return f"date delta (@incrementdate {days})"
+        return "date delta (@incrementdate)"
+    if oid == OperandId.REBASEDATE:
         origin = rebasedate_origin(op)
         if origin:
-            return f"date-shifted (@rebasedate {origin})"
-        return "date-shifted (@rebasedate)"
-    return f"date-shifted ({op})"
+            return f"date delta (@rebasedate {origin})"
+        return "date delta (@rebasedate)"
+    return f"date delta ({op})"
 
 
 def anonymizer_field_note(tag_hex: str, tag_path: str) -> str:
@@ -107,7 +139,7 @@ def anonymizer_field_note(tag_hex: str, tag_path: str) -> str:
 
 
 def build_assessment_note(row: SeriesMetadataAssessmentRow) -> str:
-    """Compose Note column: anonymizer / IOD / varies / date-shift explanations."""
+    """Compose Note column: anonymizer / IOD / varies / date-delta explanations."""
     parts: list[str] = []
     if row.is_anonymizer_field:
         parts.append(anonymizer_field_note(row.tag.replace(",", ""), row.tag_path))
@@ -135,9 +167,9 @@ def consolidate_series_metadata(
     """
     Collapse per-SOP extract rows into one series assessment list.
 
-    Order: first-seen ``tag_path`` while walking ``sop_order`` (or dict order).
-    ``text`` is the first-seen value; ``varies`` when later SOPs differ.
-    ``iod_unexpected`` if any SOP flags the path.
+    Order: first-seen tag_path while walking sop_order (or dict order).
+    text is the first-seen value; varies when later SOPs differ.
+    iod_unexpected if any SOP flags the path.
     """
     if not metadata_by_sop:
         return ()
@@ -223,7 +255,7 @@ def _name_is_blank_or_private(name: str) -> bool:
 def order_assessment_display_rows(
     rows: Sequence[SeriesMetadataAssessmentRow],
 ) -> list[SeriesMetadataAssessmentRow | None]:
-    """Public rows, optional Private divider (``None``), then private rows."""
+    """Public rows, optional Private divider (None), then private rows."""
     public = [r for r in rows if not r.is_private]
     private = [r for r in rows if r.is_private]
     if public and private:
@@ -263,7 +295,7 @@ def filter_assessment_rows(
 
 
 def assessment_summary(rows: Sequence[SeriesMetadataAssessmentRow]) -> tuple[int, int, int]:
-    """Return ``(carriers, unexpected_count, varies_count)``."""
+    """Return (carriers, unexpected_count, varies_count)."""
     unexpected = sum(1 for r in rows if r.iod_unexpected)
     varies = sum(1 for r in rows if r.varies)
     return len(rows), unexpected, varies

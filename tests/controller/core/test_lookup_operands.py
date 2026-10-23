@@ -9,7 +9,8 @@ from pydicom import dcmread
 from pydicom.data import get_testdata_file
 
 from anonymizer.controller.anonymizer import QuarantineDirectories
-from anonymizer.controller.ingest.process_ctp_lookup import commit_ctp_lookup, preview_ctp_lookup
+from anonymizer.controller.ctp_lookup import commit_ctp_lookup, preview_ctp_lookup
+from anonymizer.model.project import RETAIN_OPTIONS
 from tests.controller.dicom.support.test_files import ct_small_filename
 from tests.controller.dicom.support.test_nodes import LocalSCU
 
@@ -20,6 +21,9 @@ def _write_properties(path: Path, lines: list[str]) -> None:
 
 @pytest.fixture
 def lookup_controller(controller, tmp_path):
+    # Dateoffset lookup implies modified dates; record Retain options including 113107.
+    controller.model.confidentiality_options = RETAIN_OPTIONS
+    controller.anonymizer.project_model.confidentiality_options = RETAIN_OPTIONS
     props = tmp_path / "trial.properties"
     _write_properties(
         props,

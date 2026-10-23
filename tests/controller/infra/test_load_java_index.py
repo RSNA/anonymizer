@@ -3,7 +3,7 @@ import time
 
 from pydicom.dataset import Dataset
 
-from anonymizer.controller.ingest.dates import hash_date
+from anonymizer.controller.dates import hash_date
 from anonymizer.controller.project import ProjectController
 from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.utils.storage.java_index import (

@@ -7,24 +7,22 @@ import logging
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox
-from typing import TYPE_CHECKING, Callable
+from typing import Callable
 
 import customtkinter as ctk
 
-from anonymizer.controller.ingest.process_ctp_lookup import (
+from anonymizer.controller.ctp_lookup import (
     CtpLookupPreview,
     LookupPropertiesError,
+    apply_ctp_lookup_preview,
     commit_ctp_lookup,
     preview_ctp_lookup,
 )
 from anonymizer.controller.project import ProjectController
+from anonymizer.controller.script.document import ScriptDocument
 from anonymizer.utils.translate import _
 from anonymizer.view.common.app_window import AppToplevel, install_modal_dismiss, place_toplevel_centered_on_parent
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
-
-if TYPE_CHECKING:
-    from anonymizer.controller.ingest.anonymizer_script import ScriptDocument
-from anonymizer.controller.ingest.process_ctp_lookup import apply_lookup_operands
 
 logger = logging.getLogger(__name__)
 
@@ -254,7 +252,7 @@ class LookupTableDialog(AppToplevel):
                 # Create-project staging: apply to in-memory document; defer SQL/files.
                 if self._script_document is not None:
 
-                    apply_lookup_operands(self._script_document, has_dateoffset=self._preview.has_dateoffset)
+                    apply_ctp_lookup_preview(self._script_document, self._preview)
                 if self._on_pending_preview is not None:
                     self._on_pending_preview(self._preview)
                 if self._on_document_patched is not None:

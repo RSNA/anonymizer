@@ -6,43 +6,56 @@ from pathlib import Path
 
 import pytest
 
-from anonymizer.controller.ingest.anonymizer_script import (
-    PAGE_SIZE,
+from anonymizer.controller.dates import (
+    incrementdate_days,
+    is_date_delta_operation,
+    rebasedate_origin,
+)
+from anonymizer.controller.script.date_rules import rules_for_incrementdate_bulk
+from anonymizer.controller.script.document import (
+    ScriptDocument,
     ScriptRule,
-    ScriptViewMode,
-    add_rule_from_dictionary,
-    always_literal_text,
-    anonymization_policy_display_name,
-    anonymization_policy_switch_confirm_message,
-    anonymization_policy_tooltip,
-    commit_script_edit,
-    demote_rule,
-    display_operation,
-    embedded_phi_batch_explainer,
-    filter_rules,
-    format_operand,
-    has_missing_dictionary_tags,
-    is_remove_operation,
     load_script_rules,
-    normalize_operation,
-    operand_id_for_operation,
-    operand_id_from_syntax,
-    packaged_script_basename_for_policy,
-    packaged_script_path_for_policy,
-    private_anonymizer_script_path,
-    page_slice,
-    promote_rule,
-    script_provenance,
-    search_dicom_dictionary,
-    search_missing_dictionary_tags,
-    search_removed_rules,
-    should_install_anonymization_policy,
-    stage_script_edit,
     validate_document,
-    validate_operation,
     write_script_rules,
 )
-from anonymizer.model.project import AnonymizationPolicy
+from anonymizer.controller.script.operands import (
+    always_literal_text,
+    format_operand,
+    is_remove_operation,
+    operand_id_for_operation,
+    operand_id_from_syntax,
+    validate_operation,
+)
+from anonymizer.model.project import BASIC_OPTIONS, RETAIN_OPTIONS
+from anonymizer.utils.dicom_dictionary import (
+    dicom_applicable_standard_text,
+    dicom_standard_version,
+    format_dicom_tag,
+    format_tag_description_line,
+    search_dicom_dictionary,
+    tag_dictionary_meta,
+)
+from anonymizer.view.settings.script_editor import (
+    PAGE_SIZE,
+    ScriptViewMode,
+    add_rule_from_dictionary,
+    apply_incrementdate_to_rules,
+    confidentiality_options_changed,
+    demote_rule,
+    embedded_phi_batch_explainer,
+    filter_rules,
+    format_incrementdate_affected_lines,
+    has_missing_dictionary_tags,
+    operand_tag_incompatibility,
+    operands_for_tag,
+    options_switch_confirm_message,
+    page_slice,
+    promote_rule,
+    search_missing_dictionary_tags,
+    search_removed_rules,
+)
+from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
 
 
 def _mini_script(path: Path) -> Path:
@@ -61,8 +74,7 @@ def _mini_script(path: Path) -> Path:
                 "",
             ]
         ),
-        encoding="utf-8",
-    )
+        encoding="utf-8")
     return path
 
 
@@ -70,6 +82,7 @@ def test_load_write_round_trip_preserves_remove_and_r(tmp_path: Path) -> None:
     src = _mini_script(tmp_path / "in.script")
     doc = load_script_rules(src)
     assert len(doc.rules) == 5
+    assert doc.get_rule("00080016").operation == "@keep"
     assert any(is_remove_operation(r.operation) for r in doc.rules)
     assert len(doc.r_rules) == 1
     assert doc.r_rules[0].tag == "privategroups"
@@ -94,7 +107,8 @@ def test_active_filter_excludes_remove(tmp_path: Path) -> None:
 
 def test_promote_and_demote(tmp_path: Path) -> None:
     doc = load_script_rules(_mini_script(tmp_path / "b.script"))
-    promote_rule(doc, "00080001", "")
+    promote_rule(doc, "00080001", "@keep")
+    assert doc.get_rule("00080001").operation == "@keep"
     assert not is_remove_operation(doc.get_rule("00080001").operation)
     demote_rule(doc, "00080001")
     assert is_remove_operation(doc.get_rule("00080001").operation)
@@ -111,7 +125,7 @@ def test_validate_and_format_operands() -> None:
     assert validate_operation("@keep") is None
     assert validate_operation("@safe()") is None
     assert operand_id_for_operation("@safe()") == "safe"
-    assert normalize_operation("@keep") == ""
+    assert format_operand("keep") == "@keep"
     assert validate_operation("@remove()") is None
     assert validate_operation("@lookup(this,ptid)") is None
     assert validate_operation("@round(this,5)") is None
@@ -137,6 +151,7 @@ def test_validate_and_format_operands() -> None:
         format_operand("rebasedate", rebase_origin="1960")
     assert operand_id_for_operation("@round(this,5)") == "round"
     assert operand_id_for_operation("") == "keep"
+    assert operand_id_for_operation("@keep") == "keep"
     assert operand_id_for_operation("YES") == "always"
     assert operand_id_for_operation("@always()YES") == "always"
     assert operand_id_for_operation("@always()") is None
@@ -147,40 +162,23 @@ def test_validate_and_format_operands() -> None:
     assert always_literal_text("@always()REMOVED") == "REMOVED"
     assert always_literal_text("@always()") is None
     assert always_literal_text("@uid") is None
-    assert display_operation("") == "@keep"
-    assert display_operation("@keep") == "@keep"
-    assert display_operation("@uid") == "@uid"
-    assert display_operation("YES") == "YES"
-    assert display_operation("@always()YES") == "@always()YES"
     assert operand_id_from_syntax("@keep") == "keep"
     assert operand_id_from_syntax("@round(this,n)") == "round"
     assert operand_id_from_syntax("@always()") == "always"
     assert operand_id_from_syntax("@incrementdate(this,n)") == "incrementdate"
     assert operand_id_from_syntax("@rebasedate(this,origin)") == "rebasedate"
-    from anonymizer.controller.ingest.anonymizer_script import (
-        incrementdate_days,
-        is_date_shift_operation,
-        rebasedate_origin,
-    )
 
     assert incrementdate_days("@incrementdate(this,42)") == 42
     assert rebasedate_origin("@rebasedate(this,19600101)") == "19600101"
     assert rebasedate_origin("@rebasedate") == "19600101"
-    assert is_date_shift_operation("@hashdate")
-    assert is_date_shift_operation("@incrementdate(this,1)")
-    assert is_date_shift_operation("@rebasedate(this,19600101)")
-    assert is_date_shift_operation("@lookup(this,dateoffset)")
-    assert not is_date_shift_operation("@keep")
+    assert is_date_delta_operation("@hashdate")
+    assert is_date_delta_operation("@incrementdate(this,1)")
+    assert is_date_delta_operation("@rebasedate(this,19600101)")
+    assert is_date_delta_operation("@lookup(this,dateoffset)")
+    assert not is_date_delta_operation("@keep")
 
 
 def test_tag_dictionary_meta_and_dicom_version() -> None:
-    from anonymizer.controller.ingest.anonymizer_script import (
-        dicom_applicable_standard_text,
-        dicom_standard_version,
-        format_tag_description_line,
-        tag_dictionary_meta,
-    )
-
     meta = tag_dictionary_meta("00100010")
     assert meta is not None
     assert meta.description == "Patient's Name"
@@ -211,12 +209,6 @@ def test_tag_dictionary_meta_and_dicom_version() -> None:
 
 
 def test_operand_tag_incompatibility_gates() -> None:
-    from anonymizer.controller.ingest.anonymizer_script import (
-        format_dicom_tag,
-        operand_tag_incompatibility,
-        operands_for_tag,
-    )
-
     assert format_dicom_tag("00080020") == "0008,0020"
     assert format_dicom_tag("0008,0020") == "0008,0020"
 
@@ -246,15 +238,7 @@ def test_operand_tag_incompatibility_gates() -> None:
     assert "lookup_dateoffset" not in uid_ids and "incrementdate" not in uid_ids
 
 
-def test_incrementdate_bulk_updates_all_date_shift_fields() -> None:
-    from anonymizer.controller.ingest.anonymizer_script import (
-        ScriptDocument,
-        ScriptRule,
-        apply_incrementdate_to_rules,
-        format_incrementdate_affected_lines,
-        rules_for_incrementdate_bulk,
-    )
-
+def test_incrementdate_bulk_updates_all_date_delta_fields() -> None:
     doc = ScriptDocument(
         rules=[
             ScriptRule("00080020", "StudyDate", "T", "@hashdate"),
@@ -284,7 +268,7 @@ def test_incrementdate_bulk_updates_all_date_shift_fields() -> None:
     doc2 = ScriptDocument(
         rules=[
             ScriptRule("00080020", "StudyDate", "T", "@hashdate"),
-            ScriptRule("00080023", "ContentDate", "T", ""),
+            ScriptRule("00080023", "ContentDate", "T", "@keep"),
         ]
     )
     tags = [r.tag for r in rules_for_incrementdate_bulk(doc2, selected_tag="00080023")]
@@ -314,132 +298,74 @@ def test_search_removed_and_dictionary_capped(tmp_path: Path) -> None:
 
 def test_add_from_dictionary_and_validate_document(tmp_path: Path) -> None:
     doc = load_script_rules(_mini_script(tmp_path / "e.script"))
-    add_rule_from_dictionary(doc, tag="00081030", name="StudyDescription", operation="")
-    assert doc.get_rule("00081030") is not None
+    add_rule_from_dictionary(doc, tag="00081030", name="StudyDescription", operation="@keep")
+    assert doc.get_rule("00081030").operation == "@keep"
     assert validate_document(doc) == []
     with pytest.raises(ValueError, match="already"):
-        add_rule_from_dictionary(doc, tag="00081030", name="StudyDescription", operation="")
+        add_rule_from_dictionary(doc, tag="00081030", name="StudyDescription", operation="@keep")
 
 
 def test_page_slice() -> None:
-    items = [ScriptRule(tag=f"{i:08X}", name=str(i), en="T", operation="") for i in range(10)]
+    items = [ScriptRule(tag=f"{i:08X}", name=str(i), en="T", operation="@keep") for i in range(10)]
     page, index, count = page_slice(items, 0, page_size=3)
     assert len(page) == 3
     assert index == 0
     assert count == 4
 
 
-def test_stage_script_edit(controller, tmp_path: Path) -> None:
+def test_write_project_script_path_and_reload(controller, tmp_path: Path) -> None:
     src = _mini_script(tmp_path / "stage_in.script")
     doc = load_script_rules(src)
     promote_rule(doc, "00080001", "@empty()")
-    dest = stage_script_edit(controller.model, doc)
-    assert dest == private_anonymizer_script_path(controller.model)
+    controller.model.anonymizer_script_path = (
+        Path(controller.model.storage_dir)
+        / f"{controller.model.site_id}-anonymizer.script"
+    )
+    dest = controller.model.anonymizer_script_path
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    write_script_rules(dest, doc)
     assert dest.is_file()
-    assert controller.model.anonymizer_script_path == dest
     reloaded = load_script_rules(dest)
     assert reloaded.get_rule("00080001").operation == "@empty()"
 
-
-def test_commit_script_edit_reloads_tag_keep(controller) -> None:
-    from anonymizer.controller.ingest.process_ctp_lookup import _DEFAULT_SCRIPT_PATH
-
-    src = Path(controller.model.anonymizer_script_path)
-    if not src.is_file():
-        src = _DEFAULT_SCRIPT_PATH
-    doc = load_script_rules(src)
     patient = doc.get_rule("00100020")
-    assert patient is not None
-    if is_remove_operation(patient.operation):
+    if patient is not None and is_remove_operation(patient.operation):
         promote_rule(doc, "00100020", "@ptid")
-    demote_rule(doc, "00100020")
-
-    dest = commit_script_edit(controller, doc)
-    assert dest.is_file()
+    if doc.get_rule("00100020") is not None:
+        demote_rule(doc, "00100020")
+    write_script_rules(dest, doc)
+    controller.anonymizer.reload_script(dest)
     assert "00100020" not in controller.anonymizer.model._tag_keep
-    assert controller.model.anonymizer_script_path == dest
 
 
-def test_packaged_script_for_policy() -> None:
-    assert packaged_script_basename_for_policy(AnonymizationPolicy.STRICT) == "default-anonymizer.script"
-    assert packaged_script_basename_for_policy(AnonymizationPolicy.CLINICAL) == "clinical-anonymizer.script"
-    strict = packaged_script_path_for_policy(AnonymizationPolicy.STRICT)
-    clinical = packaged_script_path_for_policy(AnonymizationPolicy.CLINICAL)
-    assert strict.name == "default-anonymizer.script"
-    assert clinical.name == "clinical-anonymizer.script"
-    assert strict.is_file()
-    assert clinical.is_file()
+def test_packaged_script_paths() -> None:
+    default = DEFAULT_ANONYMIZER_SCRIPT
+    assert default.name == "default-anonymizer.script"
+    assert default.is_file()
+    # Install-dir relative path used by product code after main chdir / test conftest.
+    relative = Path("assets/scripts/default-anonymizer.script")
+    assert relative.is_file()
+    assert relative.resolve() == default.resolve()
 
 
-def test_script_provenance_kinds(tmp_path: Path) -> None:
-    packaged = packaged_script_path_for_policy(AnonymizationPolicy.STRICT)
-    project = tmp_path / "SITE-anonymizer.script"
-    project.write_text(packaged.read_text(encoding="utf-8"), encoding="utf-8")
-    custom = tmp_path / "elsewhere.script"
-    custom.write_text("<script></script>\n", encoding="utf-8")
-
-    assert script_provenance(
-        packaged,
-        policy=AnonymizationPolicy.STRICT,
-        project_script_path=project,
-    ) == ("default-anonymizer.script", "packaged")
-    assert script_provenance(
-        project,
-        policy=AnonymizationPolicy.CLINICAL,
-        project_script_path=project,
-    ) == ("clinical-anonymizer.script", "project")
-    assert script_provenance(
-        custom,
-        policy=AnonymizationPolicy.STRICT,
-        project_script_path=project,
-    ) == ("elsewhere.script", "custom")
-
-
-def test_should_install_anonymization_policy() -> None:
-    assert anonymization_policy_display_name(AnonymizationPolicy.STRICT) == "Strict"
-    assert anonymization_policy_display_name(AnonymizationPolicy.CLINICAL) == "Clinical"
-    assert "Image-focused" in anonymization_policy_tooltip(AnonymizationPolicy.STRICT)
-    assert "SR and PDF" in anonymization_policy_tooltip(AnonymizationPolicy.STRICT)
-    clinical_tip = anonymization_policy_tooltip(AnonymizationPolicy.CLINICAL)
-    assert "TCIA" in clinical_tip
-    assert "SR and PDF" in clinical_tip
-    assert should_install_anonymization_policy(
-        selected=AnonymizationPolicy.CLINICAL,
-        installed=AnonymizationPolicy.STRICT,
-    )
-    assert not should_install_anonymization_policy(
-        selected=AnonymizationPolicy.CLINICAL,
-        installed=AnonymizationPolicy.CLINICAL,
-    )
-    strict_batch = embedded_phi_batch_explainer(AnonymizationPolicy.STRICT)
-    clinical_batch = embedded_phi_batch_explainer(AnonymizationPolicy.CLINICAL)
+def test_confidentiality_options_changed() -> None:
+    assert confidentiality_options_changed(
+        selected=RETAIN_OPTIONS,
+        installed=BASIC_OPTIONS)
+    assert not confidentiality_options_changed(
+        selected=RETAIN_OPTIONS,
+        installed=RETAIN_OPTIONS)
+    strict_batch = embedded_phi_batch_explainer(BASIC_OPTIONS)
+    clinical_batch = embedded_phi_batch_explainer(RETAIN_OPTIONS)
     assert "OCR on burnt-in image pixels" in strict_batch
     assert "OCR on burnt-in image pixels" in clinical_batch
     assert "already removed" in strict_batch
-    assert "kept report" in clinical_batch
+    assert "kept private" in clinical_batch
 
 
-def test_anonymization_policy_switch_confirm_message() -> None:
-    clinical = anonymization_policy_switch_confirm_message(
-        AnonymizationPolicy.CLINICAL,
-        policy_display_name="Clinical",
-    )
-    assert clinical.startswith("Change policy to Clinical?")
-    assert "packaged Clinical script" in clinical
-    assert "Custom script edits will be lost" in clinical
-    assert "Private tags are left untouched" in clinical
-    assert "Embedded PHI" in clinical
-    assert "SR and PDF" in clinical
-    assert "not re-processed" in clinical
-    assert "Recommendation:" in clinical
-    assert "burnt-in" in clinical
+def test_options_switch_confirm_message() -> None:
+    message = options_switch_confirm_message()
+    assert "Custom script edits will be lost" in message
+    assert "not re-processed" in message
+    assert "SR" in message and "PDF" in message
 
-    strict = anonymization_policy_switch_confirm_message(
-        AnonymizationPolicy.STRICT,
-        policy_display_name="Strict",
-    )
-    assert strict.startswith("Change policy to Strict?")
-    assert "packaged Strict script" in strict
-    assert "Private tags are wiped" in strict
-    assert "not re-processed" in strict
-    assert "left as-is" in strict

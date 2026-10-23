@@ -1,0 +1,4 @@
+# Trial-wide DATEINC (days) for private-tag date ops (KB action o/oi) and
+# @incrementdate(this,N) when using the packaged default offset.
+# Pseudo-PHI DeIdentified gold uses -3670 on every study; change per trial.
+-3670

@@ -1,4 +1,4 @@
-"""Tests for controller/process_ctp_lookup.py."""
+"""Tests for controller/ctp_lookup.py."""
 
 from __future__ import annotations
 
@@ -7,12 +7,13 @@ from pathlib import Path
 import pytest
 from sqlalchemy import create_engine, text
 
-from anonymizer.controller.ingest.anonymizer_script import private_anonymizer_script_path
-from anonymizer.controller.ingest.process_ctp_lookup import (
+from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
+from anonymizer.controller.ctp_lookup import (
     LookupPropertiesError,
+    apply_ctp_lookup_preview,
     commit_ctp_lookup,
+    lookup_table_context,
     preview_ctp_lookup,
-    private_lookup_properties_path,
 )
 from anonymizer.model.anonymizer import AnonymizerModel
 from tests.opened_anonymizer_model import opened_anonymizer_model
@@ -64,8 +65,7 @@ def _lookup_rows_from_db(db_path: Path) -> list[tuple[str, str, int | None]]:
 
 def _assert_model_matches_expected(
     model: AnonymizerModel,
-    expected: dict[str, tuple[str, int | None]],
-) -> None:
+    expected: dict[str, tuple[str, int | None]]) -> None:
     for patient_id, (anon_id, offset) in expected.items():
         row = model.get_phi_by_phi_patient_id(patient_id)
         assert row is not None, f"missing PHI for {patient_id!r}"
@@ -83,8 +83,7 @@ def test_preview_parses_basedate(tmp_path: Path) -> None:
         [
             "ptid/MRN1=SITE-1",
             "basedate/MRN1=20180327",
-        ],
-    )
+        ])
     preview = preview_ctp_lookup(props)
     assert preview.has_basedate is True
     assert preview.rows[0].base_date == "20180327"
@@ -97,8 +96,7 @@ def test_preview_rejects_basedate_without_matching_ptid(tmp_path: Path) -> None:
         [
             "ptid/MRN1=SITE-1",
             "basedate/OTHER=20180327",
-        ],
-    )
+        ])
     with pytest.raises(LookupPropertiesError, match="basedate"):
         preview_ctp_lookup(props)
 
@@ -110,8 +108,7 @@ def test_preview_parses_ptid_and_dateoffset(tmp_path: Path) -> None:
         [
             "ptid/12345=527408-000042",
             "dateoffset/12345=127",
-        ],
-    )
+        ])
     preview = preview_ctp_lookup(props)
     assert len(preview.rows) == 1
     assert preview.rows[0].patient_id == "12345"
@@ -147,8 +144,7 @@ def test_preview_ignores_comments_and_blank_lines(tmp_path: Path) -> None:
             "! bang comment",
             "ptid/ALPHA=527408-000001",
             "  ptid/BETA=527408-000002  ",
-        ],
-    )
+        ])
     preview = preview_ctp_lookup(props)
     assert {row.patient_id for row in preview.rows} == {"ALPHA", "BETA"}
 
@@ -170,8 +166,7 @@ def test_preview_requires_dateoffset_for_all_ptid(tmp_path: Path) -> None:
             "ptid/111=AAA-001",
             "ptid/222=AAA-002",
             "dateoffset/111=10",
-        ],
-    )
+        ])
     with pytest.raises(LookupPropertiesError, match="Missing"):
         preview_ctp_lookup(props)
 
@@ -184,8 +179,7 @@ def test_preview_rejects_dateoffset_without_matching_ptid(tmp_path: Path) -> Non
             "ptid/111=AAA-001",
             "dateoffset/111=10",
             "dateoffset/ORPHAN=20",
-        ],
-    )
+        ])
     with pytest.raises(LookupPropertiesError, match="dateoffset"):
         preview_ctp_lookup(props)
 
@@ -198,8 +192,7 @@ def test_preview_requires_basedate_for_all_ptid(tmp_path: Path) -> None:
             "ptid/A=SITE-A",
             "ptid/B=SITE-B",
             "basedate/A=20180327",
-        ],
-    )
+        ])
     with pytest.raises(LookupPropertiesError, match="basedate"):
         preview_ctp_lookup(props)
 
@@ -223,8 +216,7 @@ def test_basedate_only_does_not_patch_hashdate(tmp_path: Path) -> None:
         [
             "ptid/MRN1=SITE-1",
             "basedate/MRN1=20180327",
-        ],
-    )
+        ])
     preview = preview_ctp_lookup(props)
     assert preview.has_basedate is True
     assert preview.has_dateoffset is False
@@ -232,10 +224,12 @@ def test_basedate_only_does_not_patch_hashdate(tmp_path: Path) -> None:
     assert not any("@lookup(this,dateoffset)" in change.after for change in preview.script_patch.changes)
 
 
-def test_apply_lookup_operands_preserves_incrementdate_and_rebasedate() -> None:
-    from anonymizer.controller.ingest.anonymizer_script import ScriptDocument, ScriptRule
-    from anonymizer.controller.ingest.process_ctp_lookup import apply_lookup_operands
+def test_apply_ctp_lookup_preview_preserves_incrementdate_and_rebasedate(tmp_path: Path) -> None:
+    from anonymizer.controller.script.document import ScriptDocument, ScriptRule
 
+    props = tmp_path / "p.properties"
+    props.write_text("ptid/A=X\ndateoffset/A=1\n", encoding="utf-8")
+    preview = preview_ctp_lookup(props)
     doc = ScriptDocument(
         rules=[
             ScriptRule(tag="00100020", name="PatientID", en="T", operation="@ptid"),
@@ -244,7 +238,7 @@ def test_apply_lookup_operands_preserves_incrementdate_and_rebasedate() -> None:
             ScriptRule(tag="00080023", name="ContentDate", en="T", operation="@hashdate"),
         ]
     )
-    apply_lookup_operands(doc, has_dateoffset=True)
+    apply_ctp_lookup_preview(doc, preview)
     assert doc.get_rule("00100020").operation == "@lookup(this,ptid)"
     assert doc.get_rule("00080020").operation == "@incrementdate(this,42)"
     assert doc.get_rule("00080021").operation == "@rebasedate(this,19600101)"
@@ -252,8 +246,6 @@ def test_apply_lookup_operands_preserves_incrementdate_and_rebasedate() -> None:
 
 
 def test_full_load_with_basedates_into_model(controller, tmp_path: Path) -> None:
-    from anonymizer.controller.ingest.process_ctp_lookup import lookup_table_context
-
     props = tmp_path / "basedates.properties"
     _write_properties(
         props,
@@ -262,8 +254,7 @@ def test_full_load_with_basedates_into_model(controller, tmp_path: Path) -> None
             "ptid/MRN2=SITE-2",
             "basedate/MRN1=20180327",
             "basedate/MRN2=20190115",
-        ],
-    )
+        ])
     preview = preview_ctp_lookup(props)
     assert preview.has_basedate is True
     assert preview.has_dateoffset is False
@@ -290,9 +281,12 @@ def test_full_load_ptid_only_into_model(controller, tmp_path: Path) -> None:
     preview = preview_ctp_lookup(props)
     script_path = commit_ctp_lookup(controller, preview)
 
-    properties_dest = private_lookup_properties_path(controller.model)
+    properties_dest = Path(controller.model.private_dir()) / f"{controller.model.site_id}-lookup.properties"
     assert properties_dest.read_text(encoding="utf-8") == props.read_text(encoding="utf-8")
-    assert script_path == private_anonymizer_script_path(controller.model)
+    assert script_path == (
+        Path(controller.model.storage_dir)
+        / f"{controller.model.site_id}-anonymizer.script"
+    )
     assert script_path.read_text(encoding="utf-8").count("@lookup(this,dateoffset)") == 0
 
     _assert_model_matches_expected(controller.anonymizer.model, expected)
@@ -321,7 +315,7 @@ def test_full_load_with_dateoffsets_into_model(controller, tmp_path: Path) -> No
 
     script_path = commit_ctp_lookup(controller, preview)
 
-    assert (private_lookup_properties_path(controller.model)).is_file()
+    assert (Path(controller.model.private_dir()) / f"{controller.model.site_id}-lookup.properties").is_file()
     assert script_path.is_file()
     assert controller.model.anonymizer_script_path == script_path
     assert controller.anonymizer.project_model.anonymizer_script_path == script_path
@@ -346,8 +340,7 @@ def test_full_reload_replaces_all_lookup_patients(controller, tmp_path: Path) ->
         [
             "ptid/OLD-1=527408-000001",
             "ptid/OLD-2=527408-000002",
-        ],
-    )
+        ])
     commit_ctp_lookup(controller, preview_ctp_lookup(first_props))
 
     second_props = tmp_path / "second.properties"
@@ -371,8 +364,7 @@ def test_commit_writes_files_and_sql(controller, tmp_path: Path) -> None:
         [
             "ptid/12345=527408-000042",
             "dateoffset/12345=127",
-        ],
-    )
+        ])
     preview = preview_ctp_lookup(props)
     script_path = commit_ctp_lookup(controller, preview)
 
@@ -388,10 +380,12 @@ def test_commit_writes_files_and_sql(controller, tmp_path: Path) -> None:
     assert "@lookup(this,ptid)" in controller.anonymizer.model._tag_keep.get("00100020", "")
 
 
-def test_apply_lookup_operands_preserves_custom_rules() -> None:
-    from anonymizer.controller.ingest.anonymizer_script import ScriptDocument, ScriptRule
-    from anonymizer.controller.ingest.process_ctp_lookup import apply_lookup_operands
+def test_apply_ctp_lookup_preview_preserves_custom_rules(tmp_path: Path) -> None:
+    from anonymizer.controller.script.document import ScriptDocument, ScriptRule
 
+    props = tmp_path / "p.properties"
+    props.write_text("ptid/A=X\ndateoffset/A=1\n", encoding="utf-8")
+    preview = preview_ctp_lookup(props)
     doc = ScriptDocument(
         rules=[
             ScriptRule(tag="00100020", name="PatientID", en="T", operation="@ptid"),
@@ -400,7 +394,7 @@ def test_apply_lookup_operands_preserves_custom_rules() -> None:
             ScriptRule(tag="00080018", name="SOPInstanceUID", en="T", operation="@uid"),
         ]
     )
-    changes = apply_lookup_operands(doc, has_dateoffset=True)
+    changes = apply_ctp_lookup_preview(doc, preview)
     assert doc.get_rule("00100020").operation == "@lookup(this,ptid)"
     assert doc.get_rule("00080020").operation == "@lookup(this,dateoffset)"
     assert doc.get_rule("00080018").operation == "@uid"
@@ -408,8 +402,9 @@ def test_apply_lookup_operands_preserves_custom_rules() -> None:
 
 
 def test_lookup_table_context_and_operands(tmp_path: Path, controller) -> None:
-    from anonymizer.controller.ingest.anonymizer_script import OPERANDS, operands_for_tag
-    from anonymizer.controller.ingest.process_ctp_lookup import LookupTableContext, lookup_table_context
+    from anonymizer.controller.script.operands import OPERANDS
+    from anonymizer.view.settings.script_editor import operands_for_tag
+    from anonymizer.controller.ctp_lookup import LookupTableContext
 
     # Lookup / rebase stay in the catalog; the view prompts to load a table on Apply.
     ids = {s.id for s in OPERANDS}
@@ -441,13 +436,11 @@ def test_lookup_table_context_and_operands(tmp_path: Path, controller) -> None:
 
 def test_commit_preserves_custom_operand_on_private_script(controller, tmp_path: Path) -> None:
     """Lookup commit must patch the current private script, not wipe custom operands."""
-    from anonymizer.controller.ingest.anonymizer_script import load_script_rules, stage_script_edit
+    from anonymizer.controller.script.document import load_script_rules, write_script_rules
 
     src = Path(controller.model.anonymizer_script_path)
-    from anonymizer.controller.ingest.process_ctp_lookup import _DEFAULT_SCRIPT_PATH
-
     if not src.is_file():
-        src = _DEFAULT_SCRIPT_PATH
+        src = DEFAULT_ANONYMIZER_SCRIPT
     doc = load_script_rules(src)
     sop = doc.get_rule("00080018")
     assert sop is not None
@@ -457,13 +450,19 @@ def test_commit_preserves_custom_operand_on_private_script(controller, tmp_path:
         rule = doc.get_rule(tag)
         if rule is not None and "@remove" not in (rule.operation or ""):
             rule.operation = "@ptid"
-    private = stage_script_edit(controller.model, doc)
+    controller.model.anonymizer_script_path = (
+        Path(controller.model.storage_dir)
+        / f"{controller.model.site_id}-anonymizer.script"
+    )
+    private = controller.model.anonymizer_script_path
+    private.parent.mkdir(parents=True, exist_ok=True)
+    write_script_rules(private, doc)
 
     props = tmp_path / "custom.properties"
     _write_properties(props, ["ptid/Z=ANON-Z"])
     commit_ctp_lookup(controller, preview_ctp_lookup(props))
 
-    reloaded = load_script_rules(private_anonymizer_script_path(controller.model))
+    reloaded = load_script_rules(controller.model.anonymizer_script_path)
     assert reloaded.get_rule("00080018").operation == "@uid"
     assert reloaded.get_rule("00100020").operation == "@lookup(this,ptid)"
     assert private.is_file()

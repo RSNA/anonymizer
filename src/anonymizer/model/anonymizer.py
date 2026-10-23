@@ -5,9 +5,7 @@ and anonymization lookups. It also includes SQLAlchemy ORM classes for Series, S
 
 import hashlib
 import logging
-import re
-import xml.etree.ElementTree as ET
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import wraps
@@ -83,7 +81,7 @@ class Series(Base):
     )
 
     def is_description_harmonized(self) -> bool:
-        """True when ``harmonized_description`` is non-blank."""
+        """True when harmonized_description is non-blank."""
         return bool((self.harmonized_description or "").strip())
 
 
@@ -263,10 +261,10 @@ class AnonymizerModel:
     """
     The Anonymizer data model class to store PHI (Protected Health Information) with anonymized key lookups.
 
-    ``MODEL_VERSION`` tracks the code release schema generation. Existing project SQLite
-    databases are upgraded on open by ``ensure_sqlite_columns`` (see ``sqlite_schema``),
-    which adds any ORM-mapped columns missing from older ``anonymizer.db`` files.
-    Bumping ``MODEL_VERSION`` alone does not migrate the database.
+    MODEL_VERSION tracks the code release schema generation. Existing project SQLite
+    databases are upgraded on open by ensure_sqlite_columns (see sqlite_schema),
+    which adds any ORM-mapped columns missing from older anonymizer.db files.
+    Bumping MODEL_VERSION alone does not migrate the database.
     """
 
     # Model Version Control
@@ -311,6 +309,7 @@ class AnonymizerModel:
         self._tag_keep: dict[str, str] = {}
         self._lookup_required = False
         self.date_operands_present = False
+
         # Create the deterministic, project-specific salt for accession_number hash:
         salt_string = f"anonymizer::{self._site_id}::{self._uid_prefix}"
         self._accession_salt = salt_string.encode("utf-8")
@@ -327,7 +326,7 @@ class AnonymizerModel:
 
         # Default PHI record: (patient_id=DEFAULT_PHI_PATIENT_ID_PK_VALUE, anon_patient_id = site_id + "-000000")
         self._add_default_PHI()
-        self._load_script(script_path)
+        # Keep-table is filled by AnonymizerController.reload_script via script.document.
 
 
     def _get_class_name(self) -> str:
@@ -446,102 +445,37 @@ class AnonymizerModel:
         default_phi.anon_patient_id = new_anon_pt_id
         self._site_id = new_site_id
 
-    def _load_script(self, script_path: Path):
+    def replace_tag_keep(
+        self,
+        operations: Mapping[str, str],
+        *,
+        script_path: Path | None = None,
+    ) -> None:
         """
-        Load and parse an anonymize script file to populate the _tag_keep dictionary.
-        This method reads an XML file that defines which DICOM tags to keep and their associated operations.
-        The XML file should have a structure where each 'e' element represents a tag to keep,
-        with the tag name as an attribute 't' and the operation as the text content of the element.
-        The operations can include instructions like "@remove" to indicate that the tag should be removed,
-        or simply be left empty to indicate that the tag should be kept without modification.
-        Refer to AnonymizerController._anonymize_element to see which operations are available and how they are applied.
+        Replace the runtime keep table and refresh derived flags.
 
         Args:
-            script_path (Path): The path to the script file.
-
-        Raises:
-            FileNotFoundError: If the script file is not found.
-            ET.ParseError: If there is an error parsing the script file.
-            Exception: If there is any other generic exception.
+            operations: Uppercase tag → operation (from tag_keep_from_document).
+            script_path: When set, becomes the model's active script path.
 
         Returns:
-            None
+            None.
         """
-        logger.info(f"Load script file: {script_path} to create AnonymizerModel._tag_keep")
-        try:
-            # Open and parse the XML script file
-            root = ET.parse(script_path).getroot()
-
-            # Extract 'e' tags into _tag_keep dictionary
-            # IGNORE "en" = "T" or "F" - Java UX checkbox
-            # Tags with no operation or specified operation (which can be @remove) are added to tag_keep dictionary
-            # ALL unspecified tags are removed
-            for e in root.findall("e"):
-                tag = str(e.attrib.get("t"))
-                operation = str(e.text) if e.text is not None else ""
-                if "@remove" not in operation:
-                    # Store GGGGXXEE uppercase so resolve_tag_keep can match private blocks.
-                    key = tag.upper() if "XX" in tag.upper() else tag
-                    self._tag_keep[key] = operation
-
-            # TODO: Handle (and TCIA required date handling, id lookups, sequences?, private tags):
-            # <r en="T" t="curves">Remove curves</r>
-            # <r en="T" t="overlays">Remove overlays</r>
-            # <r en="T" t="privategroups">Remove private groups</r> # pydicom.remove_private_tags() * currently removed by default
-
-            filtered_tag_keep = {k: v for k, v in self._tag_keep.items() if v != ""}
-            logger.info(f"_tag_keep has {len(self._tag_keep)} entries with {len(filtered_tag_keep)} operations")
-            logger.info(f"_tag_keep operations:\n{pformat(filtered_tag_keep)}")
-            self._lookup_required = any("@lookup" in operation for operation in self._tag_keep.values())
-            self.date_operands_present = any("date" in operation for operation in self._tag_keep.values())
-            logger.info(f"Lookup required: {self._lookup_required}")
-            logger.info(f"Date operands present: {self.date_operands_present}")
-            return
-
-        except FileNotFoundError:
-            logger.error(f"{script_path} not found")
-            raise
-
-        except ET.ParseError:
-            logger.error(f"Error parsing script file {script_path}. Ensure it is valid XML.")
-            raise
-
-        except Exception as e:
-            # Catch other generic exceptions and log the error message
-            logger.error(f"Error Parsing script file {script_path}: {str(e)}")
-            raise
-
-    def reload_script(self, script_path: Path) -> None:
-        """Reload anonymization script from disk (e.g. after CTP lookup table commit)."""
-        if not script_path.exists():
-            raise FileNotFoundError(f"Script file {script_path} does not exist.")
-        self._script_path = script_path
-        self._tag_keep.clear()
-        self._lookup_required = False
-        self.date_operands_present = False
-        self._load_script(script_path)
-
-    def resolve_tag_keep(self, tag: str) -> str | None:
-        """Return keep operation for ``tag``, or ``None`` if the element should be deleted.
-
-        Exact hex keys win; otherwise ``GGGGXXEE`` patterns match any byte in ``XX``.
-        Clinical walks may override XX via creator-aware TCIA KB before calling this.
-        """
-
-        key = str(tag).upper()
-        if key in self._tag_keep:
-            return self._tag_keep[key]
-        # Also try original casing keys stored without XX.
-        if tag in self._tag_keep:
-            return self._tag_keep[tag]
-        for keep_tag, operation in self._tag_keep.items():
-            kt = str(keep_tag).upper()
-            if "XX" not in kt or len(kt) != 8:
-                continue
-            pattern = kt.replace("XX", "[0-9A-F]{2}")
-            if re.fullmatch(pattern, key):
-                return operation
-        return None
+        if script_path is not None:
+            path = Path(script_path)
+            if not path.exists():
+                raise FileNotFoundError(f"Script file {path} does not exist.")
+            self._script_path = path
+        self._tag_keep = {str(tag).upper(): str(op) for tag, op in operations.items()}
+        self._lookup_required = any("@lookup" in operation for operation in self._tag_keep.values())
+        self.date_operands_present = any("date" in operation for operation in self._tag_keep.values())
+        filtered = {k: v for k, v in self._tag_keep.items() if v and v != "@keep"}
+        logger.info(
+            f"_tag_keep has {len(self._tag_keep)} entries with {len(filtered)} non-keep operations"
+        )
+        logger.info(f"_tag_keep operations:\n{pformat(filtered)}")
+        logger.info(f"Lookup required: {self._lookup_required}")
+        logger.info(f"Date operands present: {self.date_operands_present}")
 
     @use_session()
     def upsert_ctp_lookup_phi(self, rows: Sequence[CtpLookupPhiRow]) -> int:
@@ -966,7 +900,7 @@ class AnonymizerModel:
         return new_phi
 
     def _get_or_create_study(
-        self, ds: Dataset, parent_phi: PHI, date_offset_from_hash: int, source_name: str
+        self, ds: Dataset, parent_phi: PHI, date_delta: int, source_name: str
     ) -> tuple[Study, int]:
         study_uid = str(ds.StudyInstanceUID)  # PK of Study
         study: Study | None = self.session.get(Study, study_uid)
@@ -991,7 +925,7 @@ class AnonymizerModel:
 
         logger.debug(f"Creating new Study record with anon_acc_no:{anon_acc_no}")
         # Lookup table date offset stored in PHI takes precedence over hash-based date offset:
-        date_offset = parent_phi.date_offset if parent_phi.date_offset is not None else date_offset_from_hash
+        date_offset = parent_phi.date_offset if parent_phi.date_offset is not None else date_delta
         new_study: Study = Study(
             study_uid=study_uid,
             anon_study_uid=self._create_anon_uid(study_uid),  # Generate a new anonymized StudyUID
@@ -1058,7 +992,7 @@ class AnonymizerModel:
 
     @use_session()
     def capture_phi(
-        self, source: str, ds: Dataset, date_offset_from_hash: int
+        self, source: str, ds: Dataset, date_delta: int
     ) -> tuple[str, str, str | None, int]:
         """
         Capture PHI (Protected Health Information) from a DICOM dataset
@@ -1066,7 +1000,7 @@ class AnonymizerModel:
         Args:
             source (str): The source of the dataset.
             ds (Dataset): The dataset containing the PHI.
-            date_offset_from_hash (int): The date shift determined from the hash of the study date and patient ID
+            date_delta (int): The file's resolved date delta in days (fallback when the PHI record has no lookup dateoffset)
 
         Returns:
             tuple[str, str, str | None, int]: A tuple containing the PHI patient ID, anonymized patient ID, anonymized accession number, and date offset.
@@ -1083,7 +1017,7 @@ class AnonymizerModel:
             raise ValueError(msg)
 
         phi = self._get_or_create_phi(ds)
-        study, date_offset = self._get_or_create_study(ds, phi, date_offset_from_hash, source)
+        study, date_offset = self._get_or_create_study(ds, phi, date_delta, source)
         series = self._get_or_create_series(ds, study)
         self._get_or_create_instance(ds, series)
 
@@ -1386,7 +1320,7 @@ class AnonymizerModel:
     @use_session(is_read_only_operation=True)
     def find_studies_with_series_fingerprint(self, fingerprint: tuple[str, ...]) -> list[str]:
         """
-        Return anon_study_uid values whose D3 harmonized series descriptions match ``fingerprint``.
+        Return anon_study_uid values whose D3 harmonized series descriptions match fingerprint.
 
         Fingerprint is a sorted multiset of Playbook series description strings.
         """
@@ -1406,7 +1340,7 @@ class AnonymizerModel:
 
     @use_session(is_read_only_operation=True)
     def find_studies_with_2d_series_fingerprint(self, fingerprint: tuple[str, ...]) -> list[str]:
-        """Return anon_study_uid values whose D2 harmonized descriptions match ``fingerprint``."""
+        """Return anon_study_uid values whose D2 harmonized descriptions match fingerprint."""
 
         target = tuple(fingerprint)
         stmt = select(Study).options(selectinload(Study.series))

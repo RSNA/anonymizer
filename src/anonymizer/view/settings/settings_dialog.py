@@ -12,26 +12,25 @@ from typing import List, Tuple
 
 import customtkinter as ctk
 
-from anonymizer.controller.ingest.anonymizer_script import (
-    anonymization_policy_display_name,
-    anonymization_policy_switch_confirm_message,
-    anonymization_policy_tooltip,
-    normalize_anonymization_policy,
-    should_install_anonymization_policy,
-)
-from anonymizer.controller.ingest.process_ctp_lookup import _DEFAULT_SCRIPT_PATH, CtpLookupPreview
+from anonymizer.controller.ctp_lookup import CtpLookupPreview
 from anonymizer.controller.project import ProjectController
-from anonymizer.model.project import AnonymizationPolicy, AWSCognito, DICOMNode, ProjectModel
+from anonymizer.model.project import BASIC_OPTIONS, RETAIN_OPTIONS, AWSCognito, DICOMNode, ProjectModel
+from anonymizer.utils.dicom import DeidMethodCode, deid_method_meaning
 from anonymizer.utils.logging import set_logging_levels
 from anonymizer.utils.storage.java_index import (
     JavaAnonymizerExportedStudy,
     read_java_anonymizer_index_xlsx,
 )
 from anonymizer.utils.translate import _, get_current_language_code
+from anonymizer.view.ai.features.availability import get_download_manager
+from anonymizer.view.ai.features.catalog import (
+    ai_feature_for_deid_option,
+    deid_option_ready,
+    groups_for,
+)
 from anonymizer.view.common.app_window import AppToplevel, install_modal_dismiss
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import default_char_width_px
-from anonymizer.view.common.tooltip import bind_hover_tooltip
 from anonymizer.view.common.ux_fields import str_entry
 from anonymizer.view.settings.anonymizer_script_dialog import AnonymizerScriptDialog
 from anonymizer.view.settings.aws_cognito_dialog import AWSCognitoDialog
@@ -39,6 +38,10 @@ from anonymizer.view.settings.dicom_node_dialog import DICOMNodeDialog
 from anonymizer.view.settings.logging_levels_dialog import LoggingLevelsDialog
 from anonymizer.view.settings.modalites_dialog import ModalitiesDialog
 from anonymizer.view.settings.network_timeouts_dialog import NetworkTimeoutsDialog
+from anonymizer.view.settings.script_editor import (
+    confidentiality_options_changed,
+    options_switch_confirm_message,
+)
 from anonymizer.view.settings.sop_classes_dialog import SOPClassesDialog
 from anonymizer.view.settings.transfer_syntaxes_dialog import TransferSyntaxesDialog
 
@@ -262,46 +265,34 @@ class SettingsDialog(AppToplevel):
 
         # row += 1
 
-        self._policy_label = ctk.CTkLabel(self._frame, text=_("Anonymization Policy") + ":")
-        self._policy_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
-        policy_frame = ctk.CTkFrame(self._frame, fg_color="transparent")
-        policy_frame.grid(row=row, column=1, pady=(PAD, 0), padx=PAD, sticky="nw")
-        initial_policy = normalize_anonymization_policy(
-            getattr(self.model, "anonymization_policy", AnonymizationPolicy.STRICT)
-        )
-        self.model.anonymization_policy = initial_policy
-        self._policy_var = tk.StringVar(value=initial_policy.value)
-        self._policy_change_guard = False
-        # Existing projects: confirm + install packaged script immediately on radio change.
-        policy_command = (
-            self._on_anonymization_policy_selected
-            if (not self.new_model and self.project_controller is not None)
-            else None
-        )
-        self._strict_policy_radio = ctk.CTkRadioButton(
-            policy_frame,
-            text=_("Strict"),
-            variable=self._policy_var,
-            value=AnonymizationPolicy.STRICT.value,
-            command=policy_command,
-        )
-        self._strict_policy_radio.pack(side="left", padx=(0, 12))
-        bind_hover_tooltip(
-            self._strict_policy_radio,
-            _(anonymization_policy_tooltip(AnonymizationPolicy.STRICT)),
-        )
-        self._clinical_policy_radio = ctk.CTkRadioButton(
-            policy_frame,
-            text=_("Clinical"),
-            variable=self._policy_var,
-            value=AnonymizationPolicy.CLINICAL.value,
-            command=policy_command,
-        )
-        self._clinical_policy_radio.pack(side="left")
-        bind_hover_tooltip(
-            self._clinical_policy_radio,
-            _(anonymization_policy_tooltip(AnonymizationPolicy.CLINICAL)),
-        )
+        self._options_label = ctk.CTkLabel(self._frame, text=_("De-identification Options") + ":")
+        self._options_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
+        options_frame = ctk.CTkFrame(self._frame, fg_color="transparent")
+        options_frame.grid(row=row, column=1, pady=(PAD, 0), padx=PAD, sticky="nw")
+        self._option_vars: dict[DeidMethodCode, tk.BooleanVar] = {}
+        self._options_change_guard = False
+        for code in DeidMethodCode:
+            var = tk.BooleanVar(value=code in self.model.confidentiality_options)
+            self._option_vars[code] = var
+            checkbox = ctk.CTkCheckBox(
+                options_frame,
+                text=_(deid_method_meaning(code)),
+                variable=var,
+                command=lambda c=code: self._on_option_checkbox(c),
+            )
+            if code is DeidMethodCode.BASIC:
+                checkbox.configure(state="disabled")
+            checkbox.pack(anchor="w")
+        preset_frame = ctk.CTkFrame(options_frame, fg_color="transparent")
+        preset_frame.pack(anchor="w", pady=(4, 0))
+        ctk.CTkButton(
+            preset_frame, text=_("Basic"), width=90,
+            command=lambda: self._apply_options_preset(BASIC_OPTIONS),
+        ).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(
+            preset_frame, text=_("Retain"), width=90,
+            command=lambda: self._apply_options_preset(RETAIN_OPTIONS),
+        ).pack(side="left")
 
         row += 1
 
@@ -490,75 +481,175 @@ class SettingsDialog(AppToplevel):
         self.model.anonymizer_script_path = script_path
         logger.info(f"Anonymizer Script File updated: {self.model.anonymizer_script_path}")
 
-    def _sync_model_from_controller_policy(self) -> None:
-        """Copy policy/script/modalities/storage classes from the controller after install.
+    def _selected_options(self) -> frozenset[DeidMethodCode]:
+        """
+        De-identification options from the checkbox set.
 
-        Copies ``storage_classes`` as-is (does not rebuild from modalities) so custom
-        SOP-class selections survive Clinical enablement and Update.
+        Returns:
+            Selected option codes, always including the Basic Profile.
+        """
+        return frozenset(
+            {code for code, var in self._option_vars.items() if var.get()}
+            | {DeidMethodCode.BASIC}
+        )
+
+    def _set_option_vars(self, options: frozenset[DeidMethodCode]) -> None:
+        """
+        Reflect options in the checkbox set without firing callbacks.
+
+        Args:
+            options: Option codes to show as selected.
+        """
+        self._options_change_guard = True
+        try:
+            for code, var in self._option_vars.items():
+                var.set(code in options)
+        finally:
+            self._options_change_guard = False
+
+    def _apply_options_preset(self, options: frozenset[DeidMethodCode]) -> None:
+        """
+        Fill the checkbox set from a preset (Basic / Retain).
+
+        Args:
+            options: Preset option codes.
+        """
+        self._set_option_vars(options)
+        self._on_confidentiality_options_selected()
+
+    def _sync_model_from_controller_options(self) -> None:
+        """Copy options/script/modalities/storage classes from the controller after install.
+
+        Copies storage_classes as-is (does not rebuild from modalities) so custom
+        SOP-class selections survive option-driven enablement and Update.
         """
         if self.project_controller is None:
             return
         ctrl = self.project_controller.model
-        self.model.anonymization_policy = normalize_anonymization_policy(ctrl.anonymization_policy)
+        self.model.confidentiality_options = ctrl.confidentiality_options
         self.model.anonymizer_script_path = Path(ctrl.anonymizer_script_path)
         self.model.modalities = list(ctrl.modalities)
         self.model.storage_classes = list(ctrl.storage_classes)
 
-    def _on_anonymization_policy_selected(self, _value: str | None = None) -> None:
-        """Existing project: confirm, then replace project script with packaged policy script."""
-        if self._policy_change_guard or self.new_model or self.project_controller is None:
+    def _on_option_checkbox(self, code: DeidMethodCode) -> None:
+        """
+        Gate one option toggle on its AI feature's readiness.
+
+        A cleaning option may only be selected when its feature reports
+        ready; otherwise offer the model download in-flow. Declining (or a
+        failed download) leaves the option unselected.
+
+        Args:
+            code: Option whose checkbox was toggled.
+        """
+        if self._options_change_guard:
             return
-        selected = normalize_anonymization_policy(self._policy_var.get())
-        current = normalize_anonymization_policy(self.model.anonymization_policy)
-        if selected is current:
+        var = self._option_vars[code]
+        if var.get() and not deid_option_ready(code):
+            var.set(False)
+            self._offer_option_download(code)
             return
-        policy_name = _(anonymization_policy_display_name(selected))
+        self._on_confidentiality_options_selected()
+
+    def _offer_option_download(self, code: DeidMethodCode) -> None:
+        """
+        Offer to download the models for a not-ready cleaning option.
+
+        Args:
+            code: Option the user tried to select.
+        """
+        feature = ai_feature_for_deid_option(code)
+        if feature is None:
+            messagebox.showinfo(
+                _("De-identification Options"),
+                _("This option is not available yet."),
+                parent=self,
+            )
+            return
+        groups = [g for g in groups_for(feature) if g.needs_download()]
+        if not groups:
+            messagebox.showinfo(
+                _("De-identification Options"),
+                _("This option is not ready (models or license missing)."),
+                parent=self,
+            )
+            return
+        if not messagebox.askyesno(
+            _("De-identification Options"),
+            _("Models for this option are not installed. Download now?"),
+            parent=self,
+        ):
+            return
+        manager = get_download_manager()
+        group = groups[0]
+
+        def _done(event) -> None:  # noqa: ANN001 - DownloadCompleteEvent from availability
+            self.after(0, lambda: self._after_option_download(code, event))
+
+        if not manager.start(group.download_id, group.download, on_complete=_done):
+            messagebox.showinfo(
+                _("De-identification Options"),
+                _("Another download is already in progress."),
+                parent=self,
+            )
+
+    def _after_option_download(self, code: DeidMethodCode, event) -> None:  # noqa: ANN001
+        """
+        Re-check readiness after an in-flow option download finishes.
+
+        Args:
+            code: Option the download was for.
+            event: Download completion event.
+        """
+        get_download_manager().clear_pending(event.download_id)
+        if event.error is None and deid_option_ready(code):
+            self._option_vars[code].set(True)
+            self._on_confidentiality_options_selected()
+        else:
+            messagebox.showinfo(
+                _("De-identification Options"),
+                _("This option is not ready (models or license missing)."),
+                parent=self,
+            )
+
+    def _on_confidentiality_options_selected(self) -> None:
+        """Existing project: confirm, then recompile the project script from the options."""
+        if self._options_change_guard or self.new_model or self.project_controller is None:
+            return
+        selected = self._selected_options()
+        current = self.model.confidentiality_options
+        if selected == current:
+            return
         confirmed = messagebox.askyesno(
-            _("Anonymization Policy"),
-            _(
-                anonymization_policy_switch_confirm_message(
-                    selected,
-                    policy_display_name=policy_name,
-                )
-            ),
+            _("De-identification Options"),
+            _(options_switch_confirm_message()),
             parent=self,
         )
         if not confirmed:
-            self._policy_change_guard = True
-            try:
-                self._policy_var.set(current.value)
-            finally:
-                self._policy_change_guard = False
+            self._set_option_vars(current)
             return
         try:
-            self.project_controller.apply_anonymization_policy(selected)
+            self.project_controller.apply_confidentiality_options(selected)
         except Exception as exc:  # noqa: BLE001
-            logger.exception("apply_anonymization_policy failed: %s", exc)
+            logger.exception("apply_confidentiality_options failed: %s", exc)
             messagebox.showerror(
-                _("Anonymization Policy"),
-                _("Failed to apply anonymization policy") + f":\n{exc}",
+                _("De-identification Options"),
+                _("Failed to apply de-identification options") + f":\n{exc}",
                 parent=self,
             )
-            self._policy_change_guard = True
-            try:
-                self._policy_var.set(current.value)
-            finally:
-                self._policy_change_guard = False
+            self._set_option_vars(current)
             return
-        self._sync_model_from_controller_policy()
-        self._policy_change_guard = True
-        try:
-            self._policy_var.set(self.model.anonymization_policy.value)
-        finally:
-            self._policy_change_guard = False
-        logger.info("Anonymization policy switched to %s", selected.value)
+        self._sync_model_from_controller_options()
+        self._set_option_vars(self.model.confidentiality_options)
+        logger.info(f"Confidentiality options switched to {sorted(int(c) for c in selected)}")
 
     def _open_anonymizer_script_dialog(self) -> None:
         script_path = Path(self.model.anonymizer_script_path)
         if not script_path.is_file():
 
-            if _DEFAULT_SCRIPT_PATH.is_file():
-                script_path = _DEFAULT_SCRIPT_PATH
+            default_script = Path("assets/scripts/default-anonymizer.script")
+            if default_script.is_file():
+                script_path = default_script
         if not script_path.is_file():
             messagebox.showerror(
                 _("Edit Anonymizer Script"),
@@ -653,31 +744,29 @@ class SettingsDialog(AppToplevel):
         self.model.language_code = get_current_language_code()
         self.model.project_name = self.project_name_var.get()
         self.model.uid_root = self.uidroot_var.get()
-        if hasattr(self, "_policy_var"):
-            self.model.anonymization_policy = normalize_anonymization_policy(self._policy_var.get())
-        # Existing project: install packaged script only when policy still differs
-        # (radio change already applied it; re-install would wipe Edit Script customizations).
-        # Do not sync from controller when policy is unchanged — that used to rebuild
+        if hasattr(self, "_option_vars"):
+            self.model.confidentiality_options = self._selected_options()
+        # Existing project: recompile only when options still differ
+        # (checkbox change already applied it; re-install would wipe Edit Script customizations).
+        # Do not sync from controller when options are unchanged — that used to rebuild
         # storage_classes from modalities and discard SOP classes added in this dialog.
         if self.project_controller is not None:
-            installed = normalize_anonymization_policy(
-                self.project_controller.model.anonymization_policy
-            )
-            if should_install_anonymization_policy(
-                selected=self.model.anonymization_policy,
+            installed = self.project_controller.model.confidentiality_options
+            if confidentiality_options_changed(
+                selected=self.model.confidentiality_options,
                 installed=installed,
             ):
                 try:
-                    self.project_controller.apply_anonymization_policy(self.model.anonymization_policy)
+                    self.project_controller.apply_confidentiality_options(self.model.confidentiality_options)
                 except Exception as exc:  # noqa: BLE001
-                    logger.exception("apply_anonymization_policy failed: %s", exc)
+                    logger.exception("apply_confidentiality_options failed: %s", exc)
                     messagebox.showerror(
-                        _("Anonymization Policy"),
-                        _("Failed to apply anonymization policy") + f":\n{exc}",
+                        _("De-identification Options"),
+                        _("Failed to apply de-identification options") + f":\n{exc}",
                         parent=self,
                     )
                     return
-                self._sync_model_from_controller_policy()
+                self._sync_model_from_controller_options()
         self._user_input = self.model, self.java_phi_studies, self._ctp_lookup_preview
 
         teardown_ctk_toplevel(self, parent=self.master)

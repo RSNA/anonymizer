@@ -186,7 +186,9 @@ def test_load_script_sets_lookup_required(anonymizer_model: AnonymizerModel, tmp
         "</anonymizer-script>\n",
         encoding="utf-8",
     )
-    anonymizer_model.reload_script(lookup_script)
+    from tests.opened_anonymizer_model import load_model_script
+
+    load_model_script(anonymizer_model, lookup_script)
 
     assert anonymizer_model._lookup_required is True
 

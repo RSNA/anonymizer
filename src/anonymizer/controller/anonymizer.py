@@ -1,19 +1,16 @@
+"""Anonymization of DICOM datasets.
+
+Public API
+----------
+QuarantineDirectories
+    QuarantineDirectories type.
+
+LookupTableMissError
+    Raised when a required CTP lookup patient id is not in PHI (lookup not committed).
+
+AnonymizerController
+    The Anonymizer Controller class to handle the anonymization of DICOM datasets and manage the Anonymizer Model.
 """
-Anonymization of DICOM datasets.
-
-This module provides the AnonymizerController class, which handles the anonymization of DICOM datasets and manages the Anonymizer Model.
-
-The AnonymizerController class performs the following tasks:
-- Loading and saving the Anonymizer Model from/to a pickle file.
-- Handling the anonymization of DICOM datasets using worker threads.
-- Managing the quarantine of invalid or incomplete DICOM datasets.
-- Generating the local storage path for anonymized datasets.
-- Validating date strings.
-- Hashing dates based on patient ID.
-
-For more information, refer to the legacy anonymizer documentation: https://mircwiki.rsna.org/index.php?title=The_CTP_DICOM_Anonymizer
-"""
-
 import logging
 import os
 import re
@@ -24,22 +21,32 @@ from pathlib import Path
 from queue import Queue
 from shutil import copyfile
 
-from pydicom import DataElement, Dataset, Sequence, dcmread
+from pydicom import DataElement, Dataset, dcmread
 from pydicom.datadict import dictionary_VR
 from pydicom.errors import InvalidDicomError
 from pydicom.tag import Tag
 
-from anonymizer.controller.ingest.anonymizer_script import always_literal_text, incrementdate_days, rebasedate_origin
-from anonymizer.controller.ingest.dates import (
+from anonymizer.controller.dates import (
     DEFAULT_ANON_DATE,
     apply_day_delta,
-    hash_date,
-    rebase_days,
+    is_date_delta_operation,
+    resolve_date_delta,
     stamp_dates_modified,
     stamp_rebase_registration,
+    valid_date,
+)
+from anonymizer.controller.private_tags import private_tag_operation
+from anonymizer.controller.script.document import (
+    load_script_rules,
+    tag_keep_from_document,
+)
+from anonymizer.controller.script.operands import (
+    always_literal_text,
+    is_remove_operation,
 )
 from anonymizer.model.anonymizer import AnonymizerModel
-from anonymizer.model.project import AnonymizationPolicy, DICOMNode, ProjectModel
+from anonymizer.model.project import AT_INGEST, DICOMNode, ProjectModel
+from anonymizer.utils.dicom import DeidMethodCode, record_deid_method_codes
 from anonymizer.utils.storage.dicom_tree import DICOM_FILE_SUFFIX
 from anonymizer.utils.translate import _
 
@@ -72,20 +79,8 @@ class AnonymizerController:
     ANONYMIZER_MODEL_FILENAME = "AnonymizerModel.pkl"
     DEIDENTIFICATION_METHOD = "RSNA DICOM ANONYMIZER"  # (0012,0063)
 
-    # See assets/docs/RSNA-Covid-19-Deindentification-Protocol.pdf
-    # TODO: if user edits default anonymization script these values should be updated accordingly
-    # TODO: simpler to provide UX for different de-identification methods, esp. enable/disable sub-options
-    # DeIdentificationMethodCodeSequence (0012,0064)
-    DEIDENTIFICATION_METHODS: list[tuple[str, str]] = [
-        ("113100", "Basic Application Confidentiality Profile"),
-        (
-            "113107",
-            "Retain Longitudinal Temporal Information Modified Dates Option",
-        ),
-        ("113108", "Retain Patient Characteristics Option"),
-    ]
     PRIVATE_BLOCK_NAME = "RSNA"
-    DEFAULT_ANON_DATE = DEFAULT_ANON_DATE  # from controller.ingest.dates
+    DEFAULT_ANON_DATE = DEFAULT_ANON_DATE  # from controller.dates
 
     NUMBER_OF_DATASET_WORKER_THREADS = 1
     WORKER_THREAD_SLEEP_SECS = 0.075  # for UX responsiveness
@@ -115,7 +110,9 @@ class AnonymizerController:
             project_model.anonymizer_script_path,
             project_model.get_db_url(),
         )
+        self.reload_script(project_model.anonymizer_script_path)
         self._model_change_flag = False
+        logger.info(f"SAFE_PRIVATE enabled: {self.safe_private_enabled}")
         logger.info(f"Anonymizer Model initialised from script: {project_model.anonymizer_script_path}")
 
         self._anon_ds_Q: Queue = Queue()  # queue for dataset workers
@@ -133,6 +130,32 @@ class AnonymizerController:
 
         self._active = True
         logger.info("Anonymizer Controller initialised")
+
+    def reload_script(self, script_path: Path) -> None:
+        """
+        Load a script file into the runtime keep table.
+
+        Args:
+            script_path: Path to the anonymizer .script file.
+
+        Returns:
+            None.
+
+        Raises:
+            FileNotFoundError: When the script file is missing.
+        """
+        path = Path(script_path)
+        document = load_script_rules(path)
+        self.model.replace_tag_keep(
+            tag_keep_from_document(document),
+            script_path=path,
+        )
+        logger.info(f"Anonymizer keep-table reloaded from {path}")
+
+    @property
+    def safe_private_enabled(self) -> bool:
+        """True when Retain Safe Private is one of the project's confidentiality options."""
+        return DeidMethodCode.SAFE_PRIVATE in self.project_model.confidentiality_options
 
     def model_changed(self) -> bool:
         if self._model_change_flag:
@@ -298,104 +321,14 @@ class AnonymizerController:
 
         return result
 
-    def _anonymize_element(
-        self,
-        dataset: Dataset,
-        data_element: DataElement,
-        phi_ptid: str,
-        anon_ptid: str,
-        anon_acc_no: str | None,
-        days_from_lookup: int,
-        base_date: str | None,
-    ) -> None:
-        """
-        Apply script keep/remove/transform rules to one data element.
-
-        Args:
-            dataset: Dataset containing the element (mutated).
-            data_element: Element to anonymize.
-            phi_ptid: PHI PatientID.
-            anon_ptid: Anonymized PatientID.
-            anon_acc_no: Anonymized accession number, or None.
-            days_from_lookup: Lookup dateoffset days for this patient.
-            base_date: Lookup base_date YYYYMMDD for this patient, or None.
-
-        Returns:
-            None.
-        """
-        tag = str(data_element.tag).translate(self._clean_tag_translate_table).upper()
-        if data_element.tag.is_private:
-            return
-        operation = self.model.resolve_tag_keep(tag)
-        if operation is None:
-            del dataset[tag]
-            return
-        if "@keep" in operation or "@safe" in operation:
-            return
-
-        value = data_element.value
-        raw = str(value) if value is not None else ""
-
-        if "@empty" in operation:
-            dataset[tag].value = ""
-        elif "@uid" in operation:
-            dataset[tag].value = self.model.get_or_create_anon_uid(value)
-        elif "@ptid" in operation:
-            dataset[tag].value = anon_ptid
-        elif "@acc" in operation:
-            if value == "":
-                dataset[tag].value = ""
-            elif anon_acc_no:
-                dataset[tag].value = anon_acc_no
-        elif "@incrementdate" in operation:
-            days = incrementdate_days(operation)
-            if days is None:
-                logger.error("Invalid incrementdate operation: %s", operation)
-                return
-            dataset[tag].value = apply_day_delta(raw, days)
-        elif "@rebasedate" in operation.lower():
-            origin = rebasedate_origin(operation)
-            days = rebase_days(base_date, origin)
-            if days is None:
-                logger.error(
-                    "@rebasedate used but no base_date/ORIGIN offset available for patient %s",
-                    phi_ptid,
-                )
-                return
-            dataset[tag].value = apply_day_delta(raw, days)
-        elif "@hashdate" in operation:
-            _, anon_date = hash_date(raw, phi_ptid)
-            dataset[tag].value = anon_date
-        elif "dateoffset" in operation:
-            dataset[tag].value = apply_day_delta(raw, days_from_lookup)
-        elif "@lookup" in operation:
-            dataset[tag].value = anon_ptid
-        elif "@round" in operation:
-            # TODO: operand is named round but it is age format specific, should be renamed round_age
-            if value is None:
-                return
-            parameter = self.extract_first_digit(operation.replace("@round", ""))
-            if parameter is None:
-                logger.error(f"Invalid round operation: {operation}, ignoring operation, return unmodified value")
-                dataset[tag].value = value
-                return
-            width = int(parameter)
-            logger.debug(f"round_age: Age:{value} Width:{width}")
-            dataset[tag].value = self._round_age(value, width)
-            logger.debug(f"round_age: Result:{dataset[tag].value}")
-        else:
-            literal = always_literal_text(operation)
-            if literal is not None:
-                dataset[tag].value = literal
-
     def _insert_always_missing_elements(self, ds: Dataset) -> None:
         """
-        Create absent DICOM elements that the script marks with ``@always()…``.
+        Create absent DICOM elements that the script marks with @always()….
 
-        ``ds.walk`` only visits existing tags. CTP ``@always()LITERAL`` also
+        ds.walk only visits existing tags. CTP @always()LITERAL also
         requires creating the element when the source dataset omits it (for
-        example fixed de-identification stamps). For each ``_tag_keep`` entry
-        whose operation is ``@always()…``, if the tag is missing, add it with
+        example fixed de-identification stamps). For each _tag_keep entry
+        whose operation is @always()…, if the tag is missing, add it with
         the dictionary VR (or LO) and the literal text.
 
         Sequences (VR SQ) are skipped; nested creation is not supported here.
@@ -437,6 +370,105 @@ class AnonymizerController:
                     exc_info=True,
                 )
 
+    def _anonymize_element(
+        self,
+        dataset: Dataset,
+        data_element: DataElement,
+        phi_ptid: str,
+        anon_ptid: str,
+        anon_acc_no: str | None,
+        date_delta: int | None,
+    ) -> None:
+        """
+        Apply script keep/remove/transform rules to one data element.
+
+        Args:
+            dataset: Dataset containing the element (mutated).
+            data_element: Element to anonymize.
+            phi_ptid: PHI PatientID.
+            anon_ptid: Anonymized PatientID.
+            anon_acc_no: Anonymized accession number, or None.
+            date_delta: The file's single resolved day delta for date
+                operations, or None when no delta could be resolved.
+
+        Returns:
+            None.
+        """
+        tag = str(data_element.tag).translate(self._clean_tag_translate_table).upper()
+
+        if data_element.tag.is_private:
+            operation = private_tag_operation(
+                dataset,
+                data_element,
+                retain_uids=DeidMethodCode.RETAIN_UIDS
+                in self.project_model.confidentiality_options,
+                date_delta=date_delta,
+            )
+        elif tag in self.model._tag_keep:
+            operation = str(self.model._tag_keep[tag] or "").strip() or "@keep"
+        else:
+            operation = "@remove()"
+
+        if is_remove_operation(operation):
+            del dataset[tag]
+            return
+
+        if "@keep" in operation or "@safe" in operation:
+            return
+
+        value = data_element.value
+        raw = str(value) if value is not None else ""
+
+        if "@empty" in operation:
+            dataset[tag].value = ""
+        elif "@uid" in operation:
+            dataset[tag].value = self.model.get_or_create_anon_uid(value)
+        elif "@ptid" in operation:
+            dataset[tag].value = anon_ptid
+        elif "@acc" in operation:
+            if value == "":
+                dataset[tag].value = ""
+            elif anon_acc_no:
+                dataset[tag].value = anon_acc_no
+        elif is_date_delta_operation(operation):
+            if date_delta is None:
+                logger.error(
+                    f"No date delta resolved for patient {phi_ptid}; leaving {tag} unchanged ({operation})"
+                )
+                return
+            if "@hashdate" in operation and (not phi_ptid or not valid_date(raw.strip()[:8])):
+                dataset[tag].value = DEFAULT_ANON_DATE
+            elif data_element.tag.is_private and data_element.VR in ("SL", "UL", "IS"):
+                # Numeric private dates (YYYYMMDD in an int VR) apply as ints.
+                try:
+                    dataset[tag].value = int(
+                        apply_day_delta(f"{int(raw.strip()):08d}", date_delta)[:8]
+                    )
+                except ValueError:
+                    del dataset[tag]
+                    return
+            else:
+                dataset[tag].value = apply_day_delta(raw, date_delta)
+        elif "@lookup" in operation:
+            dataset[tag].value = anon_ptid
+        elif "@round" in operation:
+            # TODO: operand is named round but it is age format specific, should be renamed round_age
+            if value is None:
+                return
+            parameter = self.extract_first_digit(operation.replace("@round", ""))
+            if parameter is None:
+                logger.error(f"Invalid round operation: {operation}, ignoring operation, return unmodified value")
+                dataset[tag].value = value
+                return
+            width = int(parameter)
+            logger.debug(f"round_age: Age:{value} Width:{width}")
+            dataset[tag].value = self._round_age(value, width)
+            logger.debug(f"round_age: Result:{dataset[tag].value}")
+        else:
+            literal = always_literal_text(operation)
+            if literal is not None:
+                dataset[tag].value = literal
+
     def anonymize(self, source: DICOMNode | str, ds: Dataset) -> str | None:
         """
         Anonymizes the DICOM dataset by removing PHI (Protected Health Information) and
@@ -467,17 +499,25 @@ class AnonymizerController:
             except Exception as e:
                 logger.error(f"Error storing source file: {str(e)}")
 
-        # Calculate date offset from hash of study date and patient ID
-        date_offset_from_hash, _ = (
-            hash_date(ds.StudyDate, ds.PatientID)
-            if hasattr(ds, "StudyDate") and hasattr(ds, "PatientID")
-            else (0, None)
+        # Resolve the file's single date delta from the StudyDate operation,
+        # then verify valid DICOM format and CAPTURE PHI and source into DATABASE:
+        phi_patient_id = str(ds.PatientID).strip() if hasattr(ds, "PatientID") else ""
+        phi_record = self.model.get_phi_by_phi_patient_id(phi_patient_id)
+        phi_study_date = str(getattr(ds, "StudyDate", "") or "").strip() or None
+        base_date = phi_record.base_date if phi_record is not None else None
+        date_delta = resolve_date_delta(
+            self.model._tag_keep.get("00080020") or None,
+            patient_id=phi_patient_id,
+            days_from_lookup=(
+                phi_record.date_offset
+                if phi_record is not None and phi_record.date_offset is not None
+                else 0
+            ),
+            base_date=phi_record.base_date if phi_record is not None else None,
         )
-
-        # Verify valid DICOM format then CAPTURE PHI and source into DATABASE:
         try:
-            phi_ptid, anon_ptid, anon_acc_no, date_offset = self.model.capture_phi(
-                str(source), ds, date_offset_from_hash
+            phi_ptid, anon_ptid, anon_acc_no, _date_offset = self.model.capture_phi(
+                str(source), ds, date_delta or 0
             )
         except KeyError as e:
             return self._write_dataset_to_quarantine(e, ds, QuarantineDirectories.LOOKUP_MISS)
@@ -490,12 +530,8 @@ class AnonymizerController:
         try:
             # To minimize memory/computation overhead DO NOT MAKE COPY of source dataset
             # Anonymize dataset (overwrite phi dataset) (prevents dataset copy)
-            phi_study_date = str(getattr(ds, "StudyDate", "") or "").strip() or None
-            phi_record = self.model.get_phi_by_phi_patient_id(phi_ptid)
-            base_date = phi_record.base_date if phi_record is not None else None
 
-            # Do not remove private tags for Clinical anonymization policy
-            if self.project_model.anonymization_policy is not AnonymizationPolicy.CLINICAL:
+            if not self.safe_private_enabled:
                 ds.remove_private_tags()
 
             # if ds.PatientID not present, set to '' so that anonymization script can process the element:
@@ -509,13 +545,12 @@ class AnonymizerController:
                     phi_ptid,
                     anon_ptid,
                     None if anon_acc_no is None else str(anon_acc_no),
-                    date_offset,
-                    base_date,
+                    date_delta,
                 )
 
             ds.walk(pydicom_callback)  # recursive by default, recurses into embedded dataset sequences
 
-            # Create missing non-SQ elements whose script uses ``@always()…`` (CTP create-if-missing).
+            # Create missing non-SQ elements whose script uses @always()… (CTP create-if-missing).
             self._insert_always_missing_elements(ds)
 
             if self.model.date_operands_present:
@@ -526,16 +561,7 @@ class AnonymizerController:
             # All elements now anonymized according to script, now handle Anonymization specific Tags:
             ds.PatientIdentityRemoved = "YES"  # CS: (0012, 0062)
             ds.DeidentificationMethod = self.DEIDENTIFICATION_METHOD  # LO: (0012,0063)
-            de_ident_seq = Sequence()  # SQ: (0012,0064)
-
-            for code, descr in self.DEIDENTIFICATION_METHODS:
-                item = Dataset()
-                item.CodeValue = code
-                item.CodingSchemeDesignator = "DCM"
-                item.CodeMeaning = descr
-                de_ident_seq.append(item)
-
-            ds.DeidentificationMethodCodeSequence = de_ident_seq
+            record_deid_method_codes(ds, self.project_model.confidentiality_options & AT_INGEST)
             block = ds.private_block(0x0013, self.PRIVATE_BLOCK_NAME, create=True)
             block.add_new(0x1, "SH", self.project_model.site_id)
             block.add_new(0x3, "SH", self.project_model.project_name)

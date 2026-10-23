@@ -1,10 +1,10 @@
-"""
-ProjectController: DICOM Application Entity (SCU + SCP) for the Anonymizer project.
+"""ProjectController: DICOM Application Entity (SCU + SCP) for the Anonymizer project.
 
-Networking implementation lives in ``anonymizer.controller.dicom`` mixins.
-This module assembles the AE and retains AWS export, PHI, and AI façades.
+Public API
+----------
+ProjectController
+    DICOM Application Entity (pynetdicom.ae sub-class) for the Anonymizer.
 """
-
 from __future__ import annotations
 
 import logging
@@ -51,24 +51,10 @@ from anonymizer.controller.dicom import dicomweb as dicomweb_api
 from anonymizer.controller.dicom.association import AssociationMixin
 from anonymizer.controller.dicom.echo_scu import EchoMixin
 from anonymizer.controller.dicom.find_scu import FindMixin
-from anonymizer.controller.dicom.hierarchies import InstanceUIDHierarchy, SeriesUIDHierarchy, StudyUIDHierarchy
-from anonymizer.controller.dicom.requests import (
-    EchoRequest,
-    EchoResponse,
-    ExportPatientsRequest,
-    ExportPatientsResponse,
-    FindStudyRequest,
-    FindStudyResponse,
-    MoveStudiesRequest,
-)
+from anonymizer.controller.dicom.requests import ExportPatientsRequest, ExportPatientsResponse
 from anonymizer.controller.dicom.retrieve_scu import RetrieveMixin
 from anonymizer.controller.dicom.scp import ScpMixin
 from anonymizer.controller.dicom.store_scu import StoreMixin
-from anonymizer.controller.ingest.anonymizer_script import (
-    packaged_script_path_for_policy,
-    project_anonymizer_script_path,
-)
-from anonymizer.controller.ingest.process_ctp_lookup import migrate_project_script_from_private
 from anonymizer.controller.jobs.work_state import WorkState
 from anonymizer.controller.phi.phi_io import (
     PHI_IndexRecord,
@@ -76,32 +62,18 @@ from anonymizer.controller.phi.phi_io import (
     format_series_processing_status,
     write_lookup_csv,
 )
-from anonymizer.controller.phi.phi_io import (
-    import_java_phi_studies as phi_io_import_java_phi_studies,
-)
+from anonymizer.controller.phi.phi_io import import_java_phi_studies as phi_io_import_java_phi_studies
+from anonymizer.controller.script.compile import compile_script
+from anonymizer.controller.script.document import write_script_rules
 from anonymizer.model.anonymizer import PHI, SeriesProcessingStatus
-from anonymizer.model.project import AnonymizationPolicy, AuthenticationError, DICOMRuntimeError, ProjectModel
+from anonymizer.model.project import AuthenticationError, DICOMRuntimeError, ProjectModel
+from anonymizer.utils.dicom import DeidMethodCode
 from anonymizer.utils.logging import set_logging_levels
 from anonymizer.utils.modalities import Modality, get_modality_catalog
 from anonymizer.utils.storage.java_index import JavaAnonymizerExportedStudy
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
-
-# Re-export hierarchy / request types for existing call sites
-__all__ = [
-    "InstanceUIDHierarchy",
-    "SeriesUIDHierarchy",
-    "StudyUIDHierarchy",
-    "EchoRequest",
-    "EchoResponse",
-    "FindStudyRequest",
-    "FindStudyResponse",
-    "MoveStudiesRequest",
-    "ExportPatientsRequest",
-    "ExportPatientsResponse",
-    "ProjectController",
-]
 
 
 class ProjectController(
@@ -111,8 +83,7 @@ class ProjectController(
     StoreMixin,
     FindMixin,
     RetrieveMixin,
-    AE,
-):
+    AE):
     """
     DICOM Application Entity (pynetdicom.ae sub-class) for the Anonymizer.
 
@@ -206,15 +177,14 @@ class ProjectController(
         self._aws_expiration_datetime: datetime | None = None
         self._aws_user_directory: str | None = None
         self._aws_last_error: str | None = None
-        self.anonymizer = AnonymizerController(project_model=model)
+        self.anonymizer = AnonymizerController(project_model = model)
 
     def build_dataset_analytics(self, *, should_abort=None):
 
         return build_dataset_analytics(
             self.anonymizer.model,
             Path(self.model.images_dir()),
-            should_abort=should_abort,
-        )
+            should_abort=should_abort)
 
     def _reset_scp_vars(self):
         self._abort_query = False
@@ -296,8 +266,7 @@ class ProjectController(
                 AuthParameters={
                     "USERNAME": self.model.aws_cognito.username,
                     "PASSWORD": self.model.aws_cognito.password,
-                },
-            )
+                })
 
             if "ChallengeName" in response and response["ChallengeName"] == "NEW_PASSWORD_REQUIRED":
                 # New password required, reset using previous password:
@@ -311,8 +280,7 @@ class ProjectController(
                         "USERNAME": self.model.aws_cognito.username,
                         "NEW_PASSWORD": self.model.aws_cognito.password,
                     },
-                    Session=session,
-                )
+                    Session=session)
 
             if "ChallengeName" in response:
                 raise AuthenticationError(_("Unexpected Authorisation Challenge") + f": {response['ChallengeName']}")
@@ -361,8 +329,7 @@ class ProjectController(
                 AccountId=self.model.aws_cognito.account_id,
                 Logins={
                     f"cognito-idp.{self.model.aws_cognito.region_name}.amazonaws.com/{self.model.aws_cognito.user_pool_id}": cognito_identity_token
-                },
-            )
+                })
 
             if "IdentityId" not in response:
                 logging.error(f"IdentityId not in response: {response}")
@@ -377,8 +344,7 @@ class ProjectController(
                 IdentityId=identity_id,
                 Logins={
                     f"cognito-idp.{self.model.aws_cognito.region_name}.amazonaws.com/{self.model.aws_cognito.user_pool_id}": cognito_identity_token
-                },
-            )
+                })
 
             self._aws_expiration_datetime = self._aws_credentials["Credentials"][
                 "Expiration"
@@ -391,8 +357,7 @@ class ProjectController(
                 "s3",
                 aws_access_key_id=self._aws_credentials["Credentials"]["AccessKeyId"],
                 aws_secret_access_key=self._aws_credentials["Credentials"]["SecretKey"],
-                aws_session_token=self._aws_credentials["Credentials"]["SessionToken"],
-            )
+                aws_session_token=self._aws_credentials["Credentials"]["SessionToken"])
 
             return self._s3
 
@@ -434,8 +399,7 @@ class ProjectController(
             self.model.aws_cognito.s3_prefix,
             self._aws_user_directory,
             self.model.project_name,
-            anon_pt_id,
-        )
+            anon_pt_id)
 
         if study_uid:
             object_path = object_path.joinpath(study_uid)
@@ -461,8 +425,7 @@ class ProjectController(
         patient_id: str,
         ux_Q: Queue,
         *,
-        export_dicom_seg: bool = False,
-    ) -> None:
+        export_dicom_seg: bool = False) -> None:
         """
         Blocking: Export the anonymized patient's DICOM files to the specified destination (DICOM server or AWS S3 bucket).
 
@@ -471,7 +434,7 @@ class ProjectController(
             patient_id (str): The anonymized Patient ID.
             ux_Q (Queue): The UX queue to send ExportPatientsResponse to.
             export_dicom_seg: When True, convert series segments (TotalSegmentator
-                ``seg/`` masks and user ROI annotations) to DICOM-SEG files in each
+                seg/ masks and user ROI annotations) to DICOM-SEG files in each
                 series directory before collecting files to send.
 
                 Any exceptions & errors are reflected via the error field of ExportPatientsResponse
@@ -560,8 +523,7 @@ class ProjectController(
                         self.model.aws_cognito.s3_prefix,
                         self._aws_user_directory,
                         self.model.project_name,
-                        Path(dicom_file_path).relative_to(self.model.images_dir()),
-                    ).as_posix()
+                        Path(dicom_file_path).relative_to(self.model.images_dir())).as_posix()
 
                     # TODO: use multi-part upload_part method for large files
                     # which can be aborted via s3.abort_multipart_upload
@@ -584,8 +546,7 @@ class ProjectController(
                             dicomweb_api.store_files(
                                 session,
                                 [dicom_file_path],
-                                abort_check=lambda: self._abort_export,
-                            )
+                                abort_check=lambda: self._abort_export)
                             files_sent += 1
                             ux_Q.put(ExportPatientsResponse(patient_id, files_sent, None, False))
                 else:
@@ -653,8 +614,8 @@ class ProjectController(
     def _prepare_patient_dicom_segs(self, patient_dir: Path) -> None:
         """Convert series segments to DICOM-SEG files under each series directory.
 
-        Includes TotalSegmentator ``seg/`` anatomy masks (e.g. brain structures) and
-        user ROI ``annotations/``. Failures for individual series are logged and
+        Includes TotalSegmentator seg/ anatomy masks (e.g. brain structures) and
+        user ROI annotations/. Failures for individual series are logged and
         skipped so the patient export continues.
         """
 
@@ -705,8 +666,7 @@ class ProjectController(
 
         self._export_executor = ThreadPoolExecutor(
             max_workers=self._patient_export_thread_pool_size,
-            thread_name_prefix="ExportPatient",
-        )
+            thread_name_prefix="ExportPatient")
 
         with self._export_executor as executor:
             for i in range(len(req.patient_ids)):
@@ -715,8 +675,7 @@ class ProjectController(
                     req.dest_name,
                     req.patient_ids[i],
                     req.ux_Q,
-                    export_dicom_seg=req.export_dicom_seg,
-                )
+                    export_dicom_seg=req.export_dicom_seg)
                 self._export_futures.append(future)
 
             logger.info(f"Export Futures: {len(self._export_futures)}")
@@ -753,7 +712,7 @@ class ProjectController(
         threading.Thread(
             target=self._manage_export,
             name="ManageExport",
-            args=(er,),
+            args=(er),
             daemon=True,  # daemon threads are abruptly stopped at shutdown
         ).start()
 
@@ -871,8 +830,7 @@ class ProjectController(
                 phi_csv_path,
                 patient_count,
                 study_count,
-                series_count,
-            )
+                series_count)
         except Exception as e:
             logger.error(f"Error writing PHI CSV: {e}")
             return repr(e)
@@ -900,8 +858,7 @@ class ProjectController(
         self,
         status: SeriesProcessingStatus,
         *,
-        include_face_blur: bool = True,
-    ) -> str:
+        include_face_blur: bool = True) -> str:
         return format_series_processing_status(status, include_face_blur=include_face_blur)
 
     def get_phi_by_anon_patient_id(self, anon_patient_id: str) -> PHI | None:
@@ -918,15 +875,13 @@ class ProjectController(
         series_path: Path,
         anon_series_uid: str | None = None,
         *,
-        also_clear_annotations: bool = False,
-    ) -> None:
+        also_clear_annotations: bool = False) -> None:
 
         clear_series_tseg_cache(
             series_path,
             anon_model=self.anonymizer.model,
             anon_series_uid=anon_series_uid,
-            also_clear_annotations=also_clear_annotations,
-        )
+            also_clear_annotations=also_clear_annotations)
 
     def harmonize_studies(
         self,
@@ -934,8 +889,7 @@ class ProjectController(
         *,
         progress: HarmonizeStudiesProgressCallback | None = None,
         cancelled: HarmonizeStudiesCancelledCallback | None = None,
-        on_outcome: HarmonizeStudiesLogCallback | None = None,
-    ) -> HarmonizeStudiesSummary:
+        on_outcome: HarmonizeStudiesLogCallback | None = None) -> HarmonizeStudiesSummary:
         """Run unattended harmonize for all CT series under the selected studies."""
         return harmonize_studies_batch(
             self.model.images_dir(),
@@ -943,8 +897,7 @@ class ProjectController(
             anon_model=self.anonymizer.model,
             progress=progress,
             cancelled=cancelled,
-            on_outcome=on_outcome,
-        )
+            on_outcome=on_outcome)
 
     def ai_batch_process(
         self,
@@ -955,8 +908,7 @@ class ProjectController(
         cancelled: AiBatchCancelledCallback | None = None,
         on_log: AiBatchWorkflowLogCallback | None = None,
         memory_callback: AiBatchMemoryCallback | None = None,
-        work_state: WorkState | None = None,
-    ) -> AiBatchSummary:
+        work_state: WorkState | None = None) -> AiBatchSummary:
         """Run selected AI algorithms sequentially for series under selected studies."""
         return ai_batch_process(
             self.model.images_dir(),
@@ -969,41 +921,48 @@ class ProjectController(
             cancelled=cancelled,
             on_log=on_log,
             memory_callback=memory_callback,
-            work_state=work_state,
-        )
+            work_state=work_state)
 
-    def apply_anonymization_policy(
+    def apply_confidentiality_options(
         self,
-        policy: AnonymizationPolicy | str | None = None,
-    ) -> Path:
-        """Install the packaged script for ``policy`` beside ProjectModel.json and reload.
-
-        Strict → ``default-anonymizer.script``; Clinical → ``clinical-anonymizer.script``.
-        Clinical also enables SR/PDF modalities when missing.
+        options: frozenset[DeidMethodCode] | None = None) -> Path:
         """
+        Compile the script for options beside ProjectModel.json and reload.
 
-        if policy is None:
-            policy = getattr(self.model, "anonymization_policy", AnonymizationPolicy.STRICT)
-        try:
-            policy = AnonymizationPolicy(str(policy).strip().lower())
-        except ValueError:
-            policy = AnonymizationPolicy.STRICT
-        self.model.anonymization_policy = policy
+        Args:
+            options: De-identification options to store on the project;
+                defaults to the options already stored.
 
+        Returns:
+            Path of the installed project script.
 
-        source = packaged_script_path_for_policy(policy)
-        if not source.is_file():
-            raise FileNotFoundError(f"Packaged script missing: {source}")
+        Raises:
+            FileNotFoundError: When a packaged base script is missing.
+        """
+        if options is None:
+            options = self.model.confidentiality_options
+        options = (
+            frozenset(DeidMethodCode(int(code)) for code in options)
+            | {DeidMethodCode.BASIC}
+        )
+        self.model.confidentiality_options = options
 
-        migrate_project_script_from_private(self.model)
-        dest = project_anonymizer_script_path(self.model)
+        # Leaving the packaged default: project script beside ProjectModel.json.
+        self.model.anonymizer_script_path = (
+            Path(self.model.storage_dir) / f"{self.model.site_id}-anonymizer.script"
+        )
+        dest = self.model.anonymizer_script_path
         dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source, dest)
-        self.model.anonymizer_script_path = dest
-        self.anonymizer.project_model.anonymizer_script_path = dest
-        self.anonymizer.model.reload_script(dest)
+        write_script_rules(
+            dest,
+            compile_script(options, ProjectModel.default_anonymizer_script_path()),
+        )
+        self.anonymizer.reload_script(dest)
 
-        if policy is AnonymizationPolicy.CLINICAL:
+        if options & {
+            DeidMethodCode.CLEAN_STRUCTURED_CONTENT,
+            DeidMethodCode.CLEAN_DESCRIPTORS,
+        }:
             catalog = get_modality_catalog()
             mods = list(self.model.modalities)
             for code in (Modality.SR, Modality.PDF):
@@ -1012,5 +971,7 @@ class ProjectController(
             self.model.modalities = mods
             # Add SR/PDF SOP classes; keep any custom storage classes already selected.
             self.model.ensure_storage_classes_from_modalities()
-        logger.info("Applied anonymization policy %s → %s", policy.value, dest)
+        logger.info(
+            f"Applied confidentiality options {sorted(int(code) for code in options)} → {dest}"
+        )
         return dest
