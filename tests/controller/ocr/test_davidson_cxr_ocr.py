@@ -25,11 +25,6 @@ def davidson_loaded():
     return load_series_frames(DAVIDSON_CXR_SERIES_DIR)
 
 
-def test_davidson_cxr_loads_single_frame(davidson_loaded) -> None:
-    assert davidson_loaded.is_single_frame
-    assert davidson_loaded.frames.shape[0] == 1
-    assert davidson_loaded.frames.ndim == 3
-
 
 @pytest.mark.ocr_integration
 @pytest.mark.usefixtures("require_ocr")

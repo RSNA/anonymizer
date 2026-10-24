@@ -10,20 +10,20 @@
 
 ## Running
 
-Default suite matches CI (`tests/controller` + `tests/model` + `tests/mcp`, including managed Orthanc):
+Default suite matches the main CI job (`tests/controller` + `tests/model` + `tests/mcp`, **without** managed Orthanc):
 
 ```bash
 uv sync --extra tseg --group dev
-uv run pytest -q                              # same suite as GitHub Actions
+uv run pytest -q                              # same suite as GitHub Actions unit job
 uv run pytest tests/controller/tseg -q        # subset
 uv run pytest src/prototyping -q              # prototyping only (outside testpaths)
 ```
 
-### Optional / opt-out suites
+### Optional / opt-in suites
 
 ```bash
-# Skip managed Orthanc (ports 11242/18042; auto-download under orthanc_runtime/)
-uv run pytest -m 'not dicom_integration' -q
+# Managed Orthanc PACS (ports 11242/18042; auto-download under orthanc_runtime/)
+uv run pytest -m dicom_integration -o 'addopts=--tb=short' -q
 
 # EasyOCR on real fixtures (needs weights under assets/ai/ocr/model)
 uv run pytest tests/controller/ocr -m ocr_integration \
@@ -43,13 +43,14 @@ Defined in `pyproject.toml`:
 
 | Marker | Use |
 |--------|-----|
-| `dicom_integration` | Managed Orthanc; **included** in default suite; skip with `-m 'not dicom_integration'` |
+| `dicom_integration` | Managed Orthanc; **opt-in** (excluded from default `addopts`). CI runs a path-filtered job when DICOM sources/tests change, on `dev`/`main`/`master` pushes, or `workflow_dispatch` |
 | `ocr_integration` | EasyOCR on real fixtures (opt-in; excluded from default `addopts`) |
+| `mcp_e2e` | Live HTTP MCP server (opt-in; excluded from default) |
 | `view_dev` | Series View vs local MRI_TEST (opt-in; not in `testpaths`) |
 | `tseg_integration` | TotalSegmentator inference in prototyping (slow; not in CI) |
 | `rsna_local_data` | RSNA test data directory required |
 
-Default `addopts` excludes only `ocr_integration` and `view_dev`.
+Default `addopts` excludes `ocr_integration`, `view_dev`, `pseudo_phi_integration`, `mcp_e2e`, and `dicom_integration`.
 
 ## Shared assets
 

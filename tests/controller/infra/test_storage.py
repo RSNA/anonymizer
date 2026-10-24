@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from anonymizer.utils.storage.dicom_tree import (
+    count_quarantine_images,
     count_series,
     count_studies_series_images,
     count_study_images,
@@ -362,3 +363,12 @@ def test_list_import_directory_files_skips_non_dicom_sidecars(temp_dir: str) -> 
             handle.write("x")
 
     assert sorted(list_import_directory_files(temp_dir)) == sorted([dicom_file, extensionless])
+
+
+def test_count_quarantine_images(tmp_path: Path) -> None:
+    assert count_quarantine_images(tmp_path / "missing") == 0
+    q = tmp_path / "quarantine"
+    (q / "a").mkdir(parents=True)
+    (q / "a" / "bad.dcm").write_bytes(b"x")
+    (q / "a" / "note.txt").write_text("n")
+    assert count_quarantine_images(q) == 1

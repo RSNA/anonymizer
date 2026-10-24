@@ -18,8 +18,11 @@ tests/controller/dicom/
 ```
 
 ```bash
+# Default: PACS simulator only (Orthanc deselected by addopts)
 pytest tests/controller/dicom -q
 pytest tests/controller/dicom/dimse -q
 pytest tests/controller/dicom/dicomweb -q
-pytest tests/controller/dicom -m 'not dicom_integration' -q
+
+# Managed Orthanc (opt-in; also CI path-filtered job on Python 3.12)
+pytest tests/controller/dicom -m dicom_integration -o 'addopts=--tb=short' -q
 ```

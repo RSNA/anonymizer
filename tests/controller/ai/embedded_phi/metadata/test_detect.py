@@ -150,3 +150,37 @@ def test_entity_count_by_label() -> None:
         "b": (Entity(label="FIRST_NAME", start=0, end=2),),
     }
     assert entity_count_by_label(ents) == {"FIRST_NAME": 2, "ID": 1}
+
+
+def test_detect_requires_dataset() -> None:
+    try:
+        detect_phi_in_texts(texts=["Jane"], ds=None)
+        raise AssertionError("expected TypeError")
+    except TypeError as exc:
+        assert "requires ds" in str(exc)
+
+
+def test_detect_empty_cells_returns_empty() -> None:
+    ds = Dataset()
+    assert detect_phi_in_texts(ds=ds, items=[]) == {}
+    assert detect_phi_in_texts(texts=[], ds=ds) == {}
+
+
+def test_detect_explicit_empty_whitelist_skips_modality_load() -> None:
+    ds = Dataset()
+    with (
+        patch(
+            "anonymizer.controller.ai.embedded_phi.metadata.detect.load_modality_whitelist"
+        ) as mock_load,
+        patch(
+            "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
+            return_value=[],
+        ),
+    ):
+        detect_phi_in_texts(
+            ds=ds,
+            items=[MetadataNerItem(text="Jane Doe", field_name="Series Description", vr="LO")],
+            whitelist=[],
+            modality="US",
+        )
+    mock_load.assert_not_called()

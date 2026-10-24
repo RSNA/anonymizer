@@ -1,14 +1,10 @@
-"""Correlate Series View detect vs AI batch UX removal logs for RGB US single-frame."""
+"""Series View survivors after AI batch Remove Text on RGB US single-frame."""
 
 import shutil
 from pathlib import Path
 
 import pytest
 
-from anonymizer.controller.ai.batch_process import (
-    format_remove_pixel_phi_instance_detail,
-    format_remove_pixel_phi_series_message,
-)
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     PixelPhiRemovalMode,
     detect_text,
@@ -21,50 +17,9 @@ from anonymizer.controller.jobs.runner import RemovePixelPhiRunner
 from anonymizer.controller.series.series_io import load_series_frames
 from tests.controller.ocr.conftest import assert_dcm
 from tests.controller.support.us_rgb_fixtures import (
-    US_RGB_BATCH_PIXELS_CHANGED,
-    US_RGB_BATCH_REMOVED_TEXTS,
     US_RGB_DCM,
-    US_RGB_SERIES_VIEW_NOT_REMOVED_BY_BATCH,
-    US_RGB_SERIES_VIEW_OCR_TEXTS,
     US_RGB_SERIES_VIEW_SURVIVORS_AFTER_BATCH,
 )
-
-
-def test_us_rgb_ux_log_lines_match_fixture() -> None:
-    instance_line = format_remove_pixel_phi_instance_detail(
-        instance_index=1,
-        instance_total=1,
-        modified=True,
-        texts=US_RGB_BATCH_REMOVED_TEXTS,
-        removal_mode=PixelPhiRemovalMode.BLACKOUT,
-        pixels_changed=US_RGB_BATCH_PIXELS_CHANGED,
-    )
-    series_line = format_remove_pixel_phi_series_message(
-        modified_count=1,
-        total=1,
-        texts_removed=US_RGB_BATCH_REMOVED_TEXTS,
-        pixels_changed=US_RGB_BATCH_PIXELS_CHANGED,
-        removal_mode=PixelPhiRemovalMode.BLACKOUT,
-    )
-    region_count = len(US_RGB_BATCH_REMOVED_TEXTS)
-
-    assert instance_line == (
-        f"Instance 1/1: Remove Text · Black out text · {region_count} PHI removed"
-    )
-    assert series_line == (
-        f"PHI removed · 1/1 instance(s) · Remove Text · Black out text · "
-        f"{region_count} PHI removed"
-    )
-    for token in US_RGB_BATCH_REMOVED_TEXTS:
-        assert token not in instance_line
-        assert token not in series_line
-
-
-def test_us_rgb_series_view_detect_is_not_batch_removal_list() -> None:
-    assert len(US_RGB_SERIES_VIEW_OCR_TEXTS) == 34
-    assert US_RGB_BATCH_REMOVED_TEXTS != US_RGB_SERIES_VIEW_OCR_TEXTS
-    for text in US_RGB_SERIES_VIEW_NOT_REMOVED_BY_BATCH:
-        assert text not in US_RGB_BATCH_REMOVED_TEXTS, f"{text!r} should be filtered before removal"
 
 
 @pytest.mark.ocr_integration

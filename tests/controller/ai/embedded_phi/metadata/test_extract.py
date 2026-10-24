@@ -11,6 +11,7 @@ from anonymizer.controller.ai.embedded_phi.metadata.extract import (
     VR_SEQ_TEXT,
     apply_text_at_path,
     extract_metadata_phi_rows,
+    is_anonymizer_field,
     scrub_span_in_row,
 )
 from anonymizer.controller.private_tags import PrivateTagAction, lookup_private_tag
@@ -212,3 +213,69 @@ def test_private_name_never_bare_private() -> None:
     assert len(priv) == 1
     assert priv[0].name.casefold() != "private"
     assert "ACME_VENDOR" in priv[0].name
+
+
+def test_scrub_span_rejects_non_seq_and_cross_leaf() -> None:
+    ds = _sc_dataset()
+    ds.StudyDescription = "plain"
+    flat = next(r for r in extract_metadata_phi_rows(ds) if r.tag_path == "StudyDescription")
+    try:
+        scrub_span_in_row(ds, flat, 0, 1, "x")
+        raise AssertionError("expected ValueError for non-SEQ row")
+    except ValueError as exc:
+        assert "SEQ(text)" in str(exc)
+
+    history = _code_item("Patient History")
+    history.ValueType = "TEXT"
+    history.TextValue = "AAAA"
+    other = _code_item("Other")
+    other.ValueType = "TEXT"
+    other.TextValue = "BBBB"
+    root = _code_item("Radiology Report")
+    root.ValueType = "CONTAINER"
+    root.ContentSequence = Sequence([history, other])
+    ds.ContentSequence = Sequence([root])
+    row = next(r for r in extract_metadata_phi_rows(ds) if r.is_seq_text)
+    assert len(row.spans) >= 2
+    # Span that crosses two leaf fragments
+    start = row.spans[0].end - 1
+    end = row.spans[1].start + 1
+    assert start < end
+    try:
+        scrub_span_in_row(ds, row, start, end, "X")
+        raise AssertionError("expected ValueError for cross-leaf span")
+    except ValueError as exc:
+        assert "No leaf span covers" in str(exc)
+    try:
+        scrub_span_in_row(ds, row, -1, 2, "X")
+        raise AssertionError("expected ValueError for invalid span")
+    except ValueError as exc:
+        assert "Invalid span" in str(exc)
+
+
+def test_empty_content_sequence_yields_no_seq_text_row() -> None:
+    ds = _sc_dataset()
+    ds.ContentSequence = Sequence([])
+    assert not any(r.is_seq_text for r in extract_metadata_phi_rows(ds))
+
+
+def test_apply_text_at_path_rejects_bad_segments() -> None:
+    ds = _sc_dataset()
+    try:
+        apply_text_at_path(ds, "NoSuch[0].TextValue", "x")
+        raise AssertionError("expected AttributeError/ValueError")
+    except (AttributeError, ValueError, KeyError):
+        pass
+    try:
+        apply_text_at_path(ds, "", "x")
+        raise AssertionError("expected ValueError for empty path")
+    except ValueError:
+        pass
+
+
+def test_is_anonymizer_field_stamps_and_private_group() -> None:
+    assert is_anonymizer_field(tag="0012,0062")
+    assert is_anonymizer_field(tag="00120063")
+    assert is_anonymizer_field(tag="0013,0001")
+    assert is_anonymizer_field(tag_path="PatientIdentityRemoved")
+    assert not is_anonymizer_field(tag="0008,1030", tag_path="StudyDescription")

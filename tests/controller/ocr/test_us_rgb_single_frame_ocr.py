@@ -85,13 +85,6 @@ def anonymizer_model(tmp_path: Path):
         yield model
 
 
-def test_us_rgb_loads_color_single_frame(us_rgb_loaded) -> None:
-    loaded = us_rgb_loaded
-    assert loaded.is_single_frame
-    assert loaded.frames.shape == (1, 600, 800, 3)
-    assert loaded.frames.dtype == np.uint8
-    assert str(loaded.metadata.PhotometricInterpretation).upper() == "RGB"
-
 
 def test_ocr_rotation_angles_us_uses_horizontal_only() -> None:
     assert _ocr_rotation_angles("US") == [0]

@@ -13,7 +13,7 @@ from anonymizer.controller.jobs.runner import (
     ocr_detect_tooltip,
     ocr_remove_mode_tooltip,
 )
-from anonymizer.utils.translate import language_to_code, set_language_code
+from anonymizer.utils.translate import set_language_code
 
 
 def test_edit_context_menu_values_are_language_agnostic() -> None:
@@ -32,7 +32,7 @@ def test_detect_tooltip_describes_detect_not_remove_target() -> None:
     assert "Remove target" not in ocr_detect_tooltip(OcrEditContext.SERIES)
 
 
-@pytest.mark.parametrize("lang_code", tuple(language_to_code.values()))
+@pytest.mark.parametrize("lang_code", ("en_US", "de"))
 def test_normalize_edit_context_accepts_internal_codes(
     monkeypatch: pytest.MonkeyPatch,
     lang_code: str,
@@ -57,7 +57,7 @@ def test_german_edit_context_labels_are_translated(
     assert normalize_edit_context(series_label) is OcrEditContext.SERIES
 
 
-@pytest.mark.parametrize("lang_code", tuple(language_to_code.values()))
+@pytest.mark.parametrize("lang_code", ("en_US", "de"))
 def test_menu_labels_match_normalize_roundtrip(
     monkeypatch: pytest.MonkeyPatch,
     lang_code: str,

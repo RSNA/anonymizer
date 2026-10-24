@@ -264,11 +264,11 @@ def test_evaluate_face_blur_eligibility_already_applied() -> None:
     assert "already been applied" in face_blur_gate_message(result.reason).lower()
 
 
-@pytest.mark.parametrize("reason", list(FaceBlurGateReason))
-def test_face_blur_gate_message_covers_all_reasons(reason: FaceBlurGateReason) -> None:
-    message = face_blur_gate_message(reason)
-    assert message
-    assert isinstance(message, str)
+def test_face_blur_gate_message_covers_all_reasons() -> None:
+    """Every gate reason has a non-empty message (map completeness, not per-reason isinstance)."""
+    messages = {reason: face_blur_gate_message(reason) for reason in FaceBlurGateReason}
+    assert set(messages) == set(FaceBlurGateReason)
+    assert all(isinstance(m, str) and m.strip() for m in messages.values())
 
 
 def test_face_blur_context_hint_skips_geometry_block() -> None:

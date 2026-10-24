@@ -5,7 +5,6 @@ import os
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from time import sleep
 
 import pytest
 from pydicom import dcmread
@@ -46,14 +45,14 @@ from tests.controller.dicom.support.test_nodes import LocalSCU
 
 
 # Test a valid date before 19000101
-def test_valid_date_before_19000101(controller):
+def test_valid_date_before_19000101():
     input_date = "18991231"
     assert not valid_date(input_date)
     assert hash_date(input_date, "12345") == (0, DEFAULT_ANON_DATE)
 
 
 # Test a valid date on or after 19000101
-def test_valid_date_on_or_after_19000101(controller):
+def test_valid_date_on_or_after_19000101():
     assert valid_date("19010101")
     assert valid_date("19801228")
     assert valid_date("19660307")
@@ -62,7 +61,7 @@ def test_valid_date_on_or_after_19000101(controller):
 
 
 # Test an invalid date format
-def test_invalid_date_format(controller):
+def test_invalid_date_format():
     assert not valid_date("01-01-2022")
     assert not valid_date("2001-01-02")
     assert not valid_date("01/01/2022")
@@ -70,7 +69,7 @@ def test_invalid_date_format(controller):
 
 
 # Test an invalid date value (not a valid date)
-def test_invalid_date_value(controller):
+def test_invalid_date_value():
     assert not valid_date("20220230")
     assert not valid_date("20220231")
     assert not valid_date("20220431")
@@ -79,14 +78,14 @@ def test_invalid_date_value(controller):
 
 
 # Test with a known date and PatientID
-def test_valid_date_hashing(controller):
+def test_valid_date_hashing():
     assert hash_date("20220101", "12345")[1] == "20220921"
     assert hash_date("20220101", "67890")[1] == "20250815"
     assert hash_date("19000101", "123456789")[1] == "19080814"
     assert hash_date("19000101", "1234567890")[1] == "19080412"
 
 
-def test_valid_date_hash_patient_id_range(controller):
+def test_valid_date_hash_patient_id_range():
     for i in range(100):
         _, hdate = hash_date("20100202", str(i))
         assert valid_date(hdate)
@@ -179,8 +178,7 @@ def test_anonymize_dataset_without_PatientID(controller: ProjectController):
     # Remove PatientID field
     del ds.PatientID
     phi_ds = deepcopy(ds)
-    anonymizer.anonymize_dataset_ex(LocalSCU, ds)
-    sleep(1)
+    assert anonymizer.anonymize(LocalSCU, ds) is None
     store_dir = controller.model.images_dir()
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
 
@@ -218,8 +216,7 @@ def test_anonymize_dataset_with_blank_PatientID_1_study(controller):
     # Set Blank PatientID
     ds.PatientID = ""
     phi_ds = deepcopy(ds)
-    anonymizer.anonymize_dataset_ex(LocalSCU, ds)
-    sleep(0.5)
+    assert anonymizer.anonymize(LocalSCU, ds) is None
     store_dir = controller.model.images_dir()
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
 
@@ -257,8 +254,7 @@ def test_anonymize_dataset_with_blank_PatientID_2_studies(controller: ProjectCon
     # Set Blank PatientID
     ds1.PatientID = ""
     phi_ds1 = deepcopy(ds1)
-    anonymizer.anonymize_dataset_ex(LocalSCU, ds1)
-    sleep(0.5)
+    assert anonymizer.anonymize(LocalSCU, ds1) is None
 
     ds2 = get_testdata_file(ct_small_filename, read=True)
     assert isinstance(ds2, Dataset)
@@ -267,9 +263,7 @@ def test_anonymize_dataset_with_blank_PatientID_2_studies(controller: ProjectCon
     # Delete PatientID attribute
     del ds2.PatientID
     phi_ds2 = deepcopy(ds2)
-    anonymizer.anonymize_dataset_ex(LocalSCU, ds2)
-
-    sleep(0.5)
+    assert anonymizer.anonymize(LocalSCU, ds2) is None
     store_dir = controller.model.images_dir()
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
 
@@ -328,8 +322,7 @@ def test_anonymize_dataset_with_PatientID_1_study(controller):
     assert ds
     assert ds.PatientID
     phi_ds = deepcopy(ds)
-    anonymizer.anonymize_dataset_ex(LocalSCU, ds)
-    sleep(0.5)
+    assert anonymizer.anonymize(LocalSCU, ds) is None
     store_dir = controller.model.images_dir()
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
 
@@ -536,7 +529,7 @@ def test_incrementdate_preserves_study_interval(controller: ProjectController) -
     ).days == 30
 
 
-def test_incrementdate_sets_modified_flag(controller: ProjectController) -> None:
+def test_incrementdate_sets_modified_flag() -> None:
     ds = Dataset()
     ds.add_new(0x00080020, "DA", "20200101")
     stamp_dates_modified(ds)
@@ -544,7 +537,7 @@ def test_incrementdate_sets_modified_flag(controller: ProjectController) -> None
     assert not hasattr(ds, "LongitudinalTemporalEventType")
 
 
-def test_apply_day_delta_empty_and_short_passthrough(controller: ProjectController) -> None:
+def test_apply_day_delta_empty_and_short_passthrough() -> None:
     assert apply_day_delta("", 10) == ""
     assert apply_day_delta("2020", 10) == "2020"
     assert apply_day_delta("20200101", 10) == "20200111"
@@ -619,40 +612,6 @@ def test_anonymize_records_selected_option_codes(controller: ProjectController) 
     assert controller.anonymizer.anonymize(LocalSCU, ds2) is None
     codes2 = {str(item.CodeValue) for item in ds2.DeidentificationMethodCodeSequence}
     assert codes2 == {"113100", "113107", "113108", "113111"}
-
-
-def test_safe_private_walk_dispositions(controller: ProjectController) -> None:
-    """Retain Safe Private: KB keep/date/uid apply in the walk; unknown is removed."""
-    from anonymizer.model.project import RETAIN_OPTIONS
-
-    controller.model.confidentiality_options = RETAIN_OPTIONS
-    ds = dcmread(get_testdata_file(ct_small_filename))
-    ds.PatientID = "SAFE-PT"
-    ds.StudyDate = "20200101"
-    ds.SOPInstanceUID = "1.2.840.10008.safepriv.1"
-    ds.add_new(0x00090010, "LO", "GEMS_PETD_01")
-    ds.add_new(0x0009100F, "LO", "KEEPME")
-    ds.add_new(0x00091005, "DT", "20200101120000")
-    ds.add_new(0x00190010, "LO", "MMCPrivate")
-    ds.add_new(0x0019101A, "UI", "1.2.3.4.5")
-    ds.add_new(0x00110010, "LO", "ACME")
-    ds.add_new(0x00111001, "LO", "SECRET")
-
-    delta = resolve_date_delta(
-        controller.anonymizer.model._tag_keep.get("00080020") or None,
-        patient_id="SAFE-PT",
-        days_from_lookup=0,
-        base_date=None,
-    )
-    assert controller.anonymizer.anonymize(LocalSCU, ds) is None
-
-    assert ds[0x00090010].value == "GEMS_PETD_01"
-    assert ds[0x0009100F].value == "KEEPME"
-    assert str(ds[0x00091005].value) == apply_day_delta("20200101120000", delta)
-    assert str(ds[0x0019101A].value) != "1.2.3.4.5"
-    assert str(ds[0x0019101A].value).startswith(controller.model.uid_root)
-    assert ds[0x00110010].value == "ACME"
-    assert 0x00111001 not in ds
 
 
 def test_hashdate_full_anonymize_sets_modified(controller: ProjectController) -> None:

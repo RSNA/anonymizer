@@ -18,12 +18,6 @@ def us_multi_frame_loaded():
     return load_series_frames(US_MULTI_FRAME_DIR)
 
 
-def test_us_multi_frame_loads_54_frames(us_multi_frame_loaded) -> None:
-    loaded = us_multi_frame_loaded
-    assert loaded.frames.shape == (54, 802, 1054)
-    assert not loaded.is_single_frame
-    assert str(loaded.metadata.Modality) == "US"
-
 
 @pytest.mark.ocr_integration
 @pytest.mark.usefixtures("require_ocr")

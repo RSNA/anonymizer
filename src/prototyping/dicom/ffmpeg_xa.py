@@ -456,16 +456,19 @@ def transcode_dicom_to_h264_dicom(
     #     return
 
     out_ds[0x7FE00010].VR = "OB"
-
-    out_ds.is_little_endian = True
-    out_ds.is_implicit_VR = False
     # --- END OF THE ONE RECOMMENDED SET OF CHANGES ---
 
     # 5. Write Output DICOM File
     try:
         # output_dicom_path was passed to FileDataset constructor by ds.copy() if ds.filename was set
         # but dcmwrite will use the path given to it.
-        pydicom.dcmwrite(output_dicom_path, out_ds, write_like_original=False)
+        pydicom.dcmwrite(
+            output_dicom_path,
+            out_ds,
+            write_like_original=False,
+            little_endian=True,
+            implicit_vr=False,
+        )
         print(f"Successfully created H.264 DICOM: {output_dicom_path}")
     except Exception as e:
         print(f"Error writing output DICOM file {output_dicom_path}: {e}")
@@ -530,10 +533,12 @@ def create_dummy_xa_dcm():
     ds_dummy.NumberOfFrames = num_test_frames  # This should already be there or set with num_test_frames
     ds_dummy.PixelData = test_pixel_data_16bit.tobytes()
 
-    ds_dummy.is_little_endian = True
-    ds_dummy.is_implicit_VR = False
-
-    pydicom.dcmwrite(dummy_input_filename, ds_dummy)
+    pydicom.dcmwrite(
+        dummy_input_filename,
+        ds_dummy,
+        little_endian=True,
+        implicit_vr=False,
+    )
     print(f"Dummy DICOM file created successfully: {dummy_input_filename}")
 
 

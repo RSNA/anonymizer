@@ -15,6 +15,7 @@ import psutil
 import pytest
 
 import tests.controller.dicom.support.pacs_simulator_scp as pacs_simulator_scp
+from anonymizer.controller.anonymizer import AnonymizerController
 from anonymizer.controller.project import ProjectController
 from anonymizer.model.project import NetworkTimeouts, ProjectModel
 from anonymizer.utils.logging import init_logging
@@ -105,6 +106,8 @@ def controller(temp_dir: str) -> Generator[ProjectController, Any, None]:
         anonymizer_script_path=DEFAULT_ANONYMIZER_SCRIPT,
     )
 
+    # Tests do not need UX worker polling delay; speeds queue drain / stop().
+    AnonymizerController.WORKER_THREAD_SLEEP_SECS = 0
     project_controller = ProjectController(project_model)
 
     assert project_controller

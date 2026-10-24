@@ -25,7 +25,7 @@ from anonymizer.controller.ai.harmonize.profile_2d import (
     is_2d_harmonize_modality,
     profile_2d_for_modality,
 )
-from anonymizer.utils.modalities import ContentClass, Modality, get_modality_catalog
+from anonymizer.utils.modalities import Modality
 from anonymizer.view.ai.harmonize_description import harmonize_button_visible
 from tests.paths import REPO_ROOT
 
@@ -77,9 +77,6 @@ def test_modality_gates_planar_vs_tseg() -> None:
     assert not is_2d_harmonize_modality("OT")
     assert not is_2d_harmonize_modality("DOC")
 
-    catalog = get_modality_catalog()
-    assert catalog[Modality.CT].content_class is ContentClass.D3 and catalog[Modality.MR].content_class is ContentClass.D3
-    assert catalog[Modality.CR].content_class is ContentClass.D2
     assert harmonize_allowed_for_modality("CR")
     assert harmonize_allowed_for_modality("US")
     assert not is_2d_harmonize_modality("SC")

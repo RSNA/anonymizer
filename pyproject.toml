@@ -160,15 +160,20 @@ max-complexity = 15
 
 [tool.pytest.ini_options]
 testpaths = ["tests/controller", "tests/model", "tests/mcp"]
-addopts = "--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model --cov=src/anonymizer/mcp -m \"not ocr_integration and not view_dev and not pseudo_phi_integration and not mcp_e2e\""
+addopts = "--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model --cov=src/anonymizer/mcp -m \"not ocr_integration and not view_dev and not pseudo_phi_integration and not mcp_e2e and not dicom_integration\""
 pythonpath = ["src", "."]
-filterwarnings = []
+filterwarnings = [
+    # batchgenerators (TotalSegmentator stack) still imports deprecated scipy.ndimage.* paths
+    "ignore:Please import .* from the `scipy.ndimage` namespace:DeprecationWarning:batchgenerators.augmentations.utils",
+    # Analytics charts intentionally use ImageTk.PhotoImage (ImageViewer lifetime pattern), not CTkImage
+    "ignore:.*Given image is not CTkImage.*:UserWarning:customtkinter.windows.widgets.core_widget_classes.ctk_base_class",
+]
 markers = [
     "tseg_integration: run TotalSegmentator inference (slow, optional)",
     "ocr_integration: EasyOCR on real burnt-in PHI fixtures under tests/controller/ocr (opt-in; excluded from default)",
     "pseudo_phi_integration: PseudoPHI local dataset pipeline (script+KB+NER); opt-in; needs DATA/Pseudo-PHI-DICOM-Dataset",
     "mcp_e2e: live HTTP MCP server e2e (opt-in; excluded from default)",
-    "dicom_integration: managed Orthanc PACS (DIMSE + DICOMweb); included in default suite; skip with -m 'not dicom_integration'",
+    "dicom_integration: managed Orthanc PACS (DIMSE + DICOMweb); opt-in; excluded from default; CI path-filtered job",
     "rsna_local_data: requires local RSNA_TEST_DATA directory (skipped when absent)",
     "view_dev: Series View layout/startup design-time tests (Tk display; excluded from default; not in testpaths)",
     "prototyping: tests for src/prototyping scripts",

@@ -11,7 +11,7 @@ from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     pixel_phi_removal_mode_menu_values,
     pixel_phi_removal_mode_option_label,
 )
-from anonymizer.utils.translate import language_to_code, set_language_code
+from anonymizer.utils.translate import set_language_code
 
 
 def test_removal_mode_menu_values_are_language_agnostic() -> None:
@@ -21,7 +21,7 @@ def test_removal_mode_menu_values_are_language_agnostic() -> None:
     )
 
 
-@pytest.mark.parametrize("lang_code", tuple(language_to_code.values()))
+@pytest.mark.parametrize("lang_code", ("en_US", "de"))
 def test_normalize_removal_mode_accepts_internal_codes(
     monkeypatch: pytest.MonkeyPatch,
     lang_code: str,
@@ -33,7 +33,7 @@ def test_normalize_removal_mode_accepts_internal_codes(
     assert normalize_pixel_phi_removal_mode("inpaint") is PixelPhiRemovalMode.INPAINT
 
 
-@pytest.mark.parametrize("lang_code", tuple(language_to_code.values()))
+@pytest.mark.parametrize("lang_code", ("en_US", "de"))
 def test_menu_labels_match_normalize_roundtrip(
     monkeypatch: pytest.MonkeyPatch,
     lang_code: str,

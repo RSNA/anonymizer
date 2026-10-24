@@ -4,6 +4,7 @@ import threading
 from unittest.mock import patch
 
 from anonymizer.controller.ai.feature_availability import embedded_phi_allowed, harmonize_allowed
+from anonymizer.controller.ai.model_download import end_model_download
 from anonymizer.controller.ai.tseg.readiness import TsWeightKind
 from anonymizer.view.ai.features.availability import (
     AiFeatureDownloadManager,
@@ -19,6 +20,12 @@ from anonymizer.view.ai.features.catalog import (
     download_id_for_weight_kind,
     top_level_features,
 )
+
+
+def _clear_model_download_progress() -> None:
+    """Drop process-wide download trackers so single-flight tests see a clean busy() gate."""
+    for download_id in all_download_ids():
+        end_model_download(download_id)
 
 
 def test_friendly_labels_have_no_ts_cli_abbreviations() -> None:
@@ -66,6 +73,7 @@ def test_format_harmonize_inventory_includes_bullets() -> None:
 
 
 def test_download_manager_single_flight() -> None:
+    _clear_model_download_progress()
     manager = AiFeatureDownloadManager()
     started = threading.Event()
     release = threading.Event()
@@ -73,21 +81,32 @@ def test_download_manager_single_flight() -> None:
 
     def worker() -> str:
         started.set()
-        release.wait(timeout=2)
+        assert release.wait(timeout=5), "test release signal timed out"
         return "ok"
 
     def on_complete(event: DownloadCompleteEvent) -> None:
         completed.append(event)
 
-    assert manager.start("harmonize_ct_models", worker, on_complete=on_complete)
-    assert started.wait(timeout=1)
-    assert manager.busy()
-    assert manager.start("face_ct_models", worker, on_complete=on_complete) is False
-    release.set()
-    manager._thread.join(timeout=2)  # noqa: SLF001 — test drains worker
-    manager.clear_pending("harmonize_ct_models")
-    assert not manager.busy()
-    assert completed and completed[0].result == "ok"
+    try:
+        assert manager.start("harmonize_ct_models", worker, on_complete=on_complete) is True, (
+            "first start should succeed when idle"
+        )
+        assert started.wait(timeout=5), "worker thread did not start"
+        assert manager.busy(), "manager should report busy while first download runs"
+        assert manager.start("face_ct_models", worker, on_complete=on_complete) is False, (
+            "second start must be rejected while busy"
+        )
+        release.set()
+        thread = manager._thread  # noqa: SLF001 — test drains worker
+        assert thread is not None
+        thread.join(timeout=5)
+        assert not thread.is_alive(), "worker thread did not finish"
+        manager.clear_pending("harmonize_ct_models")
+        assert not manager.busy()
+        assert completed and completed[0].result == "ok"
+    finally:
+        release.set()
+        _clear_model_download_progress()
 
 
 def test_allowed_gates_are_readiness_only() -> None:

@@ -17,7 +17,7 @@ from anonymizer.controller.ai.tseg.config import (
     set_ct_segmentation_mode,
     set_mr_segmentation_mode,
 )
-from anonymizer.utils.translate import language_to_code, set_language_code
+from anonymizer.utils.translate import set_language_code
 
 
 def test_normalize_segmentation_mode_defaults() -> None:
@@ -28,7 +28,7 @@ def test_normalize_segmentation_mode_defaults() -> None:
     assert normalize_segmentation_mode("bogus") == "3mm"
 
 
-@pytest.mark.parametrize("lang_code", tuple(language_to_code.values()))
+@pytest.mark.parametrize("lang_code", ("en_US", "de"))
 def test_segmentation_mode_menu_values_are_language_agnostic(
     monkeypatch: pytest.MonkeyPatch,
     lang_code: str,

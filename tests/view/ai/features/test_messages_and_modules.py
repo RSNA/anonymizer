@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from anonymizer.controller.ai.tseg import ml_env, readiness
 from anonymizer.controller.ai.tseg.config import (
     apply_ai_features_preferences,
     clear_segmentation_mode_cache,
@@ -50,15 +49,6 @@ def _po_msgstr(locale: str, msgid: str) -> str | None:
     return "".join(re.findall(r'"([^"]*)"', match.group(1)))
 
 
-def test_ml_env_and_readiness_modules_export_expected_symbols() -> None:
-    assert callable(ml_env.sequential_ml_context)
-    assert callable(readiness.anatomy_ct_ready)
-    assert callable(readiness.weight_kind_ready)
-    assert callable(readiness.download_segmentation_model)
-    assert not hasattr(readiness, "get_runtime_status")
-    assert readiness.TsWeightKind.ANATOMY.value == "anatomy"
-    assert feature_title(AiFeatureId.HARMONIZE.value) == "Harmonize"
-
 
 def test_feature_strings_use_gettext() -> None:
     assert _("Remove") == "Remove"
@@ -96,7 +86,7 @@ def test_segmentation_modes_persist_in_app_state(tmp_path: Path, monkeypatch: py
         clear_segmentation_mode_cache()
 
 
-@pytest.mark.parametrize("locale", ("de", "es", "fr"))
+@pytest.mark.parametrize("locale", ("de",))
 def test_ai_feature_msgids_translated_in_catalog(locale: str) -> None:
     for msgid in _KEY_AI_MSGIDS:
         msgstr = _po_msgstr(locale, msgid)

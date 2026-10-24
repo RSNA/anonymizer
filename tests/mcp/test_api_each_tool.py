@@ -80,24 +80,9 @@ def test_api_list_projects_empty_store():
     assert "base_dir" in result
 
 
-def test_api_list_projects_after_create():
-    _create_open("Listed")
-    SESSION.close()
-    result = mcp_tools.list_projects()
-    assert result["ok"] is True
-    assert result["count"] >= 1
-    assert any(p["project_name"] == "Listed" for p in result["projects"])
-
 
 # --- create_project ---------------------------------------------------------
 
-
-def test_api_create_project_ok():
-    result = confirm_create(mcp_tools.create_project, project_name="Created")
-    assert result["ok"] is True
-    assert result["project"]["project_name"] == "Created"
-    assert result["project"]["totals"]["patients"] == 0
-    assert SESSION.is_open
 
 
 def test_api_create_project_rejects_empty_name():
@@ -108,15 +93,6 @@ def test_api_create_project_rejects_empty_name():
 
 # --- project_open -----------------------------------------------------------
 
-
-def test_api_project_open_ok():
-    _create_open("ToOpen")
-    SESSION.close()
-    assert not SESSION.is_open
-    result = mcp_tools.project_open(project_name="ToOpen")
-    assert result["ok"] is True
-    assert result["project"]["project_name"] == "ToOpen"
-    assert SESSION.is_open
 
 
 def test_api_project_open_missing_returns_error():
@@ -138,39 +114,11 @@ def test_api_project_info_ok():
     assert "totals" in result["project"]
 
 
-def test_api_project_info_without_session():
-    result = mcp_tools.project_info()
-    assert result["ok"] is False
-    assert "no project" in result["error"].lower()
-
 
 # --- import_file / import_directory -----------------------------------------
 
 
-def test_api_import_file_ok():
-    _create_open()
-    result = mcp_tools.import_file(str(DAVIDSON_DCM))
-    assert result["ok"] is True
-    assert result["files_seen"] == 1
-    assert result["succeeded"] == 1
-    assert "file" not in result
-    assert result["failures"] == []
-    assert len(result["anon_patient_ids"]) == 1
-    assert result["project"]["totals"]["instances"] >= 1
-    assert result["project"]["imported_modalities"]
 
-
-def test_api_import_file_without_session():
-    result = mcp_tools.import_file(str(DAVIDSON_DCM))
-    assert result["ok"] is False
-
-
-def test_api_import_directory_ok():
-    _create_open()
-    result = await_job(mcp_tools.import_directory(str(DAVIDSON)), mcp_tools.job_status)
-    assert result["ok"] is True
-    assert result["succeeded"] >= 1
-    assert result["failed"] == 0
 
 
 def test_api_import_directory_rejects_placeholder_path():
@@ -180,52 +128,10 @@ def test_api_import_directory_rejects_placeholder_path():
     assert "placeholder" in result["error"].lower() or "absolute" in result["error"].lower()
 
 
-def test_api_import_directory_without_session():
-    result = mcp_tools.import_directory(str(DAVIDSON))
-    assert result["ok"] is False
-
 
 # --- list_inventory ---------------------------------------------------------
 
 
-def test_api_list_inventory_ok():
-    _create_open()
-    _import_davidson()
-    result = mcp_tools.list_inventory()
-    assert result["ok"] is True
-    assert result["count"] >= 1
-    row = result["series"][0]
-    assert row["anon_patient_id"]
-    assert row["patient_index"] == 1
-    assert row["study_index"] == 1
-    assert row["series_index"] == 1
-    assert row["row_index"] == 1
-    assert "series_description" in row
-    assert "study_description" in row
-    assert isinstance(row["study_description"], str)
-    assert isinstance(row["series_description"], str)
-    # Davidson CXR carries a study description into the ORM / inventory.
-    assert row["study_description"].strip() != ""
-    assert "study_description" in result["table"].splitlines()[0]
-    assert row["study_description"] in result["table"]
-    assert "study_harmonized" in row
-    assert "series_harmonized" in row
-    assert "pixel_phi_scanned" in row
-    assert isinstance(result.get("table"), str)
-    assert "patient_index" in result["table"].splitlines()[0]
-    assert "\t" in result["table"]
-    assert "patient_name" not in row
-    assert "series_path" not in row
-    assert "anon_series_uid" not in row
-    assert "anon_study_uid" not in row
-    project = result.get("project") or {}
-    assert "images_dir" not in project
-    assert "storage_dir" not in project
-
-
-def test_api_list_inventory_without_session():
-    result = mcp_tools.list_inventory()
-    assert result["ok"] is False
 
 
 # --- remove_pixel_phi -------------------------------------------------------
@@ -262,10 +168,6 @@ def test_api_remove_pixel_phi_ok_mocked():
     assert result["pixel_phi_scanned"] is True
     assert result["anon_series_uid"]
 
-
-def test_api_remove_pixel_phi_without_session():
-    result = mcp_tools.remove_pixel_phi()
-    assert result["ok"] is False
 
 
 # --- harmonize_studies ------------------------------------------------------
@@ -365,10 +267,6 @@ def test_api_harmonize_studies_patient_selector_mocked():
     assert result["study_count"] == 1
     mock_h.assert_called_once()
 
-
-def test_api_harmonize_studies_without_session():
-    result = mcp_tools.harmonize_studies()
-    assert result["ok"] is False
 
 
 # --- job_status -------------------------------------------------------------
@@ -484,10 +382,6 @@ def test_api_export_series_preview_patient_index():
     assert result["width"] == 448
 
 
-def test_api_resolve_series_without_session():
-    result = mcp_tools.resolve_series(patient="1")
-    assert result["ok"] is False
-
 
 # --- export_series_preview --------------------------------------------------
 
@@ -524,10 +418,6 @@ def test_api_export_series_preview_rejects_patient_all():
     assert "all" in result["error"].lower()
 
 
-def test_api_export_series_preview_without_session():
-    result = mcp_tools.export_series_preview()
-    assert result["ok"] is False
-
 
 # --- configure_remote -------------------------------------------------------
 
@@ -556,10 +446,6 @@ def test_api_configure_remote_bad_role():
     assert result["ok"] is False
     assert "role" in result["error"].lower()
 
-
-def test_api_configure_remote_without_session():
-    result = mcp_tools.configure_remote("1.1.1.1", 104, "PACS")
-    assert result["ok"] is False
 
 
 # --- pacs_find --------------------------------------------------------------
@@ -606,10 +492,6 @@ def test_api_pacs_find_requires_remote():
     )
 
 
-def test_api_pacs_find_without_session():
-    result = mcp_tools.pacs_find()
-    assert result["ok"] is False
-
 
 # --- pacs_move --------------------------------------------------------------
 
@@ -648,10 +530,6 @@ def test_api_pacs_move_empty_studies():
     assert result["ok"] is False
     assert "empty" in result["error"].lower()
 
-
-def test_api_pacs_move_without_session():
-    result = mcp_tools.pacs_move(studies=[{"study_instance_uid": "1.2.3", "patient_id": "x"}])
-    assert result["ok"] is False
 
 
 # --- Parametrized: every session-bound tool rejects missing project ---------

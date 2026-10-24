@@ -56,8 +56,6 @@ def _text_item(meaning: str, text: str, code: str = "121060") -> Dataset:
 def make_basic_text_sr(path: Path) -> Path:
     ds = Dataset()
     ds.file_meta = _base_file_meta(ComprehensiveSRStorage)
-    ds.is_little_endian = True
-    ds.is_implicit_VR = False
     ds.SOPClassUID = ComprehensiveSRStorage
     ds.Modality = "SR"
     _common_patient(ds)
@@ -97,8 +95,6 @@ def make_basic_text_sr(path: Path) -> Path:
 def make_encapsulated_pdf(path: Path) -> Path:
     ds = Dataset()
     ds.file_meta = _base_file_meta(EncapsulatedPDFStorage)
-    ds.is_little_endian = True
-    ds.is_implicit_VR = False
     ds.SOPClassUID = EncapsulatedPDFStorage
     ds.Modality = "DOC"
     _common_patient(ds)

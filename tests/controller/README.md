@@ -37,7 +37,7 @@ from tests.controller.dicom.support.helpers import send_file_to_scp
 
 ## Running subsets
 
-Bare `uv run pytest` (and CI) collects controller + model + mcp, including managed Orthanc.
+Bare `uv run pytest` (and the main CI job) collects controller + model + mcp **without** managed Orthanc.
 
 ```bash
 pytest tests/controller/tseg -q
@@ -46,17 +46,17 @@ pytest tests/controller/blur_face -q
 pytest tests/controller/ocr -q                       # unit + load/smoke (excludes ocr_integration by default)
 pytest tests/controller/ocr -m ocr_integration \
   -o 'addopts=--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model --cov=src/anonymizer/mcp' -q
-pytest tests/controller/dicom -q                     # dimse/ + dicomweb/ (simulator + Orthanc)
+pytest tests/controller/dicom -q                     # simulator DIMSE/DICOMweb (Orthanc deselected by default)
+pytest tests/controller/dicom -m dicom_integration -o 'addopts=--tb=short' -q   # managed Orthanc
 pytest tests/controller/dicom/dimse -q
 pytest tests/controller/dicom/dicomweb -q
-pytest tests/controller/dicom -m 'not dicom_integration' -q   # simulator only
 pytest tests/controller/core -q
 pytest tests/controller/infra -q
 ```
 
-Managed Orthanc (auto-download into `tests/controller/dicom/support/orthanc_runtime/`): DICOM port **11242**, HTTP **18042**, Basic Auth `test`/`test`. Marked `dicom_integration` and included by default; CI caches binaries before `uv run pytest`. See [dicom/README.md](dicom/README.md).
+Managed Orthanc (auto-download into `tests/controller/dicom/support/orthanc_runtime/`): DICOM port **11242**, HTTP **18042**, Basic Auth `test`/`test`. Marked `dicom_integration` and **excluded** from default; CI runs a path-filtered Orthanc job (Python 3.12) when DICOM sources/tests change. See [dicom/README.md](dicom/README.md).
 
-Default `addopts` excludes `ocr_integration` / `view_dev` only. Download EasyOCR models via AI Features or `download_ocr_models()` before running OCR asset tests.
+Default `addopts` excludes `ocr_integration` / `view_dev` / `dicom_integration` (and related opt-in markers). Download EasyOCR models via AI Features or `download_ocr_models()` before running OCR asset tests.
 
 ## Coverage measurement
 

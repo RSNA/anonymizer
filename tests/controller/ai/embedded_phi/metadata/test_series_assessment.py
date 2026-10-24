@@ -155,3 +155,82 @@ def test_anonymizer_stamp_detection_and_date_notes() -> None:
         }
     )[0]
     assert "date delta (@hashdate)" in date_row.note
+
+
+def test_date_shift_note_operands() -> None:
+    assert date_shift_note("@incrementdate(this,-3670)", covered=True) == (
+        "date delta (@incrementdate -3670)"
+    )
+    assert date_shift_note("@rebasedate(this,19600101)", covered=True) == (
+        "date delta (@rebasedate 19600101)"
+    )
+    assert date_shift_note(None, covered=True) == "date delta by script"
+    assert date_shift_note("@keep", covered=False) is None
+    assert date_shift_note("@keep", covered=True) == "date delta (@keep)"
+
+
+def test_consolidate_empty_and_sop_order_appends_missing() -> None:
+    assert consolidate_series_metadata({}) == ()
+    by_sop = {
+        "sop-z": (_row("StudyDescription", text="Z"),),
+        "sop-a": (_row("StudyDescription", text="A"),),
+    }
+    rows = consolidate_series_metadata(by_sop, sop_order=("sop-a",))
+    # sop-a first for varies text; sop-z still counted
+    assert rows[0].text == "A"
+    assert rows[0].sop_count == 2
+    assert rows[0].varies is True
+
+
+def test_filter_matches_note_and_display_vr() -> None:
+    rows = consolidate_series_metadata(
+        {
+            "s1": (_row("ReasonForVisit", text="phi", unexpected=True),),
+            "s2": (
+                _row(
+                    "ContentSequence",
+                    text="[History] fever",
+                    vr=VR_SEQ_TEXT,
+                    name="Content Sequence",
+                    tag="0040,A730",
+                ),
+            ),
+        }
+    )
+    by_note = filter_assessment_rows(rows, query="not in SOP Class IOD")
+    assert [r.tag_path for r in by_note] == ["ReasonForVisit"]
+    by_vr = filter_assessment_rows(rows, query="SEQ")
+    assert any(r.display_vr == "SEQ" for r in by_vr)
+
+
+def test_order_only_public_or_only_private_has_no_divider() -> None:
+    public = consolidate_series_metadata({"s": (_row("StudyDescription", text="A"),)})
+    ordered_pub = order_assessment_display_rows(public)
+    assert None not in ordered_pub
+    private = consolidate_series_metadata(
+        {"s": (_row("(0009,1010)", private=True, text="priv"),)}
+    )
+    ordered_priv = order_assessment_display_rows(private)
+    assert None not in ordered_priv
+    assert ordered_priv[0].is_private
+
+
+def test_multi_sop_varies_and_unexpected_or() -> None:
+    """Two SOPs same path: different text → varies; unexpected ORs across SOPs."""
+    by_sop = {
+        "sop-1": (
+            _row("SeriesDescription", text="AXIAL", unexpected=False),
+            _row("ImageComments", text="see Jane Doe", unexpected=True),
+        ),
+        "sop-2": (
+            _row("SeriesDescription", text="SAGITTAL", unexpected=False),
+            _row("ImageComments", text="see Jane Doe", unexpected=False),
+        ),
+    }
+    rows = consolidate_series_metadata(by_sop, sop_order=("sop-1", "sop-2"))
+    by_path = {r.tag_path: r for r in rows}
+    assert by_path["SeriesDescription"].varies is True
+    assert "varies" in by_path["SeriesDescription"].note
+    assert by_path["ImageComments"].varies is False
+    assert by_path["ImageComments"].iod_unexpected is True
+    assert "not in SOP Class IOD" in by_path["ImageComments"].note

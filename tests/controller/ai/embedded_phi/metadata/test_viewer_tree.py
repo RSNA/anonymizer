@@ -33,8 +33,7 @@ def _sc_dataset() -> Dataset:
     ds.file_meta.MediaStorageSOPInstanceUID = generate_uid()
     ds.SOPClassUID = SecondaryCaptureImageStorage
     ds.SOPInstanceUID = ds.file_meta.MediaStorageSOPInstanceUID
-    ds.is_little_endian = True
-    ds.is_implicit_VR = False
+    # Endian / VR come from TransferSyntaxUID (pydicom 3+; avoid deprecated Dataset flags).
     return ds
 
 
@@ -111,3 +110,32 @@ def test_analyse_davidson_cxr_metadata_tree_includes_description() -> None:
     # Not PHI-only: identity / image geometry tags appear.
     assert "SOPClassUID" in paths or "Modality" in paths
     assert "Rows" in paths or "Columns" in paths or "SOPInstanceUID" in paths
+
+
+def test_include_file_meta_and_empty_filter() -> None:
+    ds = _sc_dataset()
+    ds.Modality = "OT"
+    roots = build_metadata_tree(ds, include_file_meta=True)
+    paths = set(flatten_tree_paths(roots))
+    assert any(p.startswith("file_meta.") for p in paths)
+    assert filter_metadata_tree(roots, "") == roots
+    assert filter_metadata_tree(roots, "   ") == roots
+
+
+def test_pixel_data_summary_node() -> None:
+    ds = _sc_dataset()
+    ds.Rows = 2
+    ds.Columns = 2
+    ds.SamplesPerPixel = 1
+    ds.BitsAllocated = 8
+    ds.BitsStored = 8
+    ds.HighBit = 7
+    ds.PixelRepresentation = 0
+    ds.PhotometricInterpretation = "MONOCHROME2"
+    ds.PixelData = b"\x00\x01\x02\x03"
+    roots = build_metadata_tree(ds)
+    by_path = {n.tag_path: n for n in roots}
+    assert "PixelData" in by_path
+    content = by_path["PixelData"].content
+    assert content
+    assert "\\x00" not in content  # summarized, not raw dump

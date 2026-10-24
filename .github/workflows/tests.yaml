@@ -20,10 +20,10 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     - name: Install uv
-      uses: astral-sh/setup-uv@v5
+      uses: astral-sh/setup-uv@v7
       with:
         enable-cache: true
         cache-dependency-glob: |
@@ -43,12 +43,6 @@ jobs:
     - name: Ruff Linting Check
       run: uv run --python ${{ matrix.python-version }} ruff check ./src/anonymizer/
 
-    - name: Cache managed Orthanc binaries
-      uses: actions/cache@v4
-      with:
-        path: tests/controller/dicom/support/orthanc_runtime
-        key: orthanc-${{ runner.os }}-1.12.7-dicomweb-1.18-gdcm-1.8
-
     - name: Run Unit Tests
       env:
         PYTHONPATH: ${{ github.workspace }}/src
@@ -56,3 +50,67 @@ jobs:
         AWS_PASSWORD: ${{ secrets.AWS_PASSWORD }}
         CI: "true"
       run: uv run --python ${{ matrix.python-version }} pytest
+
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      dicom: ${{ steps.filter.outputs.dicom }}
+      force: ${{ steps.force.outputs.run }}
+    steps:
+    - uses: actions/checkout@v5
+    - name: Force Orthanc on dispatch or protected branches
+      id: force
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "run=true" >> "$GITHUB_OUTPUT"
+        elif [ "${{ github.ref }}" = "refs/heads/dev" ] || [ "${{ github.ref }}" = "refs/heads/main" ] || [ "${{ github.ref }}" = "refs/heads/master" ]; then
+          echo "run=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "run=false" >> "$GITHUB_OUTPUT"
+        fi
+    - uses: dorny/paths-filter@v3
+      id: filter
+      with:
+        filters: |
+          dicom:
+            - 'src/anonymizer/controller/dicom/**'
+            - 'tests/controller/dicom/**'
+            - 'pyproject.toml'
+            - 'uv.lock'
+            - '.github/workflows/tests.yaml'
+
+  dicom-integration:
+    needs: changes
+    if: needs.changes.outputs.dicom == 'true' || needs.changes.outputs.force == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          uv.lock
+          pyproject.toml
+
+    - name: Set up Python 3.12
+      run: uv python install 3.12
+
+    - name: Install dependencies
+      run: uv sync --group dev --locked --python 3.12
+
+    - name: Cache managed Orthanc binaries
+      uses: actions/cache@v5
+      with:
+        path: tests/controller/dicom/support/orthanc_runtime
+        key: orthanc-${{ runner.os }}-1.12.7-dicomweb-1.18-gdcm-1.8
+
+    - name: Run Orthanc DICOM integration tests
+      env:
+        PYTHONPATH: ${{ github.workspace }}/src
+        CI: "true"
+      run: >
+        uv run --python 3.12 pytest -m dicom_integration
+        -o 'addopts=--tb=short'

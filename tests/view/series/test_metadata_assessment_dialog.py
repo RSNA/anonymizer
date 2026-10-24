@@ -35,8 +35,7 @@ def _sc_dataset(*, patient_name: str = "Test^Patient") -> Dataset:
     item = Dataset()
     item.CodeMeaning = "Test"
     ds.ProcedureCodeSequence = Sequence([item])
-    ds.is_little_endian = True
-    ds.is_implicit_VR = False
+    # Endian / VR come from TransferSyntaxUID (pydicom 3+; avoid deprecated Dataset flags).
     return ds
 
 
@@ -269,3 +268,184 @@ def test_metadata_remove_phi_then_save_writes_file(tk_root: tk.Tk, tmp_path) -> 
     assert not dialog._dirty
     assert str(dcmread(path).PatientName) != name
     dialog._on_close()
+
+
+class _ImmediateThread:
+    def __init__(self, target=None, **_kwargs) -> None:  # noqa: ANN001
+        self._target = target
+        self.started = False
+
+    def start(self) -> None:
+        self.started = True
+        if self._target is not None:
+            self._target()
+
+
+def _run_detect(dialog: MetadataAssessmentDialog, fake: dict) -> None:
+    with (
+        patch(
+            "anonymizer.view.series.metadata_assessment_dialog.report_text_phi_ready",
+            return_value=True,
+        ),
+        patch(
+            "anonymizer.view.series.metadata_assessment_dialog.detect_phi_in_texts",
+            return_value=fake,
+        ),
+        patch(
+            "anonymizer.view.series.metadata_assessment_dialog.threading.Thread",
+            side_effect=_ImmediateThread,
+        ),
+    ):
+        dialog._on_detect()
+        dialog._poll_detect()
+
+
+def test_dialog_without_dataset_path_disables_save(tk_root: tk.Tk) -> None:
+    """Series View opens Metadata without dataset_path — Save stays disabled."""
+    ds = _sc_dataset(patient_name="Smith^Ada")
+    dialog = MetadataAssessmentDialog(tk_root, dataset=ds, dataset_path=None)
+    dialog.withdraw()
+    with contextlib.suppress(tk.TclError):
+        dialog.grab_release()
+    name = "Smith^Ada"
+    _run_detect(dialog, {name: (Entity(label="FIRST_NAME", start=0, end=len(name)),)})
+    dialog._on_remove()
+    assert dialog._dirty
+    assert dialog.save_button.cget("state") == "disabled"
+    dialog._on_save()  # no-op without path
+    assert dialog._dirty
+    assert name not in dialog.panel.content_texts()
+    with patch(
+        "anonymizer.view.series.metadata_assessment_dialog.messagebox.askyesno",
+        return_value=True,
+    ):
+        dialog._on_close()
+
+
+def test_detect_models_not_ready_warns_without_thread(tk_root: tk.Tk) -> None:
+    dialog = MetadataAssessmentDialog(tk_root, dataset=_sc_dataset())
+    dialog.withdraw()
+    with contextlib.suppress(tk.TclError):
+        dialog.grab_release()
+    with (
+        patch(
+            "anonymizer.view.series.metadata_assessment_dialog.report_text_phi_ready",
+            return_value=False,
+        ),
+        patch(
+            "anonymizer.view.series.metadata_assessment_dialog.messagebox.showwarning"
+        ) as warn,
+        patch(
+            "anonymizer.view.series.metadata_assessment_dialog.threading.Thread"
+        ) as thread_cls,
+    ):
+        dialog._on_detect()
+    warn.assert_called_once()
+    thread_cls.assert_not_called()
+    assert not dialog._detecting
+    dialog._on_close()
+
+
+def test_detect_error_surfaces_status(tk_root: tk.Tk) -> None:
+    dialog = MetadataAssessmentDialog(tk_root, dataset=_sc_dataset())
+    dialog.withdraw()
+    with contextlib.suppress(tk.TclError):
+        dialog.grab_release()
+
+    def _failing_worker() -> None:
+        dialog._detect_queue.put(("error", "boom"))
+
+    class _FailThread:
+        def __init__(self, target=None, **_kwargs) -> None:  # noqa: ANN001
+            del target
+
+        def start(self) -> None:
+            _failing_worker()
+
+    with (
+        patch(
+            "anonymizer.view.series.metadata_assessment_dialog.report_text_phi_ready",
+            return_value=True,
+        ),
+        patch(
+            "anonymizer.view.series.metadata_assessment_dialog.threading.Thread",
+            side_effect=_FailThread,
+        ),
+    ):
+        dialog._on_detect()
+        dialog._poll_detect()
+    assert not dialog._detecting
+    assert "Detection failed" in str(dialog._status_label.cget("text"))
+    dialog._on_close()
+
+
+def test_exclude_all_phi_disables_remove(tk_root: tk.Tk) -> None:
+    ds = _sc_dataset(patient_name="Smith^Ada")
+    dialog = MetadataAssessmentDialog(tk_root, dataset=ds)
+    dialog.withdraw()
+    with contextlib.suppress(tk.TclError):
+        dialog.grab_release()
+    name = "Smith^Ada"
+    _run_detect(dialog, {name: (Entity(label="FIRST_NAME", start=0, end=len(name)),)})
+    assert dialog.remove_button.cget("state") == "normal"
+    dialog.panel._excluded_contents.add(name)
+    dialog._refresh_state()
+    assert dialog.remove_button.cget("state") == "disabled"
+    dialog._on_close()
+
+
+def test_dirty_close_cancels_when_user_declines(tk_root: tk.Tk) -> None:
+    ds = _sc_dataset(patient_name="Smith^Ada")
+    dialog = MetadataAssessmentDialog(tk_root, dataset=ds)
+    dialog.withdraw()
+    with contextlib.suppress(tk.TclError):
+        dialog.grab_release()
+    name = "Smith^Ada"
+    _run_detect(dialog, {name: (Entity(label="FIRST_NAME", start=0, end=len(name)),)})
+    dialog._on_remove()
+    assert dialog._dirty
+    with patch(
+        "anonymizer.view.series.metadata_assessment_dialog.messagebox.askyesno",
+        return_value=False,
+    ):
+        dialog._on_close()
+    assert not dialog._destroyed
+    with patch(
+        "anonymizer.view.series.metadata_assessment_dialog.messagebox.askyesno",
+        return_value=True,
+    ):
+        dialog._on_close()
+    assert dialog._destroyed
+
+
+def test_private_uid_date_counts_on_panel(tk_root: tk.Tk) -> None:
+    ds = _sc_dataset()
+    block = ds.private_block(0x0009, "GEMS_PETD_01", create=True)
+    block.add_new(0x01, "UI", "1.2.3.4.5")
+    block.add_new(0x05, "DA", "20200115")
+    panel = MetadataTreePanel(tk_root)
+    panel.set_dataset(ds)
+    uids, dates = panel.private_uid_date_counts()
+    assert uids >= 1
+    assert dates >= 1
+
+
+def test_remove_synth_and_blank_modes(tk_root: tk.Tk) -> None:
+    for mode_key in ("blank", "synth"):
+        ds = _sc_dataset(patient_name="Smith^Ada")
+        dialog = MetadataAssessmentDialog(tk_root, dataset=ds)
+        dialog.withdraw()
+        with contextlib.suppress(tk.TclError):
+            dialog.grab_release()
+        name = "Smith^Ada"
+        _run_detect(dialog, {name: (Entity(label="FIRST_NAME", start=0, end=len(name)),)})
+        label = next(lbl for lbl, key in dialog._mode_labels.items() if key == mode_key)
+        dialog.mode_var.set(label)
+        dialog._on_remove()
+        texts = dialog.panel.content_texts()
+        assert name not in texts
+        with patch(
+            "anonymizer.view.series.metadata_assessment_dialog.messagebox.askyesno",
+            return_value=True,
+        ):
+            dialog._on_close()
