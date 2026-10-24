@@ -11,7 +11,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
@@ -54,7 +54,7 @@ jobs:
       run: uv run --python ${{ matrix.python-version }} pytest
 
   changes:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       dicom: ${{ steps.filter.outputs.dicom }}
       force: ${{ steps.force.outputs.run }}
@@ -84,7 +84,7 @@ jobs:
   dicom-integration:
     needs: changes
     if: needs.changes.outputs.dicom == 'true' || needs.changes.outputs.force == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - name: Checkout repository
       uses: actions/checkout@v5

@@ -16,7 +16,7 @@ env:
 
 jobs:
   details:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       new_version: ${{ steps.release.outputs.new_version }}
       suffix: ${{ steps.release.outputs.suffix }}
@@ -45,7 +45,7 @@ jobs:
 
   check_pypi:
     needs: details
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       already_on_pypi: ${{ steps.check.outputs.already_on_pypi }}
     steps:
@@ -80,7 +80,7 @@ jobs:
 
   setup_and_build:
     needs: [details, check_pypi]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
 
@@ -139,7 +139,7 @@ jobs:
     name: Upload release to PyPI
     needs: [setup_and_build, details, check_pypi]
     if: needs.check_pypi.outputs.already_on_pypi != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: release
     permissions:
@@ -157,7 +157,7 @@ jobs:
   github_release:
     name: Create GitHub Release
     needs: [setup_and_build, details]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
