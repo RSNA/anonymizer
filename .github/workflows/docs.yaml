@@ -28,6 +28,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
+          cache-suffix: docs
       - name: Install docs dependencies
         run: uv sync --group docs
       - name: Build MkDocs site

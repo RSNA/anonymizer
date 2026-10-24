@@ -26,6 +26,8 @@ jobs:
       uses: astral-sh/setup-uv@v7
       with:
         enable-cache: true
+        # Matrix jobs otherwise share the runner-default Python cache key and race on save.
+        cache-suffix: py${{ matrix.python-version }}
         cache-dependency-glob: |
           uv.lock
           pyproject.toml
@@ -91,6 +93,7 @@ jobs:
       uses: astral-sh/setup-uv@v7
       with:
         enable-cache: true
+        cache-suffix: dicom-py3.12
         cache-dependency-glob: |
           uv.lock
           pyproject.toml
