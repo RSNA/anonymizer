@@ -1,0 +1,13 @@
+{
+  "patients": [
+    "1011144680",
+    "105230877",
+    "1055270895",
+    "1132133087",
+    "1163484890"
+  ],
+  "min_pass_pct": 98.0844,
+  "note": "Floor ~1pp below observed smoke5 after over-scrub iterations (technical keep + compile Retain/Device + Eigen numeric private).",
+  "last_run_dir": "/Volumes/MBOD.DX.LIFE/TCIA/MIDI-B/harness-runs/validation_20261026T155146Z_pytest_smoke5",
+  "last_pass_pct": 99.08443540183113
+}

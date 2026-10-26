@@ -91,8 +91,9 @@ def compile_script(
             set_operation(tag, "@keep")
 
     if DeidMethodCode.DEVICE_IDENTITY in selected:
+        # @safe(): retain value and exclude from Embedded PHI / PseudoPHI NER.
         for tag in DEVICE_IDENTITY_TAGS:
-            set_operation(tag, "@keep")
+            set_operation(tag, "@safe()")
 
     if DeidMethodCode.INSTITUTION_IDENTITY in selected:
         for tag in INSTITUTION_IDENTITY_TAGS:

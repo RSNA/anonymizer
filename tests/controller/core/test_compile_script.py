@@ -48,11 +48,16 @@ def test_institution_identity_overlay_keeps_institution_tags() -> None:
     assert ops["00081040"] == "@keep"
 
 
-def test_device_identity_overlay_keeps_serial_and_station() -> None:
-    """DEVICE_IDENTITY keeps tags the default script removes."""
+def test_device_identity_overlay_keeps_serial_station_and_manufacturer() -> None:
+    """DEVICE_IDENTITY safe-keeps tags the default script removes (including Manufacturer)."""
+    basic = _ops(compile_script(BASIC_OPTIONS, _DEFAULT))
     ops = _ops(compile_script(BASIC_OPTIONS | {DeidMethodCode.DEVICE_IDENTITY}, _DEFAULT))
-    assert ops["00181000"] == "@keep"
-    assert ops["00081010"] == "@keep"
+    assert basic["00080070"].startswith("@remove")
+    assert ops["00080070"] == "@safe()"
+    assert ops["00081090"] == "@safe()"
+    assert ops["00181000"] == "@safe()"
+    assert ops["00081010"] == "@safe()"
+    assert ops["00181020"] == "@safe()"
 
 
 def test_full_dates_overlay_keeps_dates() -> None:

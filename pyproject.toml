@@ -160,7 +160,7 @@ max-complexity = 15
 
 [tool.pytest.ini_options]
 testpaths = ["tests/controller", "tests/model", "tests/mcp"]
-addopts = "--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model --cov=src/anonymizer/mcp -m \"not ocr_integration and not view_dev and not pseudo_phi_integration and not mcp_e2e and not dicom_integration\""
+addopts = "--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model --cov=src/anonymizer/mcp -m \"not ocr_integration and not view_dev and not pseudo_phi_integration and not midi_b_integration and not mcp_e2e and not dicom_integration\""
 pythonpath = ["src", "."]
 filterwarnings = [
     # batchgenerators (TotalSegmentator stack) still imports deprecated scipy.ndimage.* paths
@@ -172,6 +172,7 @@ markers = [
     "tseg_integration: run TotalSegmentator inference (slow, optional)",
     "ocr_integration: EasyOCR on real burnt-in PHI fixtures under tests/controller/ocr (opt-in; excluded from default)",
     "pseudo_phi_integration: PseudoPHI local dataset pipeline (script+KB+NER); opt-in; needs DATA/Pseudo-PHI-DICOM-Dataset",
+    "midi_b_integration: MIDI-B Synthetic Validation adversarial suite (opt-in; needs TCIA MIDI-B volume + official validator; excluded from default/CI)",
     "mcp_e2e: live HTTP MCP server e2e (opt-in; excluded from default)",
     "dicom_integration: managed Orthanc PACS (DIMSE + DICOMweb); opt-in; excluded from default; CI path-filtered job",
     "rsna_local_data: requires local RSNA_TEST_DATA directory (skipped when absent)",

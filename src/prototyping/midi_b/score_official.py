@@ -83,15 +83,20 @@ def run_validation(
     cfg = json.loads(config_path.read_text(encoding="utf-8"))
     score_dir = Path(cfg["output_data_path"]) / cfg["run_name"]
 
-    # Ensure NLTK stopwords (official curation_validator import).
+    # Official curation_validator imports nltk; fail fast with an install hint.
     try:
         import nltk
-
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "nltk is required for the official MIDI scorer. "
+            "Install with: uv sync --group midi-b"
+        ) from exc
+    try:
         nltk.download("stopwords", quiet=True)
         nltk.download("punkt", quiet=True)
         nltk.download("punkt_tab", quiet=True)
     except Exception:
-        logger.warning("nltk download failed; official scorer may error", exc_info=True)
+        logger.warning("nltk corpus download failed; official scorer may error", exc_info=True)
 
     _run_script(root / "run_validation.py", config_path, cwd=root)
     if reports and (root / "run_reports.py").is_file():

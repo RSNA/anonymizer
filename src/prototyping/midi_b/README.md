@@ -44,3 +44,27 @@ uv run --group midi-b python -m prototyping.midi_b score \
 PseudoPHI compared **eval vs gold DICOM headers field-by-field**. MIDI-B scoring is **action-based**: each answer-key row says what must happen to a tag (`text_retained`, `text_removed`, `uid_changed`, …). The official script indexes your submission, joins via UID/PatientID mapping CSVs, and scores those actions (not a full pairwise header dump).
 
 Subset runs write `answer_key_filtered.db` so missing-file checks stay scoped to selected patients.
+
+## Adversarial / characterization (opt-in, not CI)
+
+Pytest suite under `tests/prototyping/midi_b/` finds residual PHI vs over-scrub regressions using the official scorer. Skips cleanly when the MIDI-B volume or validator is missing.
+
+```bash
+uv sync --group midi-b --group dev
+
+# Always use --group midi-b (official scorer needs nltk).
+# Smoke + taxonomy + live NER harvest checks
+uv run --group midi-b pytest tests/prototyping/midi_b -m midi_b_integration -o 'addopts=--tb=short' -q
+
+# After a successful smoke5 validate+score, freeze floors / ratchet baselines:
+MIDI_B_WRITE_BASELINE=1 uv run --group midi-b pytest tests/prototyping/midi_b \
+  -m midi_b_integration -o 'addopts=--tb=short' -q
+
+# Full Validation gate (manual / overnight)
+MIDI_B_FULL=1 uv run --group midi-b pytest tests/prototyping/midi_b \
+  -m midi_b_integration -k full -o 'addopts=--tb=short'
+# or
+uv run --group midi-b python -m prototyping.midi_b validate --split validation --slug full
+```
+
+Each scored run writes `adversarial_taxonomy.json` (+ Markdown) under the harness run dir, classifying official failures into `residual_phi`, `over_scrub`, `uid_action`, `private_tag`, and `other`.

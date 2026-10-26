@@ -16,6 +16,7 @@ from prototyping.midi_b.score_official import (
     run_validation,
     write_config,
 )
+from prototyping.midi_b.taxonomy import write_adversarial_taxonomy
 from prototyping.pseudo_phi_deid.pipeline.script_session import ensure_experiment_script_copy
 from prototyping.pseudo_phi_deid.pipeline.run import RunConfig
 
@@ -165,6 +166,11 @@ def cmd_score(args: argparse.Namespace) -> int:
     except Exception:
         logger.exception("scorecard generation failed")
         print(str(summary_path))
+    try:
+        tax_path = write_adversarial_taxonomy(run_path)
+        logger.info("adversarial taxonomy → %s", tax_path)
+    except Exception:
+        logger.exception("adversarial taxonomy generation failed")
     return 0
 
 

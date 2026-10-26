@@ -26,6 +26,9 @@ always_literal_text(operation) -> str | None
 is_remove_operation(operation) -> bool
     True when the operation removes the tag.
 
+is_retain_value_operation(operation) -> bool
+    True when the operation leaves the value in place (@keep or @safe).
+
 format_operand(operand_id, ...) -> str
     Build stored operation text for an operand id.
 
@@ -323,6 +326,25 @@ def is_remove_operation(operation: str | None) -> bool:
         True when @remove appears in the text.
     """
     return _REMOVE_MARKER in str(operation or "")
+
+
+def is_retain_value_operation(operation: str | None) -> bool:
+    """
+    True when the operation leaves the value in place.
+
+    Covers @keep (including empty operand normalized to keep) and @safe()
+    (retain without NER scrubbing).
+
+    Args:
+        operation: Script operation text.
+
+    Returns:
+        True for keep / safe retain operands.
+    """
+    op = str(operation or "").strip()
+    if not op or op == "@keep":
+        return True
+    return "@safe" in op
 
 
 def format_operand(

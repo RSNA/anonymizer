@@ -2,6 +2,12 @@
 
 Public API
 ----------
+TCIA_PRIVATE_TAG_KB_PAGE_URL
+    TCIA wiki page that hosts the latest private-tag knowledge-base release.
+
+TCIA_PRIVATE_TAG_KB_ASSET_RELPATH
+    Packaged CSV path under assets/ used to build this anonymizer's KB.
+
 collapse_retain_safe_action(actions: set[PrivateTagAction]) -> PrivateTagAction | None
     Select one action for an XX slot under Retain Safe Private.
 
@@ -14,6 +20,7 @@ private_creator_string(ds: Dataset, tag: BaseTag) -> str
 private_tag_operation(ds: Dataset, elem: DataElement, *, retain_uids: bool, date_delta: int | None) -> str
     Return the operation for one private element.
 """
+
 import logging
 
 from pydicom.dataelem import DataElement
@@ -22,16 +29,46 @@ from pydicom.tag import BaseTag, Tag
 
 from anonymizer.controller.dates import incrementdate_operand
 from anonymizer.controller.private_tags.tcia_kb_data import (
+    KB_SOURCE,
     PRIVATE_KB,
     PRIVATE_KB_FALLBACK,
     PrivateTagAction,
     PrivateTagEntry,
 )
 
+# Landing page for TCIA de-identification resources (includes newest KB CSV releases).
+TCIA_PRIVATE_TAG_KB_PAGE_URL = (
+    "https://wiki.cancerimagingarchive.net/display/Public/"
+    "Submission+and+De-identification+Overview"
+)
+# Relative path of the CSV shipped with this build (feeds convert_tcia_private_kb).
+TCIA_PRIVATE_TAG_KB_ASSET_RELPATH = f"assets/tcia_kb/{KB_SOURCE}"
+
 logger = logging.getLogger(__name__)
 
 _DATE_VRS = frozenset({"DA", "DT", "TM"})
 _INT_DATE_VRS = frozenset({"SL", "UL", "IS"})
+# Unknown private slots with these VRs are calibration / geometry numbers, not
+# free-text identity. Keep them under Retain Safe Private when the KB has no row
+# (e.g. Eigen DS values marked keep in MIDI-B answer keys).
+_SAFE_UNKNOWN_KEEP_VRS = frozenset(
+    {
+        "DS",
+        "FL",
+        "FD",
+        "IS",
+        "SS",
+        "US",
+        "SL",
+        "UL",
+        "OB",
+        "OW",
+        "OF",
+        "OD",
+        "OL",
+        "OV",
+    }
+)
 _ANONYMIZER_PRIVATE_GROUP = 0x0013
 
 # Prefer transform, then keep, then remove. Used when collapsing XX slots at
@@ -135,7 +172,8 @@ def private_tag_operation(
     2. tag.is_private_creator returns "@keep". The creator string
        is the lookup key for every other element in the block.
     3. entry = kb[(creator, group, suffix)].
-    4. No entry: log tag, creator, VR; return "@remove()".
+    4. No entry: keep when VR is numeric/binary (_SAFE_UNKNOWN_KEEP_VRS);
+       otherwise log tag, creator, VR and return "@remove()".
     5. entry.action:
        - KEEP → "@keep"
        - REMOVE → "@remove()"
@@ -172,10 +210,13 @@ def private_tag_operation(
     )
     vr = str(elem.VR or "").upper()
     if entry is None:
-        logger.info(
-            f"SAFE_PRIVATE unknown private tag removed: {_tag_hex(tag)} "
-            f"creator={creator!r} VR={vr}"
-        )
+        if vr in _SAFE_UNKNOWN_KEEP_VRS:
+            logger.info(
+                f"SAFE_PRIVATE unknown private tag kept (numeric/binary VR): "
+                f"{_tag_hex(tag)} creator={creator!r} VR={vr}"
+            )
+            return "@keep"
+        logger.info(f"SAFE_PRIVATE unknown private tag removed: {_tag_hex(tag)} creator={creator!r} VR={vr}")
         return "@remove()"
 
     note_u = entry.note.upper()
@@ -194,9 +235,7 @@ def private_tag_operation(
             return "@remove()"
         if vr in _DATE_VRS:
             return incrementdate_operand(date_delta)
-        if vr in _INT_DATE_VRS and any(
-            word in note_u for word in ("DATE", "TIME", "DATETIME")
-        ):
+        if vr in _INT_DATE_VRS and any(word in note_u for word in ("DATE", "TIME", "DATETIME")):
             return incrementdate_operand(date_delta)
         return "@remove()"
     return "@remove()"
@@ -205,5 +244,3 @@ def private_tag_operation(
 def _tag_hex(tag: BaseTag) -> str:
     """Eight-hex uppercase tag string."""
     return f"{tag.group:04X}{tag.element:04X}"
-
-

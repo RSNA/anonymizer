@@ -40,9 +40,9 @@
  <e en="T" t="00080061" n="ModalitiesInStudy">@remove()</e>
  <e en="T" t="00080062" n="SOPClassesInStudy">@remove()</e>
  <e en="T" t="00080063" n="AnatomicRegionsInStudyCodeSeq">@remove()</e>
- <e en="T" t="00080064" n="ConversionType">@remove()</e>
+ <e en="T" t="00080064" n="ConversionType" />
  <e en="T" t="00080068" n="PresentationIntentType">@remove()</e>
- <e en="T" t="00080070" n="Manufacturer"></e>
+ <e en="T" t="00080070" n="Manufacturer">@remove()</e>
  <e en="T" t="00080080" n="InstitutionName">@remove()</e>
  <e en="T" t="00080081" n="InstitutionAddress">@remove()</e>
  <e en="T" t="00080082" n="InstitutionCodeSeq">@remove()</e>
@@ -52,11 +52,11 @@
  <e en="T" t="00080096" n="ReferringPhysicianIdentificationSeq">@remove()</e>
  <e en="T" t="0008009C" n="ConsultingPhysicianName">@remove()</e>
  <e en="T" t="0008009D" n="ConsultingPhysicianIdentificationSeq">@remove()</e>
- <e en="T" t="00080100" n="CodeValue">@remove()</e>
+ <e en="T" t="00080100" n="CodeValue" />
  <e en="T" t="00080101" n="ExtendedCodeValue">@remove()</e>
- <e en="T" t="00080102" n="CodingSchemeDesignator">@remove()</e>
+ <e en="T" t="00080102" n="CodingSchemeDesignator" />
  <e en="T" t="00080103" n="CodingSchemeVersion">@remove()</e>
- <e en="T" t="00080104" n="CodeMeaning">@remove()</e>
+ <e en="T" t="00080104" n="CodeMeaning" />
  <e en="T" t="00080105" n="MappingResource">@remove()</e>
  <e en="T" t="00080106" n="ContextGroupVersion">@remove()</e>
  <e en="T" t="00080107" n="ContextGroupLocalVersion">@remove()</e>
@@ -120,7 +120,7 @@
  <e en="T" t="00081072" n="OperatorIdentificationSeq">@remove()</e>
  <e en="T" t="00081080" n="AdmittingDiagnosisDescription">@remove()</e>
  <e en="T" t="00081084" n="AdmittingDiagnosisCodeSeq">@remove()</e>
- <e en="T" t="00081090" n="ManufacturerModelName"></e>
+ <e en="T" t="00081090" n="ManufacturerModelName">@remove()</e>
  <e en="T" t="00081100" n="RefResultsSeq">@remove()</e>
  <e en="T" t="00081110" n="RefStudySeq">@remove()</e>
  <e en="T" t="00081111" n="RefPPSSeq">@remove()</e>
@@ -198,15 +198,15 @@
  <e en="T" t="00083011" n="SourceIrradiationEventSeq">@remove()</e>
  <e en="T" t="00083012" n="RadiopharmaceuticalAdministrationEventUID">@remove()</e>
  <e en="T" t="00084000" n="IdentifyingCommentsRetired">@remove()</e>
- <e en="T" t="00089007" n="FrameType">@remove()</e>
+ <e en="T" t="00089007" n="FrameType" />
  <e en="T" t="00089092" n="RefImageEvidenceSeq">@remove()</e>
  <e en="T" t="00089121" n="RefRawDataSeq">@remove()</e>
  <e en="T" t="00089123" n="CreatorVersionUID">@remove()</e>
  <e en="T" t="00089124" n="DerivationImageSeq">@remove()</e>
  <e en="T" t="00089154" n="SourceImageEvidenceSeq">@remove()</e>
- <e en="T" t="00089205" n="PixelPresentation">@remove()</e>
- <e en="T" t="00089206" n="VolumetricProperties">@remove()</e>
- <e en="T" t="00089207" n="VolumeBasedCalculationTechnique">@remove()</e>
+ <e en="T" t="00089205" n="PixelPresentation" />
+ <e en="T" t="00089206" n="VolumetricProperties" />
+ <e en="T" t="00089207" n="VolumeBasedCalculationTechnique" />
  <e en="T" t="00089208" n="ComplexImageComponent">@remove()</e>
  <e en="T" t="00089209" n="AcquisitionContrast">@remove()</e>
  <e en="T" t="00089215" n="DerivationCodeSeq">@remove()</e>
@@ -228,7 +228,7 @@
  <e en="T" t="00100033" n="PatientBirthDateInAlternativeCalendar">@remove()</e>
  <e en="T" t="00100034" n="PatientDeathDateInAlternativeCalendar">@remove()</e>
  <e en="T" t="00100035" n="PatientAlternativeCalendar">@remove()</e>
- <e en="T" t="00100040" n="PatientSex"></e>
+ <e en="T" t="00100040" n="PatientSex">@remove()</e>
  <e en="T" t="00100050" n="PatientInsurancePlanCodeSeq">@remove()</e>
  <e en="T" t="00100101" n="PatientPrimaryLanguageCodeSeq">@remove()</e>
  <e en="T" t="00100102" n="PatientPrimaryLanguageModifierCodeSeq">@remove()</e>
@@ -251,12 +251,12 @@
  <e en="T" t="00101002" n="OtherPatientIDSeq">@remove()</e>
  <e en="T" t="00101005" n="PatientBirthName">@remove()</e>
  <e en="T" t="00101010" n="PatientAge">@round(this,5)</e>
- <e en="T" t="00101020" n="PatientSize"></e>
+ <e en="T" t="00101020" n="PatientSize">@remove()</e>
  <e en="T" t="00101021" n="PatientSizeCodeSeq"></e>
  <e en="T" t="00101022" n="PatientBodyMassIndex"></e>
  <e en="T" t="00101023" n="MeasuredAPDimension"></e>
  <e en="T" t="00101024" n="MeasuredLateralDimension"></e>
- <e en="T" t="00101030" n="PatientWeight"></e>
+ <e en="T" t="00101030" n="PatientWeight">@remove()</e>
  <e en="T" t="00101040" n="PatientAddress">@remove()</e>
  <e en="T" t="00101050" n="InsurancePlanIdentificationRetired">@remove()</e>
  <e en="T" t="00101060" n="PatientMotherBirthName">@remove()</e>
@@ -270,9 +270,9 @@
  <e en="T" t="00102152" n="RegionOfResidence">@remove()</e>
  <e en="T" t="00102154" n="PatientPhoneNumbers">@remove()</e>
  <e en="T" t="00102155" n="PatientTelecomInformation">@remove()</e>
- <e en="T" t="00102160" n="EthnicGroup"></e>
+ <e en="T" t="00102160" n="EthnicGroup">@remove()</e>
  <e en="T" t="00102180" n="Occupation">@remove()</e>
- <e en="T" t="001021A0" n="SmokingStatus"></e>
+ <e en="T" t="001021A0" n="SmokingStatus">@remove()</e>
  <e en="T" t="001021B0" n="AdditionalPatientHistory">@remove()</e>
  <e en="T" t="001021C0" n="PregnancyStatus">@remove()</e>
  <e en="T" t="001021D0" n="LastMenstrualDate">@remove()</e>
@@ -676,16 +676,16 @@
  <e en="T" t="0018100A" n="UDISeq">@remove()</e>
  <e en="T" t="0018100B" n="ManufacturerDeviceClassUID">@remove()</e>
  <e en="T" t="00181010" n="SecondaryCaptureDeviceID">@remove()</e>
- <e en="T" t="00181011" n="HardcopyCreationDeviceID"></e>
+ <e en="T" t="00181011" n="HardcopyCreationDeviceID">@remove()</e>
  <e en="T" t="00181012" n="DateOfSecondaryCapture">@remove()</e>
  <e en="T" t="00181014" n="TimeOfSecondaryCapture">@remove()</e>
- <e en="T" t="00181016" n="SecondaryCaptureDeviceManufacturer"></e>
+ <e en="T" t="00181016" n="SecondaryCaptureDeviceManufacturer">@remove()</e>
  <e en="T" t="00181017" n="HardcopyDeviceManufacturer"></e>
- <e en="T" t="00181018" n="SecondaryCaptureDeviceManufacturerModelName"></e>
- <e en="T" t="00181019" n="SecondaryCaptureDeviceSoftwareVersion"></e>
+ <e en="T" t="00181018" n="SecondaryCaptureDeviceManufacturerModelName">@remove()</e>
+ <e en="T" t="00181019" n="SecondaryCaptureDeviceSoftwareVersion">@remove()</e>
  <e en="T" t="0018101A" n="HardcopyDeviceSoftwareVersion"></e>
  <e en="T" t="0018101B" n="HardcopyDeviceManfuacturerModelName"></e>
- <e en="T" t="00181020" n="SoftwareVersion"></e>
+ <e en="T" t="00181020" n="SoftwareVersion">@remove()</e>
  <e en="T" t="00181022" n="VideoImageFormatAcquired"></e>
  <e en="T" t="00181023" n="DigitalImageFormatAcquired"></e>
  <e en="T" t="00181030" n="ProtocolName">@remove()</e>
@@ -2254,16 +2254,16 @@
  <e en="T" t="00400296" n="BillingItemSeq">@remove()</e>
  <e en="T" t="00400300" n="TotalTimeOfFluoroscopy">@remove()</e>
  <e en="T" t="00400301" n="TotalNumberOfExposures">@remove()</e>
- <e en="T" t="00400302" n="EntranceDose">@remove()</e>
+ <e en="T" t="00400302" n="EntranceDose" />
  <e en="T" t="00400303" n="ExposedArea">@remove()</e>
  <e en="T" t="00400306" n="DistanceSourceToEntrance">@remove()</e>
  <e en="T" t="00400307" n="DistanceSourceToSupport">@remove()</e>
  <e en="T" t="0040030E" n="ExposureDoseSeq">@remove()</e>
  <e en="T" t="00400310" n="CommentsOnRadiationDose">@remove()</e>
  <e en="T" t="00400312" n="XRayOutput">@remove()</e>
- <e en="T" t="00400314" n="HalfValueLayer">@remove()</e>
- <e en="T" t="00400316" n="OrganDose">@remove()</e>
- <e en="T" t="00400318" n="OrganExposed">@remove()</e>
+ <e en="T" t="00400314" n="HalfValueLayer" />
+ <e en="T" t="00400316" n="OrganDose" />
+ <e en="T" t="00400318" n="OrganExposed" />
  <e en="T" t="00400320" n="BillingProcedureStepSeq">@remove()</e>
  <e en="T" t="00400321" n="FilmConsumptionSeq">@remove()</e>
  <e en="T" t="00400324" n="BillingSuppliesAndDevicesSeq">@remove()</e>
@@ -2285,7 +2285,7 @@
  <e en="T" t="00400552" n="SpecimenDescriptionSequenceTrial">@remove()</e>
  <e en="T" t="00400553" n="SpecimenDescriptionTrial">@remove()</e>
  <e en="T" t="00400554" n="SpecimenUID">@remove()</e>
- <e en="T" t="00400555" n="AcquisitionContextSeq">@remove()</e>
+ <e en="T" t="00400555" n="AcquisitionContextSeq" />
  <e en="T" t="00400556" n="AcquisitionContextDescription">@remove()</e>
  <e en="T" t="00400560" n="SpecimenDescriptionSeq">@remove()</e>
  <e en="T" t="00400562" n="IssuerOfTheSpecimenIdentifierSeq">@remove()</e>
@@ -2379,7 +2379,7 @@
  <e en="T" t="00404072" n="STOWRSStorageSeq">@remove()</e>
  <e en="T" t="00404073" n="StorageURL">@remove()</e>
  <e en="T" t="00404074" n="XDSStorageSeq">@remove()</e>
- <e en="T" t="00408302" n="EntranceDoseInmGy">@remove()</e>
+ <e en="T" t="00408302" n="EntranceDoseInmGy" />
  <e en="T" t="00408303" n="EntranceDoseDerivation">@remove()</e>
  <e en="T" t="00409092" n="ParametricMapFrameTypeSeq">@remove()</e>
  <e en="T" t="00409094" n="RefImageRealWorldValueMappingSeq">@remove()</e>
@@ -2752,7 +2752,7 @@
  <e en="T" t="00540072" n="TimeSlotInformationSeq">@remove()</e>
  <e en="T" t="00540073" n="TimeSlotTime">@remove()</e>
  <e en="T" t="00540080" n="SliceVector">@remove()</e>
- <e en="T" t="00540081" n="NumberOfSlices">@remove()</e>
+ <e en="T" t="00540081" n="NumberOfSlices" />
  <e en="T" t="00540090" n="AngularViewVector">@remove()</e>
  <e en="T" t="00540100" n="TimeSliceVector">@remove()</e>
  <e en="T" t="00540101" n="NumberOfTimeSlices">@remove()</e>
@@ -2760,7 +2760,7 @@
  <e en="T" t="00540202" n="TypeOfDetectorMotion">@remove()</e>
  <e en="T" t="00540210" n="TriggerVector">@remove()</e>
  <e en="T" t="00540211" n="NumberOfTriggersInPhase">@remove()</e>
- <e en="T" t="00540220" n="ViewCodeSeq">@remove()</e>
+ <e en="T" t="00540220" n="ViewCodeSeq" />
  <e en="T" t="00540222" n="ViewModifierCodeSeq">@remove()</e>
  <e en="T" t="00540300" n="RadionuclideCodeSeq">@remove()</e>
  <e en="T" t="00540302" n="AdministrationRouteCodeSeq">@remove()</e>
@@ -3550,7 +3550,7 @@
  <e en="T" t="20400100" n="ThresholdDensityRetired">@remove()</e>
  <e en="T" t="20400500" n="RefImageBoxSeqRetired">@remove()</e>
  <e en="T" t="20500010" n="PresentationLUTSeq">@remove()</e>
- <e en="T" t="20500020" n="PresentationLUTShape">@remove()</e>
+ <e en="T" t="20500020" n="PresentationLUTShape" />
  <e en="T" t="20500500" n="RefPresentationLUTSeq">@remove()</e>
  <e en="T" t="21000010" n="PrintJobID">@remove()</e>
  <e en="T" t="21000020" n="ExecutionStatus">@remove()</e>
@@ -4634,8 +4634,8 @@
  <e en="T" t="4010107D" n="SecondaryInspectionMethodSeq">@remove()</e>
  <e en="T" t="4010107E" n="PRCSToRCSOrientation">@remove()</e>
  <e en="T" t="4FFE0001" n="MACParametersSeq">@remove()</e>
- <e en="T" t="52009229" n="SharedFunctionalGroupsSeq">@remove()</e>
- <e en="T" t="52009230" n="PerFrameFunctionalGroupsSeq">@remove()</e>
+ <e en="T" t="52009229" n="SharedFunctionalGroupsSeq" />
+ <e en="T" t="52009230" n="PerFrameFunctionalGroupsSeq" />
  <e en="T" t="54000100" n="WaveformSeq">@remove()</e>
  <e en="T" t="54000110" n="ChannelMinimumValue">@remove()</e>
  <e en="T" t="54000112" n="ChannelMaximumValue">@remove()</e>

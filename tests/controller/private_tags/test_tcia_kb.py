@@ -137,6 +137,27 @@ def test_private_tag_operation_kb_samples() -> None:
     )
 
 
+def test_private_tag_operation_unknown_numeric_vr_kept() -> None:
+    """Unknown private slots with numeric VR are kept (not free-text PHI)."""
+    specs = [
+        unknown_private_spec(creator="Eigen, Inc", group=0x1129, suffix=0x08, vr="DS", value="0.0"),
+        unknown_private_spec(creator="Eigen, Inc", group=0x1129, suffix=0x16, vr="LO", value="secret"),
+    ]
+    ds = apply_private_specs(minimal_sc_dataset(), specs)
+    assert (
+        private_tag_operation(
+            ds, find_private_element(ds, specs[0]), retain_uids=False, date_delta=None
+        )
+        == "@keep"
+    )
+    assert (
+        private_tag_operation(
+            ds, find_private_element(ds, specs[1]), retain_uids=False, date_delta=None
+        )
+        == "@remove()"
+    )
+
+
 def test_private_tag_operation_uid_and_retain_uids() -> None:
     """UID disposition: @uid / @keep under Retain UIDs / @remove for non-UID VRs."""
     uid_ui = sample_kb_entries(PrivateTagAction.UID, vr_in=frozenset({"UI"}), limit=1)[0]

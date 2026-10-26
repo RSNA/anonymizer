@@ -1,0 +1,14 @@
+{
+  "patients": [
+    "1011144680",
+    "105230877",
+    "1055270895",
+    "1132133087",
+    "1163484890"
+  ],
+  "max_residual_phi": 6,
+  "max_over_scrub": 3,
+  "max_private_tag": 0,
+  "note": "residual_phi=6 is MIDI answer-key conflict (Birth Date / Device Serial tag_retained vs text_removed). over_scrub=3 is one View Code triple still missing on MG.",
+  "last_run_dir": "/Volumes/MBOD.DX.LIFE/TCIA/MIDI-B/harness-runs/validation_20261026T155146Z_pytest_smoke5"
+}
