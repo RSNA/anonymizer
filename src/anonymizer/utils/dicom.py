@@ -47,6 +47,9 @@ C_STORE_UNRECOGNIZED_OPERATION
 SUPPORTED_PHOTOMETRIC_INTERPRETATIONS
     Supported photometric interpretations.
 
+DICOM_CONFIDENTIALITY_PROFILE_URL
+    DICOM PS 3.15 Appendix E (confidentiality profile and options).
+
 DeidMethodCode
     DCM code value from PS3.16 CID 7050 (De-identification Method).
 
@@ -59,6 +62,7 @@ record_deid_method_codes(ds: Dataset, codes: Iterable[DeidMethodCode]) -> tuple[
 get_wl_ww(ds: Dataset) -> tuple[float, float]
     Read WindowCenter / WindowWidth from ds, with defaults from BitsAllocated.
 """
+
 import logging
 from collections.abc import Iterable
 from enum import IntEnum
@@ -98,6 +102,10 @@ SUPPORTED_PHOTOMETRIC_INTERPRETATIONS = frozenset(
         "YBR_PARTIAL_420",
     }
 )
+
+# PS 3.15 Appendix E — Basic Application Confidentiality Profile and options (Table E.1-1).
+DICOM_CONFIDENTIALITY_PROFILE_URL = "https://dicom.nema.org/medical/dicom/current/output/chtml/part15/chapter_E.html"
+
 
 class DeidMethodCode(IntEnum):
     """DCM code value from PS3.16 CID 7050 (De-identification Method)."""
@@ -142,7 +150,9 @@ _MEANING: dict[DeidMethodCode, str] = {
     DeidMethodCode.CLEAN_STRUCTURED_CONTENT: _mark_for_translation("Clean Structured Content Option"),
     DeidMethodCode.CLEAN_DESCRIPTORS: _mark_for_translation("Clean Descriptors Option"),
     DeidMethodCode.FULL_DATES: _mark_for_translation("Retain Longitudinal Temporal Information Full Dates Option"),
-    DeidMethodCode.MODIFIED_DATES: _mark_for_translation("Retain Longitudinal Temporal Information Modified Dates Option"),
+    DeidMethodCode.MODIFIED_DATES: _mark_for_translation(
+        "Retain Longitudinal Temporal Information Modified Dates Option"
+    ),
     DeidMethodCode.PATIENT_CHARACTERISTICS: _mark_for_translation("Retain Patient Characteristics Option"),
     DeidMethodCode.DEVICE_IDENTITY: _mark_for_translation("Retain Device Identity Option"),
     DeidMethodCode.RETAIN_UIDS: _mark_for_translation("Retain UIDs Option"),
@@ -218,9 +228,7 @@ def get_wl_ww(ds: Dataset) -> tuple[float, float]:
     ww_float: float
 
     if wl_from_ds is None or ww_from_ds is None:
-        logger.debug(
-            "WindowCenter or WindowWidth not found in DICOM dataset. Using default values."
-        )
+        logger.debug("WindowCenter or WindowWidth not found in DICOM dataset. Using default values.")
         if bits_allocated == 8:
             wl_float = 127.5
             ww_float = 255.0
@@ -251,9 +259,7 @@ def get_wl_ww(ds: Dataset) -> tuple[float, float]:
         ww_float = float(ww_from_ds)
 
     if ww_float < 1.0:
-        logger.warning(
-            "DICOM WindowWidth (%s) is less than 1. Setting to 1.", ww_from_ds
-        )
+        logger.warning("DICOM WindowWidth (%s) is less than 1. Setting to 1.", ww_from_ds)
         ww_float = 1.0
 
     return wl_float, ww_float
