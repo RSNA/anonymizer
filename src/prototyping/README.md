@@ -7,28 +7,26 @@ Experimental scripts, CLIs, and UI spikes. **Not** part of the shipped `rsna-ano
 ```
 src/prototyping/
 ├── medgemma_chat/   # MedGemma + Anonymizer MCP chat (CLI / Gradio prototype)
-├── ct/              # CT eval CLIs (e.g. ct_eval.py)
+├── ct/              # CT eval CLIs (ct_eval.py)
 ├── falcon/          # FALCON offline research (moved from product; superseded by tseg Harmonize)
 ├── ocr/             # OCR burned-in text detection / inpainting experiments
 ├── metadata_phi/    # metadata / SR / PDF free-text PHI NER experiment (en_US first)
 ├── report_phi/      # Encapsulated PDF letterhead OCR×OpenMed API-param sweep
-├── ffr/             # facial feature removal (CT face blur POC, legacy volume scripts)
-│   └── face/        # face blur viz POC (QA gallery + report.html)
-├── deid/            # deprecated shims → use ocr/ or ffr/
-├── ts_seg_face.py   # licensed TS face CLI → <series>/0_TS_SEG/seg/face.nii.gz
+├── midi_b/          # MIDI-B Synthetic Validation harness + official scorer glue
+├── pseudo_phi_deid/ # PseudoPHI header de-id pipeline experiments
+├── ffr/             # facial feature removal (CT face blur POC)
+│   ├── face/        # face blur viz POC (QA gallery + report.html)
+│   └── ts_seg_face.py  # licensed TS face CLI → <series>/0_TS_SEG/seg/face.nii.gz
+├── harmonize/       # Harmonize benchmarks and cancel smokes
+├── dev/             # hot-reload launcher, welcome window sizing check
 ├── dicom/           # DICOM transcoding, H.264, network spikes
 ├── fhir/            # Epic / HAPI FHIR experiments
 ├── aws/             # S3 import/export helpers
 ├── build/           # packaging and CI helpers
-├── ui/              # tkinter / CustomTkinter spikes
-│   └── windows_shot.py  # Windows HWND / PrintWindow / DWM grab comparison
+├── ui/              # tkinter / CustomTkinter spikes (+ play/pause icons)
 ├── scratch/         # unmaintained demos (no tests required)
 ├── _shared/         # config, storage_dir, parse_log
-├── dev_anonymizer.py              # hot-reload launcher for UI work
-├── test_welcome_window.py         # welcome window sizing check
-├── benchmark_harmonize_series.py  # Harmonize stage timing for one series
-├── ct_eval.py       # shim → ct/ct_eval.py
-└── ex_test_falcon_rsna_study_temp.py  # shim → falcon/rsna_eligibility.py
+└── conftest.py      # shared pytest fixtures for prototyping tests
 ```
 
 MkDocs help screenshots (maintainer tooling) live in [`src/docs_help/`](../docs_help/README.md)::
@@ -38,8 +36,6 @@ uv run python -m docs_help --language en_US
 # Writes docs/<lang>/<NN-workflow>/shots/<os>/*.png
 ```
 
-Root-level shims exist only for backward-compatible CLI entry points and ``prototyping.config``.
-
 ## Running CLIs
 
 From repo root with dev dependencies:
@@ -47,14 +43,16 @@ From repo root with dev dependencies:
 ```bash
 uv sync --extra tseg --group dev
 uv run python src/prototyping/ct/ct_eval.py --help
-uv sync --extra tseg --group dev
 uv run totalseg_set_license -l aca_XXXXXXXXXXXXXX   # once, if not already set
-uv run python src/prototyping/ts_seg_face.py /path/to/ct_head_series
-uv run python src/prototyping/ts_seg_face.py /path/to/ct_head_series --force
+uv run python src/prototyping/ffr/ts_seg_face.py /path/to/ct_head_series
+uv run python src/prototyping/ffr/ts_seg_face.py /path/to/ct_head_series --force
 uv sync --extra tseg --group dev --group prototyping-viz
 uv run python -m prototyping.ffr.face /path/to/ct_head_series
 # → opens <series>/ts_seg/viz_poc/report.html in a browser
 # (runs face segmentation first if 0_TS_SEG/seg/face.nii.gz is missing)
+
+uv run python src/prototyping/dev/dev_anonymizer.py
+uv run python src/prototyping/harmonize/benchmark_harmonize_series.py --help
 
 # MedGemma × Anonymizer MCP chat (see medgemma_chat/README.md)
 uv sync --extra mcp --group medgemma-chat

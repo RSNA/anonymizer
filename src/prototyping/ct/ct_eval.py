@@ -12,7 +12,7 @@ Requires: ``uv sync --extra tseg`` (TotalSegmentator, XGBoost). No FALCON.
 
 Run::
 
-    uv run python src/prototyping/ct_eval.py \\
+    uv run python src/prototyping/ct/ct_eval.py \\
         --data-dir /path/to/A_DATA \\
         --output-dir artifacts/ct_eval \\
         --per-class 10

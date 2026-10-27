@@ -12,7 +12,7 @@ uv run totalseg_set_license -l aca_XXXXXXXXXXXXXX   # if not already done
 Either run face segmentation first (faster when iterating on viz only):
 
 ```bash
-uv run python src/prototyping/ts_seg_face.py /path/to/ct_head_series
+uv run python src/prototyping/ffr/ts_seg_face.py /path/to/ct_head_series
 ```
 
 Or let the blur POC run segmentation automatically when the cached mask is missing.

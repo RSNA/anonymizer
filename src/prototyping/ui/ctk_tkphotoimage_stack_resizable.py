@@ -31,8 +31,8 @@ class ImageViewer(ctk.CTkFrame):
 
         # --- Load Button Icons ---
         # Load images and convert to Pillow Image
-        play_image = Image.open("src/prototyping/play.png").resize(self.PLAY_BTN_SIZE)
-        pause_image = Image.open("src/prototyping/pause.png").resize(self.PLAY_BTN_SIZE)
+        play_image = Image.open("src/prototyping/ui/play.png").resize(self.PLAY_BTN_SIZE)
+        pause_image = Image.open("src/prototyping/ui/pause.png").resize(self.PLAY_BTN_SIZE)
 
         # Create CTkImage objects
         self.ctk_play_icon = ctk.CTkImage(light_image=play_image, dark_image=play_image, size=self.PLAY_BTN_SIZE)

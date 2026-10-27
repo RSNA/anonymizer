@@ -3,7 +3,7 @@
 
 Run from the repo root::
 
-    uv run python src/prototyping/test_welcome_window.py
+    uv run python src/prototyping/dev/test_welcome_window.py
 
 Exit 0 when the welcome window keeps its target width after layout; exit 1 otherwise.
 Use ``--interactive`` to keep the window open for visual inspection.

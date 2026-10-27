@@ -9,7 +9,7 @@
 <p>Requires TotalSegmentator and XGBoost. Does not use FALCON.</p>
 
 <h3 style="font-size: 16px; margin: 20px 0 8px 0;">Run</h3>
-<pre style="background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; padding: 10px 12px; font-family: Consolas, Monaco, monospace; font-size: 13px; overflow-x: auto;">uv run python src/prototyping/ct_eval.py [options]</pre>
+<pre style="background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; padding: 10px 12px; font-family: Consolas, Monaco, monospace; font-size: 13px; overflow-x: auto;">uv run python src/prototyping/ct/ct_eval.py [options]</pre>
 
 <table style="border-collapse: collapse; width: 100%; max-width: 640px; margin: 12px 0; font-size: 13px;">
   <thead>
@@ -44,7 +44,7 @@
 </table>
 
 <p><strong>Example (smoke test, 10 per label class):</strong></p>
-<pre style="background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; padding: 10px 12px; font-family: Consolas, Monaco, monospace; font-size: 13px; overflow-x: auto;">uv run python src/prototyping/ct_eval.py \
+<pre style="background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; padding: 10px 12px; font-family: Consolas, Monaco, monospace; font-size: 13px; overflow-x: auto;">uv run python src/prototyping/ct/ct_eval.py \
   --data-dir /Users/michaelevans/Downloads/A_DATA \
   --output-dir artifacts/ct_eval_smoke \
   --per-class 10</pre>

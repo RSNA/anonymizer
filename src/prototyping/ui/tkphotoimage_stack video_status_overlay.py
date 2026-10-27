@@ -29,8 +29,8 @@ class ImageViewer:
         self.status_label = None  # For overlaying status
 
         # --- Load Icons (using Pillow) ---
-        self.play_icon = ImageTk.PhotoImage(Image.open("src/prototyping/play.png").resize(self.PLAY_BTN_SIZE))
-        self.pause_icon = ImageTk.PhotoImage(Image.open("src/prototyping/pause.png").resize(self.PLAY_BTN_SIZE))
+        self.play_icon = ImageTk.PhotoImage(Image.open("src/prototyping/ui/play.png").resize(self.PLAY_BTN_SIZE))
+        self.pause_icon = ImageTk.PhotoImage(Image.open("src/prototyping/ui/pause.png").resize(self.PLAY_BTN_SIZE))
 
         # --- UI Elements ---
         # Use a Frame to hold both image_label and allow status overlay.

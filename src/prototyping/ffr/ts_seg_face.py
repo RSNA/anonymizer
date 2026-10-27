@@ -6,8 +6,8 @@ Usage::
 
     uv sync --extra tseg --group dev
     uv run totalseg_set_license -l aca_XXXXXXXXXXXXXX   # once, academic license
-    uv run python src/prototyping/ts_seg_face.py /path/to/ct_head_series
-    uv run python src/prototyping/ts_seg_face.py /path/to/ct_head_series --force
+    uv run python src/prototyping/ffr/ts_seg_face.py /path/to/ct_head_series
+    uv run python src/prototyping/ffr/ts_seg_face.py /path/to/ct_head_series --force
 
 Writes ``<series>/0_TS_SEG/seg/face.nii.gz`` (reuses ``0_TS_SEG/volume.nii.gz`` when present).
 

@@ -3,10 +3,10 @@
 
 Example (do not commit PHI paths into defaults):
 
-  uv run python src/prototyping/benchmark_harmonize_series.py \\
+  uv run python src/prototyping/harmonize/benchmark_harmonize_series.py \\
     --series "/path/to/series" --label pre --dual-pass
 
-  uv run python src/prototyping/benchmark_harmonize_series.py \\
+  uv run python src/prototyping/harmonize/benchmark_harmonize_series.py \\
     --series "/path/to/series" --label post
 """
 

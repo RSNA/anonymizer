@@ -113,7 +113,7 @@ uv run rsna-anonymizer
 
 AI Features en macOS: `brew install libomp` (runtime OpenMP para contraste Harmonize / TotalSegmentator).
 
-Recarga en caliente de la UI: `uv run python src/prototyping/dev_anonymizer.py` (opcional [watchexec](https://github.com/watchexec/watchexec); alternativa `watchfiles`).
+Recarga en caliente de la UI: `uv run python src/prototyping/dev/dev_anonymizer.py` (opcional [watchexec](https://github.com/watchexec/watchexec); alternativa `watchfiles`).
 
 CLIs experimentales en [`src/prototyping/`](src/prototyping/README.md).
 

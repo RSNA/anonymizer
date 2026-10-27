@@ -459,7 +459,7 @@ def resolve_face_mask_path(
     if not run_if_missing:
         raise FileNotFoundError(
             f"Face mask not found at {cache_path}. "
-            "Run face segmentation first (ts_seg_face.py or analyze_tseg_face)."
+            "Run face segmentation first (ffr/ts_seg_face.py or analyze_tseg_face)."
         )
 
     if force_segmentation:

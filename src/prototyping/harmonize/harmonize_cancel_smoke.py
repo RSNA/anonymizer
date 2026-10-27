@@ -5,7 +5,7 @@ Manual smoke test for Harmonize cooperative cancellation.
 Not collected by pytest (lives under src/prototyping/, outside testpaths).
 
 Run:
-    uv run python src/prototyping/harmonize_cancel_smoke.py
+    uv run python src/prototyping/harmonize/harmonize_cancel_smoke.py
 """
 
 import threading
