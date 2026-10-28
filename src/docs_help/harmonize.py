@@ -821,15 +821,12 @@ def latch_brain_and_detail_overlays(series_view: Any, *, settle_ms: int = 800) -
 
 
 def prepare_series_view_for_grab(series_view: Any, *, settle_ms: int = 1000) -> None:
-    """Force Series View on-screen and frontmost before ImageGrab / screencapture."""
-    try:
-        screen_w = int(series_view.winfo_screenwidth())
-        screen_h = int(series_view.winfo_screenheight())
-        width = min(1280, max(980, screen_w - 40))
-        height = min(860, max(680, screen_h - 60))
-        series_view.geometry(f"{width}x{height}+24+40")
-    except Exception:
-        pass
+    """Bring Series View frontmost for ImageGrab / screencapture.
+
+    Leave window geometry alone — Series View already sized itself at open.
+    Forcing a larger frame letterboxes the canvas (black bands) and makes OCR
+    overlays look mis-registered in help shots.
+    """
     try:
         series_view.deiconify()
         series_view.lift()

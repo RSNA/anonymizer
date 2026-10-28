@@ -25,7 +25,8 @@ Capture must run on the real OS (window chrome cannot be faked).
 
 1. Check out the latest branch on a **macOS** machine
 2. Orthanc on `127.0.0.1:4242` (AE `ORTHANC`) for Search/Query shots; grant Screen Recording
-3. Run full capture (all languages in order **en_US → de → es → fr**; writes `shots/macos/`). Existing PNGs stay on disk (`exists` in the end-of-run table) so you can re-run to resume:
+3. Quit any open Anonymizer window yourself if you can — capture also **stops other Anonymizer GUI processes** automatically before the first UI shot (same PID as `docs_help` is never killed)
+4. Run full capture (all languages in order **en_US → de → es → fr**; writes `shots/macos/`). Existing PNGs stay on disk (`exists` in the end-of-run table) so you can re-run to resume:
 
 ```bash
 uv run python -m docs_help -v
@@ -38,14 +39,14 @@ uv run python -m docs_help --language de -v
 uv run python -m docs_help --language en_US --force --only Welcome
 ```
 
-4. Repeat on a **Windows** machine with the same commit (writes `shots/windows/`)
-5. Commit both `shots/macos/` and `shots/windows/` trees and push
+5. Repeat on a **Windows** machine with the same commit (writes `shots/windows/`)
+6. Commit both `shots/macos/` and `shots/windows/` trees and push
 
 `--platform auto` (default) uses the host OS. Cross-OS capture is refused.
 
 Harmonize shots reuse a saved TotalSegmentator `0_TS_SEG` tree under
-`docs/.capture_work/fixture_cache/` (gitignored). Detect Text shots apply
-committed boxes in `src/docs_help/ocr_cache/` instead of running EasyOCR.
+`docs/.capture_work/fixture_cache/` (gitignored). Pixel PHI Detect shots run
+live Series View **Detect** (EasyOCR) so rectangles match the displayed pixels.
 
 Soft shots for clinician UX also include:
 

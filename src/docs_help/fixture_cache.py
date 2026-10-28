@@ -1,25 +1,65 @@
-"""Persistent capture caches so help shots do not re-run TotalSegmentator or EasyOCR.
+"""Persistent capture caches for TotalSegmentator (not EasyOCR).
 
 TotalSegmentator: copy ``0_TS_SEG/`` into the imported series (same reuse path as
-the live Harmonize UI). Pixel PHI: apply committed EasyOCR boxes through Series
-View's normal overlay/whitelist/exclude filters.
+the live Harmonize UI). Pixel PHI help shots run Series View **Detect** live —
+box coordinates are never committed.
+
+Public API
+----------
+tseg_cache_source(fixture: str) -> Path
+    Directory of the saved ``0_TS_SEG`` tree for a fixture.
+
+tseg_anatomy_cache_ready(series_path: Path) -> bool
+    True when the series already has TotalSegmentator anatomy masks.
+
+clear_series_tseg_dir(series_path: Path) -> bool
+    Remove ``0_TS_SEG`` under a series (orphan CT masks spoil CXR Pixel PHI shots).
+
+seed_tseg_cache(series_path: Path, fixture: str) -> bool
+    Copy a previously saved ``0_TS_SEG`` onto an imported series.
+
+harvest_tseg_cache_from_tree(root: Path, fixture: str = "CT_Head_With_Contrast") -> bool
+    Keep a leftover ``0_TS_SEG`` from a previous capture work dir.
+
+save_tseg_cache(series_path: Path, fixture: str) -> bool
+    Persist ``0_TS_SEG`` so later capture runs skip TotalSegmentator.
+
+pixel_phi_lookup_labels(fixture: str) -> list[str]
+    Burned-in text strings for Patient Lookup CSV seeding (not Detect boxes).
 """
 
-import json
+from __future__ import annotations
+
 import logging
 import shutil
 from pathlib import Path
-from typing import Any
-
-from anonymizer.controller.series.series_overlay import OCRText
 
 logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CAPTURE_WORK = REPO_ROOT / "docs" / ".capture_work"
 TSEG_CACHE_ROOT = CAPTURE_WORK / "fixture_cache"
-OCR_CACHE_DIR = Path(__file__).resolve().parent / "ocr_cache"
 TSEG_DIRNAME = "0_TS_SEG"
+
+# Dataset Embedded PHI column seeding for Patient Lookup shots — text only, not boxes.
+_PIXEL_PHI_LOOKUP_LABELS: dict[str, tuple[str, ...]] = {
+    "davidson_cxr": (
+        "DAVIDSON",
+        "DOUGLAS [M]",
+        "01.09.2012",
+        "DOB: 06.16.1976",
+        "Semi-Upright",
+        "Portable",
+    ),
+    "us_rgb_single_frame": (
+        "mindray",
+        "26,05/2018",
+        "A-Abdomen",
+        "LIVER",
+        "Dist",
+        "15.23",
+    ),
+}
 
 
 def tseg_cache_source(fixture: str) -> Path:
@@ -31,6 +71,17 @@ def tseg_anatomy_cache_ready(series_path: Path) -> bool:
     return seg_dir.is_dir() and any(seg_dir.glob("*.nii.gz"))
 
 
+def clear_series_tseg_dir(series_path: Path) -> bool:
+    """Remove ``0_TS_SEG`` under a series (wrong leftover masks spoil Pixel PHI shots)."""
+    series_path = Path(series_path)
+    dest = series_path / TSEG_DIRNAME
+    if not dest.exists():
+        return False
+    shutil.rmtree(dest)
+    logger.info("Cleared stray TS cache under %s", series_path)
+    return True
+
+
 def seed_tseg_cache(series_path: Path, fixture: str) -> bool:
     """Copy a previously saved ``0_TS_SEG`` onto an imported series. Returns True if present."""
     series_path = Path(series_path)
@@ -38,10 +89,14 @@ def seed_tseg_cache(series_path: Path, fixture: str) -> bool:
     src = tseg_cache_source(fixture)
     src_n = _seg_mask_count(src)
     dest_n = _seg_mask_count(dest)
+    # Fixtures without a committed cache must not keep orphan masks (e.g. CT
+    # brain chips left under davidson_cxr from an earlier capture project).
+    if src_n == 0:
+        if dest_n > 0:
+            clear_series_tseg_dir(series_path)
+        return False
     if dest_n >= src_n and dest_n > 0:
         return True
-    if src_n == 0:
-        return dest_n > 0
     if dest.exists():
         shutil.rmtree(dest)
     shutil.copytree(src, dest)
@@ -99,65 +154,6 @@ def save_tseg_cache(series_path: Path, fixture: str) -> bool:
     return True
 
 
-def ocr_cache_path(fixture: str) -> Path:
-    return OCR_CACHE_DIR / f"{fixture}.json"
-
-
-def load_ocr_cache(fixture: str) -> dict[int, list[OCRText]]:
-    path = ocr_cache_path(fixture)
-    if not path.is_file():
-        raise RuntimeError(f"No pixel-PHI detection cache for fixture {fixture!r} ({path})")
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    frames = payload.get("frames") or {}
-    out: dict[int, list[OCRText]] = {}
-    for key, items in frames.items():
-        texts: list[OCRText] = []
-        for item in items:
-            box = item["box"]
-            texts.append(
-                OCRText(
-                    text=str(item["text"]),
-                    top_left=(int(box[0]), int(box[1])),
-                    bottom_right=(int(box[2]), int(box[3])),
-                    prob=float(item.get("prob", 0.99)),
-                )
-            )
-        out[int(key)] = texts
-    if not out:
-        raise RuntimeError(f"Pixel-PHI detection cache for {fixture!r} has no frames")
-    return out
-
-
-def cached_pixel_phi_labels(fixture: str) -> list[str]:
-    """Deduped detection strings for Patient Lookup metadata (no EasyOCR)."""
-    seen: set[str] = set()
-    labels: list[str] = []
-    for texts in load_ocr_cache(fixture).values():
-        for item in texts:
-            label = item.text.strip()
-            if label and label not in seen:
-                seen.add(label)
-                labels.append(label)
-    return labels
-
-
-def apply_cached_ocr_detections(view: Any, fixture: str) -> int:
-    """Install cached Detect Text overlays using Series View's own draw/filter path."""
-    from anonymizer.utils.translate import _
-
-    result = load_ocr_cache(fixture)
-    apply = getattr(view, "_apply_ocr_detections_result", None)
-    if not callable(apply):
-        raise RuntimeError("Series View is missing _apply_ocr_detections_result")
-    apply(result)
-    detection_count = sum(len(texts) for texts in result.values())
-    status = _("Text detection complete") + f": {detection_count} " + _("detections")
-    if hasattr(view, "update_status"):
-        view.update_status(status, debug_log=True)
-    if hasattr(view, "_refresh_ocr_toolbar_buttons"):
-        view._refresh_ocr_toolbar_buttons()
-    viewer = getattr(view, "image_viewer", None)
-    if viewer is not None and hasattr(viewer, "refresh_current_image"):
-        viewer.refresh_current_image()
-    logger.info("Applied cached pixel-PHI detections for %s (%d boxes)", fixture, detection_count)
-    return detection_count
+def pixel_phi_lookup_labels(fixture: str) -> list[str]:
+    """Burned-in text strings for Patient Lookup CSV seeding (not Detect boxes)."""
+    return list(_PIXEL_PHI_LOOKUP_LABELS.get(fixture, ()))

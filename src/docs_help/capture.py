@@ -315,9 +315,8 @@ def _open_settings(ctx: CaptureContext, *, new_model: bool = False):
     from anonymizer.view.settings.settings_dialog import SettingsDialog
 
     if new_model:
+        # Keep ProjectModel defaults (Documents/RSNA Anonymizer/MY_PROJECT).
         model = ProjectModel()
-        model.storage_dir = ctx.work_dir / "settings_preview_storage"
-        model.storage_dir.mkdir(parents=True, exist_ok=True)
         return SettingsDialog(parent=ctx.app, model=model, new_model=True, title=_("New Project Settings"))
     _ensure_project(ctx)
     return SettingsDialog(
@@ -513,8 +512,8 @@ def run_language(
                 _record(ctx, ShotResult(shot.id, "hard_fail", f"No handler for {shot.id}"))
                 continue
             try:
-                if shot.id == "Welcome" and ctx.project_open:
-                    raise RuntimeError("Welcome must run before project open")
+                if shot.id in {"Welcome", "NewProject_Menu"} and ctx.project_open:
+                    raise RuntimeError(f"{shot.id} must run before project open")
                 result = handler(ctx, shot)
                 _record(ctx, result)
             except KeyboardInterrupt:

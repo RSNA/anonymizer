@@ -1,34 +1,33 @@
-"""Capture fixture caches: TS copy/harvest and pixel-PHI detection JSON."""
+"""Capture fixture caches: TS copy/harvest (no OCR box cache)."""
 
 from pathlib import Path
-from types import SimpleNamespace
 
 from docs_help.fixture_cache import (
-    apply_cached_ocr_detections,
-    cached_pixel_phi_labels,
     harvest_tseg_cache_from_tree,
-    load_ocr_cache,
+    pixel_phi_lookup_labels,
     save_tseg_cache,
     seed_tseg_cache,
     tseg_anatomy_cache_ready,
 )
 
 
-def test_load_ocr_cache_davidson_includes_portable() -> None:
-    frames = load_ocr_cache("davidson_cxr")
-    texts = [item.text for item in frames[0]]
-    assert "DAVIDSON" in texts
-    assert "Portable" in texts
-    assert "DAVIDSON" in cached_pixel_phi_labels("davidson_cxr")
+def test_pixel_phi_lookup_labels_are_text_not_boxes() -> None:
+    labels = pixel_phi_lookup_labels("davidson_cxr")
+    assert "DAVIDSON" in labels
+    assert "Portable" in labels
+    assert pixel_phi_lookup_labels("missing_fixture") == []
 
 
-def test_load_ocr_cache_us_covers_exclude_panel() -> None:
-    frames = load_ocr_cache("us_rgb_single_frame")
-    texts = [item.text for item in frames[0]]
-    assert "mindray" in texts
-    assert any("FHS" in t for t in texts)
-    assert "LIVER" in texts
-    assert "Dist" in texts
+def test_seed_tseg_clears_orphan_masks_without_fixture_cache(tmp_path: Path, monkeypatch) -> None:
+    from docs_help import fixture_cache as fc
+
+    monkeypatch.setattr(fc, "TSEG_CACHE_ROOT", tmp_path / "fixture_cache")
+    series = tmp_path / "davidson_series"
+    seg = series / "0_TS_SEG" / "seg"
+    seg.mkdir(parents=True)
+    (seg / "brain.nii.gz").write_bytes(b"nii")
+    assert seed_tseg_cache(series, "davidson_cxr") is False
+    assert not (series / "0_TS_SEG").exists()
 
 
 def test_seed_and_save_tseg_cache(tmp_path: Path, monkeypatch) -> None:
@@ -80,21 +79,3 @@ def test_save_tseg_cache_does_not_downgrade(tmp_path: Path, monkeypatch) -> None
     assert save_tseg_cache(poor, "CT_Head_With_Contrast")
     cached = tmp_path / "fixture_cache" / "CT_Head_With_Contrast" / "0_TS_SEG" / "seg"
     assert (cached / "brainstem.nii.gz").is_file()
-
-
-def test_apply_cached_ocr_detections_uses_series_view_path() -> None:
-    applied: dict[int, list] = {}
-
-    def _apply(result):
-        applied.update(result)
-
-    view = SimpleNamespace(
-        _apply_ocr_detections_result=_apply,
-        update_status=lambda *a, **k: None,
-        _refresh_ocr_toolbar_buttons=lambda: None,
-        image_viewer=SimpleNamespace(refresh_current_image=lambda: None),
-    )
-    count = apply_cached_ocr_detections(view, "davidson_cxr")
-    assert count == 6
-    assert 0 in applied
-    assert any(t.text == "DAVIDSON" for t in applied[0])

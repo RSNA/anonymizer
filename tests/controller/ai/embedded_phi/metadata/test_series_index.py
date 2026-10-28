@@ -9,6 +9,7 @@ from pydicom import dcmread
 from pydicom.dataset import Dataset, FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian, SecondaryCaptureImageStorage, generate_uid
 
+from anonymizer.controller.ai.embedded_phi.classify_series import SeriesKind, classify_series
 from anonymizer.controller.ai.embedded_phi.metadata.extract import MetadataPhiRow
 from anonymizer.controller.ai.embedded_phi.metadata.series_index import (
     extract_sop_metadata_rows,
@@ -20,14 +21,22 @@ from anonymizer.controller.series import series_io
 _REPO = Path(__file__).resolve().parents[5]
 _TEST_DCM = _REPO / "tests/controller/assets/test_dcm_files"
 
+# Encapsulated PDF / SR use Report Text Review — no PixelData for load_series_frames.
+_NON_IMAGE_SERIES_KINDS = frozenset({SeriesKind.NATIVE_SR, SeriesKind.NATIVE_PDF})
+
 
 def _series_dirs() -> list[Path]:
-    """Immediate child dirs of test_dcm_files that contain at least one .dcm."""
+    """Image series dirs under test_dcm_files (at least one .dcm; not native SR/PDF)."""
     if not _TEST_DCM.is_dir():
         return []
-    return sorted(
-        p for p in _TEST_DCM.iterdir() if p.is_dir() and any(p.glob("*.dcm"))
-    )
+    out: list[Path] = []
+    for path in sorted(_TEST_DCM.iterdir()):
+        if not path.is_dir() or not any(path.glob("*.dcm")):
+            continue
+        if classify_series(path) in _NON_IMAGE_SERIES_KINDS:
+            continue
+        out.append(path)
+    return out
 
 
 def _row_fingerprint(row: MetadataPhiRow) -> tuple[str, str, str, bool, bool]:

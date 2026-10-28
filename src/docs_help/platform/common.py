@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 # Uniform docs frame width (logical / CSS px). Every help PNG is this wide after
 # normalize_for_docs: wide windows downscale, narrow dialogs letterbox. MkDocs
 # max-width:100% then scales all shots by the same factor so UI text matches.
-DOCS_SHOT_MAX_WIDTH = 960
+DOCS_SHOT_MAX_WIDTH = 1200
 DOCS_SHOT_PAD_RGB = (255, 255, 255)
 _MIN_MEAN_BRIGHTNESS = 12.0
 

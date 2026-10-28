@@ -198,11 +198,17 @@ def test_basic_infer_excludes_safe_private_and_clean_options() -> None:
         DeidMethodCode.CLEAN_PIXEL_DATA,
         DeidMethodCode.CLEAN_VISUAL_FEATURES,
         DeidMethodCode.CLEAN_GRAPHICS,
-        DeidMethodCode.CLEAN_STRUCTURED_CONTENT,
+        # CLEAN_STRUCTURED_CONTENT keeps Encapsulated PDF / SR text tags — see
+        # test_compile_script.test_clean_structured_keeps_report_document_tags.
         DeidMethodCode.CLEAN_DESCRIPTORS,
         DeidMethodCode.SAFE_PRIVATE,
     ],
 )
 def test_non_overlay_options_do_not_change_compile(option: DeidMethodCode) -> None:
+    """Options that do not rewrite script operands leave Basic unchanged.
+
+    Assert the tag delta (not full dict equality) so failures stay short in CI logs.
+    """
     basic = _ops(BASIC_OPTIONS)
-    assert _ops(BASIC_OPTIONS | {option}) == basic
+    delta = _delta(basic, _ops(BASIC_OPTIONS | {option}))
+    assert delta == {}, f"{option.name} changed {len(delta)} tag(s): {delta}"

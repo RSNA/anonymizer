@@ -131,6 +131,16 @@ def _main(argv: list[str] | None = None) -> int:
         )
         return 2
 
+    if needs_ui:
+        from docs_help.stop_running import stop_running_anonymizer_apps
+
+        stopped = stop_running_anonymizer_apps()
+        if stopped:
+            print(
+                f"Stopped {len(stopped)} other Anonymizer process(es) before capture: {stopped}",
+                flush=True,
+            )
+
     print(
         f"Full capture languages ({len(languages)}): " + " → ".join(languages),
         flush=True,

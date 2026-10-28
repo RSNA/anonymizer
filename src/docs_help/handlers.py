@@ -52,13 +52,44 @@ def shot_new_project_settings(ctx: CaptureContext, shot: ShotSpec) -> ShotResult
         close_toplevel(dlg)
 
 
-def shot_settings_subdialog(ctx: CaptureContext, shot: ShotSpec, opener: Callable) -> ShotResult:
+def _expand_treeview_dialog(dlg: Any, *, chrome_px: int = 110, row_px: int = 22) -> None:
+    """Grow a settings list dialog so every Treeview row is visible (no scroll)."""
+    tree = getattr(dlg, "_tree", None)
+    if tree is None:
+        return
+    children = tree.get_children()
+    if not children:
+        return
+    try:
+        style_row = int(tree.tk.call("ttk::style", "lookup", "Treeview", "-rowheight") or 0)
+        if style_row > 0:
+            row_px = style_row
+    except Exception:
+        pass
+    dlg.update_idletasks()
+    width = max(int(dlg.winfo_width()), int(dlg.winfo_reqwidth()), 640)
+    height = chrome_px + len(children) * row_px
+    dlg.geometry(f"{width}x{height}")
+    dlg.update_idletasks()
+    settle(dlg, 200)
+
+
+def shot_settings_subdialog(
+    ctx: CaptureContext,
+    shot: ShotSpec,
+    opener: Callable,
+    *,
+    expand_tree: bool = False,
+) -> ShotResult:
     settings = _open_settings(ctx, new_model=False)
     try:
         settle(settings, ctx.settle_ms)
         dlg = opener(settings)
         try:
             settle(dlg, ctx.settle_ms)
+            if expand_tree:
+                _expand_treeview_dialog(dlg)
+                settle(dlg, max(ctx.settle_ms, 400))
             return ShotResult(shot.id, "ok", shot.window, ctx.grab(dlg, shot))
         finally:
             close_toplevel(dlg)
@@ -122,7 +153,7 @@ def shot_modalities(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     def opener(settings):
         return ModalitiesDialog(settings, settings.model.modalities)
 
-    return shot_settings_subdialog(ctx, shot, opener)
+    return shot_settings_subdialog(ctx, shot, opener, expand_tree=True)
 
 
 def shot_storage_classes(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
@@ -131,6 +162,7 @@ def shot_storage_classes(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     def opener(settings):
         return SOPClassesDialog(settings, settings.model.storage_classes, settings.model.modalities)
 
+    # Keep default dialog height — the full pynetdicom list is too long for docs.
     return shot_settings_subdialog(ctx, shot, opener)
 
 
@@ -140,7 +172,7 @@ def shot_transfer_syntaxes(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     def opener(settings):
         return TransferSyntaxesDialog(settings, settings.model.transfer_syntaxes)
 
-    return shot_settings_subdialog(ctx, shot, opener)
+    return shot_settings_subdialog(ctx, shot, opener, expand_tree=True)
 
 
 def shot_logging_levels(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
@@ -153,23 +185,20 @@ def shot_logging_levels(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
 
 
 def shot_deidentification_options(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
-    """New Project Settings → De-identification Options with Retain preset filled."""
-    from anonymizer.model.project import RETAIN_OPTIONS
+    """New Project Settings → De-identification Options with Basic preset + RHS help."""
+    from anonymizer.model.project import BASIC_OPTIONS
+    from anonymizer.utils.dicom import DeidMethodCode
     from anonymizer.view.settings.deidentification_options_dialog import DeidentificationOptionsDialog
 
     settings = _open_settings(ctx, new_model=True)
     dlg: Any = None
     try:
         settle(settings, max(ctx.settle_ms, 500))
-        dlg = DeidentificationOptionsDialog(settings, RETAIN_OPTIONS)
+        dlg = DeidentificationOptionsDialog(settings, BASIC_OPTIONS)
         settle(dlg, max(ctx.settle_ms, 800))
         wait_mapped(dlg)
-        # Focus a cleaning option explanation when present (optional chrome).
         with contextlib.suppress(Exception):
-            from anonymizer.utils.dicom import DeidMethodCode
-
-            dlg._focused = DeidMethodCode.MODIFIED_DATES
-            dlg._show_explanation(DeidMethodCode.MODIFIED_DATES)
+            dlg._focus_option(DeidMethodCode.BASIC)
             settle(dlg, 200)
         try:
             dlg.lift()
@@ -182,7 +211,7 @@ def shot_deidentification_options(ctx: CaptureContext, shot: ShotSpec) -> ShotRe
             dlg.attributes("-topmost", False)
         except Exception:
             pass
-        return ShotResult(shot.id, "ok", "retain", dest)
+        return ShotResult(shot.id, "ok", "basic", dest)
     finally:
         if dlg is not None:
             close_toplevel(dlg)
@@ -216,10 +245,9 @@ def shot_anonymizer_script_editor(ctx: CaptureContext, shot: ShotSpec) -> ShotRe
         with contextlib.suppress(Exception):
             dlg._view_var.set("active")
             dlg._on_view_changed()
-        # PatientID + @lookup_ptid: operand help + Load Lookup Table.
+        # Keep Search empty (no filter). PatientID + @lookup_ptid: operand help + Load Lookup Table.
         with contextlib.suppress(Exception):
-            dlg._search_var.set("PatientID")
-            settle(dlg, 200)
+            dlg._search_var.set("")
             dlg._refresh_list()
             settle(dlg, 200)
             # Script XML tags are uncomma'd (00100020); display uses 0010,0020.
@@ -388,24 +416,48 @@ def shot_dashboard_analytics(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     return ShotResult(shot.id, "ok", f"widgets={widget_count}", dest)
 
 
+def _reveal_metadata_phi_rows(dlg: Any, *, select: bool = False) -> None:
+    """Scroll the first Detect PHI hit into view (Study Description on davidson_cxr).
+
+    Do not select the row by default: Treeview selection paints over the orange
+    entity highlight that help shots need to show.
+    """
+    panel = getattr(dlg, "_panel", None)
+    if panel is None:
+        return
+    tree = getattr(panel, "_tree", None)
+    entities = getattr(panel, "_entities_by_content", None) or {}
+    if tree is None or not entities:
+        return
+    for iid in panel._all_iids():
+        text = str(panel._content_by_iid.get(iid) or "")
+        if text in entities:
+            with contextlib.suppress(Exception):
+                panel._reveal_iid(iid)
+                if select:
+                    tree.selection_set(iid)
+                else:
+                    tree.selection_remove(tree.selection())
+                    tree.focus("")
+            return
+
+
 def shot_metadata_assessment(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
-    """Series View Metadata tree; Detect / Remove PHI (recipe.mode=tree|detect|remove)."""
+    """Series View Metadata tree; Detect / Replace PHI (recipe.mode=tree|detect|remove).
+
+    Opens davidson_cxr before Harmonize so Study Description still holds leftover
+    PHI (e.g. patient name in free text) for Detect PHI. ``remove`` mode uses
+    Synthetic → Replace PHI (not Blank).
+    """
     import time
     import tkinter as tk
 
     from anonymizer.controller.ai.feature_availability import report_text_phi_ready
     from anonymizer.view.series.metadata_assessment_dialog import MetadataAssessmentDialog
-    from anonymizer.view.series.series import show_series_view
 
     fixture = _fixture_from_deps(shot.deps) or "davidson_cxr"
-    _import_fixtures(ctx, fixture)
-    series = series_for_fixture(ctx.app.controller.model.images_dir(), fixture)
-    if series is None:
-        raise RuntimeError(f"No series for {fixture}")
-    parent = ctx.app.dashboard or ctx.app
-    view = show_series_view(parent, controller=ctx.app.controller, series_path=series, fonts=ctx.app.fonts)
-    if view is None:
-        raise RuntimeError("SeriesView failed")
+    # Clear orphan TotalSegmentator chips — Metadata shots sit over Series View.
+    view, _series = _series_view_for_fixture(ctx, fixture, clear_tseg=True)
     dlg: Any = None
     try:
         settle(view, max(ctx.settle_ms, 1000))
@@ -451,35 +503,60 @@ def shot_metadata_assessment(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
                     return ShotResult(shot.id, "soft_fail", "detect_timeout")
                 raise RuntimeError("Timed out waiting for Metadata Detect PHI")
             settle(dlg, max(ctx.settle_ms, 500))
+            # Never select PHI rows for Detect — selection hides orange entity colour.
+            _reveal_metadata_phi_rows(dlg, select=False)
+            settle(dlg, 200)
             if mode == "remove":
                 if not dlg._panel.has_phi():
                     if shot.soft:
                         return ShotResult(shot.id, "soft_fail", "no_phi_for_remove")
                     raise RuntimeError("Metadata Detect PHI found nothing to remove")
-                # Blank mode so Remove PHI label and dirty Save are visible.
+                # Synthetic → Replace PHI (Blank is labels[0]; Synthetic is labels[1]).
                 with contextlib.suppress(Exception):
                     labels = list(dlg._mode_labels)
-                    if labels:
+                    if len(labels) >= 2:
+                        dlg.mode_var.set(labels[1])
+                        dlg._refresh_remove_label()
+                    elif labels:
                         dlg.mode_var.set(labels[0])
                         dlg._refresh_remove_label()
                 dlg._on_remove()
                 settle(dlg, max(ctx.settle_ms, 400))
+                # Keep Study Description visible; clear selection so Content is readable.
+                with contextlib.suppress(Exception):
+                    tree = dlg._panel._tree
+                    tree.selection_remove(tree.selection())
+                    tree.focus("")
+                    for iid in dlg._panel._all_iids():
+                        vals = tree.item(iid, "values") or ()
+                        field = str(vals[0]) if vals else ""
+                        if "Study Description" in field or field.strip() == "Study Description":
+                            dlg._panel._reveal_iid(iid)
+                            break
         try:
             dlg.lift()
             dlg.attributes("-topmost", True)
         except Exception:
             pass
         settle(dlg, 300)
+        # Final clear — Treeview can re-select during see()/lift.
+        with contextlib.suppress(Exception):
+            tree = dlg._panel._tree
+            tree.selection_remove(tree.selection())
+            tree.focus("")
+        settle(dlg, 100)
         dest = ctx.grab(dlg, shot)
         try:
             dlg.attributes("-topmost", False)
         except Exception:
             pass
         detail = f"{fixture}:{mode}"
+        if mode == "remove":
+            detail = f"{fixture}:replace_synthetic"
         return ShotResult(shot.id, "ok", detail, dest)
     finally:
         if dlg is not None:
-            # Discard unsaved Remove PHI edits without a confirm dialog.
+            # Discard unsaved Replace PHI edits without a confirm dialog.
             with contextlib.suppress(Exception):
                 dlg._dirty = False
             close_toplevel(dlg)
@@ -625,6 +702,36 @@ def shot_report_text_review(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
             except Exception:
                 pass
             return ShotResult(shot.id, "ok", f"{fixture}:metadata", dest)
+        # Review shot: live Detect so the RHS text panel shows entity colours;
+        # select Synthetic so Blank/Synthetic chrome is visible.
+        from anonymizer.controller.ai.feature_availability import report_text_phi_ready
+
+        if not report_text_phi_ready():
+            if shot.soft:
+                return ShotResult(shot.id, "soft_fail", "ner_models_missing")
+            raise RuntimeError("Embedded PHI models not ready for Report Detect PHI")
+        view._on_detect()
+        deadline = time.monotonic() + 180.0
+        while time.monotonic() < deadline:
+            settle(view, 200)
+            if not getattr(view, "_detecting", False):
+                break
+        else:
+            if shot.soft:
+                return ShotResult(shot.id, "soft_fail", "detect_timeout")
+            raise RuntimeError("Timed out waiting for Report Detect PHI")
+        settle(view, max(ctx.settle_ms, 500))
+        if not getattr(view, "_entities", None):
+            if shot.soft:
+                return ShotResult(shot.id, "soft_fail", "no_report_phi")
+            raise RuntimeError("Report Detect PHI found no entities to highlight")
+        with contextlib.suppress(Exception):
+            labels = list(view._mode_labels)
+            # Prefer Synthetic (second label) for the demo shot.
+            if len(labels) >= 2:
+                view.mode_var.set(labels[1])
+                view._refresh_remove_label()
+                view._set_remove_toolbar_present(True)
         try:
             view.lift()
             view.attributes("-topmost", True)
@@ -636,7 +743,7 @@ def shot_report_text_review(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
             view.attributes("-topmost", False)
         except Exception:
             pass
-        return ShotResult(shot.id, "ok", f"{fixture}:review", dest)
+        return ShotResult(shot.id, "ok", f"{fixture}:review:detect:{len(view._entities)}", dest)
     finally:
         if meta_dlg is not None:
             close_toplevel(meta_dlg)
@@ -702,87 +809,38 @@ def _save_rgba(dest: Path, image: Any, widget: Any) -> Path:
     return dest
 
 
+def shot_new_project_menu(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
+    """Welcome + native File → New Project menu (manual shot).
+
+    macOS draws the File menu in the system menu bar, so a composed in-window
+    stand-in is not valid. Capture Welcome with File open by hand, normalize
+    with docs_help.platform.common.normalize_for_docs, and place
+    NewProject_Menu.png under docs/<lang>/05-create-project/shots/macos/.
+    """
+    dest = ctx.dest(shot)
+    if dest.is_file() and dest.stat().st_size > 0:
+        return ShotResult(shot.id, "ok", "manual NewProject_Menu (existing PNG)", dest)
+    raise RuntimeError(
+        "NewProject_Menu is manual: capture Welcome with the native File → New Project "
+        f"menu open, then place the PNG at {dest}"
+    )
+
+
 def shot_import_davidson_menu(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
-    """Main window File menu open — Import Files / Import Directory."""
-    import customtkinter as ctk
+    """Dashboard + native File → Import Files / Import Directory (manual shot).
 
-    from anonymizer.utils.translate import _
-
-    _ensure_project(ctx)
-    settle(ctx.app, ctx.settle_ms)
-    # Bring Dashboard forward so the shot is clearly the main app + File menu.
-    with contextlib.suppress(Exception):
-        if ctx.app.dashboard is not None:
-            ctx.app.dashboard.deiconify()
-            ctx.app.dashboard.lift()
-        ctx.app.deiconify()
-        ctx.app.lift()
-        ctx.app.focus_force()
-    settle(ctx.app, ctx.settle_ms)
-
-    # Native macOS menubar is not grab-friendly; compose a File menu panel over the main window.
-    standin = ctk.CTkToplevel(ctx.app)
-    try:
-        standin.title("")
-        standin.overrideredirect(True)
-        standin.attributes("-topmost", True)
-        ax = int(ctx.app.winfo_rootx()) + 12
-        ay = int(ctx.app.winfo_rooty()) + 28
-        standin.geometry(f"280x220+{ax}+{ay}")
-        standin.resizable(False, False)
-
-        menubar = ctk.CTkFrame(standin, height=28, corner_radius=0, fg_color=("#e8e8e8", "#2b2b2b"))
-        menubar.pack(fill="x")
-        for label, active in ((_("File"), True), (_("Settings"), False), (_("Help"), False)):
-            ctk.CTkLabel(
-                menubar,
-                text=label,
-                width=64,
-                fg_color=("#cfe0f5", "#1f538d") if active else "transparent",
-                text_color=("#014F8F", "#DCE4EE") if active else ("gray20", "gray80"),
-                corner_radius=4,
-            ).pack(side="left", padx=4, pady=2)
-
-        panel = ctk.CTkFrame(standin, corner_radius=6, border_width=1, border_color=("gray60", "gray40"))
-        panel.pack(fill="both", expand=True, padx=2, pady=(0, 2))
-        items = (
-            (_("Import Files"), True),
-            (_("Import Directory"), False),
-            (None, False),
-            (_("Clone Project"), False),
-            (_("Close Project"), False),
-            (None, False),
-            (_("Exit"), False),
-        )
-        for label, highlight in items:
-            if label is None:
-                ctk.CTkFrame(panel, height=1, fg_color=("gray70", "gray40")).pack(fill="x", padx=8, pady=4)
-                continue
-            ctk.CTkButton(
-                panel,
-                text=label,
-                anchor="w",
-                fg_color=("#3a7ebf", "#1f538d") if highlight else "transparent",
-                text_color=("#DCE4EE", "#DCE4EE") if highlight else ("gray14", "gray84"),
-                hover=False,
-                height=28,
-            ).pack(fill="x", padx=4, pady=1)
-
-        # Grab main window + menu overlay (union bbox).
-        from docs_help.platform import grab_widgets_union
-
-        settle(standin, max(ctx.settle_ms, 400))
-        dest = grab_widgets_union(
-            [ctx.app, standin],
-            ctx.dest(shot),
-            settle_ms=max(ctx.settle_ms, 500),
-            allow_placeholder=ctx.allow_placeholder,
-            shot_id=shot.id,
-        )
-        return ShotResult(shot.id, "ok", "File menu on main window", dest)
-    finally:
-        if standin.winfo_exists():
-            close_toplevel(standin)
+    macOS draws the File menu in the system menu bar, so a composed in-window
+    stand-in is not valid. Capture Dashboard with File open by hand, normalize
+    with docs_help.platform.common.normalize_for_docs, and place
+    ImportFiles_Menu.png under docs/<lang>/06-search/shots/macos/.
+    """
+    dest = ctx.dest(shot)
+    if dest.is_file() and dest.stat().st_size > 0:
+        return ShotResult(shot.id, "ok", "manual ImportFiles_Menu (existing PNG)", dest)
+    raise RuntimeError(
+        "ImportFiles_Menu is manual: capture Dashboard with the native File → "
+        f"Import Files / Import Directory menu open, then place the PNG at {dest}"
+    )
 
 
 def shot_import_directory_chooser(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
@@ -887,6 +945,45 @@ def _trim_docs_png_whitespace(path: Path, *, bottom: bool = True, right: bool = 
             logger.info("Trimmed %s %s → %s", path.name, image.size, cropped.size)
     except Exception as exc:
         logger.warning("Whitespace trim failed for %s: %s", path, exc)
+
+
+def _trim_docs_png_bottom_chrome(path: Path, *, pad: int = 8) -> None:
+    """Crop CTk light-grey slack (and shadow fringe) below real Dataset chrome.
+
+    Unlike ``_trim_docs_png_whitespace``, ignores dark drop-shadow pixels at the
+    extreme bottom so a grey band above the fringe is still removed.
+    """
+    try:
+        import numpy as np
+        from PIL import Image
+
+        image = Image.open(path).convert("RGB")
+        arr = np.asarray(image)
+        h, _w, _c = arr.shape
+        if h < 32:
+            return
+        chrome = 236
+        tol = 10
+
+        def _chrome_frac(y: int) -> float:
+            row = arr[y].astype(np.int16)
+            return float(((np.abs(row - chrome) <= tol).all(axis=1)).mean())
+
+        def _dark_frac(y: int) -> float:
+            return float((arr[y].mean(axis=1) < 40).mean())
+
+        y = h - 1
+        # Drop shadow fringe, then solid CTk grey under the button strip.
+        while y > h // 2 and (_dark_frac(y) > 0.0 or _chrome_frac(y) > 0.92):
+            y -= 1
+        new_h = min(h, y + 1 + max(0, int(pad)))
+        if new_h >= h - 2:
+            return
+        cropped = Image.fromarray(arr[:new_h])
+        cropped.save(path, format="PNG")
+        logger.info("Trimmed bottom chrome %s %s → %s", path.name, image.size, cropped.size)
+    except Exception as exc:
+        logger.warning("Bottom chrome trim failed for %s: %s", path, exc)
 
 
 def _fit_query_view_for_capture(view: Any, *, row_count: int, ready: bool = False) -> str:
@@ -1406,6 +1503,11 @@ def _fit_dataset_view_for_capture(view: Any, *, study_count: int, series_count: 
 
     Treeview defaults to ``height=30`` rows; for help shots size exactly to the
     visible study+series rows and stop frames from expanding vertically.
+
+    DatasetView keeps a product ``minsize`` height of 320 so the live window never
+    collapses under the button strip. That floor leaves a grey band under a fitted
+    6-row tree — temporarily drop the height floor for the grab only (do not change
+    the product view).
     """
     visible = max(1, int(study_count) + int(series_count))
     # Exact fit — spare rows paint as empty grey (not present in the live app at default size).
@@ -1422,19 +1524,26 @@ def _fit_dataset_view_for_capture(view: Any, *, study_count: int, series_count: 
     except Exception:
         pass
     try:
+        min_w = int(view.minsize()[0] or 0)
+        view.minsize(max(min_w, 1), 1)
+    except Exception:
+        pass
+    try:
         view.update_idletasks()
         view.update()
     except Exception:
         pass
+    # button_frame uses pady=(0, PAD=10); include that pad so Delete is not clipped.
+    # Do not use winfo_reqheight — CTk often reports the old minsize floor and leaves a grey band.
+    _btn_pad_below = 10
     try:
         btn = view._button_frame
-        bottom = int(btn.winfo_y()) + int(btn.winfo_height()) + 4
+        bottom = int(btn.winfo_y()) + int(btn.winfo_height()) + _btn_pad_below + 6
         req_w = int(view.winfo_reqwidth())
     except Exception:
-        bottom, req_w = 360, 1100
+        bottom, req_w = 280, 1100
     width = max(980, min(req_w + 20, 1280))
-    # Prefer content bottom over reqheight so CTk does not leave a grey strip under the buttons.
-    height = max(220, min(bottom, 720))
+    height = max(240, min(bottom, 720))
     return f"{width}x{height}"
 
 
@@ -1524,7 +1633,20 @@ def shot_dataset(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     except Exception:
         pass
     settle(view, max(ctx.settle_ms, 300))
+    # Re-measure after geometry sticks — first pass can undershoot before Tk finishes layout.
+    try:
+        btn = view._button_frame
+        need_h = int(btn.winfo_y()) + int(btn.winfo_height()) + 16
+        cur_h = int(view.winfo_height() or 0)
+        if need_h > cur_h:
+            width = geometry.split("x", 1)[0]
+            geometry = f"{width}x{need_h}"
+            view.geometry(geometry)
+            settle(view, max(ctx.settle_ms, 200))
+    except Exception:
+        pass
     dest = ctx.grab(view, shot, geometry=geometry, settle_ms=max(ctx.settle_ms, 700))
+    _trim_docs_png_bottom_chrome(dest, pad=8)
     return ShotResult(shot.id, "ok", f"{study_count} studies / {series_count} series @ {geometry}", dest)
 
 
@@ -2300,7 +2422,7 @@ def _process_before_patient_lookup(ctx: CaptureContext) -> dict[str, object]:
         apply_harmonized_description,
         harmonize_and_apply_series,
     )
-    from docs_help.fixture_cache import cached_pixel_phi_labels, tseg_anatomy_cache_ready
+    from docs_help.fixture_cache import pixel_phi_lookup_labels, tseg_anatomy_cache_ready
 
     controller = ctx.app.controller
     anon = controller.anonymizer.model
@@ -2336,7 +2458,7 @@ def _process_before_patient_lookup(ctx: CaptureContext) -> dict[str, object]:
         series_uid = str(
             getattr(dcmread(dcms[0], stop_before_pixels=True, force=True), "SeriesInstanceUID", "") or ""
         )
-        labels = cached_pixel_phi_labels(fixture)
+        labels = pixel_phi_lookup_labels(fixture)
         any_text = False
         for dcm_path in dcms:
             if labels and apply_instance_embedded_phi_for_dcm(anon, dcm_path, labels):
@@ -2557,13 +2679,17 @@ def shot_dataset_patient_lookup(ctx: CaptureContext, shot: ShotSpec) -> ShotResu
         ctx.app.dataset_view = None
 
 
-def _series_view_for_fixture(ctx: CaptureContext, fixture: str):
+def _series_view_for_fixture(ctx: CaptureContext, fixture: str, *, clear_tseg: bool = False):
     from anonymizer.view.series.series import show_series_view
 
     _import_fixtures(ctx, fixture)
     series = series_for_fixture(ctx.app.controller.model.images_dir(), fixture)
     if series is None:
         raise RuntimeError(f"No series for {fixture}")
+    if clear_tseg:
+        from docs_help.fixture_cache import clear_series_tseg_dir
+
+        clear_series_tseg_dir(series)
     parent = ctx.app.dashboard or ctx.app
     view = show_series_view(parent, controller=ctx.app.controller, series_path=series, fonts=ctx.app.fonts)
     if view is None:
@@ -2572,13 +2698,41 @@ def _series_view_for_fixture(ctx: CaptureContext, fixture: str):
     return view, series
 
 
+def _run_series_view_detect(view, *, timeout_s: float = 180.0) -> int:
+    """Click Series View Detect and wait for the live OCR job (no cached boxes)."""
+    import time
+
+    from anonymizer.controller.ai.embedded_phi.pixel.cache import ocr_models_ready
+
+    if not ocr_models_ready():
+        raise RuntimeError("EasyOCR models missing — finish AI Features setup before Pixel PHI shots")
+    if not hasattr(view, "detect_text_button_clicked"):
+        raise RuntimeError("Series View is missing detect_text_button_clicked")
+    view.detect_text_button_clicked()
+    deadline = time.monotonic() + max(5.0, float(timeout_s))
+    while getattr(view, "_ocr_detecting", False) and time.monotonic() < deadline:
+        settle(view, 150)
+    if getattr(view, "_ocr_detecting", False):
+        raise RuntimeError(f"Detect Text did not finish within {timeout_s:.0f}s")
+    settle(view, 300)
+    ndx = view.image_viewer.current_image_index
+    ocr = view.image_viewer.overlay_data.get(ndx)
+    texts = list(getattr(ocr, "ocr_texts", []) or []) if ocr is not None else []
+    logger.info("Live Detect Text finished with %d overlay box(es)", len(texts))
+    return len(texts)
+
+
 def shot_process_remove_pixel(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
-    """Series View OCR workflow: detect and/or remove burned-in text."""
+    """Series View OCR workflow: detect and/or remove burned-in text.
+
+    Do not resize Series View — grab the window the app opened. Detect runs live
+    EasyOCR (same path as the working app); boxes are never read from a cache.
+    """
     from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    PixelPhiRemovalMode,
-    normalize_pixel_phi_removal_mode,
-    pixel_phi_removal_mode_option_label,
-)
+        PixelPhiRemovalMode,
+        normalize_pixel_phi_removal_mode,
+        pixel_phi_removal_mode_option_label,
+    )
     from anonymizer.controller.jobs.runner import OcrEditContext, edit_context_display_label
     from anonymizer.controller.series.series_overlay import UserRectangle
 
@@ -2590,9 +2744,9 @@ def shot_process_remove_pixel(ctx: CaptureContext, shot: ShotSpec) -> ShotResult
     )
     edit_ctx_raw = str(recipe.get("edit_context") or "frame").strip().casefold()
     edit_ctx = OcrEditContext.SERIES if edit_ctx_raw.startswith("series") else OcrEditContext.FRAME
-    view, series = _series_view_for_fixture(ctx, fixture)
+    # Strip orphan TS masks before open so CT chips never appear; leave UI layout alone.
+    view, series = _series_view_for_fixture(ctx, fixture, clear_tseg=True)
     try:
-        # Default whitelist + Frame/Series context (keep orientation markers).
         try:
             label = edit_context_display_label(edit_ctx)
             if hasattr(view, "_edit_context_var"):
@@ -2628,20 +2782,10 @@ def shot_process_remove_pixel(ctx: CaptureContext, shot: ShotSpec) -> ShotResult
             settle(view, max(ctx.settle_ms, 400))
 
         if "detect_text" in actions:
-            from docs_help.fixture_cache import apply_cached_ocr_detections
-
-            detection_count = apply_cached_ocr_detections(view, fixture)
-            settle(view, max(ctx.settle_ms, 700))
-            if "remove_text" not in actions:
-                ndx = view.image_viewer.current_image_index
-                ocr = view.image_viewer.overlay_data.get(ndx)
-                texts = list(getattr(ocr, "ocr_texts", []) or []) if ocr is not None else []
-                if not texts:
-                    raise RuntimeError(
-                        f"Detect Text shot expected green OCR overlays from cache, found none "
-                        f"(cached={detection_count})"
-                    )
-                settle(view, 500)
+            detection_count = _run_series_view_detect(view, timeout_s=180.0)
+            settle(view, max(ctx.settle_ms, 500))
+            if "remove_text" not in actions and detection_count <= 0:
+                raise RuntimeError("Detect Text shot expected OCR overlays, found none")
 
         if "remove_text" in actions:
             ndx = view.image_viewer.current_image_index
@@ -2649,7 +2793,6 @@ def shot_process_remove_pixel(ctx: CaptureContext, shot: ShotSpec) -> ShotResult
             texts = list(getattr(ocr, "ocr_texts", []) or []) if ocr is not None else []
             if not texts:
                 raise RuntimeError("Remove Text shot requires Detect Text overlays first")
-            # Re-assert removal mode in case Detect refreshed toolbar widgets.
             if hasattr(view, "remove_text_mode_var"):
                 view.remove_text_mode_var.set(pixel_phi_removal_mode_option_label(removal_mode))
             view.remove_text_button_clicked()
@@ -2664,37 +2807,8 @@ def shot_process_remove_pixel(ctx: CaptureContext, shot: ShotSpec) -> ShotResult
                 pass
             settle(view, 500)
 
-        try:
-            view.lift()
-            view.attributes("-topmost", True)
-        except Exception:
-            pass
-        # Multi-frame US windows often return black Screen Recording frames; shrink first.
-        try:
-            if int(getattr(view.image_viewer, "num_images", 1) or 1) > 1:
-                view.geometry("1280x860+24+40")
-                settle(view, max(ctx.settle_ms, 500))
-        except Exception:
-            pass
-        try:
-            dest = ctx.grab(view, shot, settle_ms=max(ctx.settle_ms, 700))
-        except RuntimeError as exc:
-            msg = str(exc).casefold()
-            if "blank" in msg or "screen capture" in msg:
-                logger.warning(
-                    "Screen grab failed for %s; using off-screen Series View export: %s",
-                    shot.id,
-                    exc,
-                )
-                from docs_help.series_view_export import export_series_view_docs_shot
-
-                dest = export_series_view_docs_shot(view, ctx.dest(shot))
-            else:
-                raise
-        try:
-            view.attributes("-topmost", False)
-        except Exception:
-            pass
+        # Grab as-opened — never pass geometry= (that letterboxes the canvas).
+        dest = ctx.grab(view, shot, settle_ms=max(ctx.settle_ms, 700))
         return ShotResult(
             shot.id,
             "ok",
@@ -2863,6 +2977,109 @@ def shot_process_harmonize_segmented_series(ctx: CaptureContext, shot: ShotSpec)
         if series_view is not None:
             close_toplevel(series_view)
 
+
+def shot_series_view_annotate(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
+    """Series View Annotate mode with a painted user segment on planar XR.
+
+    Uses ``davidson_cxr`` (Annotate without Harmonize): create a user label,
+    brush a visible ROI, then grab so Brush / Erase chrome and the segment
+    outline both appear in the View chapter shot.
+    """
+    from docs_help.harmonize import (
+        grab_series_with_overlays,
+        open_series_view,
+        prepare_series_view_for_grab,
+    )
+    from docs_help.project_setup import series_for_fixture
+
+    fixture = _fixture_from_deps(shot.deps) or "davidson_cxr"
+    _import_fixtures(ctx, fixture)
+    series_path = series_for_fixture(ctx.app.controller.model.images_dir(), fixture)
+    if series_path is None:
+        raise RuntimeError(f"No series for fixture {fixture!r}")
+
+    series_view = None
+    try:
+        series_view = open_series_view(ctx, series_path)
+        settle(series_view, max(ctx.settle_ms, 1200))
+        try:
+            series_view._refresh_analysis_cache_ui()
+        except Exception as exc:
+            logger.warning("Series View refresh for Annotate shot: %s", exc)
+
+        viewer = series_view.image_viewer
+        session = series_view._ensure_annotate_session()
+        if session is None:
+            raise RuntimeError("Could not create annotate session for davidson_cxr")
+        viewer.set_annotate_enabled(True)
+        viewer.set_annotate_mode("annotate")
+        viewer.set_annotate_tool("brush")
+        # Larger brush so the painted ROI reads clearly after docs downscale.
+        try:
+            viewer._brush_radius = 28
+            if getattr(viewer, "_brush_size_label", None) is not None:
+                viewer._brush_size_label.configure(text=f"{viewer._brush_radius} px")
+        except Exception:
+            pass
+
+        entry = series_view._workspace.add_annotate_user_label(session, "Demo lesion")
+        key = f"user:{entry.label_id}"
+        viewer._active_segmentation_names.add(key)
+        viewer.remember_view_latch(key)
+        series_view._refresh_paint_target_options()
+        viewer._select_annotate_segment(key)
+        with contextlib.suppress(Exception):
+            viewer.reveal_segmentation_button(key)
+        settle(series_view, max(ctx.settle_ms, 400))
+
+        # Image-space brush stamps (cy, cx) — a compact blob in the right mid-lung.
+        h = int(session.labels.shape[-2])
+        w = int(session.labels.shape[-1])
+        cy0 = max(40, int(h * 0.42))
+        cx0 = max(40, int(w * 0.62))
+        radius = int(getattr(viewer, "_brush_radius", 28) or 28)
+        offsets = (
+            (0, 0),
+            (0, 18),
+            (0, 36),
+            (14, 8),
+            (14, 26),
+            (-12, 10),
+            (-12, 28),
+            (22, 18),
+            (-20, 20),
+        )
+        for dy, dx in offsets:
+            series_view._on_annotate_stroke(key, cy0 + dy, cx0 + dx, radius, "brush")
+        series_view._on_annotate_stroke_end()
+        with contextlib.suppress(Exception):
+            series_view._flush_annotate_save(update_ledger=False)
+        settle(series_view, max(ctx.settle_ms, 700))
+
+        tools = getattr(viewer, "_annotate_tools_frame", None)
+        if tools is None:
+            raise RuntimeError("Annotate tools frame missing")
+        try:
+            mapped = bool(tools.winfo_ismapped())
+        except Exception as exc:
+            raise RuntimeError(f"Annotate tools not ready: {exc}") from exc
+        if not mapped:
+            raise RuntimeError("Annotate tools (Brush/Erase) not visible")
+        if key not in (viewer.get_active_segmentation_names() or set()) and viewer.get_paint_target_key() != key:
+            raise RuntimeError(f"Paint target {key} not selected after Demo lesion stroke")
+
+        prepare_series_view_for_grab(series_view, settle_ms=800)
+        dest = grab_series_with_overlays(ctx, series_view, shot=shot)
+        try:
+            series_view.attributes("-topmost", False)
+        except Exception:
+            pass
+        return ShotResult(shot.id, "ok", f"{fixture}:annotate_demo_lesion", dest)
+    finally:
+        if series_view is not None:
+            close_toplevel(series_view)
+
+
 def shot_process_face_blur(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     """Face Blur review dialog after Gaussian preview completes (QA + Save enabled)."""
     import time
@@ -2949,6 +3166,7 @@ def shot_process_face_blur(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
 
 SHOT_HANDLERS: dict[str, Callable[[CaptureContext, ShotSpec], ShotResult]] = {
     "Welcome": shot_welcome,
+    "NewProject_Menu": shot_new_project_menu,
     "NewProjectSettings": shot_new_project_settings,
     "LocalServer": shot_local_server,
     "QueryServer": shot_query_server,
@@ -2983,6 +3201,7 @@ SHOT_HANDLERS: dict[str, Callable[[CaptureContext, ShotSpec], ShotResult]] = {
     "ViewProjections": shot_view_projections,
     "ViewProjections_Multi": shot_view_projections_multi,
     "SeriesView_Review": shot_series_review,
+    "SeriesView_Annotate": shot_series_view_annotate,
     "MetadataAssessment": shot_metadata_assessment,
     "MetadataAssessment_DetectPHI": shot_metadata_assessment,
     "MetadataAssessment_RemovePHI": shot_metadata_assessment,
