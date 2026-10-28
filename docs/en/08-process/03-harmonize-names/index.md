@@ -10,7 +10,7 @@ Research datasets often use inconsistent **Series Description** text. **Harmoniz
 | **`davidson_cxr`** | `davidson_cxr` | XR planar path: optional **Xp-Bodypart** + **CXp-Projection-Rotation** |
 | **`us_rgb_single_frame`** | `us_rgb_single_frame` | US planar path: DICOM metadata only (no TotalSegmentator) |
 
-Import a series, open it in **Series View**, then run Harmonize. Reuse **`CT_Head_With_Contrast`** in [8.3 Blur faces](../04-blur-faces/).
+Import a series, open it in **Series View**, then run Harmonize. Reuse **`CT_Head_With_Contrast`** in [8.3 Blur faces](../04-blur-faces/index.md).
 
 ## Goal
 
@@ -19,9 +19,9 @@ Import a series, open it in **Series View**, then run Harmonize. Reuse **`CT_Hea
 
 ## Before you start
 
-1. Complete [AI Features setup](../../03-ai-features-setup/) — Harmonize CT pack, resolution, and Brain structures for the CT demo.
+1. Complete [AI Features setup](../../03-ai-features-setup/index.md) — Harmonize CT pack, resolution, and Brain structures for the CT demo.
 2. Optionally download **XR body part** and **XR chest view** so the CXR demo shows pixel fusion (without them, XR still Harmonizes from DICOM tags).
-3. Import the demo series ([Search](../../06-search/)) and open each in **Series View** ([View](../../07-view/) — right-click the series row).
+3. Import the demo series ([Search](../../06-search/index.md)) and open each in **Series View** ([View](../../07-view/index.md) — right-click the series row).
 
 ## Workflow on `CT_Head_With_Contrast`
 
@@ -39,7 +39,7 @@ The Series View remains behind the dialog so you keep context for the open serie
 
 On a CT head series, Harmonize asks whether to run **detailed brain structure segmentation** before the job continues. If a saved **description mapping** also matches this series’ original description, the same dialog asks whether to **Apply mapping** or **Run Harmonize model** (brain option appears only when running the model). You are never shown two stacked prompts.
 
-1. Read the **Brain structures** Yes/No message (academic license / models required — see [AI Features](../../03-ai-features-setup/)).
+1. Read the **Brain structures** Yes/No message (academic license / models required — see [AI Features](../../03-ai-features-setup/index.md)).
 2. Choose **Yes** to include brain structures in this run, or **No** for standard anatomy only.
 
 ![Harmonize Description with brain structures prompt](shots/macos/Process_Harmonize_BrainPrompt.png)
@@ -83,10 +83,10 @@ CR/DX, ultrasound, and mammography use a **separate** Harmonize path from CT/MR:
 - **XR (CR/DX):** planar Harmonize; optional Xp-Bodypart + chest-only CXp view/rotation (soft downloads).
 - **US / MG:** planar Harmonize from DICOM only — **no** TotalSegmentator and **no** XR pixel packs.
 - **SC / OT / DOC:** Harmonize is not offered.
-- After all series in a study are harmonized, the best **LOINC study description** is applied automatically (same path as AI Batch). Change it later from [Dataset](../../07-view/#edit-harmonized-descriptions). Pure XR/US/MG studies use the matching LOINC prefix.
-- In [Dataset](../../07-view/#edit-study-and-series-descriptions), double-click a study or series description (or multi-select and right-click for **Set description**) to pick LOINC (study) or RadLex (series) names — including for rows not yet green. Single-click only selects the row.
+- After all series in a study are harmonized, the best **LOINC study description** is applied automatically (same path as AI Batch). Change it later from [Dataset](../../07-view/index.md#edit-study-and-series-descriptions). Pure XR/US/MG studies use the matching LOINC prefix.
+- In [Dataset](../../07-view/index.md#edit-study-and-series-descriptions), double-click a study or series description (or multi-select and right-click for **Set description**) to pick LOINC (study) or RadLex (series) names — including for rows not yet green. Single-click only selects the row.
 - Results cache under the series folder — **Clear Analysis Cache** for a fresh CT/MR run.
-- Batch: [8.4 Run on many studies](../05-run-on-many-studies/) (resolution comes from AI Features, not per batch).
+- Batch: [8.4 Run on many studies](../05-run-on-many-studies/index.md) (resolution comes from AI Features, not per batch).
 
 ## What good looks like
 
@@ -98,8 +98,8 @@ CR/DX, ultrasound, and mammography use a **separate** Harmonize path from CT/MR:
 
 - Not suitable series → expected skip.
 - Already harmonized → Clear Analysis Cache to re-run.
-- Models not ready → [AI Features](../../03-ai-features-setup/).
+- Models not ready → [AI Features](../../03-ai-features-setup/index.md).
 
 ## Next steps
 
-Continue with [8.3 Blur faces](../04-blur-faces/) on the **same** `CT_Head_With_Contrast` series (Gaussian).
+Continue with [8.3 Blur faces](../04-blur-faces/index.md) on the **same** `CT_Head_With_Contrast` series (Gaussian).

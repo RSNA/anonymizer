@@ -16,7 +16,7 @@
 | --- | --- |
 | Fichiers ignorés | Déjà importés (même SOP Instance) |
 | Dossiers de quarantaine qui se remplissent | Lisez le nom du dossier (Invalid_DICOM, Missing_Attributes, Lookup_Miss, …) |
-| Lookup_Miss | Corrigez la [table de correspondance](05-create-project/) ou l’identifiant patient |
+| Lookup_Miss | Corrigez la [table de correspondance](05-create-project/index.md) ou l’identifiant patient |
 
 ## Lots et mémoire
 
@@ -28,7 +28,7 @@
 
 ## Headless
 
-Guide complet : [Exécution sans interface](10-headless/).
+Guide complet : [Exécution sans interface](10-headless/index.md).
 
 - `--ai-batch-run` nécessite **à la fois** `-c` et `--ai-batch`
 - Les gates de fonction échouent si les modèles n’ont jamais été téléchargés sur cette machine
@@ -38,5 +38,5 @@ Guide complet : [Exécution sans interface](10-headless/).
 
 | Symptôme | Que tenter |
 | --- | --- |
-| Fenêtre Bienvenue minuscule / coupée (macOS) | Utilisez la V19 actuelle ; conseils Tk 9 / réinstallation uv dans [Installation](02-install/) |
+| Fenêtre Bienvenue minuscule / coupée (macOS) | Utilisez la V19 actuelle ; conseils Tk 9 / réinstallation uv dans [Installation](02-install/index.md) |
 | Échec des projections sur US couleur | Mettez à jour vers la V19 actuelle |

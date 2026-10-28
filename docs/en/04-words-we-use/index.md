@@ -15,7 +15,7 @@ Short glossary for clinicians. When IT uses different terms, these are usually t
 | **Blank / Synthetic** | Two ways to remove text PHI: delete it, or replace it with a realistic fake of the same type (“hide in plain sight”). |
 | **De-identification options** | DICOM confidentiality options (Basic Profile, Modified Dates, Retain Safe Private, …). **Basic** and **Retain** are presets that fill the checkbox set. Applying options on an existing project recompiles the project script after you confirm. Set in Project Settings. |
 | **Metadata** | The DICOM tag tree for the current image in Series View. **Detect PHI** highlights leftover identifiers in tag values (separate from burned-in pixel text). |
-| **Analytics** | Dashboard charts of organ volumes after Harmonize on CT/MR (cohort overview, not a send step). |
+| **Analytics** | Dashboard charts of organ volumes after Harmonize on CT/MR (cohort overview after import — see [View](../07-view/index.md#analytics)). |
 | **Quarantine** | A holding folder for files that could not be imported (wrong type, missing IDs, lookup miss, etc.). |
 | **Dataset** | The in-app list of patients, studies, and series in your project (formerly called PHI Index). |
 | **Project** | A named workspace with its own settings and storage folder. |
@@ -23,8 +23,8 @@ Short glossary for clinicians. When IT uses different terms, these are usually t
 | **Exclude Area** | A region on the image that Detect / Remove Embedded PHI skip (for machine overlays that are not PHI). |
 
 !!! note "When you talk to IT"
-    Terms like **AE Title**, **SOP Class**, **transfer syntax**, and **C-MOVE** describe how systems talk to each other. You usually only need them when connecting to a hospital archive—see [Create a project → When you talk to IT](../05-create-project/#when-you-talk-to-it).
+    Terms like **AE Title**, **SOP Class**, **transfer syntax**, and **C-MOVE** describe how systems talk to each other. You usually only need them when connecting to a hospital archive—see [Create a project → When you talk to IT](../05-create-project/index.md#when-you-talk-to-it).
 
 ## Next steps
 
-Continue with [Create a project](../05-create-project/).
+Continue with [Create a project](../05-create-project/index.md).

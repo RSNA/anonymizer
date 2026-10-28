@@ -20,7 +20,7 @@ Traiter une cohorte pour texte incrusté, Harmoniser et/ou flou facial avec prog
 ## Avant de commencer
 
 1. Importez les séries de démo ci-dessus (et toute autre étude nécessaire).
-2. Terminez [Configuration des Fonctions IA](../../03-ai-features-setup/) pour chaque outil que vous lancerez.
+2. Terminez [Configuration des Fonctions IA](../../03-ai-features-setup/index.md) pour chaque outil que vous lancerez.
 3. Optionnellement parcourez 8.1–8.3 une fois pour connaître les résultats attendus.
 
 ## Démarrer un lot
@@ -53,7 +53,7 @@ Pour chaque série, les outils sélectionnés s’exécutent dans un ordre stabl
 
 - Lisez le résumé (terminé / ignoré / échoué).
 - Contrôlez Vue des séries sur `davidson_cxr` et `CT_Head_With_Contrast` avant l’export.
-- Même travail sur un **serveur sans fenêtre** → [Exécution sans interface](../../10-headless/).
+- Même travail sur un **serveur sans fenêtre** → [Exécution sans interface](../../10-headless/index.md).
 
 ## Ce qui indique que tout va bien
 
@@ -62,10 +62,10 @@ Pour chaque série, les outils sélectionnés s’exécutent dans un ordre stabl
 
 ## En cas d’échec
 
-- Fonctions pas prêtes → [Fonctions IA](../../03-ai-features-setup/).
+- Fonctions pas prêtes → [Fonctions IA](../../03-ai-features-setup/index.md).
 - Aucune série pour la sélection → vérifiez la sélection Jeu de données.
 - Mémoire insuffisante → fermez d’autres applications ou traitez moins d’études.
 
 ## Prochaines étapes
 
-Continuez avec [Envoyer](../../09-send/) pour exporter les études anonymisées (ou [exécuter sans interface](../../10-headless/) pour un lot serveur).
+Continuez avec [Envoyer](../../09-send/index.md) pour exporter les études anonymisées (ou [exécuter sans interface](../../10-headless/index.md) pour un lot serveur).

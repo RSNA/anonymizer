@@ -4,7 +4,7 @@ On some **head CT or MR** exams, facial features could allow recognition even af
 
 ## Demo series
 
-**`CT_Head_With_Contrast`** — same series as [8.2 Harmonize names](../03-harmonize-names/)  
+**`CT_Head_With_Contrast`** — same series as [8.2 Harmonize names](../03-harmonize-names/index.md)  
 (`tests/controller/assets/test_dcm_files/CT_Head_With_Contrast`).
 
 Prefer Harmonize first so anatomy hints improve eligibility, then open face blur on this series.
@@ -15,7 +15,7 @@ On `CT_Head_With_Contrast`, run face blur in **Gaussian** mode, review QA, and s
 
 ## Before you start
 
-1. Complete [AI Features setup](../../03-ai-features-setup/) — face models and academic license.
+1. Complete [AI Features setup](../../03-ai-features-setup/index.md) — face models and academic license.
 2. Import **`CT_Head_With_Contrast`** (and ideally finish Harmonize in 8.2).
 3. Open the series in Series View.
 
@@ -36,7 +36,7 @@ Batch and Series View may also offer median, pixelate, or fill noise. The docume
 
 ## Batch
 
-See [8.4 Run on many studies](../05-run-on-many-studies/). Non-head series are skipped.
+See [8.4 Run on many studies](../05-run-on-many-studies/index.md). Non-head series are skipped.
 
 ## What good looks like
 
@@ -48,8 +48,8 @@ See [8.4 Run on many studies](../05-run-on-many-studies/). Non-head series are s
 - Not a head series / insufficient face mask → skip or run Harmonize first (8.2).
 - Already applied → will not re-blur unless you use a deliberate re-run path.
 - QA FAIL → do not save; adjust mode or inspect mask.
-- Tools greyed out → [AI Features](../../03-ai-features-setup/).
+- Tools greyed out → [AI Features](../../03-ai-features-setup/index.md).
 
 ## Next steps
 
-Continue with [8.4 Run on many studies](../05-run-on-many-studies/) to batch these tools across a cohort.
+Continue with [8.4 Run on many studies](../05-run-on-many-studies/index.md) to batch these tools across a cohort.

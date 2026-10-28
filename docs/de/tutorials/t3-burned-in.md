@@ -11,4 +11,4 @@ Eingebrannten Text auf einer Serie erkennen und entfernen, während L/R-Marker e
 ## Video
 <!-- YouTube embed placeholder -->
 
-Siehe [Eingebrannten Text entfernen](../08-process/02-remove-burned-in-text).
+Siehe [Eingebrannten Text entfernen](../08-process/02-remove-burned-in-text/index.md).

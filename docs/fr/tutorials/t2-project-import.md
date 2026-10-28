@@ -14,4 +14,4 @@ Créer un projet et importer un dossier de test pour que les études apparaissen
 ![Nouveau projet](../05-create-project/shots/macos/NewProjectSettings.png)
 ![Importer](../06-search/shots/macos/ImportDavidson_Done.png)
 
-Voir [Créer un projet](../05-create-project/) et [Rechercher](../06-search/).
+Voir [Créer un projet](../05-create-project/index.md) et [Rechercher](../06-search/index.md).

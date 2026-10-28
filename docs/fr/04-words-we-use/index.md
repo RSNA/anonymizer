@@ -17,8 +17,8 @@ Glossaire court pour les cliniciens. Quand l’informatique utilise d’autres t
 | **Liste blanche (OCR)** | Courtes étiquettes autorisées (par exemple L/R) qui ne doivent **pas** être supprimées lors du nettoyage du texte incrusté. |
 
 !!! note "Quand vous parlez à l’informatique"
-    Des termes comme **AE Title**, **SOP Class**, **transfer syntax** et **C-MOVE** décrivent comment les systèmes communiquent. Vous n’en avez en général besoin que pour la connexion à une archive hospitalière — voir [Créer un projet → Quand vous parlez à l’informatique](../05-create-project/#quand-vous-parlez-a-linformatique).
+    Des termes comme **AE Title**, **SOP Class**, **transfer syntax** et **C-MOVE** décrivent comment les systèmes communiquent. Vous n’en avez en général besoin que pour la connexion à une archive hospitalière — voir [Créer un projet → Quand vous parlez à l’informatique](../05-create-project/index.md#when-you-talk-to-it).
 
 ## Prochaines étapes
 
-Continuez avec [Créer un projet](../05-create-project/).
+Continuez avec [Créer un projet](../05-create-project/index.md).

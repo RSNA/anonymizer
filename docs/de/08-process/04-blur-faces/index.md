@@ -4,7 +4,7 @@ Bei manchen **Kopf-CT- oder MR**-Untersuchungen können Gesichtszüge auch nach 
 
 ## Demo-Serie
 
-**`CT_Head_With_Contrast`** — dieselbe Serie wie [8.2 Namen harmonisieren](../03-harmonize-names/)  
+**`CT_Head_With_Contrast`** — dieselbe Serie wie [8.2 Namen harmonisieren](../03-harmonize-names/index.md)  
 (`tests/controller/assets/test_dcm_files/CT_Head_With_Contrast`).
 
 Bevorzugt zuerst Harmonisieren, damit Anatomie-Hinweise die Eignung verbessern, dann Gesichtsunschärfe auf dieser Serie öffnen.
@@ -15,7 +15,7 @@ Auf `CT_Head_With_Contrast` Gesichtsunschärfe im Modus **Gaussian** ausführen,
 
 ## Bevor Sie starten
 
-1. [KI-Funktionen einrichten](../../03-ai-features-setup/) abschließen — Gesichtsmodelle und akademische Lizenz.
+1. [KI-Funktionen einrichten](../../03-ai-features-setup/index.md) abschließen — Gesichtsmodelle und akademische Lizenz.
 2. **`CT_Head_With_Contrast`** importieren (und idealerweise Harmonisieren in 8.2 abschließen).
 3. Die Serie in der Serienansicht öffnen.
 
@@ -36,7 +36,7 @@ Stapel und Serienansicht können auch Median, Pixelate oder Fill Noise anbieten.
 
 ## Stapel
 
-Siehe [8.4 Auf vielen Studien ausführen](../05-run-on-many-studies/). Nicht-Kopf-Serien werden übersprungen.
+Siehe [8.4 Auf vielen Studien ausführen](../05-run-on-many-studies/index.md). Nicht-Kopf-Serien werden übersprungen.
 
 ## So sieht es aus, wenn es passt
 
@@ -48,8 +48,8 @@ Siehe [8.4 Auf vielen Studien ausführen](../05-run-on-many-studies/). Nicht-Kop
 - Keine Kopfserie / unzureichende Gesichtsmaske → überspringen oder zuerst Harmonisieren (8.2).
 - Bereits angewendet → wird nicht erneut unscharf gemacht, außer über einen bewussten erneuten Lauf.
 - QS FEHLGESCHLAGEN → nicht speichern; Modus anpassen oder Maske prüfen.
-- Werkzeuge ausgegraut → [KI-Funktionen](../../03-ai-features-setup/).
+- Werkzeuge ausgegraut → [KI-Funktionen](../../03-ai-features-setup/index.md).
 
 ## Nächste Schritte
 
-Weiter mit [8.4 Auf vielen Studien ausführen](../05-run-on-many-studies/), um diese Werkzeuge über eine Kohorte zu stapeln.
+Weiter mit [8.4 Auf vielen Studien ausführen](../05-run-on-many-studies/index.md), um diese Werkzeuge über eine Kohorte zu stapeln.

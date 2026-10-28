@@ -4,7 +4,7 @@ Sur certains examens **CT ou MR tête**, les traits du visage pourraient permett
 
 ## Série de démo
 
-**`CT_Head_With_Contrast`** — même série que [8.2 Harmoniser les noms](../03-harmonize-names/)  
+**`CT_Head_With_Contrast`** — même série que [8.2 Harmoniser les noms](../03-harmonize-names/index.md)  
 (`tests/controller/assets/test_dcm_files/CT_Head_With_Contrast`).
 
 Préférez Harmoniser d’abord pour que les indices d’anatomie améliorent l’éligibilité, puis ouvrez le flou facial sur cette série.
@@ -15,7 +15,7 @@ Sur `CT_Head_With_Contrast`, lancer le flou facial en mode **Gaussien**, revoir 
 
 ## Avant de commencer
 
-1. Terminez [Configuration des Fonctions IA](../../03-ai-features-setup/) — modèles visage et licence académique.
+1. Terminez [Configuration des Fonctions IA](../../03-ai-features-setup/index.md) — modèles visage et licence académique.
 2. Importez **`CT_Head_With_Contrast`** (et idéalement terminez Harmoniser en 8.2).
 3. Ouvrez la série dans Vue des séries.
 
@@ -36,7 +36,7 @@ Le traitement par lots et Vue des séries peuvent aussi proposer médiane, pixel
 
 ## Lots
 
-Voir [8.4 Exécuter sur plusieurs études](../05-run-on-many-studies/). Les séries non-tête sont ignorées.
+Voir [8.4 Exécuter sur plusieurs études](../05-run-on-many-studies/index.md). Les séries non-tête sont ignorées.
 
 ## Ce qui indique que tout va bien
 
@@ -48,8 +48,8 @@ Voir [8.4 Exécuter sur plusieurs études](../05-run-on-many-studies/). Les sér
 - Pas une série tête / masque facial insuffisant → ignorer ou lancer Harmoniser d’abord (8.2).
 - Déjà appliqué → ne re-floutera pas sauf chemin de relance volontaire.
 - AQ ÉCHEC → n’enregistrez pas ; ajustez le mode ou inspectez le masque.
-- Outils grisés → [Fonctions IA](../../03-ai-features-setup/).
+- Outils grisés → [Fonctions IA](../../03-ai-features-setup/index.md).
 
 ## Prochaines étapes
 
-Continuez avec [8.4 Exécuter sur plusieurs études](../05-run-on-many-studies/) pour lancer ces outils en lot sur une cohorte.
+Continuez avec [8.4 Exécuter sur plusieurs études](../05-run-on-many-studies/index.md) pour lancer ces outils en lot sur une cohorte.

@@ -17,4 +17,4 @@ Installer l’Anonymizer et atteindre l’écran Bienvenue avec les Fonctions IA
 
 ![Bienvenue](../02-install/shots/macos/Welcome.png)
 
-Détail complet : [Installation et premier lancement](../02-install/)
+Détail complet : [Installation et premier lancement](../02-install/index.md)

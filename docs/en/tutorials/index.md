@@ -14,9 +14,9 @@ Short video walkthroughs for common tasks. Pages include step lists so they work
 | T5 | [Blur a face on a head exam](t5-face-blur.md) | `t5-face-blur.md` |
 | T6 | [Process a list of studies](t6-batch.md) | `t6-batch.md` |
 
-Headless server operation is **text-first**: see [Run headless](../10-headless/) (no required video).
+Headless server operation is **text-first**: see [Run headless](../10-headless/index.md) (no required video).
 
 ## Next steps
 
 1. Start with [T1 Install and open the app](t1-install.md)
-2. Or return to the numbered manual at [Start here](../01-start-here/)
+2. Or return to the numbered manual at [Start here](../01-start-here/index.md)

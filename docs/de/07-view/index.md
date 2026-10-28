@@ -6,17 +6,17 @@ Dashboard-**Ansicht** öffnet den **Datensatz** — die Liste von allem in Ihrem
 
 ## Ziel
 
-Sehen, was Sie importiert haben, KI-Statusspalten prüfen, Projektionen für eine Studie öffnen, eine Serie zur Prüfung oder für [Verarbeiten](../08-process/)-Werkzeuge öffnen und bei Bedarf eine **Patientensuche**-CSV exportieren.
+Sehen, was Sie importiert haben, KI-Statusspalten prüfen, Projektionen für eine Studie öffnen, eine Serie zur Prüfung oder für [Verarbeiten](../08-process/index.md)-Werkzeuge öffnen, **Analytics** auf dem Dashboard prüfen und bei Bedarf eine **Patientensuche**-CSV exportieren.
 
 ## Demo-Studien
 
-Nach dem Import aus `tests/controller/assets/test_dcm_files` (siehe [Suchen](../06-search/)) sollte der Datensatz diese drei Studien listen (Hilfe-Screenshots verwenden **keine** synthetischen Phantome):
+Nach dem Import aus `tests/controller/assets/test_dcm_files` (siehe [Suchen](../06-search/index.md)) sollte der Datensatz diese drei Studien listen (Hilfe-Screenshots verwenden **keine** synthetischen Phantome):
 
 | Fixture | Rolle im Handbuch |
 | --- | --- |
-| **`davidson_cxr`** | Hier in der Serienansicht öffnen; eingebrannter Text in [Pixel-PHI entfernen](../08-process/02-remove-burned-in-text/) |
-| **`CT_Head_With_Contrast`** | [Harmonisieren](../08-process/03-harmonize-names/) und [Gesichtsunschärfe](../08-process/04-blur-faces/) |
-| **`us_rgb_single_frame`** | Ultraschall Einzelbild; eingebrannte Overlays in [Pixel-PHI entfernen](../08-process/02-remove-burned-in-text/) (Exclude-Area-Demos) |
+| **`davidson_cxr`** | Hier in der Serienansicht öffnen; eingebrannter Text in [Pixel-PHI entfernen](../08-process/02-remove-burned-in-text/index.md) |
+| **`CT_Head_With_Contrast`** | [Harmonisieren](../08-process/03-harmonize-names/index.md) und [Gesichtsunschärfe](../08-process/04-blur-faces/index.md) |
+| **`us_rgb_single_frame`** | Ultraschall Einzelbild; eingebrannte Overlays in [Pixel-PHI entfernen](../08-process/02-remove-burned-in-text/index.md) (Exclude-Area-Demos) |
 
 ## Datensatz öffnen
 
@@ -33,6 +33,20 @@ Nach dem Import aus `tests/controller/assets/test_dcm_files` (siehe [Suchen](../
 | **Harmonisiert** | Serienbeschreibung standardisiert (oder Studienbeschreibung angewendet) |
 | **Gesichtsunschärfe** | Gesichts-De-Identifikation angewendet |
 | **Pixel-PHI** | Scan / Entfernung eingebrannten Texts erfasst |
+
+## Analytics {#analytics}
+
+Sobald mindestens eine Studie im Projekt ist, erscheint auf dem Dashboard die Schaltfläche **Analytics** (unter **Suchen**, **Ansicht** und **Senden**). Aufklappen für Kohorten-Diagramme — besonders **Organvolumina**, nachdem Sie [Harmonisieren](../08-process/03-harmonize-names/index.md) auf CT/MR-Serien ausgeführt haben.
+
+1. Auf dem Dashboard **Analytics ▸** wählen, um die Tafel aufzuklappen.
+2. Mit **Show** wählen, welche Diagrammkacheln sichtbar sind.
+3. Mit **Volumes** wählen, welche Organe in den Volumen-Histogrammen erscheinen.
+4. **Bin width** anpassen, wenn das Histogram zu grob oder zu fein wirkt.
+5. Nach Harmonisieren oder neuen Importen **Refresh** wählen, damit Volumina aktualisiert werden.
+
+![Dashboard Analytics aufgeklappt](shots/macos/Dashboard_Analytics.png)
+
+Analytics dient der **Prüfung innerhalb dieses Projekts**. Es ändert weder Pixel noch das, was Sie senden. Nach Harmonisieren auf CT/MR (Masken unter dem Serien-Cache) mit **Volumes** Organe und mit **Show** demografische Kacheln wählen — eine volle Tafel kann Geschlecht, Alter, Modalität, Ethnizität, KI-Abdeckung und viele Organvolumen-Histogramme enthalten. Leere Volumendiagramme bedeuten meist, dass Harmonisieren für diese Serien noch keine Anatomie-Masken erzeugt hat.
 
 ## Rechtsklick im Datensatz (am wichtigsten)
 
@@ -88,7 +102,7 @@ Größenänderung berechnet neu, wie viele Kacheln pro Seite passen, und kann ei
 
 Dieses Datensatz-Fenster **Projektionen anzeigen** ist getrennt von den Slice-/Min-/Mean-/Max-Modi in der Serienansicht.
 
-### Rechtsklick auf eine **Serie** → Serienansicht
+### Rechtsklick auf eine **Serie** → Serienansicht {#right-click-a-series-series-view}
 
 1. Die Studie aufklappen, die die Serie enthält (z. B. `davidson_cxr`).
 2. **Rechtsklick auf die Serienzeile** (nicht die Studienzeile).
@@ -98,9 +112,9 @@ Das ist der Hauptweg, eine Serie zur Prüfung und für Verarbeiten-Werkzeuge (Pi
 
 ![Serienansicht auf davidson_cxr](shots/macos/SeriesView_Review.png)
 
-## Studien- und Serienbeschreibungen bearbeiten
+## Studien- und Serienbeschreibungen bearbeiten {#edit-study-and-series-descriptions}
 
-Nach [Harmonisieren](../08-process/03-harmonize-names/) (Serienansicht oder [KI-Stapelverarbeitung](../08-process/05-run-on-many-studies/)) zeigen grüne **Harmonisiert**-Zeilen den standardisierten Namen. Sie können RadLex-/LOINC-Namen auch auf **noch nicht harmonisierten** Zeilen im Datensatz setzen — die Wahl eines Standardnamens schreibt DICOM und markiert die Zeile als harmonisiert (grün nach Aktualisierung).
+Nach [Harmonisieren](../08-process/03-harmonize-names/index.md) (Serienansicht oder [KI-Stapelverarbeitung](../08-process/05-run-on-many-studies/index.md)) zeigen grüne **Harmonisiert**-Zeilen den standardisierten Namen. Sie können RadLex-/LOINC-Namen auch auf **noch nicht harmonisierten** Zeilen im Datensatz setzen — die Wahl eines Standardnamens schreibt DICOM und markiert die Zeile als harmonisiert (grün nach Aktualisierung).
 
 Hover-Tooltips erklären, was ein Klick oder eine Symbolleistenaktion tut (einschließlich warum eine Schaltfläche deaktiviert ist).
 
@@ -135,12 +149,12 @@ Mit einer **einzelnen** ausgewählten Studie oder Serie fügt **Select Similar**
 
 ## Serienansicht — was Sie tun können
 
-Die Serienansicht ist der Ort, an dem Sie Pixel betrachten und serienweise Werkzeuge ausführen (Modelle müssen bereit sein — siehe [KI-Funktionen einrichten](../03-ai-features-setup/)):
+Die Serienansicht ist der Ort, an dem Sie Pixel betrachten und serienweise Werkzeuge ausführen (Modelle müssen bereit sein — siehe [KI-Funktionen einrichten](../03-ai-features-setup/index.md)):
 
 - Frames scrollen; Histogramm und Symbolleisten nach Bedarf nutzen
-- **Eingebrannten Text erkennen / entfernen** (OCR) und Whitelist bearbeiten → [Pixel-PHI entfernen](../08-process/02-remove-burned-in-text/)
-- **Beschreibung harmonisieren** → [Namen harmonisieren](../08-process/03-harmonize-names/)
-- **Gesichtsunschärfe** (wenn geeignet) → [Gesichter unscharf machen](../08-process/04-blur-faces/)
+- **Eingebrannten Text erkennen / entfernen** (OCR) und Whitelist bearbeiten → [Pixel-PHI entfernen](../08-process/02-remove-burned-in-text/index.md)
+- **Beschreibung harmonisieren** → [Namen harmonisieren](../08-process/03-harmonize-names/index.md)
+- **Gesichtsunschärfe** (wenn geeignet) → [Gesichter unscharf machen](../08-process/04-blur-faces/index.md)
 - **Segmentation-Latch**-Overlays aus zwischengespeicherten Anatomie-Masken (nach Harmonisieren)
 - Manuelle Schwärzungsrechtecke
 - Analyse-Cache leeren (schreibt für sich allein keine DICOM-Pixel um)
@@ -149,13 +163,13 @@ In der Serienansicht können Mehrfachbild-Serien auch **Slice-/Min-/Mean-/Max**-
 
 ## Weitere Datensatz-Aktionen
 
-- Studien für [KI-Stapelverarbeitung](../08-process/05-run-on-many-studies/) oder [Senden](../09-send/) auswählen
+- Studien für [KI-Stapelverarbeitung](../08-process/05-run-on-many-studies/index.md) oder [Senden](../09-send/index.md) auswählen
 - KI-Statusspalten nach Serienansicht oder Stapelläufen stichprobenartig prüfen
 - **Patientensuche erstellen** CSV (unten)
 
 ## Patientensuche-CSV erstellen
 
-Nutzen Sie den Datensatz, um eine Tabelle zu exportieren, die PHI-Kennungen auf anonymisierte IDs (und Serien-KI-Status) abbildet. Das ist getrennt von der optionalen [CTP-Patienten-Nachschlagetabelle](../05-create-project/#patient-lookup-table) beim Import.
+Nutzen Sie den Datensatz, um eine Tabelle zu exportieren, die PHI-Kennungen auf anonymisierte IDs (und Serien-KI-Status) abbildet. Das ist getrennt von der optionalen [CTP-Patienten-Nachschlagetabelle](../05-create-project/index.md#patient-lookup-table) beim Import.
 
 ### Wann verwenden
 
@@ -166,7 +180,7 @@ Nutzen Sie den Datensatz, um eine Tabelle zu exportieren, die PHI-Kennungen auf 
 ### Schritte
 
 1. **Datensatz** vom Dashboard öffnen (**Ansicht**).
-2. In der Datensatz-Symbolleiste auf **Patientensuche erstellen** klicken (keine Studienauswahl nötig — die CSV deckt den gesamten Projektindex ab). Am besten nach [Verarbeiten](../08-process/) exportieren, damit die KI-Statusspalten gefüllt sind.
+2. In der Datensatz-Symbolleiste auf **Patientensuche erstellen** klicken (keine Studienauswahl nötig — die CSV deckt den gesamten Projektindex ab). Am besten nach [Verarbeiten](../08-process/index.md) exportieren, damit die KI-Statusspalten gefüllt sind.
 
 ![Datensatz mit Patientensuche erstellen](shots/macos/Dataset_CreatePatientLookup.png)
 
@@ -203,12 +217,12 @@ Nutzen Sie den Datensatz, um eine Tabelle zu exportieren, die PHI-Kennungen auf 
 
 ## Wenn es fehlschlägt
 
-- Leere Liste → zuerst importieren ([Suchen](../06-search/)).
+- Leere Liste → zuerst importieren ([Suchen](../06-search/index.md)).
 - Serie fehlt auf der Festplatte → **Series Not Found**; erneut importieren oder Speicherpfad prüfen.
-- Werkzeuge in der Serienansicht ausgegraut → Modelle laden / Lizenz akzeptieren unter [KI-Funktionen](../03-ai-features-setup/).
+- Werkzeuge in der Serienansicht ausgegraut → Modelle laden / Lizenz akzeptieren unter [KI-Funktionen](../03-ai-features-setup/index.md).
 - Harmonisieren läuft bereits → andere Serie zuerst beenden oder abbrechen.
 - Fehler bei Patientensuche erstellen → sicherstellen, dass das Projekt Studien im Datensatz-Index hat und `private/phi_export/` beschreibbar ist.
 
 ## Nächste Schritte
 
-Weiter mit [Verarbeiten](../08-process/) — Pixel-PHI entfernen, Harmonisieren, Gesichtsunschärfe und Stapel. Nach der Prüfung [Senden](../09-send/) anonymisierter Patienten.
+Weiter mit [Verarbeiten](../08-process/index.md) — Pixel-PHI entfernen, Harmonisieren, Gesichtsunschärfe und Stapel. Nach der Prüfung [Senden](../09-send/index.md) anonymisierter Patienten.

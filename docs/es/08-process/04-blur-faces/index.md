@@ -4,7 +4,7 @@ En algunos exámenes de **CT o MR de cabeza**, los rasgos faciales podrían perm
 
 ## Serie de demo
 
-**`CT_Head_With_Contrast`** — la misma serie que [8.2 Armonizar nombres](../03-harmonize-names/)  
+**`CT_Head_With_Contrast`** — la misma serie que [8.2 Armonizar nombres](../03-harmonize-names/index.md)  
 (`tests/controller/assets/test_dcm_files/CT_Head_With_Contrast`).
 
 Prefiera Harmonize primero para que las pistas anatómicas mejoren la elegibilidad, luego abra el desenfoque facial en esta serie.
@@ -15,7 +15,7 @@ En `CT_Head_With_Contrast`, ejecutar desenfoque facial en modo **Gaussian**, rev
 
 ## Antes de empezar
 
-1. Complete [Configuración de Funciones de IA](../../03-ai-features-setup/) — modelos de cara y licencia académica.
+1. Complete [Configuración de Funciones de IA](../../03-ai-features-setup/index.md) — modelos de cara y licencia académica.
 2. Importe **`CT_Head_With_Contrast`** (e idealmente termine Harmonize en 8.2).
 3. Abra la serie en Vista de Series.
 
@@ -36,7 +36,7 @@ El lote y Vista de Series también pueden ofrecer mediana, pixelado o relleno de
 
 ## Lote
 
-Véase [8.4 Ejecutar en muchos estudios](../05-run-on-many-studies/). Las series que no son de cabeza se omiten.
+Véase [8.4 Ejecutar en muchos estudios](../05-run-on-many-studies/index.md). Las series que no son de cabeza se omiten.
 
 ## Cómo se ve cuando va bien
 
@@ -48,8 +48,8 @@ Véase [8.4 Ejecutar en muchos estudios](../05-run-on-many-studies/). Las series
 - No es serie de cabeza / máscara facial insuficiente → omitir o ejecutar Harmonize primero (8.2).
 - Ya aplicado → no vuelve a desenfocar salvo que use una vía deliberada de reejecución.
 - CC FALLIDO → no guarde; ajuste el modo o inspeccione la máscara.
-- Herramientas en gris → [Funciones de IA](../../03-ai-features-setup/).
+- Herramientas en gris → [Funciones de IA](../../03-ai-features-setup/index.md).
 
 ## Siguientes pasos
 
-Continúe con [8.4 Ejecutar en muchos estudios](../05-run-on-many-studies/) para lotear estas herramientas en una cohorte.
+Continúe con [8.4 Ejecutar en muchos estudios](../05-run-on-many-studies/index.md) para lotear estas herramientas en una cohorte.

@@ -14,4 +14,4 @@ Ein Projekt anlegen und einen Testordner importieren, sodass Studien im Datensat
 ![Neues Projekt](../05-create-project/shots/macos/NewProjectSettings.png)
 ![Import](../06-search/shots/macos/ImportDavidson_Done.png)
 
-Siehe [Projekt anlegen](../05-create-project/) und [Suchen](../06-search/).
+Siehe [Projekt anlegen](../05-create-project/index.md) und [Suchen](../06-search/index.md).

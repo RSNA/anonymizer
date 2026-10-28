@@ -16,7 +16,7 @@
 | --- | --- |
 | Dateien ignoriert | Bereits importiert (gleiche SOP Instance) |
 | Quarantäneordner füllen sich | Ordnernamen lesen (Invalid_DICOM, Missing_Attributes, Lookup_Miss, …) |
-| Lookup_Miss | [Nachschlagetabelle](05-create-project/) oder Patienten-ID korrigieren |
+| Lookup_Miss | [Nachschlagetabelle](05-create-project/index.md) oder Patienten-ID korrigieren |
 
 ## Stapel und Speicher
 
@@ -28,7 +28,7 @@
 
 ## Headless
 
-Vollständige Anleitung: [Ohne Oberfläche ausführen](10-headless/).
+Vollständige Anleitung: [Ohne Oberfläche ausführen](10-headless/index.md).
 
 - `--ai-batch-run` braucht **sowohl** `-c` als auch `--ai-batch`
 - Feature-Gates scheitern, wenn Modelle auf diesem Rechner nie heruntergeladen wurden
@@ -38,5 +38,5 @@ Vollständige Anleitung: [Ohne Oberfläche ausführen](10-headless/).
 
 | Symptom | Was versuchen |
 | --- | --- |
-| Willkommen-Fenster winzig / abgeschnitten (macOS) | Aktuelles V19 nutzen; Tipps zu Tk 9 / uv-Neuinstallation unter [Installation](02-install/) |
+| Willkommen-Fenster winzig / abgeschnitten (macOS) | Aktuelles V19 nutzen; Tipps zu Tk 9 / uv-Neuinstallation unter [Installation](02-install/index.md) |
 | Projektionen scheitern bei Farb-US | Auf aktuelles V19 aktualisieren |

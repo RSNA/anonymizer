@@ -12,4 +12,4 @@ Ejecutar Harmonize en una serie CT/MR (y opcionalmente XR/US planar) y aplicar l
 ## Vídeo
 <!-- YouTube embed placeholder -->
 
-Véase [Armonizar nombres](../08-process/03-harmonize-names).
+Véase [Armonizar nombres](../08-process/03-harmonize-names/index.md).

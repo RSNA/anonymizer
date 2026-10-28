@@ -10,7 +10,7 @@ Los conjuntos de datos de investigación suelen usar texto inconsistente de **Se
 | **`davidson_cxr`** | `davidson_cxr` | Ruta planar XR: **Xp-Bodypart** + **CXp-Projection-Rotation** opcionales |
 | **`us_rgb_single_frame`** | `us_rgb_single_frame` | Ruta planar US: solo metadatos DICOM (sin TotalSegmentator) |
 
-Importe una serie, ábrala en **Vista de Series** y ejecute Harmonize. Reutilice **`CT_Head_With_Contrast`** en [8.3 Desenfocar caras](../04-blur-faces/).
+Importe una serie, ábrala en **Vista de Series** y ejecute Harmonize. Reutilice **`CT_Head_With_Contrast`** en [8.3 Desenfocar caras](../04-blur-faces/index.md).
 
 ## Objetivo
 
@@ -19,9 +19,9 @@ Importe una serie, ábrala en **Vista de Series** y ejecute Harmonize. Reutilice
 
 ## Antes de empezar
 
-1. Complete [Configuración de Funciones de IA](../../03-ai-features-setup/) — paquete CT de Harmonize, resolución y Estructuras cerebrales para la demo CT.
+1. Complete [Configuración de Funciones de IA](../../03-ai-features-setup/index.md) — paquete CT de Harmonize, resolución y Estructuras cerebrales para la demo CT.
 2. Opcionalmente descargue **parte del cuerpo XR** y **proyección de tórax XR** para que la demo CXR muestre fusión por píxeles (sin ellos, XR sigue armonizando desde etiquetas DICOM).
-3. Importe las series de demo ([Buscar](../../06-search/)) y abra cada una en **Vista de Series** ([Vista](../../07-view/) — clic derecho en la fila de la serie).
+3. Importe las series de demo ([Buscar](../../06-search/index.md)) y abra cada una en **Vista de Series** ([Vista](../../07-view/index.md) — clic derecho en la fila de la serie).
 
 ## Flujo en `CT_Head_With_Contrast`
 
@@ -39,7 +39,7 @@ La Vista de Series permanece detrás del diálogo para conservar el contexto de 
 
 En una serie CT de cabeza, Harmonize pregunta si ejecutar **segmentación detallada de estructuras cerebrales** antes de que el trabajo continúe:
 
-1. Lea el mensaje Sí/No de **Estructuras cerebrales** (se requiere licencia académica / modelos — véase [Funciones de IA](../../03-ai-features-setup/)).
+1. Lea el mensaje Sí/No de **Estructuras cerebrales** (se requiere licencia académica / modelos — véase [Funciones de IA](../../03-ai-features-setup/index.md)).
 2. Elija **Sí** para incluir estructuras cerebrales en esta ejecución, o **No** solo para anatomía estándar.
 
 ![Armonizar descripción con mensaje de estructuras cerebrales](shots/macos/Process_Harmonize_BrainPrompt.png)
@@ -83,10 +83,10 @@ CR/DX, ecografía y mamografía usan una ruta de Harmonize **separada** de CT/MR
 - **XR (CR/DX):** Harmonize planar; Xp-Bodypart opcional + vista/rotación CXp solo tórax (descargas opcionales).
 - **US / MG:** Harmonize planar solo desde DICOM — **sin** TotalSegmentator y **sin** paquetes de píxeles XR.
 - **SC / OT / DOC:** no se ofrece Harmonize.
-- Tras armonizar todas las series de un estudio, se aplica automáticamente la mejor **descripción de estudio LOINC** (misma ruta que el lote de IA). Cámbiela después desde el [Conjunto de datos](../../07-view/#edit-harmonized-descriptions). Estudios XR/US/MG puros usan el prefijo LOINC correspondiente.
-- En el [Conjunto de datos](../../07-view/#edit-study-and-series-descriptions), doble clic en una descripción de estudio o serie (o selección múltiple y clic derecho para **Establecer descripción**) para elegir nombres LOINC (estudio) o RadLex (serie) — también en filas aún no verdes. Clic simple solo selecciona la fila.
+- Tras armonizar todas las series de un estudio, se aplica automáticamente la mejor **descripción de estudio LOINC** (misma ruta que el lote de IA). Cámbiela después desde el [Conjunto de datos](../../07-view/index.md#edit-study-and-series-descriptions). Estudios XR/US/MG puros usan el prefijo LOINC correspondiente.
+- En el [Conjunto de datos](../../07-view/index.md#edit-study-and-series-descriptions), doble clic en una descripción de estudio o serie (o selección múltiple y clic derecho para **Establecer descripción**) para elegir nombres LOINC (estudio) o RadLex (serie) — también en filas aún no verdes. Clic simple solo selecciona la fila.
 - Los resultados se almacenan en caché bajo la carpeta de la serie — **Borrar caché de análisis** para una ejecución CT/MR nueva.
-- Lote: [8.4 Ejecutar en muchos estudios](../05-run-on-many-studies/) (la resolución viene de Funciones de IA, no por lote).
+- Lote: [8.4 Ejecutar en muchos estudios](../05-run-on-many-studies/index.md) (la resolución viene de Funciones de IA, no por lote).
 
 ## Cómo se ve cuando va bien
 
@@ -98,8 +98,8 @@ CR/DX, ecografía y mamografía usan una ruta de Harmonize **separada** de CT/MR
 
 - Serie no adecuada → omisión esperada.
 - Ya armonizado → Borrar caché de análisis para volver a ejecutar.
-- Modelos no listos → [Funciones de IA](../../03-ai-features-setup/).
+- Modelos no listos → [Funciones de IA](../../03-ai-features-setup/index.md).
 
 ## Siguientes pasos
 
-Continúe con [8.3 Desenfocar caras](../04-blur-faces/) en la **misma** serie `CT_Head_With_Contrast` (Gaussian).
+Continúe con [8.3 Desenfocar caras](../04-blur-faces/index.md) en la **misma** serie `CT_Head_With_Contrast` (Gaussian).

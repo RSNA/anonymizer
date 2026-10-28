@@ -14,9 +14,9 @@ Recorridos en vídeo cortos para tareas habituales. Las páginas incluyen listas
 | T5 | [Desenfocar una cara en un examen de cabeza](t5-face-blur.md) | `t5-face-blur.md` |
 | T6 | [Procesar una lista de estudios](t6-batch.md) | `t6-batch.md` |
 
-La operación en servidor sin interfaz es **primero texto**: véase [Ejecutar sin interfaz](../10-headless/) (sin vídeo obligatorio).
+La operación en servidor sin interfaz es **primero texto**: véase [Ejecutar sin interfaz](../10-headless/index.md) (sin vídeo obligatorio).
 
 ## Siguientes pasos
 
 1. Empiece por [T1 Instalar y abrir la aplicación](t1-install.md)
-2. O vuelva al manual numerado en [Empezar aquí](../01-start-here/)
+2. O vuelva al manual numerado en [Empezar aquí](../01-start-here/index.md)

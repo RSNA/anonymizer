@@ -11,4 +11,4 @@ Previsualizar el desenfoque facial en un CT/MR de cabeza, confirmar el CC y guar
 ## Vídeo
 <!-- YouTube embed placeholder -->
 
-Véase [Desenfocar caras](../08-process/04-blur-faces).
+Véase [Desenfocar caras](../08-process/04-blur-faces/index.md).

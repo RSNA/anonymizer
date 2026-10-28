@@ -14,5 +14,5 @@ Create a project and import a test folder so studies appear in Dataset.
 ![New Project](../05-create-project/shots/macos/NewProjectSettings.png)
 ![Import](../06-search/shots/macos/ImportDavidson_Done.png)
 
-See [Create a project](../05-create-project/) and [Search](../06-search/).
+See [Create a project](../05-create-project/index.md) and [Search](../06-search/index.md).
 

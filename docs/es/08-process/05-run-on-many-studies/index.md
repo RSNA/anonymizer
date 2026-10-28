@@ -20,7 +20,7 @@ Procesar una cohorte para texto quemado, Harmonize y/o desenfoque facial con pro
 ## Antes de empezar
 
 1. Importe las series de demo anteriores (y cualquier otro estudio que necesite).
-2. Termine [Configuración de Funciones de IA](../../03-ai-features-setup/) para cada herramienta que va a ejecutar.
+2. Termine [Configuración de Funciones de IA](../../03-ai-features-setup/index.md) para cada herramienta que va a ejecutar.
 3. Opcionalmente recorra 8.1–8.3 una vez para conocer los resultados esperados.
 
 ## Iniciar un lote
@@ -53,7 +53,7 @@ Para cada serie, las herramientas seleccionadas se ejecutan en un orden estable 
 
 - Lea el resumen (completados / omitidos / fallidos).
 - Compruebe una muestra en Vista de Series en `davidson_cxr` y `CT_Head_With_Contrast` antes de exportar.
-- El mismo trabajo en un **servidor sin ventana** → [Ejecutar sin interfaz](../../10-headless/).
+- El mismo trabajo en un **servidor sin ventana** → [Ejecutar sin interfaz](../../10-headless/index.md).
 
 ## Cómo se ve cuando va bien
 
@@ -62,10 +62,10 @@ Para cada serie, las herramientas seleccionadas se ejecutan en un orden estable 
 
 ## Si falla
 
-- Funciones no listas → [Funciones de IA](../../03-ai-features-setup/).
+- Funciones no listas → [Funciones de IA](../../03-ai-features-setup/index.md).
 - Sin series para la selección → compruebe la selección del Conjunto de datos.
 - Memoria insuficiente → cierre otras aplicaciones o procese menos estudios.
 
 ## Siguientes pasos
 
-Continúe con [Enviar](../../09-send/) para exportar estudios anonimizados (o [ejecutar sin interfaz](../../10-headless/) para lotes en servidor).
+Continúe con [Enviar](../../09-send/index.md) para exportar estudios anonimizados (o [ejecutar sin interfaz](../../10-headless/index.md) para lotes en servidor).

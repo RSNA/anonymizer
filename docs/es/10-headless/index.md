@@ -108,8 +108,8 @@ Detalle: `src/prototyping/medgemma_chat/README.md`.
 
 ## Requisitos previos
 
-- Proyecto ya creado en la GUI ([Crear un proyecto](../05-create-project/)).
-- Modelos y licencia de cara ya configurados en **esta máquina** ([Configuración de Funciones de IA](../03-ai-features-setup)).
+- Proyecto ya creado en la GUI ([Crear un proyecto](../05-create-project/index.md)).
+- Modelos y licencia de cara ya configurados en **esta máquina** ([Configuración de Funciones de IA](../03-ai-features-setup/index.md)).
 - Memoria libre suficiente para los algoritmos seleccionados.
 
 ## Cómo se ve cuando va bien
@@ -134,10 +134,9 @@ Detalle: `src/prototyping/medgemma_chat/README.md`.
 Headless **no** sustituye revisar una muestra en el Conjunto de datos o Vista de Series. Use la GUI para la configuración inicial y controles de calidad; use headless para recepción rutinaria o lote nocturno.
 
 !!! tip "El mismo trabajo que el lote de la GUI"
-    Pasos de escritorio: [Ejecutar en muchos estudios](../08-process/05-run-on-many-studies/). Headless usa las mismas herramientas de IA con una receta JSON.
+    Pasos de escritorio: [Ejecutar en muchos estudios](../08-process/05-run-on-many-studies/index.md). Headless usa las mismas herramientas de IA con una receta JSON.
 
 ## Siguientes pasos
 
 1. [Solución de problemas](../troubleshooting.md) si algo falla
-2. [Tutoriales](../tutorials/) para recorridos cortos
-3. Volver a [Inicio](../) para la lista completa de capítulos
+2. Volver a [Inicio](../index.md) para la lista completa de capítulos

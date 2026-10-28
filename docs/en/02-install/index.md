@@ -54,7 +54,7 @@ rsna-anonymizer --version # should report 19.1.0.dev2
 
 If `python -m tkinter` fails, recreate the venv with a Python that includes Tk (table above), then reinstall.
 
-### 4. macOS only — OpenMP for AI Features
+### 4. macOS only — OpenMP for AI Features {#4-macos-only-openmp-for-ai-features}
 
 On macOS, **AI Features** (TotalSegmentator / Harmonize contrast and related tools) need the C++ OpenMP library `**libomp`**. Install it once with Homebrew **before** you download or run those models:
 
@@ -75,7 +75,7 @@ rsna-anonymizer
 ![Welcome screen](shots/macos/Welcome.png)
 
 1. The **Welcome** screen opens.
-2. Optional but recommended: click **AI Features** on Welcome to download models / accept the face license (see [AI Features setup](../03-ai-features-setup)). Setup is only available from Welcome — close the project to return there later. On macOS, install `libomp` first (step 4 above).
+2. Optional but recommended: click **AI Features** on Welcome to download models / accept the face license (see [AI Features setup](../03-ai-features-setup/index.md)). Setup is only available from Welcome — close the project to return there later. On macOS, install `libomp` first (step 4 above).
 3. Create or open a project from the **File** menu.
 
 ## Upgrade
@@ -85,9 +85,19 @@ source rsna-anonymizer/bin/activate
 uv pip install --upgrade --pre rsna-anonymizer
 ```
 
+## Try a pre-release {#try-a-pre-release}
+
+Stable installs use `uv pip install rsna-anonymizer` (no `--pre`). To switch to the current 19.1 pre-release from PyPI:
+
+```bash
+source rsna-anonymizer/bin/activate
+uv pip install --upgrade --pre rsna-anonymizer
+rsna-anonymizer --version   # e.g. 19.1.0.dev2
+```
+
 See the [CHANGELOG](https://github.com/RSNA/anonymizer/blob/master/CHANGELOG.md) for release notes.
 
 ## Next steps
 
-1. [AI Features setup](../03-ai-features-setup/) — from Welcome, download models (optional but recommended)
-2. [Words we use](../04-words-we-use/), then [Create a project](../05-create-project/)
+1. [AI Features setup](../03-ai-features-setup/index.md) — from Welcome, download models (optional but recommended)
+2. [Words we use](../04-words-we-use/index.md), then [Create a project](../05-create-project/index.md)

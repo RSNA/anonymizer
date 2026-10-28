@@ -14,4 +14,4 @@ Crear un proyecto e importar una carpeta de prueba para que los estudios aparezc
 ![Nuevo Proyecto](../05-create-project/shots/macos/NewProjectSettings.png)
 ![Importar](../06-search/shots/macos/ImportDavidson_Done.png)
 
-Véase [Crear un proyecto](../05-create-project/) y [Buscar](../06-search/).
+Véase [Crear un proyecto](../05-create-project/index.md) y [Buscar](../06-search/index.md).

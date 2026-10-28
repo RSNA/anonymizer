@@ -10,7 +10,7 @@ Forschungsdatensätze verwenden oft inkonsistenten **Series Description**-Text. 
 | **`davidson_cxr`** | `davidson_cxr` | XR planarer Pfad: optional **Xp-Bodypart** + **CXp-Projection-Rotation** |
 | **`us_rgb_single_frame`** | `us_rgb_single_frame` | US planarer Pfad: nur DICOM-Metadaten (kein TotalSegmentator) |
 
-Eine Serie importieren, in der **Serienansicht** öffnen, dann Harmonisieren ausführen. **`CT_Head_With_Contrast`** in [8.3 Gesichter unscharf machen](../04-blur-faces/) wiederverwenden.
+Eine Serie importieren, in der **Serienansicht** öffnen, dann Harmonisieren ausführen. **`CT_Head_With_Contrast`** in [8.3 Gesichter unscharf machen](../04-blur-faces/index.md) wiederverwenden.
 
 ## Ziel
 
@@ -19,9 +19,9 @@ Eine Serie importieren, in der **Serienansicht** öffnen, dann Harmonisieren aus
 
 ## Bevor Sie starten
 
-1. [KI-Funktionen einrichten](../../03-ai-features-setup/) abschließen — Harmonize-CT-Paket, Auflösung und Hirnstrukturen für die CT-Demo.
+1. [KI-Funktionen einrichten](../../03-ai-features-setup/index.md) abschließen — Harmonize-CT-Paket, Auflösung und Hirnstrukturen für die CT-Demo.
 2. Optional **XR body part** und **XR chest view** herunterladen, damit die CXR-Demo Pixel-Fusion zeigt (ohne sie harmonisiert XR weiterhin aus DICOM-Tags).
-3. Die Demo-Serien importieren ([Suchen](../../06-search/)) und jeweils in der **Serienansicht** öffnen ([Ansicht](../../07-view/) — Rechtsklick auf die Serienzeile).
+3. Die Demo-Serien importieren ([Suchen](../../06-search/index.md)) und jeweils in der **Serienansicht** öffnen ([Ansicht](../../07-view/index.md) — Rechtsklick auf die Serienzeile).
 
 ## Ablauf auf `CT_Head_With_Contrast`
 
@@ -39,7 +39,7 @@ Die Serienansicht bleibt hinter dem Dialog, damit der Kontext der offenen Serie 
 
 Auf einer CT-Kopfserie fragt Harmonisieren, ob vor dem Weiterlaufen eine **detaillierte Hirnstruktur-Segmentierung** ausgeführt werden soll:
 
-1. Die **Hirnstrukturen**-Ja/Nein-Meldung lesen (akademische Lizenz / Modelle erforderlich — siehe [KI-Funktionen](../../03-ai-features-setup/)).
+1. Die **Hirnstrukturen**-Ja/Nein-Meldung lesen (akademische Lizenz / Modelle erforderlich — siehe [KI-Funktionen](../../03-ai-features-setup/index.md)).
 2. **Ja** wählen, um Hirnstrukturen in diesem Lauf einzubeziehen, oder **Nein** nur für Standardanatomie.
 
 ![Beschreibung harmonisieren mit Hirnstrukturen-Prompt](shots/macos/Process_Harmonize_BrainPrompt.png)
@@ -83,10 +83,10 @@ CR/DX, Ultraschall und Mammographie nutzen einen **separaten** Harmonize-Pfad vo
 - **XR (CR/DX):** planare Harmonisierung; optional Xp-Bodypart + nur-Thorax CXp Ansicht/Rotation (Soft-Downloads).
 - **US / MG:** planare Harmonisierung nur aus DICOM — **kein** TotalSegmentator und **keine** XR-Pixelpakete.
 - **SC / OT / DOC:** Harmonisieren wird nicht angeboten.
-- Nachdem alle Serien einer Studie harmonisiert sind, wird die beste **LOINC-Studienbeschreibung** automatisch angewendet (gleicher Pfad wie KI-Stapel). Später im [Datensatz](../../07-view/#edit-harmonized-descriptions) ändern. Reine XR/US/MG-Studien nutzen das passende LOINC-Präfix.
-- Im [Datensatz](../../07-view/#edit-study-and-series-descriptions) Doppelklick auf eine Studien- oder Serienbeschreibung (oder Mehrfachauswahl und Rechtsklick für **Set description**), um LOINC- (Studie) oder RadLex-Namen (Serie) zu wählen — auch für noch nicht grüne Zeilen. Einfachklick wählt nur die Zeile.
+- Nachdem alle Serien einer Studie harmonisiert sind, wird die beste **LOINC-Studienbeschreibung** automatisch angewendet (gleicher Pfad wie KI-Stapel). Später im [Datensatz](../../07-view/index.md#edit-study-and-series-descriptions) ändern. Reine XR/US/MG-Studien nutzen das passende LOINC-Präfix.
+- Im [Datensatz](../../07-view/index.md#edit-study-and-series-descriptions) Doppelklick auf eine Studien- oder Serienbeschreibung (oder Mehrfachauswahl und Rechtsklick für **Set description**), um LOINC- (Studie) oder RadLex-Namen (Serie) zu wählen — auch für noch nicht grüne Zeilen. Einfachklick wählt nur die Zeile.
 - Ergebnisse werden unter dem Serienordner zwischengespeichert — **Analyse-Cache leeren** für einen frischen CT/MR-Lauf.
-- Stapel: [8.4 Auf vielen Studien ausführen](../05-run-on-many-studies/) (Auflösung kommt aus KI-Funktionen, nicht pro Stapel).
+- Stapel: [8.4 Auf vielen Studien ausführen](../05-run-on-many-studies/index.md) (Auflösung kommt aus KI-Funktionen, nicht pro Stapel).
 
 ## So sieht es aus, wenn es passt
 
@@ -98,8 +98,8 @@ CR/DX, Ultraschall und Mammographie nutzen einen **separaten** Harmonize-Pfad vo
 
 - Ungeeignete Serie → erwartetes Überspringen.
 - Bereits harmonisiert → Analyse-Cache leeren zum erneuten Lauf.
-- Modelle nicht bereit → [KI-Funktionen](../../03-ai-features-setup/).
+- Modelle nicht bereit → [KI-Funktionen](../../03-ai-features-setup/index.md).
 
 ## Nächste Schritte
 
-Weiter mit [8.3 Gesichter unscharf machen](../04-blur-faces/) auf derselben Serie `CT_Head_With_Contrast` (Gaussian).
+Weiter mit [8.3 Gesichter unscharf machen](../04-blur-faces/index.md) auf derselben Serie `CT_Head_With_Contrast` (Gaussian).

@@ -16,7 +16,7 @@
 | --- | --- |
 | Files ignored | Already imported (same SOP Instance) |
 | Quarantine folders filling | Read folder name (Invalid_DICOM, Missing_Attributes, Lookup_Miss, …) |
-| Lookup_Miss | Fix [lookup table](05-create-project/) or patient ID |
+| Lookup_Miss | Fix [lookup table](05-create-project/index.md) or patient ID |
 
 ## Batch and memory
 
@@ -28,7 +28,7 @@
 
 ## Headless
 
-Full guide: [Run headless](10-headless/).
+Full guide: [Run headless](10-headless/index.md).
 
 - `--ai-batch-run` needs **both** `-c` and `--ai-batch`
 - Feature gates fail if models were never downloaded on that machine
@@ -38,5 +38,5 @@ Full guide: [Run headless](10-headless/).
 
 | Symptom | What to try |
 | --- | --- |
-| Welcome window tiny / clipped (macOS) | Use current V19; Tk 9 / uv reinstall tips in [Install](02-install/) |
+| Welcome window tiny / clipped (macOS) | Use current V19; Tk 9 / uv reinstall tips in [Install](02-install/index.md) |
 | Projections fail on color US | Update to current V19 |

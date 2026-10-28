@@ -17,8 +17,8 @@ Glosario breve para clínicos. Cuando TI usa otros términos, suelen ser las mis
 | **Lista blanca (OCR)** | Etiquetas cortas permitidas (por ejemplo L/R) que **no** deben eliminarse al limpiar texto quemado. |
 
 !!! note "Cuando hable con TI"
-    Términos como **AE Title**, **SOP Class**, **transfer syntax** y **C-MOVE** describen cómo se comunican los sistemas. Solo suele necesitarlos al conectar con un archivo hospitalario—véase [Crear un proyecto → Cuando hable con TI](../05-create-project/#when-you-talk-to-it).
+    Términos como **AE Title**, **SOP Class**, **transfer syntax** y **C-MOVE** describen cómo se comunican los sistemas. Solo suele necesitarlos al conectar con un archivo hospitalario—véase [Crear un proyecto → Cuando hable con TI](../05-create-project/index.md#when-you-talk-to-it).
 
 ## Siguientes pasos
 
-Continúe con [Crear un proyecto](../05-create-project/).
+Continúe con [Crear un proyecto](../05-create-project/index.md).

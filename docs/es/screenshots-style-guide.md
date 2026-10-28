@@ -34,7 +34,7 @@ Markdown incrusta la ruta **macOS** (el JS del sitio cambia a Windows para visit
 
 ## Captura automatizada
 
-Las herramientas están en [`src/docs_help/`](../../src/docs_help/) (no en el paquete de la aplicación publicada).
+Las herramientas están en [`src/docs_help/`](https://github.com/RSNA/anonymizer/tree/dev/src/docs_help) (no en el paquete de la aplicación publicada).
 
 **Responsabilidad del desarrollador:** obtenga el código más reciente, ejecute la captura en **macOS** y de nuevo en **Windows**, luego confirme y suba ambos árboles PNG. No hay captura CI/nube.
 

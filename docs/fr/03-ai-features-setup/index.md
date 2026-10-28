@@ -16,6 +16,9 @@ Fermez le projet (ou lancez l’application) pour revenir à Bienvenue si vous d
 
 ![Configuration des Fonctions IA](shots/macos/AiFeaturesSetup.png)
 
+!!! note "Après le téléchargement de tous les modèles"
+    Chaque ligne affiche **Installé** (avec un court détail, p. ex. la résolution) et un bouton **Supprimer** à la place de **Télécharger**. Les lignes Harmonize CT/MR conservent un menu de résolution ; les résolutions supplémentaires déjà présentes apparaissent comme « Également installé : … ». La capture ci-dessus montre cet état entièrement installé.
+
 ## Ce que vous configurez (V19)
 
 | Élément | Nécessaire pour la démo |
@@ -46,7 +49,7 @@ La mammographie et l’échographie n’utilisent pas ces modèles.
 6. Fermez la boîte de dialogue. Les préférences restent sur ce poste de travail.
 
 !!! tip "Internet uniquement pour le téléchargement"
-    Une fois les modèles et la licence en place, le traitement est local. Sous **macOS**, installez la bibliothèque C++ OpenMP avant d’utiliser Harmonize / les Fonctions IA associées : `brew install libomp` (voir [Installation](../02-install/#4-macos-uniquement--openmp-pour-les-fonctions-ia)).
+    Une fois les modèles et la licence en place, le traitement est local. Sous **macOS**, installez la bibliothèque C++ OpenMP avant d’utiliser Harmonize / les Fonctions IA associées : `brew install libomp` (voir [Installation](../02-install/index.md#4-macos-only-openmp-for-ai-features)).
 
 ## Supprimer les modèles
 
@@ -55,7 +58,7 @@ Utilisez **Supprimer** sur la carte d’un outil pour effacer les fichiers tél�
 ## Ce qui indique que tout va bien
 
 - Le statut indique prêt pour OCR, Harmonize CT et Face.
-- Vous pouvez ouvrir les outils de Vue des séries sur les séries de démo dans les chapitres [Traiter](../08-process/) 8.1–8.3.
+- Vous pouvez ouvrir les outils de Vue des séries sur les séries de démo dans les chapitres [Traiter](../08-process/index.md) 8.1–8.3.
 
 ## En cas d’échec
 
@@ -65,5 +68,5 @@ Utilisez **Supprimer** sur la carte d’un outil pour effacer les fichiers tél�
 
 ## Prochaines étapes
 
-1. [Mots que nous utilisons](../04-words-we-use/) et [Créer un projet](../05-create-project/), ou
-2. Passez aux outils [Traiter](../08-process/) une fois les études importées — commencez par [8.1 Supprimer le PHI pixel](../08-process/02-remove-burned-in-text/)
+1. [Mots que nous utilisons](../04-words-we-use/index.md) et [Créer un projet](../05-create-project/index.md), ou
+2. Passez aux outils [Traiter](../08-process/index.md) une fois les études importées — commencez par [8.1 Supprimer le PHI pixel](../08-process/02-remove-burned-in-text/index.md)

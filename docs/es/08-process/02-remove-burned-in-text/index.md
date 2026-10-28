@@ -19,8 +19,8 @@ Importe cada carpeta en su proyecto, luego abra la serie en **Vista de Series**.
 
 ## Antes de empezar
 
-1. Complete [Configuración de Funciones de IA](../../03-ai-features-setup/) para que los modelos OCR estén listos.
-2. Importe las series de demo y ábralas en Vista de Series desde el [Conjunto de datos](../../07-view/).
+1. Complete [Configuración de Funciones de IA](../../03-ai-features-setup/index.md) para que los modelos OCR estén listos.
+2. Importe las series de demo y ábralas en Vista de Series desde el [Conjunto de datos](../../07-view/index.md).
 
 ## Flujo en `davidson_cxr` (ocultar)
 
@@ -121,7 +121,7 @@ En este fotograma, un bloque denso de parámetros de máquina (ganancia, profund
 - El estado **PHI de píxeles** del Conjunto de datos debería actualizarse para cada serie que guardó.
 - Las listas blancas de modalidad y el desplegable de coincidencia (Exacto → Flexible) viven en Vista de Series; una coincidencia más estricta significa que menos aciertos OCR se tratan como conservados de lista blanca.
 - Las regiones de exclusión son de la sesión actual de Vista de Series (igual que otras superposiciones del lienzo). Vuelva a abrir la serie y redibuje si las necesita otra vez.
-- Para ejecutar la misma herramienta en muchos estudios, véase [8.4 Ejecutar en muchos estudios](../05-run-on-many-studies/).
+- Para ejecutar la misma herramienta en muchos estudios, véase [8.4 Ejecutar en muchos estudios](../05-run-on-many-studies/index.md).
 
 ## Cómo se ve cuando va bien
 
@@ -134,8 +134,8 @@ En este fotograma, un bloque denso de parámetros de máquina (ganancia, profund
 - Muchas cajas falsas → endurezca la rigor de coincidencia; ponga en lista blanca lo que conserve; o **Excluir área** para paneles enteros.
 - Texto perdido → **Área de Ocultación** manual.
 - Texto de parámetros aún enmarcado → amplíe el rectángulo de exclusión y Detecte de nuevo; pulse contornos punteados para borrar y redibujar.
-- Herramientas en gris → termine [Funciones de IA](../../03-ai-features-setup/).
+- Herramientas en gris → termine [Funciones de IA](../../03-ai-features-setup/index.md).
 
 ## Siguientes pasos
 
-Continúe con [8.2 Armonizar nombres](../03-harmonize-names/) usando **`CT_Head_With_Contrast`**.
+Continúe con [8.2 Armonizar nombres](../03-harmonize-names/index.md) usando **`CT_Head_With_Contrast`**.

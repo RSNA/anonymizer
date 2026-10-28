@@ -19,8 +19,8 @@ Import each folder into your project, then open the series in **Series View**.
 
 ## Before you start
 
-1. Complete [AI Features setup](../../03-ai-features-setup/) so OCR models are ready.
-2. Import the demo series and open them in Series View from [Dataset](../../07-view/).
+1. Complete [AI Features setup](../../03-ai-features-setup/index.md) so OCR models are ready.
+2. Import the demo series and open them in Series View from [Dataset](../../07-view/index.md).
 
 ## Workflow on `davidson_cxr` (black out)
 
@@ -133,7 +133,7 @@ On this frame, a dense block of machine parameters (gain, depth, FR, DR, and sim
 - Dataset **Pixel PHI** status should update for each series you saved.
 - Modality whitelists and the match dropdown (Exact → Lenient) live in Series View; stricter matching means fewer OCR hits are treated as whitelist keepers.
 - Exclude regions are session-only until **Save Changes**. Active rectangles (including removals of previously saved ones) are written to `whitelists/{modality}.exclude.json` next to the modality whitelist. Clearing all areas removes that file. AI Batch applies those areas when **Enable Exclude Areas** is on.
-- To run the same tool on many studies, see [8.4 Run on many studies](../05-run-on-many-studies/).
+- To run the same tool on many studies, see [8.4 Run on many studies](../05-run-on-many-studies/index.md).
 
 ## What good looks like
 
@@ -145,18 +145,23 @@ On this frame, a dense block of machine parameters (gain, depth, FR, DR, and sim
 
 | What you see | Where to look |
 | --- | --- |
-| Names / IDs still in **DICOM tags** after import | Series View → [Metadata](../../07-view/#metadata-dicom-tags) (Detect PHI highlights; does not rewrite tags) |
+| Names / IDs still in **DICOM tags** after import | Series View → [Metadata](../../07-view/index.md#metadata-dicom-tags) (Detect PHI highlights; Remove PHI + Save rewrites the current image) |
 | Text **drawn on the image** | This chapter (Detect → Remove) |
 | Text inside **SR / Encapsulated PDF** | Report Text Review (below) |
 
 ## Reports and free text (Report Text Review)
 
-Structured Reports (and Encapsulated PDFs) open in **Report Text Review** instead of Series View:
+Structured Reports (and Encapsulated PDFs) open in **Report Text Review** instead of Series View (demo fixture: **`demo_report_pdf`**). Import must use **Clean Structured Content** so Encapsulated Document / SR text is kept for review:
 
 1. Click **Detect Embedded PHI**. Detected spans are colored by type (Name, Location, ID, Phone, Date, Email) in the text and listed in the table.
 2. Untick rows in the table to **exclude** spans you want to keep.
 3. Pick **Blank** (delete the span) or **Synthetic** (replace with a fake value of the same type and similar shape — “hide in plain sight”), then **Remove Embedded PHI**.
 4. **Save** writes the report. For Encapsulated PDF, Save replaces the PDF bytes with a plain-text de-identified document (layout is not preserved). Only the **original removed PHI text** is recorded in the Dataset’s Embedded PHI column — never the report body, and never the synthetic replacements.
+5. Optional — click **Metadata** in the Report toolbar to open the same DICOM tag tree as Series View for this report file.
+
+![Report Text Review](shots/macos/ReportTextReview.png)
+
+![Report Metadata](shots/macos/ReportTextReview_Metadata.png)
 
 Synthetic values are derived deterministically from the project and the anonymized patient ID, so the same input gives the same fake every time. Pixels always use Blackout / Inpaint; Synthetic applies to text only.
 
@@ -171,8 +176,8 @@ If a Secondary Capture series looks like a text report (for example a dose or wo
 - Many false boxes → tighten match strictness; whitelist keepers; or **Exclude Area** for whole panels.
 - Missed text → manual **Blackout Area**.
 - Parameter text still boxed → enlarge the exclude rectangle and Detect again; click dotted outlines to delete and redraw.
-- Tools greyed out → finish [AI Features](../../03-ai-features-setup/).
+- Tools greyed out → finish [AI Features](../../03-ai-features-setup/index.md).
 
 ## Next steps
 
-Continue with [8.2 Harmonize names](../03-harmonize-names/) using **`CT_Head_With_Contrast`**.
+Continue with [8.2 Harmonize names](../03-harmonize-names/index.md) using **`CT_Head_With_Contrast`**.

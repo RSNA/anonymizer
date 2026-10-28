@@ -10,7 +10,7 @@ Les jeux de données de recherche utilisent souvent un texte **Series Descriptio
 | **`davidson_cxr`** | `davidson_cxr` | Chemin planaire XR : **Xp-Bodypart** + **CXp-Projection-Rotation** optionnels |
 | **`us_rgb_single_frame`** | `us_rgb_single_frame` | Chemin planaire US : métadonnées DICOM uniquement (pas de TotalSegmentator) |
 
-Importez une série, ouvrez-la dans **Vue des séries**, puis lancez Harmoniser. Réutilisez **`CT_Head_With_Contrast`** dans [8.3 Flouter les visages](../04-blur-faces/).
+Importez une série, ouvrez-la dans **Vue des séries**, puis lancez Harmoniser. Réutilisez **`CT_Head_With_Contrast`** dans [8.3 Flouter les visages](../04-blur-faces/index.md).
 
 ## Objectif
 
@@ -19,9 +19,9 @@ Importez une série, ouvrez-la dans **Vue des séries**, puis lancez Harmoniser.
 
 ## Avant de commencer
 
-1. Terminez [Configuration des Fonctions IA](../../03-ai-features-setup/) — pack Harmonize CT, résolution, et Structures cérébrales pour la démo CT.
+1. Terminez [Configuration des Fonctions IA](../../03-ai-features-setup/index.md) — pack Harmonize CT, résolution, et Structures cérébrales pour la démo CT.
 2. Optionnellement téléchargez **région anatomique XR** et **vue thorax XR** pour que la démo CXR montre la fusion pixel (sans eux, XR Harmonize encore depuis les tags DICOM).
-3. Importez les séries de démo ([Rechercher](../../06-search/)) et ouvrez chacune dans **Vue des séries** ([Vue](../../07-view/) — clic droit sur la ligne série).
+3. Importez les séries de démo ([Rechercher](../../06-search/index.md)) et ouvrez chacune dans **Vue des séries** ([Vue](../../07-view/index.md) — clic droit sur la ligne série).
 
 ## Flux de travail sur `CT_Head_With_Contrast`
 
@@ -39,7 +39,7 @@ La Vue des séries reste derrière la boîte de dialogue pour conserver le conte
 
 Sur une série CT tête, Harmoniser demande s’il faut lancer la **segmentation détaillée des structures cérébrales** avant que le travail continue :
 
-1. Lisez le message Oui/Non **Structures cérébrales** (licence académique / modèles requis — voir [Fonctions IA](../../03-ai-features-setup/)).
+1. Lisez le message Oui/Non **Structures cérébrales** (licence académique / modèles requis — voir [Fonctions IA](../../03-ai-features-setup/index.md)).
 2. Choisissez **Oui** pour inclure les structures cérébrales dans cette exécution, ou **Non** pour l’anatomie standard uniquement.
 
 ![Harmoniser la description avec invite structures cérébrales](shots/macos/Process_Harmonize_BrainPrompt.png)
@@ -83,10 +83,10 @@ CR/DX, échographie et mammographie utilisent un chemin Harmonize **séparé** d
 - **XR (CR/DX) :** Harmonize planaire ; Xp-Bodypart optionnel + vue/rotation CXp thorax uniquement (téléchargements soft).
 - **US / MG :** Harmonize planaire depuis DICOM uniquement — **pas** de TotalSegmentator et **pas** de packs pixel XR.
 - **SC / OT / DOC :** Harmonize n’est pas proposé.
-- Après que toutes les séries d’une étude sont harmonisées, la meilleure **description d’étude LOINC** est appliquée automatiquement (même chemin que le Traitement par lots IA). Modifiez-la plus tard depuis [Jeu de données](../../07-view/#modifier-les-descriptions-detude-et-de-serie). Les études XR/US/MG pures utilisent le préfixe LOINC correspondant.
-- Dans [Jeu de données](../../07-view/#modifier-les-descriptions-detude-et-de-serie), double-cliquez une description d’étude ou de série (ou multi-sélectionnez et clic droit pour **Définir la description**) pour choisir des noms LOINC (étude) ou RadLex (série) — y compris pour les lignes pas encore vertes. Un clic simple sélectionne seulement la ligne.
+- Après que toutes les séries d’une étude sont harmonisées, la meilleure **description d’étude LOINC** est appliquée automatiquement (même chemin que le Traitement par lots IA). Modifiez-la plus tard depuis [Jeu de données](../../07-view/index.md#edit-study-and-series-descriptions). Les études XR/US/MG pures utilisent le préfixe LOINC correspondant.
+- Dans [Jeu de données](../../07-view/index.md#edit-study-and-series-descriptions), double-cliquez une description d’étude ou de série (ou multi-sélectionnez et clic droit pour **Définir la description**) pour choisir des noms LOINC (étude) ou RadLex (série) — y compris pour les lignes pas encore vertes. Un clic simple sélectionne seulement la ligne.
 - Les résultats sont mis en cache sous le dossier de la série — **Vider le cache d'analyse** pour une exécution CT/MR fraîche.
-- Lots : [8.4 Exécuter sur plusieurs études](../05-run-on-many-studies/) (la résolution vient des Fonctions IA, pas par lot).
+- Lots : [8.4 Exécuter sur plusieurs études](../05-run-on-many-studies/index.md) (la résolution vient des Fonctions IA, pas par lot).
 
 ## Ce qui indique que tout va bien
 
@@ -98,8 +98,8 @@ CR/DX, échographie et mammographie utilisent un chemin Harmonize **séparé** d
 
 - Série non adaptée → ignore attendu.
 - Déjà harmonisé → Vider le cache d'analyse pour relancer.
-- Modèles pas prêts → [Fonctions IA](../../03-ai-features-setup/).
+- Modèles pas prêts → [Fonctions IA](../../03-ai-features-setup/index.md).
 
 ## Prochaines étapes
 
-Continuez avec [8.3 Flouter les visages](../04-blur-faces/) sur la **même** série `CT_Head_With_Contrast` (Gaussien).
+Continuez avec [8.3 Flouter les visages](../04-blur-faces/index.md) sur la **même** série `CT_Head_With_Contrast` (Gaussien).

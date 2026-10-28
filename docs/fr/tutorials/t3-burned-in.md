@@ -11,4 +11,4 @@ Détecter et supprimer le texte incrusté sur une série tout en conservant les 
 ## Vidéo
 <!-- YouTube embed placeholder -->
 
-Voir [Supprimer le texte incrusté](../08-process/02-remove-burned-in-text).
+Voir [Supprimer le texte incrusté](../08-process/02-remove-burned-in-text/index.md).

@@ -16,6 +16,9 @@ Schließen Sie das Projekt (oder starten Sie die App), um zum Willkommen-Bildsch
 
 ![KI-Funktionen einrichten](shots/macos/AiFeaturesSetup.png)
 
+!!! note "Nachdem alle Modelle geladen sind"
+    Jede Zeile zeigt **Installiert** (mit kurzer Angabe, z. B. Auflösung) und eine Schaltfläche **Entfernen** statt **Herunterladen**. Die Harmonize-CT/MR-Zeilen behalten ein Auflösungsmenü; weitere bereits vorhandene Auflösungen erscheinen als „Auch installiert: …“. Der Screenshot oben zeigt diesen vollständig installierten Zustand.
+
 ## Was Sie konfigurieren (V19)
 
 | Eintrag | Für die Demo nötig |
@@ -46,7 +49,7 @@ Mammographie und Ultraschall nutzen diese Modelle nicht.
 6. Dialog schließen. Die Einstellungen bleiben auf diesem Arbeitsplatz.
 
 !!! tip "Internet nur für den Download"
-    Nachdem Modelle und Lizenz bereitstehen, läuft die Verarbeitung lokal. Unter **macOS** vor Harmonisieren / verwandten KI-Funktionen die OpenMP-C++-Bibliothek installieren: `brew install libomp` (siehe [Installation](../02-install/#4-macos-only--openmp-for-ai-features)).
+    Nachdem Modelle und Lizenz bereitstehen, läuft die Verarbeitung lokal. Unter **macOS** vor Harmonisieren / verwandten KI-Funktionen die OpenMP-C++-Bibliothek installieren: `brew install libomp` (siehe [Installation](../02-install/index.md#4-macos-only-openmp-for-ai-features)).
 
 ## Modelle entfernen
 
@@ -55,7 +58,7 @@ Mit **Entfernen** auf einer Werkzeugkarte die heruntergeladenen Dateien löschen
 ## So sieht es aus, wenn es passt
 
 - Status zeigt bereit für OCR, Harmonisieren CT und Gesicht.
-- Sie können Werkzeuge der Serienansicht auf den Demo-Serien in den [Verarbeiten](../08-process/)-Kapiteln 8.1–8.3 öffnen.
+- Sie können Werkzeuge der Serienansicht auf den Demo-Serien in den [Verarbeiten](../08-process/index.md)-Kapiteln 8.1–8.3 öffnen.
 
 ## Wenn es fehlschlägt
 
@@ -65,5 +68,5 @@ Mit **Entfernen** auf einer Werkzeugkarte die heruntergeladenen Dateien löschen
 
 ## Nächste Schritte
 
-1. [Begriffe](../04-words-we-use/) und [Projekt anlegen](../05-create-project/), oder
-2. Zu den [Verarbeiten](../08-process/)-Werkzeugen springen, sobald Studien importiert sind — beginnen Sie mit [8.1 Pixel-PHI entfernen](../08-process/02-remove-burned-in-text/)
+1. [Begriffe](../04-words-we-use/index.md) und [Projekt anlegen](../05-create-project/index.md), oder
+2. Zu den [Verarbeiten](../08-process/index.md)-Werkzeugen springen, sobald Studien importiert sind — beginnen Sie mit [8.1 Pixel-PHI entfernen](../08-process/02-remove-burned-in-text/index.md)

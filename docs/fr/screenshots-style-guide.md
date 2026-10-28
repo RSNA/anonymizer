@@ -34,7 +34,7 @@ Markdown embarque le chemin **macOS** (le JS du site bascule vers Windows pour l
 
 ## Capture automatisée
 
-Les outils vivent dans [`src/docs_help/`](../../src/docs_help/) (pas le paquet d’application livré).
+Les outils vivent dans [`src/docs_help/`](https://github.com/RSNA/anonymizer/tree/dev/src/docs_help) (pas le paquet d’application livré).
 
 **Responsabilité développeur :** récupérer le code le plus récent, lancer la capture sur **macOS** puis à nouveau sur **Windows**, puis committer et pousser les deux arbres PNG. Il n’y a pas de grab CI/cloud.
 

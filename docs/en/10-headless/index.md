@@ -219,23 +219,23 @@ uv run python -m prototyping.medgemma_chat \
   --mcp-url http://127.0.0.1:8000/mcp
 ```
 
-Gradio UI (needs the `dev` dependency group for Gradio):
+Gradio UI (`gradio` is in the `medgemma-chat` group):
 
 ```bash
-uv sync --extra mcp --group medgemma-chat --group dev
+uv sync --extra mcp --group medgemma-chat
 uv run python -m prototyping.medgemma_chat \
   --model /path/to/medgemma_hf_weights \
   --mcp-url http://127.0.0.1:8000/mcp \
   --ui gradio
 ```
 
-Full flags: [`src/prototyping/medgemma_chat/README.md`](../../../src/prototyping/medgemma_chat/README.md).
+Full flags: [`src/prototyping/medgemma_chat/README.md`](https://github.com/RSNA/anonymizer/blob/dev/src/prototyping/medgemma_chat/README.md).
 
 ## Prerequisites
 
-- For receive / AI batch (`-c`): project already created ([Create a project](../05-create-project/) or via MCP `create_project`).
+- For receive / AI batch (`-c`): project already created ([Create a project](../05-create-project/index.md) or via MCP `create_project`).
 - For MCP-only: create/open projects with tools after connect (interactive setup wizard in server instructions).
-- Models and face license already set up on **this machine** ([AI Features setup](../03-ai-features-setup)).
+- Models and face license already set up on **this machine** ([AI Features setup](../03-ai-features-setup/index.md)).
 - Enough free memory for the selected algorithms.
 - For MCP: the `[mcp]` optional dependency installed.
 
@@ -262,10 +262,9 @@ Full flags: [`src/prototyping/medgemma_chat/README.md`](../../../src/prototyping
 Headless does **not** replace reviewing a sample in the Dataset or Series View. Use the GUI for first-time setup and quality checks; use headless for routine receive or overnight batch.
 
 !!! tip "Same job as GUI batch"
-    Desktop steps: [Run on many studies](../08-process/05-run-on-many-studies/). Headless uses the same AI tools with a JSON recipe.
+    Desktop steps: [Run on many studies](../08-process/05-run-on-many-studies/index.md). Headless uses the same AI tools with a JSON recipe.
 
 ## Next steps
 
 1. [Troubleshooting](../troubleshooting.md) if something fails
-2. [Tutorials](../tutorials/) for short walkthroughs
-3. Back to [Home](../) for the full chapter list
+2. Back to [Home](../index.md) for the full chapter list

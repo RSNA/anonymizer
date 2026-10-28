@@ -8,9 +8,9 @@ KI-Stapelverarbeitung aus dem Datensatz auf mehreren Studien ausführen.
 2. Algorithmen und Optionen wählen → Start.
 3. Zusammenfassung lesen; Serienansicht stichprobenartig prüfen.
 
-Für Server ohne GUI dieselben Werkzeuge über [Ohne Oberfläche ausführen](../10-headless/) nutzen.
+Für Server ohne GUI dieselben Werkzeuge über [Ohne Oberfläche ausführen](../10-headless/index.md) nutzen.
 
 ## Video
 <!-- YouTube embed placeholder -->
 
-Siehe [Auf vielen Studien ausführen](../08-process/05-run-on-many-studies).
+Siehe [Auf vielen Studien ausführen](../08-process/05-run-on-many-studies/index.md).

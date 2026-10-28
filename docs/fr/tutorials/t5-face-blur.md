@@ -11,4 +11,4 @@ Prévisualiser le flou facial sur un CT/MR tête, confirmer l’AQ, et enregistr
 ## Vidéo
 <!-- YouTube embed placeholder -->
 
-Voir [Flouter les visages](../08-process/04-blur-faces).
+Voir [Flouter les visages](../08-process/04-blur-faces/index.md).

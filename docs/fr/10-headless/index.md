@@ -108,8 +108,8 @@ Détails : `src/prototyping/medgemma_chat/README.md`.
 
 ## Prérequis
 
-- Projet déjà créé dans l’interface graphique ([Créer un projet](../05-create-project/)).
-- Modèles et licence visage déjà configurés sur **cette machine** ([Configuration des Fonctions IA](../03-ai-features-setup)).
+- Projet déjà créé dans l’interface graphique ([Créer un projet](../05-create-project/index.md)).
+- Modèles et licence visage déjà configurés sur **cette machine** ([Configuration des Fonctions IA](../03-ai-features-setup/index.md)).
 - Assez de mémoire libre pour les algorithmes sélectionnés.
 
 ## Ce qui indique que tout va bien
@@ -134,10 +134,9 @@ Détails : `src/prototyping/medgemma_chat/README.md`.
 Le mode headless ne **remplace pas** la relecture d’un échantillon dans Jeu de données ou Vue des séries. Utilisez l’interface pour la configuration initiale et les contrôles qualité ; utilisez headless pour la réception de routine ou un lot de nuit.
 
 !!! tip "Même travail que le lot de l’interface"
-    Étapes bureau : [Exécuter sur plusieurs études](../08-process/05-run-on-many-studies/). Headless utilise les mêmes outils IA avec une recette JSON.
+    Étapes bureau : [Exécuter sur plusieurs études](../08-process/05-run-on-many-studies/index.md). Headless utilise les mêmes outils IA avec une recette JSON.
 
 ## Prochaines étapes
 
 1. [Dépannage](../troubleshooting.md) si quelque chose échoue
-2. [Tutoriels](../tutorials/) pour de courts parcours
-3. Retour à [Accueil](../) pour la liste complète des chapitres
+2. Retour à [Accueil](../index.md) pour la liste complète des chapitres

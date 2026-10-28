@@ -20,7 +20,7 @@ Process a cohort for burned-in text, Harmonize, and/or face blur with progress a
 ## Before you start
 
 1. Import the demo series above (and any other studies you need).
-2. Finish [AI Features setup](../../03-ai-features-setup/) for every tool you will run.
+2. Finish [AI Features setup](../../03-ai-features-setup/index.md) for every tool you will run.
 3. Optionally walk 8.1–8.3 once so you know expected results.
 
 ## Start a batch
@@ -54,7 +54,7 @@ For each series, selected tools run in a stable order (pixel PHI → Harmonize �
 
 - Read the summary (completed / skipped / failed).
 - Spot-check Series View on `davidson_cxr` and `CT_Head_With_Contrast` before export.
-- Same job on a **server without a window** → [Run headless](../../10-headless/).
+- Same job on a **server without a window** → [Run headless](../../10-headless/index.md).
 
 ## What good looks like
 
@@ -63,10 +63,10 @@ For each series, selected tools run in a stable order (pixel PHI → Harmonize �
 
 ## If it fails
 
-- Features not ready → [AI Features](../../03-ai-features-setup/).
+- Features not ready → [AI Features](../../03-ai-features-setup/index.md).
 - No series for selection → check Dataset selection.
 - Insufficient memory → close other apps or process fewer studies.
 
 ## Next steps
 
-Continue with [Send](../../09-send/) to export anonymized studies (or [run headless](../../10-headless/) for server batch).
+Continue with [Send](../../09-send/index.md) to export anonymized studies (or [run headless](../../10-headless/index.md) for server batch).

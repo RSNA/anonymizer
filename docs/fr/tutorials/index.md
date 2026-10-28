@@ -14,9 +14,9 @@ Courts parcours vidéo pour les tâches courantes. Les pages incluent des listes
 | T5 | [Flouter un visage sur un examen de la tête](t5-face-blur.md) | `t5-face-blur.md` |
 | T6 | [Traiter une liste d’études](t6-batch.md) | `t6-batch.md` |
 
-L’opération serveur headless est **d’abord textuelle** : voir [Exécution sans interface](../10-headless/) (pas de vidéo requise).
+L’opération serveur headless est **d’abord textuelle** : voir [Exécution sans interface](../10-headless/index.md) (pas de vidéo requise).
 
 ## Prochaines étapes
 
 1. Commencez par [T1 Installer et ouvrir l’application](t1-install.md)
-2. Ou revenez au manuel numéroté à [Commencer ici](../01-start-here/)
+2. Ou revenez au manuel numéroté à [Commencer ici](../01-start-here/index.md)

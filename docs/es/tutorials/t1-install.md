@@ -17,4 +17,4 @@ Instalar el Anonymizer y llegar a la pantalla Bienvenido con Funciones de IA dis
 
 ![Bienvenido](../02-install/shots/macos/Welcome.png)
 
-Detalle completo: [Instalación y primer inicio](../02-install/)
+Detalle completo: [Instalación y primer inicio](../02-install/index.md)

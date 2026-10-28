@@ -16,11 +16,14 @@ Close the project (or start the app) to return to Welcome if you need to downloa
 
 ![AI Features setup](shots/macos/AiFeaturesSetup.png)
 
+!!! note "After all models are downloaded"
+    Each row shows **Installed** (with a short detail such as resolution) and a **Remove** button instead of **Download**. Harmonize CT/MR rows keep a resolution menu; extra resolutions already on disk appear as “Also installed: …”. The screenshot above shows that fully installed state.
+
 ## What you configure (V19)
 
 | Item | Needed for demo |
 | --- | --- |
-| **Embedded PHI** (OCR + English NER, one download) | Chapter 8.1 — `davidson_cxr`; report text review; Series View [Metadata → Detect PHI](../07-view/#metadata-dicom-tags). Maintainers: NAME false-positive guard (whitelists + RadLex + LOINC lexicon, no `radiology_deny`) is documented in the Embedded PHI code README (`src/anonymizer/controller/ai/embedded_phi/README.md`). |
+| **Embedded PHI** (OCR + English NER, one download) | Chapter 8.1 — `davidson_cxr`; report text review; Series View [Metadata → Detect PHI](../07-view/index.md#metadata-dicom-tags). Maintainers: NAME false-positive guard (whitelists + RadLex + LOINC lexicon, no `radiology_deny`) is documented in the Embedded PHI code README (`src/anonymizer/controller/ai/embedded_phi/README.md`). |
 | **Harmonize** CT pack + resolution (1.5 / 3 / 6 mm) | Chapter 8.2 — `CT_Head_With_Contrast` |
 | **Harmonize** XR body part (optional) | Pixel anatomy for CR/DX when DICOM body-part tags are missing or wrong |
 | **Harmonize** XR chest view (optional) | Pixel AP/PA/Lat (+ rotation QC) for chest CR/DX |
@@ -46,7 +49,7 @@ Mammography and ultrasound do not use these models.
 6. Close the dialog. Preferences stay on this workstation.
 
 !!! tip "Internet only for download"
-    After models and license are in place, processing is local. On **macOS**, install the OpenMP C++ library before using Harmonize / related AI Features: `brew install libomp` (see [Install](../02-install/#4-macos-only--openmp-for-ai-features)).
+    After models and license are in place, processing is local. On **macOS**, install the OpenMP C++ library before using Harmonize / related AI Features: `brew install libomp` (see [Install](../02-install/index.md#4-macos-only-openmp-for-ai-features)).
 
 ## Remove models
 
@@ -55,7 +58,7 @@ Use **Remove** on a tool card to delete downloaded files. This does not undo cha
 ## What good looks like
 
 - Status shows ready for OCR, Harmonize CT, and Face.
-- You can open Series View tools on the demo series in [Process](../08-process/) chapters 8.1–8.3.
+- You can open Series View tools on the demo series in [Process](../08-process/index.md) chapters 8.1–8.3.
 
 ## If it fails
 
@@ -65,5 +68,5 @@ Use **Remove** on a tool card to delete downloaded files. This does not undo cha
 
 ## Next steps
 
-1. [Words we use](../04-words-we-use/) and [Create a project](../05-create-project/), or
-2. Jump to [Process](../08-process/) tools once you have imported studies — start with [8.1 Remove Pixel PHI](../08-process/02-remove-burned-in-text/)
+1. [Words we use](../04-words-we-use/index.md) and [Create a project](../05-create-project/index.md), or
+2. Jump to [Process](../08-process/index.md) tools once you have imported studies — start with [8.1 Remove Pixel PHI](../08-process/02-remove-burned-in-text/index.md)

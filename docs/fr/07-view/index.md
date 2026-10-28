@@ -6,17 +6,17 @@
 
 ## Objectif
 
-Voir ce que vous avez importé, vérifier les colonnes de statut IA, ouvrir les projections d’une étude, ouvrir une série pour relecture ou outils [Traiter](../08-process/), et exporter un CSV **Créer une Recherche de Patient** si besoin.
+Voir ce que vous avez importé, vérifier les colonnes de statut IA, ouvrir les projections d’une étude, ouvrir une série pour relecture ou outils [Traiter](../08-process/index.md), consulter **Analytics** sur le Tableau de bord, et exporter un CSV **Créer une Recherche de Patient** si besoin.
 
 ## Études de démo
 
-Après import depuis `tests/controller/assets/test_dcm_files` (voir [Rechercher](../06-search/)), Jeu de données doit lister ces trois études (les captures d’aide n’utilisent **pas** de fantômes synthétiques) :
+Après import depuis `tests/controller/assets/test_dcm_files` (voir [Rechercher](../06-search/index.md)), Jeu de données doit lister ces trois études (les captures d’aide n’utilisent **pas** de fantômes synthétiques) :
 
 | Fixture | Rôle dans le manuel |
 | --- | --- |
-| **`davidson_cxr`** | Ouvrir dans Vue des séries ici ; texte incrusté dans [Supprimer le PHI pixel](../08-process/02-remove-burned-in-text/) |
-| **`CT_Head_With_Contrast`** | [Harmoniser](../08-process/03-harmonize-names/) et [Flouter les visages](../08-process/04-blur-faces/) |
-| **`us_rgb_single_frame`** | Échographie mono-image ; incrustations dans [Supprimer le PHI pixel](../08-process/02-remove-burned-in-text/) (démos zone d’exclusion) |
+| **`davidson_cxr`** | Ouvrir dans Vue des séries ici ; texte incrusté dans [Supprimer le PHI pixel](../08-process/02-remove-burned-in-text/index.md) |
+| **`CT_Head_With_Contrast`** | [Harmoniser](../08-process/03-harmonize-names/index.md) et [Flouter les visages](../08-process/04-blur-faces/index.md) |
+| **`us_rgb_single_frame`** | Échographie mono-image ; incrustations dans [Supprimer le PHI pixel](../08-process/02-remove-burned-in-text/index.md) (démos zone d’exclusion) |
 
 ## Ouvrir Jeu de données
 
@@ -34,11 +34,25 @@ Après import depuis `tests/controller/assets/test_dcm_files` (voir [Rechercher]
 | **Flou facial** | Dé-identification faciale appliquée |
 | **PHI pixel** | Scan / suppression du texte incrusté enregistrés |
 
+## Analytics {#analytics}
+
+Dès qu’au moins une étude est dans le projet, un contrôle **Analytics** apparaît sur le Tableau de bord (sous **Rechercher**, **Vue** et **Envoyer**). Développez-le pour voir les graphiques de cohorte — surtout les **volumes d’organes** après avoir lancé [Harmoniser](../08-process/03-harmonize-names/index.md) sur des séries CT/MR.
+
+1. Depuis le Tableau de bord, cliquez sur **Analytics ▸** pour développer le panneau.
+2. Utilisez **Show** pour choisir quelles tuiles de graphique sont visibles.
+3. Utilisez **Volumes** pour choisir quels organes apparaissent dans les histogrammes de volume.
+4. Ajustez **Bin width** si l’histogramme paraît trop grossier ou trop fin.
+5. Cliquez sur **Refresh** après Harmoniser ou de nouveaux imports pour mettre à jour les volumes.
+
+![Analytics du Tableau de bord développé](shots/macos/Dashboard_Analytics.png)
+
+Analytics sert à la **revue dans ce projet**. Cela ne modifie ni les pixels ni ce que vous Envoyez. Après Harmoniser sur CT/MR (masques sous le cache de série), utilisez **Volumes** pour les organes et **Show** pour les tuiles démographiques — un panneau complet peut inclure sexe, âge, modalité, ethnicité, couverture IA et de nombreux histogrammes de volume d’organes. Des graphiques de volume vides signifient souvent qu’Harmoniser n’a pas encore produit de masques anatomiques pour ces séries.
+
 ## Clic droit dans Jeu de données (le plus important)
 
 Les info-bulles au survol de l’arbre indiquent ce qu’un clic droit fera. La sélection suit la ligne sous le pointeur.
 
-**Clic gauche** sur la **description** d’étude ou de série (première colonne) lorsqu’une seule ligne est sélectionnée — voir [Modifier les descriptions d’étude et de série](#modifier-les-descriptions-detude-et-de-serie) ci-dessous. Utilisez **Shift** ou **Cmd/Ctrl+Click** pour multi-sélectionner ; puis **clic droit** sur la sélection pour définir une description sur toutes les lignes sélectionnées.
+**Clic gauche** sur la **description** d’étude ou de série (première colonne) lorsqu’une seule ligne est sélectionnée — voir [Modifier les descriptions d’étude et de série](#edit-study-and-series-descriptions) ci-dessous. Utilisez **Shift** ou **Cmd/Ctrl+Click** pour multi-sélectionner ; puis **clic droit** sur la sélection pour définir une description sur toutes les lignes sélectionnées.
 
 ### Clic droit sur une **étude** → Afficher les projections
 
@@ -88,7 +102,7 @@ Changer la taille recalcule combien de tuiles tiennent par page et peut ajouter 
 
 Cette fenêtre **Afficher les projections** du Jeu de données est distincte des modes coupe / min / mean / max à l’intérieur de Vue des séries.
 
-### Clic droit sur une **série** → Vue des séries
+### Clic droit sur une **série** → Vue des séries {#right-click-a-series-series-view}
 
 1. Développez l’étude qui contient la série (par exemple `davidson_cxr`).
 2. **Clic droit sur la ligne série** (pas la ligne étude).
@@ -98,9 +112,9 @@ C’est la façon principale d’ouvrir une série pour relecture et pour les ou
 
 ![Vue des séries sur davidson_cxr](shots/macos/SeriesView_Review.png)
 
-## Modifier les descriptions d’étude et de série
+## Modifier les descriptions d’étude et de série {#edit-study-and-series-descriptions}
 
-Après [Harmoniser](../08-process/03-harmonize-names/) (Vue des séries ou [Traitement par lots IA](../08-process/05-run-on-many-studies/)), les lignes **Harmonisé** vertes montrent le nom standardisé. Vous pouvez aussi définir des noms RadLex / LOINC sur des lignes **non harmonisées** depuis Jeu de données — choisir un nom standard écrit le DICOM et marque la ligne harmonisée (verte après actualisation).
+Après [Harmoniser](../08-process/03-harmonize-names/index.md) (Vue des séries ou [Traitement par lots IA](../08-process/05-run-on-many-studies/index.md)), les lignes **Harmonisé** vertes montrent le nom standardisé. Vous pouvez aussi définir des noms RadLex / LOINC sur des lignes **non harmonisées** depuis Jeu de données — choisir un nom standard écrit le DICOM et marque la ligne harmonisée (verte après actualisation).
 
 Les info-bulles expliquent ce qu’un clic ou une action de barre d’outils fera (y compris pourquoi un bouton est désactivé).
 
@@ -135,12 +149,12 @@ Avec une **seule** étude ou série sélectionnée, **Sélectionner similaires**
 
 ## Vue des séries — ce que vous pouvez faire
 
-Vue des séries est l’endroit où vous regardez les pixels et lancez les outils par série (les modèles doivent être prêts — voir [Configuration des Fonctions IA](../03-ai-features-setup/)) :
+Vue des séries est l’endroit où vous regardez les pixels et lancez les outils par série (les modèles doivent être prêts — voir [Configuration des Fonctions IA](../03-ai-features-setup/index.md)) :
 
 - Faire défiler les frames ; utiliser l’histogramme et les barres d’outils selon besoin
-- **Détecter / supprimer le texte incrusté** (OCR) et édition de liste blanche → [Supprimer le PHI pixel](../08-process/02-remove-burned-in-text/)
-- **Harmoniser la description** → [Harmoniser les noms](../08-process/03-harmonize-names/)
-- **Flou facial** (lorsque éligible) → [Flouter les visages](../08-process/04-blur-faces/)
+- **Détecter / supprimer le texte incrusté** (OCR) et édition de liste blanche → [Supprimer le PHI pixel](../08-process/02-remove-burned-in-text/index.md)
+- **Harmoniser la description** → [Harmoniser les noms](../08-process/03-harmonize-names/index.md)
+- **Flou facial** (lorsque éligible) → [Flouter les visages](../08-process/04-blur-faces/index.md)
 - Superpositions **Segmentation latch** depuis les masques d’anatomie en cache (après Harmoniser)
 - Rectangles de noircissement manuels
 - Vider le cache d’analyse (ne réécrit pas à lui seul les pixels DICOM)
@@ -149,13 +163,13 @@ Dans Vue des séries, les séries multi-frame peuvent aussi afficher les modes d
 
 ## Autres actions Jeu de données
 
-- Sélectionner des études pour [Traitement par lots IA](../08-process/05-run-on-many-studies/) ou [Envoyer](../09-send/)
+- Sélectionner des études pour [Traitement par lots IA](../08-process/05-run-on-many-studies/index.md) ou [Envoyer](../09-send/index.md)
 - Contrôler les colonnes de statut IA après Vue des séries ou lots
 - CSV **Créer une Recherche de Patient** (ci-dessous)
 
 ## Créer une Recherche de Patient CSV
 
-Utilisez Jeu de données pour exporter un tableur qui mappe les identifiants PHI vers les identifiants anonymisés (et le statut IA des séries). Ceci est distinct de la [Table de correspondance des patients CTP](../05-create-project/#table-de-correspondance-des-patients) optionnelle utilisée à l’import.
+Utilisez Jeu de données pour exporter un tableur qui mappe les identifiants PHI vers les identifiants anonymisés (et le statut IA des séries). Ceci est distinct de la [Table de correspondance des patients CTP](../05-create-project/index.md#patient-lookup-table) optionnelle utilisée à l’import.
 
 ### Quand l’utiliser
 
@@ -166,7 +180,7 @@ Utilisez Jeu de données pour exporter un tableur qui mappe les identifiants PHI
 ### Étapes
 
 1. Ouvrez **Jeu de données** depuis le Tableau de bord (**Vue**).
-2. Cliquez sur **Créer une Recherche de Patient** dans la barre d’outils Jeu de données (aucune sélection d’étude requise — le CSV couvre tout l’index du projet). Préférez exporter après [Traiter](../08-process/) pour que les colonnes de statut IA soient renseignées.
+2. Cliquez sur **Créer une Recherche de Patient** dans la barre d’outils Jeu de données (aucune sélection d’étude requise — le CSV couvre tout l’index du projet). Préférez exporter après [Traiter](../08-process/index.md) pour que les colonnes de statut IA soient renseignées.
 
 ![Jeu de données avec Créer une Recherche de Patient](shots/macos/Dataset_CreatePatientLookup.png)
 
@@ -203,12 +217,12 @@ Utilisez Jeu de données pour exporter un tableur qui mappe les identifiants PHI
 
 ## En cas d’échec
 
-- Liste vide → importez d’abord ([Rechercher](../06-search/)).
+- Liste vide → importez d’abord ([Rechercher](../06-search/index.md)).
 - Série manquante sur le disque → **Série non trouvée** ; réimportez ou vérifiez le chemin de stockage.
-- Outils grisés dans Vue des séries → téléchargez les modèles / acceptez la licence dans [Fonctions IA](../03-ai-features-setup/).
+- Outils grisés dans Vue des séries → téléchargez les modèles / acceptez la licence dans [Fonctions IA](../03-ai-features-setup/index.md).
 - Harmonize déjà en cours → terminez ou annulez l’autre série d’abord.
 - Erreur Créer une Recherche de Patient → assurez-vous que le projet a des études dans l’index Jeu de données et que `private/phi_export/` est accessible en écriture.
 
 ## Prochaines étapes
 
-Continuez avec [Traiter](../08-process/) — Supprimer le PHI pixel, Harmoniser, Flou facial et lots. Après relecture, [Envoyer](../09-send/) les patients anonymisés.
+Continuez avec [Traiter](../08-process/index.md) — Supprimer le PHI pixel, Harmoniser, Flou facial et lots. Après relecture, [Envoyer](../09-send/index.md) les patients anonymisés.

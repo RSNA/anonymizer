@@ -19,8 +19,8 @@ Jeden Ordner in Ihr Projekt importieren, dann die Serie in der **Serienansicht**
 
 ## Bevor Sie starten
 
-1. [KI-Funktionen einrichten](../../03-ai-features-setup/) abschließen, damit OCR-Modelle bereit sind.
-2. Die Demo-Serien importieren und in der Serienansicht aus dem [Datensatz](../../07-view/) öffnen.
+1. [KI-Funktionen einrichten](../../03-ai-features-setup/index.md) abschließen, damit OCR-Modelle bereit sind.
+2. Die Demo-Serien importieren und in der Serienansicht aus dem [Datensatz](../../07-view/index.md) öffnen.
 
 ## Ablauf auf `davidson_cxr` (schwärzen)
 
@@ -121,7 +121,7 @@ Auf diesem Frame sitzt ein dichter Block von Maschinenparametern (Gain, Depth, F
 - Der Datensatz-Status **Pixel-PHI** sollte sich für jede gespeicherte Serie aktualisieren.
 - Modalitäts-Whitelists und das Match-Dropdown (Exakt → Tolerant) leben in der Serienansicht; strengeres Matching bedeutet, dass weniger OCR-Treffer als Whitelist-Behalter gelten.
 - Ausschlussregionen gelten für die aktuelle Serienansicht-Sitzung (wie andere Canvas-Overlays). Serie erneut öffnen und neu zeichnen, wenn Sie sie wieder brauchen.
-- Um dasselbe Werkzeug auf vielen Studien auszuführen, siehe [8.4 Auf vielen Studien ausführen](../05-run-on-many-studies/).
+- Um dasselbe Werkzeug auf vielen Studien auszuführen, siehe [8.4 Auf vielen Studien ausführen](../05-run-on-many-studies/index.md).
 
 ## So sieht es aus, wenn es passt
 
@@ -134,8 +134,8 @@ Auf diesem Frame sitzt ein dichter Block von Maschinenparametern (Gain, Depth, F
 - Viele Fehlboxen → Match-Strenge erhöhen; Behalter whitelisten; oder **Bereich ausschließen** für ganze Panels.
 - Verpasster Text → manuell **Bereich schwärzen**.
 - Parametertext noch eingerahmt → Ausschlussrechteck vergrößern und erneut erkennen; gepunktete Konturen anklicken zum Löschen und Neuzeichnen.
-- Werkzeuge ausgegraut → [KI-Funktionen](../../03-ai-features-setup/) abschließen.
+- Werkzeuge ausgegraut → [KI-Funktionen](../../03-ai-features-setup/index.md) abschließen.
 
 ## Nächste Schritte
 
-Weiter mit [8.2 Namen harmonisieren](../03-harmonize-names/) anhand von **`CT_Head_With_Contrast`**.
+Weiter mit [8.2 Namen harmonisieren](../03-harmonize-names/index.md) anhand von **`CT_Head_With_Contrast`**.

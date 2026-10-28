@@ -50,96 +50,78 @@ plugins:
           build: true
           nav_translations:
             Home: Start
+            Setup: Einrichtung
+            Use: Nutzung
+            Headless: Ohne Oberfläche
+            Reference: Referenz
             1. Start here: 1. Hier beginnen
-            2. Install and first launch: 2. Installation und erster Start
-            3. AI Features setup: 3. KI-Funktionen einrichten
+            2. Install: 2. Installation
+            3. AI Features: 3. KI-Funktionen
             4. Words we use: 4. Begriffe
             5. Create a project: 5. Projekt anlegen
             6. Search: 6. Suchen
             7. View: 7. Ansicht
             8. Process: 8. Verarbeiten
-            8.1 Remove Pixel PHI: 8.1 Eingebrannten Text entfernen
-            8.2 Harmonize names: 8.2 Namen harmonisieren
-            8.3 Blur faces: 8.3 Gesichter unscharf machen
-            8.4 Run on many studies: 8.4 Auf vielen Studien ausführen
+            8.1 Pixel PHI: 8.1 Pixel-PHI
+            8.2 Harmonize: 8.2 Harmonisieren
+            8.3 Blur faces: 8.3 Gesichter unscharf
+            8.4 Batch: 8.4 Stapel
             9. Send: 9. Senden
-            10. Run headless: 10. Ohne Oberfläche ausführen
-            Reference: Referenz
             De-identification protocol: De-Identifikationsprotokoll
+            DICOM Conformance Statement: DICOM-Konformitätserklärung
             Troubleshooting: Fehlerbehebung
-            Tutorials: Tutorials
-            Overview: Überblick
-            T1 Install: T1 Installation
-            T2 Project import: T2 Projektimport
-            T3 Burned-in text: T3 Eingebrannten Text entfernen
-            T4 Harmonize: T4 Harmonisieren
-            T5 Face blur: T5 Gesichter unscharf machen
-            T6 Batch: T6 KI-Stapelverarbeitung
-            Screenshots style guide: Screenshot-Stilguide
             License: Lizenz
         - locale: es
           name: Español
           build: true
           nav_translations:
             Home: Inicio
+            Setup: Configuración
+            Use: Uso
+            Headless: Sin interfaz
+            Reference: Referencia
             1. Start here: 1. Empezar aquí
-            2. Install and first launch: 2. Instalación y primer inicio
-            3. AI Features setup: 3. Configuración de Funciones de IA
+            2. Install: 2. Instalación
+            3. AI Features: 3. Funciones de IA
             4. Words we use: 4. Palabras que usamos
             5. Create a project: 5. Crear un proyecto
             6. Search: 6. Buscar
             7. View: 7. Vista
             8. Process: 8. Procesar
-            8.1 Remove Pixel PHI: 8.1 Quitar texto quemado
-            8.2 Harmonize names: 8.2 Armonizar nombres
+            8.1 Pixel PHI: 8.1 PHI en píxeles
+            8.2 Harmonize: 8.2 Armonizar
             8.3 Blur faces: 8.3 Desenfocar caras
-            8.4 Run on many studies: 8.4 Ejecutar en muchos estudios
+            8.4 Batch: 8.4 Lote
             9. Send: 9. Enviar
-            10. Run headless: 10. Ejecutar sin interfaz
-            Reference: Referencia
             De-identification protocol: Protocolo de desidentificación
+            DICOM Conformance Statement: Declaración de conformidad DICOM
             Troubleshooting: Solución de problemas
-            Tutorials: Tutoriales
-            Overview: Resumen
-            T1 Install: T1 Instalación
-            T2 Project import: T2 Importar proyecto
-            T3 Burned-in text: T3 Quitar texto quemado
-            T4 Harmonize: T4 Armonizar
-            T5 Face blur: T5 Desenfocar caras
-            T6 Batch: T6 Procesamiento por lotes de IA
-            Screenshots style guide: Guía de estilo de capturas
             License: Licencia
         - locale: fr
           name: Français
           build: true
           nav_translations:
             Home: Accueil
+            Setup: Configuration
+            Use: Utilisation
+            Headless: Sans interface
+            Reference: Référence
             1. Start here: 1. Commencer ici
-            2. Install and first launch: 2. Installation et premier lancement
-            3. AI Features setup: 3. Configuration des Fonctions IA
+            2. Install: 2. Installation
+            3. AI Features: 3. Fonctions IA
             4. Words we use: 4. Mots que nous utilisons
             5. Create a project: 5. Créer un projet
             6. Search: 6. Rechercher
             7. View: 7. Vue
             8. Process: 8. Traiter
-            8.1 Remove Pixel PHI: 8.1 Supprimer le texte incrusté
-            8.2 Harmonize names: 8.2 Harmoniser les noms
+            8.1 Pixel PHI: 8.1 PHI pixel
+            8.2 Harmonize: 8.2 Harmoniser
             8.3 Blur faces: 8.3 Flouter les visages
-            8.4 Run on many studies: 8.4 Exécuter sur plusieurs études
+            8.4 Batch: 8.4 Lot
             9. Send: 9. Envoyer
-            10. Run headless: 10. Exécution sans interface
-            Reference: Référence
             De-identification protocol: Protocole de désidentification
+            DICOM Conformance Statement: Déclaration de conformité DICOM
             Troubleshooting: Dépannage
-            Tutorials: Tutoriels
-            Overview: Aperçu
-            T1 Install: T1 Installation
-            T2 Project import: T2 Import de projet
-            T3 Burned-in text: T3 Supprimer le texte incrusté
-            T4 Harmonize: T4 Harmoniser
-            T5 Face blur: T5 Flouter les visages
-            T6 Batch: T6 Traitement par lots IA
-            Screenshots style guide: Guide de style des captures
             License: Licence
 
 markdown_extensions:
@@ -168,36 +150,31 @@ extra:
 exclude_docs: |
   README.md
   _legacy_html/**
-  tutorials/scripts/**
+  tutorials/**
+  **/tutorials/**
   **/shots/.gitkeep
 
 nav:
   - Home: index.md
-  - 1. Start here: 01-start-here/index.md
-  - 2. Install and first launch: 02-install/index.md
-  - 3. AI Features setup: 03-ai-features-setup/index.md
-  - 4. Words we use: 04-words-we-use/index.md
-  - 5. Create a project: 05-create-project/index.md
-  - 6. Search: 06-search/index.md
-  - 7. View: 07-view/index.md
-  - 8. Process:
-      - 08-process/index.md
-      - 8.1 Remove Pixel PHI: 08-process/02-remove-burned-in-text/index.md
-      - 8.2 Harmonize names: 08-process/03-harmonize-names/index.md
-      - 8.3 Blur faces: 08-process/04-blur-faces/index.md
-      - 8.4 Run on many studies: 08-process/05-run-on-many-studies/index.md
-  - 9. Send: 09-send/index.md
-  - 10. Run headless: 10-headless/index.md
+  - Setup:
+      - 1. Start here: 01-start-here/index.md
+      - 2. Install: 02-install/index.md
+      - 3. AI Features: 03-ai-features-setup/index.md
+      - 4. Words we use: 04-words-we-use/index.md
+      - 5. Create a project: 05-create-project/index.md
+  - Use:
+      - 6. Search: 06-search/index.md
+      - 7. View: 07-view/index.md
+      - 8. Process:
+          - 08-process/index.md
+          - 8.1 Pixel PHI: 08-process/02-remove-burned-in-text/index.md
+          - 8.2 Harmonize: 08-process/03-harmonize-names/index.md
+          - 8.3 Blur faces: 08-process/04-blur-faces/index.md
+          - 8.4 Batch: 08-process/05-run-on-many-studies/index.md
+      - 9. Send: 09-send/index.md
+  - Headless: 10-headless/index.md
   - Reference:
       - De-identification protocol: deidentification-protocol.md
+      - DICOM Conformance Statement: dicom-conformance-statement.md
       - Troubleshooting: troubleshooting.md
-      - Tutorials:
-          - Overview: tutorials/index.md
-          - T1 Install: tutorials/t1-install.md
-          - T2 Project import: tutorials/t2-project-import.md
-          - T3 Burned-in text: tutorials/t3-burned-in.md
-          - T4 Harmonize: tutorials/t4-harmonize.md
-          - T5 Face blur: tutorials/t5-face-blur.md
-          - T6 Batch: tutorials/t6-batch.md
-      - Screenshots style guide: screenshots-style-guide.md
       - License: license.md

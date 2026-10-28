@@ -6,17 +6,17 @@
 
 ## Objetivo
 
-Ver lo que importó, comprobar columnas de estado de IA, abrir proyecciones de un estudio, abrir una serie para revisión o herramientas de [Procesar](../08-process/), y exportar un CSV de **Búsqueda de Pacientes** cuando haga falta.
+Ver lo que importó, comprobar columnas de estado de IA, abrir proyecciones de un estudio, abrir una serie para revisión o herramientas de [Procesar](../08-process/index.md), revisar **Analytics** en el Panel, y exportar un CSV de **Búsqueda de Pacientes** cuando haga falta.
 
 ## Estudios de demo
 
-Tras importar desde `tests/controller/assets/test_dcm_files` (véase [Buscar](../06-search/)), el Conjunto de datos debería listar estos tres estudios (las capturas de ayuda **no** usan phantoms sintéticos):
+Tras importar desde `tests/controller/assets/test_dcm_files` (véase [Buscar](../06-search/index.md)), el Conjunto de datos debería listar estos tres estudios (las capturas de ayuda **no** usan phantoms sintéticos):
 
 | Fixture | Papel en el manual |
 | --- | --- |
-| **`davidson_cxr`** | Abrir en Vista de Series aquí; texto quemado en [Quitar PHI de píxeles](../08-process/02-remove-burned-in-text/) |
-| **`CT_Head_With_Contrast`** | [Armonizar](../08-process/03-harmonize-names/) y [Desenfoque facial](../08-process/04-blur-faces/) |
-| **`us_rgb_single_frame`** | Ecografía de un solo fotograma; superposiciones quemadas en [Quitar PHI de píxeles](../08-process/02-remove-burned-in-text/) (demos de área de exclusión) |
+| **`davidson_cxr`** | Abrir en Vista de Series aquí; texto quemado en [Quitar PHI de píxeles](../08-process/02-remove-burned-in-text/index.md) |
+| **`CT_Head_With_Contrast`** | [Armonizar](../08-process/03-harmonize-names/index.md) y [Desenfoque facial](../08-process/04-blur-faces/index.md) |
+| **`us_rgb_single_frame`** | Ecografía de un solo fotograma; superposiciones quemadas en [Quitar PHI de píxeles](../08-process/02-remove-burned-in-text/index.md) (demos de área de exclusión) |
 
 ## Abrir el Conjunto de datos
 
@@ -33,6 +33,20 @@ Tras importar desde `tests/controller/assets/test_dcm_files` (véase [Buscar](..
 | **Armonizado** | Descripción de serie estandarizada (o descripción a nivel de estudio aplicada) |
 | **Desenfoque facial** | Desidentificación facial aplicada |
 | **PHI de píxeles** | Escaneo / eliminación de texto quemado registrado |
+
+## Analytics {#analytics}
+
+Cuando hay al menos un estudio en el proyecto, aparece el control **Analytics** en el Panel (bajo **Buscar**, **Vista** y **Enviar**). Expándalo para ver gráficos de la cohorte — sobre todo **volúmenes de órganos** después de ejecutar [Armonizar](../08-process/03-harmonize-names/index.md) en series CT/MR.
+
+1. Desde el Panel, pulse **Analytics ▸** para expandir el tablero.
+2. Use **Show** para elegir qué mosaicos de gráfico son visibles.
+3. Use **Volumes** para elegir qué órganos aparecen en los histogramas de volumen.
+4. Ajuste **Bin width** si el histograma se ve demasiado grueso o fino.
+5. Pulse **Refresh** tras Armonizar o nuevos imports para actualizar volúmenes.
+
+![Analytics del Panel expandido](shots/macos/Dashboard_Analytics.png)
+
+Analytics es para **revisar dentro de este proyecto**. No cambia píxeles ni lo que Envía. Tras Armonizar en CT/MR (máscaras bajo la caché de la serie), use **Volumes** para órganos y **Show** para mosaicos demográficos — un tablero completo puede incluir sexo, edad, modalidad, etnia, cobertura de IA y muchos histogramas de volumen de órganos. Gráficos de volumen vacíos suelen significar que Armonizar aún no ha producido máscaras anatómicas para esas series.
 
 ## Clic derecho en el Conjunto de datos (lo más importante)
 
@@ -88,7 +102,7 @@ Cambiar el tamaño recalcula cuántos mosaicos caben por página y puede añadir
 
 Esta ventana **Ver Proyecciones** del Conjunto de datos es distinta de los modos corte / mín / media / máx dentro de Vista de Series.
 
-### Clic derecho en una **serie** → Vista de Series
+### Clic derecho en una **serie** → Vista de Series {#right-click-a-series-series-view}
 
 1. Expanda el estudio que contiene la serie (por ejemplo `davidson_cxr`).
 2. **Clic derecho en la fila de la serie** (no en la fila del estudio).
@@ -98,9 +112,9 @@ Esa es la forma principal de abrir una serie para revisión y para herramientas 
 
 ![Vista de Series en davidson_cxr](shots/macos/SeriesView_Review.png)
 
-## Editar descripciones de estudio y serie
+## Editar descripciones de estudio y serie {#edit-study-and-series-descriptions}
 
-Tras [Armonizar](../08-process/03-harmonize-names/) (Vista de Series o [lote de IA](../08-process/05-run-on-many-studies/)), las filas verdes **Armonizado** muestran el nombre estandarizado. También puede fijar nombres RadLex / LOINC en filas **no armonizadas** desde el Conjunto de datos — elegir un nombre estándar escribe DICOM y marca la fila como armonizada (verde tras actualizar).
+Tras [Armonizar](../08-process/03-harmonize-names/index.md) (Vista de Series o [lote de IA](../08-process/05-run-on-many-studies/index.md)), las filas verdes **Armonizado** muestran el nombre estandarizado. También puede fijar nombres RadLex / LOINC en filas **no armonizadas** desde el Conjunto de datos — elegir un nombre estándar escribe DICOM y marca la fila como armonizada (verde tras actualizar).
 
 Las sugerencias al pasar el ratón explican qué hará un clic o una acción de la barra (incluido por qué un botón está desactivado).
 
@@ -135,12 +149,12 @@ Con un **solo** estudio o serie seleccionado, **Seleccionar similares** añade o
 
 ## Vista de Series — qué puede hacer
 
-Vista de Series es donde mira píxeles y ejecuta herramientas por serie (los modelos deben estar listos — véase [Configuración de Funciones de IA](../03-ai-features-setup/)):
+Vista de Series es donde mira píxeles y ejecuta herramientas por serie (los modelos deben estar listos — véase [Configuración de Funciones de IA](../03-ai-features-setup/index.md)):
 
 - Desplazarse por fotogramas; use el histograma y las barras de herramientas según necesite
-- **Detectar / eliminar texto quemado** (OCR) y edición de lista blanca → [Quitar PHI de píxeles](../08-process/02-remove-burned-in-text/)
-- **Armonizar descripción** → [Armonizar nombres](../08-process/03-harmonize-names/)
-- **Desenfoque facial** (cuando sea elegible) → [Desenfocar caras](../08-process/04-blur-faces/)
+- **Detectar / eliminar texto quemado** (OCR) y edición de lista blanca → [Quitar PHI de píxeles](../08-process/02-remove-burned-in-text/index.md)
+- **Armonizar descripción** → [Armonizar nombres](../08-process/03-harmonize-names/index.md)
+- **Desenfoque facial** (cuando sea elegible) → [Desenfocar caras](../08-process/04-blur-faces/index.md)
 - Superposiciones de **pestillo de segmentación** desde máscaras de anatomía en caché (tras Harmonize)
 - Rectángulos de ocultación manual
 - Borrar caché de análisis (por sí solo no reescribe píxeles DICOM)
@@ -149,13 +163,13 @@ Dentro de Vista de Series, las series multi-fotograma también pueden mostrar mo
 
 ## Otras acciones del Conjunto de datos
 
-- Seleccionar estudios para [Procesamiento por lotes de IA](../08-process/05-run-on-many-studies/) o [Enviar](../09-send/)
+- Seleccionar estudios para [Procesamiento por lotes de IA](../08-process/05-run-on-many-studies/index.md) o [Enviar](../09-send/index.md)
 - Comprobar columnas de estado de IA tras Vista de Series o ejecuciones por lotes
 - CSV **Crear Búsqueda de Pacientes** (abajo)
 
 ## Crear CSV de Búsqueda de Pacientes
 
-Use el Conjunto de datos para exportar una hoja que mapea identificadores PHI a IDs anonimizados (y estado de IA de series). Esto es distinto de la [Tabla de búsqueda de pacientes CTP](../05-create-project/#patient-lookup-table) opcional usada en la importación.
+Use el Conjunto de datos para exportar una hoja que mapea identificadores PHI a IDs anonimizados (y estado de IA de series). Esto es distinto de la [Tabla de búsqueda de pacientes CTP](../05-create-project/index.md#patient-lookup-table) opcional usada en la importación.
 
 ### Cuándo usarlo
 
@@ -166,7 +180,7 @@ Use el Conjunto de datos para exportar una hoja que mapea identificadores PHI a 
 ### Pasos
 
 1. Abra el **Conjunto de datos** desde el Panel de control (**Vista**).
-2. Pulse **Crear Búsqueda de Pacientes** en la barra de herramientas del Conjunto de datos (no hace falta seleccionar estudios — el CSV cubre todo el índice del proyecto). Prefiera exportar tras [Procesar](../08-process/) para que las columnas de estado de IA estén rellenadas.
+2. Pulse **Crear Búsqueda de Pacientes** en la barra de herramientas del Conjunto de datos (no hace falta seleccionar estudios — el CSV cubre todo el índice del proyecto). Prefiera exportar tras [Procesar](../08-process/index.md) para que las columnas de estado de IA estén rellenadas.
 
 ![Conjunto de datos con Crear Búsqueda de Pacientes](shots/macos/Dataset_CreatePatientLookup.png)
 
@@ -203,12 +217,12 @@ Use el Conjunto de datos para exportar una hoja que mapea identificadores PHI a 
 
 ## Si falla
 
-- Lista vacía → importe primero ([Buscar](../06-search/)).
+- Lista vacía → importe primero ([Buscar](../06-search/index.md)).
 - Serie ausente en disco → **Serie no encontrada**; reimporte o compruebe la ruta de almacenamiento.
-- Herramientas en gris en Vista de Series → descargue modelos / acepte licencia en [Funciones de IA](../03-ai-features-setup/).
+- Herramientas en gris en Vista de Series → descargue modelos / acepte licencia en [Funciones de IA](../03-ai-features-setup/index.md).
 - Harmonize ya en ejecución → termine o cancele la otra serie primero.
 - Error al Crear Búsqueda de Pacientes → asegúrese de que el proyecto tiene estudios en el índice del Conjunto de datos y que `private/phi_export/` es escribible.
 
 ## Siguientes pasos
 
-Continúe con [Procesar](../08-process/) — Quitar PHI de píxeles, Harmonize, Desenfoque facial y lote. Tras la revisión, [Enviar](../09-send/) pacientes anonimizados.
+Continúe con [Procesar](../08-process/index.md) — Quitar PHI de píxeles, Harmonize, Desenfoque facial y lote. Tras la revisión, [Enviar](../09-send/index.md) pacientes anonimizados.

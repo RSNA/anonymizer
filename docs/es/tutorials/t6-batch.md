@@ -8,9 +8,9 @@ Ejecutar el Procesamiento por lotes de IA desde el Conjunto de datos en varios e
 2. Elija algoritmos y opciones → Iniciar.
 3. Lea el resumen; compruebe una muestra en Vista de Series.
 
-En servidores sin GUI, use las mismas herramientas mediante [Ejecutar sin interfaz](../10-headless/).
+En servidores sin GUI, use las mismas herramientas mediante [Ejecutar sin interfaz](../10-headless/index.md).
 
 ## Vídeo
 <!-- YouTube embed placeholder -->
 
-Véase [Ejecutar en muchos estudios](../08-process/05-run-on-many-studies).
+Véase [Ejecutar en muchos estudios](../08-process/05-run-on-many-studies/index.md).

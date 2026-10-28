@@ -34,7 +34,7 @@ Markdown bettet den **macOS**-Pfad ein (Site-JS tauscht für Windows-Besucher au
 
 ## Automatisierte Aufnahme
 
-Das Tooling liegt in [`src/docs_help/`](../../src/docs_help/) (nicht im ausgelieferten App-Paket).
+Das Tooling liegt in [`src/docs_help/`](https://github.com/RSNA/anonymizer/tree/dev/src/docs_help) (nicht im ausgelieferten App-Paket).
 
 **Vom Entwickler verantwortet:** neuesten Code auschecken, Capture auf **macOS** und erneut auf **Windows** ausführen, dann beide PNG-Bäume committen und pushen. Es gibt kein CI-/Cloud-Grab.
 

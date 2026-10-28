@@ -16,6 +16,9 @@ Cierre el proyecto (o inicie la aplicación) para volver a Bienvenido si necesit
 
 ![Configuración de Funciones de IA](shots/macos/AiFeaturesSetup.png)
 
+!!! note "Cuando todos los modelos están descargados"
+    Cada fila muestra **Instalado** (con un detalle breve, p. ej. la resolución) y un botón **Quitar** en lugar de **Descargar**. Las filas Harmonize CT/MR conservan un menú de resolución; las resoluciones adicionales ya en disco aparecen como “También instalado: …”. La captura de arriba muestra ese estado completamente instalado.
+
 ## Qué configura (V19)
 
 | Elemento | Necesario para la demo |
@@ -46,7 +49,7 @@ Mamografía y ecografía no usan estos modelos.
 6. Cierre el diálogo. Las preferencias permanecen en esta estación de trabajo.
 
 !!! tip "Internet solo para la descarga"
-    Tras tener modelos y licencia, el procesamiento es local. En **macOS**, instale la biblioteca C++ OpenMP antes de usar Harmonize / Funciones de IA relacionadas: `brew install libomp` (véase [Instalación](../02-install/#4-macos-only--openmp-for-ai-features)).
+    Tras tener modelos y licencia, el procesamiento es local. En **macOS**, instale la biblioteca C++ OpenMP antes de usar Harmonize / Funciones de IA relacionadas: `brew install libomp` (véase [Instalación](../02-install/index.md#4-macos-only-openmp-for-ai-features)).
 
 ## Quitar modelos
 
@@ -55,7 +58,7 @@ Use **Eliminar** en la tarjeta de una herramienta para borrar los archivos desca
 ## Cómo se ve cuando va bien
 
 - El estado muestra listo para OCR, Harmonize CT y Face.
-- Puede abrir las herramientas de Vista de Series en las series de demo de los capítulos 8.1–8.3 de [Procesar](../08-process/).
+- Puede abrir las herramientas de Vista de Series en las series de demo de los capítulos 8.1–8.3 de [Procesar](../08-process/index.md).
 
 ## Si falla
 
@@ -65,5 +68,5 @@ Use **Eliminar** en la tarjeta de una herramienta para borrar los archivos desca
 
 ## Siguientes pasos
 
-1. [Palabras que usamos](../04-words-we-use/) y [Crear un proyecto](../05-create-project/), o
-2. Salte a las herramientas de [Procesar](../08-process/) cuando haya importado estudios — empiece por [8.1 Quitar PHI de píxeles](../08-process/02-remove-burned-in-text/)
+1. [Palabras que usamos](../04-words-we-use/index.md) y [Crear un proyecto](../05-create-project/index.md), o
+2. Salte a las herramientas de [Procesar](../08-process/index.md) cuando haya importado estudios — empiece por [8.1 Quitar PHI de píxeles](../08-process/02-remove-burned-in-text/index.md)

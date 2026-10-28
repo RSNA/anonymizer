@@ -12,4 +12,4 @@ Lancer Harmoniser sur une série CT/MR (et optionnellement XR/US planaire) et ap
 ## Vidéo
 <!-- YouTube embed placeholder -->
 
-Voir [Harmoniser les noms](../08-process/03-harmonize-names).
+Voir [Harmoniser les noms](../08-process/03-harmonize-names/index.md).

@@ -11,4 +11,4 @@ Gesichtsunschärfe auf einem Kopf-CT/MR vorschauen, QA bestätigen und speichern
 ## Video
 <!-- YouTube embed placeholder -->
 
-Siehe [Gesichter unscharf machen](../08-process/04-blur-faces).
+Siehe [Gesichter unscharf machen](../08-process/04-blur-faces/index.md).

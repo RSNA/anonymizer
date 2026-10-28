@@ -54,7 +54,7 @@ rsna-anonymizer --version # should report 19.1.0.dev2
 
 Wenn `python -m tkinter` fehlschlägt, legen Sie die venv mit einem Python neu an, das Tk enthält (Tabelle oben), und installieren Sie erneut.
 
-### 4. Nur macOS — OpenMP für KI-Funktionen
+### 4. Nur macOS — OpenMP für KI-Funktionen {#4-macos-only-openmp-for-ai-features}
 
 Unter macOS brauchen **KI-Funktionen** (TotalSegmentator / Harmonize-Kontrast und verwandte Werkzeuge) die C++-OpenMP-Bibliothek `**libomp`**. Einmal mit Homebrew installieren, **bevor** Sie diese Modelle laden oder ausführen:
 
@@ -75,7 +75,7 @@ rsna-anonymizer
 ![Willkommen-Bildschirm](shots/macos/Welcome.png)
 
 1. Der **Willkommen**-Bildschirm öffnet sich.
-2. Optional, aber empfohlen: auf dem Willkommen-Bildschirm **KI-Funktionen** wählen, um Modelle zu laden / die Face-Lizenz zu akzeptieren (siehe [KI-Funktionen einrichten](../03-ai-features-setup)). Die Einrichtung ist nur vom Willkommen-Bildschirm aus verfügbar — schließen Sie das Projekt, um später dorthin zurückzukehren. Unter macOS zuerst `libomp` installieren (Schritt 4 oben).
+2. Optional, aber empfohlen: auf dem Willkommen-Bildschirm **KI-Funktionen** wählen, um Modelle zu laden / die Face-Lizenz zu akzeptieren (siehe [KI-Funktionen einrichten](../03-ai-features-setup/index.md)). Die Einrichtung ist nur vom Willkommen-Bildschirm aus verfügbar — schließen Sie das Projekt, um später dorthin zurückzukehren. Unter macOS zuerst `libomp` installieren (Schritt 4 oben).
 3. Über das Menü **Datei** ein Projekt anlegen oder öffnen.
 
 ## Upgrade
@@ -85,9 +85,19 @@ source rsna-anonymizer/bin/activate
 uv pip install --upgrade --pre rsna-anonymizer
 ```
 
+## Vorabversion ausprobieren {#try-a-pre-release}
+
+Stabile Installationen nutzen `uv pip install rsna-anonymizer` (ohne `--pre`). Um auf die aktuelle 19.1-Vorabversion von PyPI zu wechseln:
+
+```bash
+source rsna-anonymizer/bin/activate
+uv pip install --upgrade --pre rsna-anonymizer
+rsna-anonymizer --version   # z. B. 19.1.0.dev2
+```
+
 Release-Hinweise: [CHANGELOG](https://github.com/RSNA/anonymizer/blob/master/CHANGELOG.md).
 
 ## Nächste Schritte
 
-1. [KI-Funktionen einrichten](../03-ai-features-setup/) — vom Willkommen-Bildschirm Modelle laden (optional, aber empfohlen)
-2. [Begriffe](../04-words-we-use/), dann [Projekt anlegen](../05-create-project/)
+1. [KI-Funktionen einrichten](../03-ai-features-setup/index.md) — vom Willkommen-Bildschirm Modelle laden (optional, aber empfohlen)
+2. [Begriffe](../04-words-we-use/index.md), dann [Projekt anlegen](../05-create-project/index.md)

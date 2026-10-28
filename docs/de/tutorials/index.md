@@ -14,9 +14,9 @@ Kurze Video-Walkthroughs für häufige Aufgaben. Die Seiten enthalten Schrittlis
 | T5 | [Gesicht auf einer Kopfuntersuchung unscharf machen](t5-face-blur.md) | `t5-face-blur.md` |
 | T6 | [Liste von Studien verarbeiten](t6-batch.md) | `t6-batch.md` |
 
-Der Headless-Serverbetrieb ist **textbasiert**: siehe [Ohne Oberfläche ausführen](../10-headless/) (kein Pflichtvideo).
+Der Headless-Serverbetrieb ist **textbasiert**: siehe [Ohne Oberfläche ausführen](../10-headless/index.md) (kein Pflichtvideo).
 
 ## Nächste Schritte
 
 1. Beginnen Sie mit [T1 App installieren und öffnen](t1-install.md)
-2. Oder zurück zum nummerierten Handbuch unter [Hier beginnen](../01-start-here/)
+2. Oder zurück zum nummerierten Handbuch unter [Hier beginnen](../01-start-here/index.md)

@@ -7,7 +7,7 @@ Bring DICOM studies into your project so they are de-identified and listed under
 1. **Import from this computer** — files or a folder via the **File** menu.
 2. **Search a remote imaging system** — PACS / VNA / Orthanc via Dashboard **Search**.
 
-Configure the [Query Server, modalities, storage classes, and network timeouts](../05-create-project/) before you rely on remote Search.
+Configure the [Query Server, modalities, storage classes, and network timeouts](../05-create-project/index.md) before you rely on remote Search.
 
 ---
 
@@ -38,15 +38,15 @@ A file is accepted only if all of these hold:
 
 1. Valid DICOM Part 10 file with file meta information (including the DICOM preamble).
 2. Contains **SOP Class UID**, **Study Instance UID**, **Series Instance UID**, and **SOP Instance UID**.
-3. Its storage class is allowed by this project’s [storage classes](../05-create-project/#storage-classes).
+3. Its storage class is allowed by this project’s [storage classes](../05-create-project/index.md#storage-classes).
 4. Protected identity (PHI) can be captured successfully.
 5. It has not already been imported into this project.
 
-If a [patient lookup table](../05-create-project/#patient-lookup-table) is required, the PHI Patient ID must also match an entry—or the file is quarantined as **Lookup_Miss**.
+If a [patient lookup table](../05-create-project/index.md#patient-lookup-table) is required, the PHI Patient ID must also match an entry—or the file is quarantined as **Lookup_Miss**.
 
 ### 4. Import `davidson_cxr` (single study demo)
 
-Demo chest X-ray used later in [View](../07-view/) and [Remove Pixel PHI](../08-process/02-remove-burned-in-text/).
+Demo chest X-ray used later in [View](../07-view/index.md) and [Remove Pixel PHI](../08-process/02-remove-burned-in-text/index.md).
 
 Path: `tests/controller/assets/test_dcm_files/davidson_cxr`
 
@@ -103,7 +103,7 @@ This window has three bands:
 ![Query, Retrieve & Import — criteria, results, and import controls](shots/macos/QueryRetrieve_Ready.png)
 
 !!! tip "Ask IT for help"
-    The Query Server must allow this computer to C-ECHO and C-FIND. For classic DICOM import it must also allow **C-GET** and/or **C-MOVE**. When C-MOVE is used, the archive must know your **Local Server** (address, port, AE Title) as the C-MOVE destination. With **DICOMweb** enabled, import uses WADO-RS over HTTP instead (no C-MOVE destination). See [Create a project → When you talk to IT](../05-create-project/#when-you-talk-to-it).
+    The Query Server must allow this computer to C-ECHO and C-FIND. For classic DICOM import it must also allow **C-GET** and/or **C-MOVE**. When C-MOVE is used, the archive must know your **Local Server** (address, port, AE Title) as the C-MOVE destination. With **DICOMweb** enabled, import uses WADO-RS over HTTP instead (no C-MOVE destination). See [Create a project → When you talk to IT](../05-create-project/index.md#when-you-talk-to-it).
 
 ### 2. Search for studies
 
@@ -151,7 +151,7 @@ Other controls:
 
     Prefer **STUDY** when the archive supports it; try **SERIES** or **INSTANCE** if transfers stall. The control stays visible for DICOMweb and C-GET because level still applies.
 3. Click **Import & Anonymize**. The app builds a study hierarchy for the selected move level, then opens the **Import Studies** progress dialog.
-4. Progress tracks metadata retrieval, then images received versus the hierarchy. A study finishes when all expected files arrive **or** a [Network Timeout](../05-create-project/#network-timeouts) expires for that transfer.
+4. Progress tracks metadata retrieval, then images received versus the hierarchy. A study finishes when all expected files arrive **or** a [Network Timeout](../05-create-project/index.md#network-timeouts) expires for that transfer.
 5. When the dialog shows **Import Finished**, click **Close**.
 
 ![Import Studies dialog — CT series import finished](shots/macos/OrthancCT_Importing.png)
@@ -176,7 +176,7 @@ Many VNAs move images asynchronously and do not behave like a textbook PACS. If 
 
 ## What good looks like
 
-- Studies appear under [View → Dataset](../07-view/).
+- Studies appear under [View → Dataset](../07-view/index.md).
 - Dashboard patient / study / image counts increase; quarantine stays empty or only holds expected rejects.
 - Local import dialogs show a clear success or error line per file before you click **Close**.
 - Remote imports show green highlighting in Query results after a successful run.
@@ -198,4 +198,4 @@ Many VNAs move images asynchronously and do not behave like a textbook PACS. If 
 
 ## Next steps
 
-Continue with [View](../07-view/) to browse what you imported.
+Continue with [View](../07-view/index.md) to browse what you imported.

@@ -12,4 +12,4 @@ Harmonisieren auf einer CT/MR-Serie (und optional planar XR/US) ausführen und d
 ## Video
 <!-- YouTube embed placeholder -->
 
-Siehe [Namen harmonisieren](../08-process/03-harmonize-names).
+Siehe [Namen harmonisieren](../08-process/03-harmonize-names/index.md).

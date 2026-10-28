@@ -6,8 +6,8 @@ Send anonymized patients to a remote DICOM system or AWS S3. Watch status until 
 
 ## Before you start
 
-1. Configure the **Export Server** (or AWS Cognito for S3) in [Project Settings](../05-create-project/).
-2. Import at least one study so the Send list is not empty ([Search](../06-search/) or Dataset).
+1. Configure the **Export Server** (or AWS Cognito for S3) in [Project Settings](../05-create-project/index.md).
+2. Import at least one study so the Send list is not empty ([Search](../06-search/index.md) or Dataset).
 
 ## Workflow
 
@@ -83,7 +83,7 @@ Also included for viewer linkage:
 - Multi-frame `DimensionOrganizationSequence` / `DimensionIndexSequence`
 - Per-frame plane position/orientation and derivation references to source slices
 
-**Viewing:** Orthanc and many PACS will **store** the SEG as a sibling series under the same study. Built-in Orthanc Explorer and viewers such as Horos often **do not overlay** SEG on the source images (CT/MR or planar XR/US/MG) even when the object is valid. To review overlays, open the **whole study** (images + SEG) in a SEG-capable tool such as **3D Slicer**, MITK, or OHIF—not the SEG file alone. For lesion / disease-area labelling intent and NIfTI vs SEG roles, see [Labelling lesions and disease areas](../07-view/#labelling-lesions-and-disease-areas).
+**Viewing:** Orthanc and many PACS will **store** the SEG as a sibling series under the same study. Built-in Orthanc Explorer and viewers such as Horos often **do not overlay** SEG on the source images (CT/MR or planar XR/US/MG) even when the object is valid. To review overlays, open the **whole study** (images + SEG) in a SEG-capable tool such as **3D Slicer**, MITK, or OHIF—not the SEG file alone. For lesion / disease-area labelling intent and NIfTI vs SEG roles, see [Labelling lesions and disease areas](../07-view/index.md#labelling-lesions-and-disease-areas).
 
 ### How it appears on the DICOM server
 
@@ -120,4 +120,4 @@ The patient list includes:
 
 ## Next steps
 
-Optional: [Run headless](../10-headless/) for lab/server receive or overnight batch.
+Optional: [Run headless](../10-headless/index.md) for lab/server receive or overnight batch.

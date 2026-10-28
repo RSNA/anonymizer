@@ -108,8 +108,8 @@ Details: `src/prototyping/medgemma_chat/README.md`.
 
 ## Voraussetzungen
 
-- Projekt bereits in der GUI angelegt ([Projekt anlegen](../05-create-project/)).
-- Modelle und Gesichtslizenz bereits auf **diesem Rechner** eingerichtet ([KI-Funktionen einrichten](../03-ai-features-setup)).
+- Projekt bereits in der GUI angelegt ([Projekt anlegen](../05-create-project/index.md)).
+- Modelle und Gesichtslizenz bereits auf **diesem Rechner** eingerichtet ([KI-Funktionen einrichten](../03-ai-features-setup/index.md)).
 - Genug freier Speicher für die gewählten Algorithmen.
 
 ## So sieht es aus, wenn es passt
@@ -134,10 +134,9 @@ Details: `src/prototyping/medgemma_chat/README.md`.
 Headless ersetzt **nicht** die Prüfung einer Stichprobe im Datensatz oder in der Serienansicht. Nutzen Sie die GUI für Ersteinrichtung und Qualitätskontrollen; Headless für Routineempfang oder Nachtstapel.
 
 !!! tip "Gleicher Job wie GUI-Stapel"
-    Desktop-Schritte: [Auf vielen Studien ausführen](../08-process/05-run-on-many-studies/). Headless nutzt dieselben KI-Werkzeuge mit einem JSON-Rezept.
+    Desktop-Schritte: [Auf vielen Studien ausführen](../08-process/05-run-on-many-studies/index.md). Headless nutzt dieselben KI-Werkzeuge mit einem JSON-Rezept.
 
 ## Nächste Schritte
 
 1. [Fehlerbehebung](../troubleshooting.md), wenn etwas fehlschlägt
-2. [Tutorials](../tutorials/) für kurze Walkthroughs
-3. Zurück zur [Startseite](../) für die vollständige Kapitelliste
+2. Zurück zur [Startseite](../index.md) für die vollständige Kapitelliste

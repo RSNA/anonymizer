@@ -17,4 +17,4 @@ Den Anonymizer installieren und den Willkommen-Bildschirm mit verfügbaren KI-Fu
 
 ![Willkommen](../02-install/shots/macos/Welcome.png)
 
-Vollständige Details: [Installation und erster Start](../02-install/)
+Vollständige Details: [Installation und erster Start](../02-install/index.md)

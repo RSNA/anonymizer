@@ -54,7 +54,7 @@ rsna-anonymizer --version # should report 19.1.0.dev2
 
 Si `python -m tkinter` échoue, recréez le venv avec un Python qui inclut Tk (tableau ci-dessus), puis réinstallez.
 
-### 4. macOS uniquement — OpenMP pour les Fonctions IA
+### 4. macOS uniquement — OpenMP pour les Fonctions IA {#4-macos-only-openmp-for-ai-features}
 
 Sous macOS, les **Fonctions IA** (TotalSegmentator / contraste Harmonize et outils liés) ont besoin de la bibliothèque C++ OpenMP `**libomp`**. Installez-la une fois avec Homebrew **avant** de télécharger ou d’exécuter ces modèles :
 
@@ -75,7 +75,7 @@ rsna-anonymizer
 ![Écran Bienvenue](shots/macos/Welcome.png)
 
 1. L’écran **Bienvenue** s’ouvre.
-2. Optionnel mais recommandé : cliquez sur **Fonctions IA** dans Bienvenue pour télécharger les modèles / accepter la licence face (voir [Configuration des Fonctions IA](../03-ai-features-setup)). La configuration n’est disponible que depuis Bienvenue — fermez le projet pour y revenir plus tard. Sous macOS, installez d’abord `libomp` (étape 4 ci-dessus).
+2. Optionnel mais recommandé : cliquez sur **Fonctions IA** dans Bienvenue pour télécharger les modèles / accepter la licence face (voir [Configuration des Fonctions IA](../03-ai-features-setup/index.md)). La configuration n’est disponible que depuis Bienvenue — fermez le projet pour y revenir plus tard. Sous macOS, installez d’abord `libomp` (étape 4 ci-dessus).
 3. Créez ou ouvrez un projet depuis le menu **Fichier**.
 
 ## Mise à jour
@@ -85,9 +85,19 @@ source rsna-anonymizer/bin/activate
 uv pip install --upgrade --pre rsna-anonymizer
 ```
 
+## Essayer une préversion {#try-a-pre-release}
+
+Les installations stables utilisent `uv pip install rsna-anonymizer` (sans `--pre`). Pour passer à la préversion 19.1 actuelle sur PyPI :
+
+```bash
+source rsna-anonymizer/bin/activate
+uv pip install --upgrade --pre rsna-anonymizer
+rsna-anonymizer --version   # p. ex. 19.1.0.dev2
+```
+
 Notes de version : [CHANGELOG](https://github.com/RSNA/anonymizer/blob/master/CHANGELOG.md).
 
 ## Prochaines étapes
 
-1. [Configuration des Fonctions IA](../03-ai-features-setup/) — depuis Bienvenue, télécharger les modèles (optionnel mais recommandé)
-2. [Mots que nous utilisons](../04-words-we-use/), puis [Créer un projet](../05-create-project/)
+1. [Configuration des Fonctions IA](../03-ai-features-setup/index.md) — depuis Bienvenue, télécharger les modèles (optionnel mais recommandé)
+2. [Mots que nous utilisons](../04-words-we-use/index.md), puis [Créer un projet](../05-create-project/index.md)

@@ -6,8 +6,8 @@ Enviar pacientes anonimizados a un sistema DICOM remoto o a AWS S3. Observe el e
 
 ## Antes de empezar
 
-1. Configure el **Servidor de Exportación** (o AWS Cognito para S3) en [Ajustes del Proyecto](../05-create-project/).
-2. Importe al menos un estudio para que la lista de Enviar no esté vacía ([Buscar](../06-search/) o Conjunto de datos).
+1. Configure el **Servidor de Exportación** (o AWS Cognito para S3) en [Ajustes del Proyecto](../05-create-project/index.md).
+2. Importe al menos un estudio para que la lista de Enviar no esté vacía ([Buscar](../06-search/index.md) o Conjunto de datos).
 
 ## Flujo de trabajo
 
@@ -120,4 +120,4 @@ La lista de pacientes incluye:
 
 ## Siguientes pasos
 
-Opcional: [Ejecutar sin interfaz](../10-headless/) para recepción en laboratorio/servidor o lote nocturno.
+Opcional: [Ejecutar sin interfaz](../10-headless/index.md) para recepción en laboratorio/servidor o lote nocturno.

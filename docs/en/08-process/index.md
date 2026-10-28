@@ -1,30 +1,30 @@
 # Process
 
-**Process** tools change anonymized **pixels** or **series / study names** after import. Work on **one series** in Series View (opened from [View](../07-view/)), or on **many studies** from Dataset ([AI Batch Process](05-run-on-many-studies/)).
+**Process** tools change anonymized **pixels** or **series / study names** after import. Work on **one series** in Series View (opened from [View](../07-view/index.md)), or on **many studies** from Dataset ([AI Batch Process](05-run-on-many-studies/index.md)).
 
-To **spot-check DICOM tags** without changing them, use Series View **Metadata** ([View](../07-view/#metadata-dicom-tags)). For cohort organ-volume charts on the Dashboard, see [Analytics](../05-create-project/#analytics-after-you-have-studies) (fills in after Harmonize on CT/MR).
+To **spot-check DICOM tags** without changing them, use Series View **Metadata** ([View](../07-view/index.md#metadata-dicom-tags)). For cohort organ-volume charts on the Dashboard, see [Analytics](../07-view/index.md#analytics) (fills in after Harmonize on CT/MR).
 
-Models and licenses are set up once from Welcome — see [AI Features setup](../03-ai-features-setup/) before the tool chapters below.
+Models and licenses are set up once from Welcome — see [AI Features setup](../03-ai-features-setup/index.md) before the tool chapters below.
 
 ## Tools
 
 | Chapter | Tool | Demo series | What you practice |
 | --- | --- | --- | --- |
-| 8.1 | [Remove Pixel PHI](02-remove-burned-in-text/) (burned-in text) | **`davidson_cxr`**, **`us_rgb_single_frame`** | Detect → black out; Detect → blend into background |
-| 8.2 | [Harmonize names](03-harmonize-names/) | **`CT_Head_With_Contrast`**, **`davidson_cxr`**, **`us_rgb_single_frame`** | CT results + brain prompt; planar XR/US Playbook sources |
-| 8.3 | [Blur faces](04-blur-faces/) | **`CT_Head_With_Contrast`** | Face blur, **Gaussian** mode |
-| 8.4 | [Run on many studies](05-run-on-many-studies/) | Selected studies | Batch the same tools across a cohort |
+| 8.1 | [Remove Pixel PHI](02-remove-burned-in-text/index.md) (burned-in text) | **`davidson_cxr`**, **`us_rgb_single_frame`** | Detect → black out; Detect → blend into background |
+| 8.2 | [Harmonize names](03-harmonize-names/index.md) | **`CT_Head_With_Contrast`**, **`davidson_cxr`**, **`us_rgb_single_frame`** | CT results + brain prompt; planar XR/US Playbook sources |
+| 8.3 | [Blur faces](04-blur-faces/index.md) | **`CT_Head_With_Contrast`** | Face blur, **Gaussian** mode |
+| 8.4 | [Run on many studies](05-run-on-many-studies/index.md) | Selected studies | Batch the same tools across a cohort |
 
-Demo series live under `tests/controller/assets/test_dcm_files/`. Import them ([Search](../06-search/)), then open Series View from Dataset ([View](../07-view/) — right-click the series).
+Demo series live under `tests/controller/assets/test_dcm_files/`. Import them ([Search](../06-search/index.md)), then open Series View from Dataset ([View](../07-view/index.md) — right-click the series).
 
 ## Order to learn
 
-1. Finish [AI Features setup](../03-ai-features-setup/) so models are ready.
+1. Finish [AI Features setup](../03-ai-features-setup/index.md) so models are ready.
 2. Walk **Remove Pixel PHI** on `davidson_cxr` (black out), then try blend on `us_rgb_single_frame`.
 3. Walk **Harmonize** on `CT_Head_With_Contrast`, then the planar demos on `davidson_cxr` and `us_rgb_single_frame`; **Face blur** on the same CT head series.
 4. Use **Run on many studies** when you need the same tools on a cohort.
 
 ## Next steps
 
-1. Start with [8.1 Remove Pixel PHI](02-remove-burned-in-text/)
-2. After processing looks good, [Send](../09-send/) anonymized patients, or [run headless](../10-headless/) on a lab server
+1. Start with [8.1 Remove Pixel PHI](02-remove-burned-in-text/index.md)
+2. After processing looks good, [Send](../09-send/index.md) anonymized patients, or [run headless](../10-headless/index.md) on a lab server

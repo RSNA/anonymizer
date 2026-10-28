@@ -17,8 +17,8 @@ Kurzes Glossar für Kliniker. Wenn die IT andere Wörter verwendet, meinen sie m
 | **Whitelist (OCR)** | Erlaubte kurze Beschriftungen (z. B. L/R), die beim Bereinigen eingebrannten Texts **nicht** entfernt werden sollen. |
 
 !!! note "Wenn Sie mit der IT sprechen"
-    Begriffe wie **AE Title**, **SOP Class**, **Transfersyntax** und **C-MOVE** beschreiben, wie Systeme miteinander sprechen. Sie brauchen sie meist nur beim Anschluss an ein Krankenhausarchiv — siehe [Projekt anlegen → Wenn Sie mit der IT sprechen](../05-create-project/#when-you-talk-to-it).
+    Begriffe wie **AE Title**, **SOP Class**, **Transfersyntax** und **C-MOVE** beschreiben, wie Systeme miteinander sprechen. Sie brauchen sie meist nur beim Anschluss an ein Krankenhausarchiv — siehe [Projekt anlegen → Wenn Sie mit der IT sprechen](../05-create-project/index.md#when-you-talk-to-it).
 
 ## Nächste Schritte
 
-Weiter mit [Projekt anlegen](../05-create-project/).
+Weiter mit [Projekt anlegen](../05-create-project/index.md).

@@ -7,7 +7,7 @@ Faire entrer des études DICOM dans votre projet pour qu’elles soient désiden
 1. **Importer depuis cet ordinateur** — fichiers ou dossier via le menu **Fichier**.
 2. **Interroger un système d’imagerie distant** — PACS / VNA / Orthanc via **Rechercher** sur le Tableau de bord.
 
-Configurez le [Serveur de requête, les modalités, les classes de stockage et les délais réseau](../05-create-project/) avant de vous fier à Rechercher à distance.
+Configurez le [Serveur de requête, les modalités, les classes de stockage et les délais réseau](../05-create-project/index.md) avant de vous fier à Rechercher à distance.
 
 ---
 
@@ -38,15 +38,15 @@ Un fichier n’est accepté que si tout ceci est vrai :
 
 1. Fichier DICOM Part 10 valide avec méta-informations de fichier (y compris le préambule DICOM).
 2. Contient **SOP Class UID**, **Study Instance UID**, **Series Instance UID** et **SOP Instance UID**.
-3. Sa classe de stockage est autorisée par les [classes de stockage](../05-create-project/#modalites--classes-de-stockage--transfer-syntaxes) de ce projet.
+3. Sa classe de stockage est autorisée par les [classes de stockage](../05-create-project/index.md#storage-classes) de ce projet.
 4. L’identité protégée (PHI) peut être capturée avec succès.
 5. Il n’a pas déjà été importé dans ce projet.
 
-Si une [table de correspondance des patients](../05-create-project/#table-de-correspondance-des-patients) est requise, l’identifiant patient PHI doit aussi correspondre à une entrée — sinon le fichier est mis en quarantaine comme **Lookup_Miss**.
+Si une [table de correspondance des patients](../05-create-project/index.md#patient-lookup-table) est requise, l’identifiant patient PHI doit aussi correspondre à une entrée — sinon le fichier est mis en quarantaine comme **Lookup_Miss**.
 
 ### 4. Importer `davidson_cxr` (démo d’une seule étude)
 
-Radiographie thoracique de démo utilisée plus tard dans [Vue](../07-view/) et [Supprimer le PHI pixel](../08-process/02-remove-burned-in-text/).
+Radiographie thoracique de démo utilisée plus tard dans [Vue](../07-view/index.md) et [Supprimer le PHI pixel](../08-process/02-remove-burned-in-text/index.md).
 
 Chemin : `tests/controller/assets/test_dcm_files/davidson_cxr`
 
@@ -103,7 +103,7 @@ Cette fenêtre a trois bandes :
 ![Interroger, récupérer et importer — critères, résultats et contrôles d’import](shots/macos/QueryRetrieve_Ready.png)
 
 !!! tip "Demandez de l’aide à l’informatique"
-    Le Serveur de requête doit autoriser cet ordinateur à faire C-ECHO et C-FIND. Pour l’import DICOM classique, il doit aussi autoriser **C-GET** et/ou **C-MOVE**. Lorsque le C-MOVE est utilisé, l’archive doit connaître votre **Serveur local** (adresse, port, AE Title) comme destination C-MOVE. Avec **DICOMweb** activé, l’import utilise WADO-RS en HTTP (pas de destination C-MOVE). Voir [Créer un projet → Quand vous parlez à l’informatique](../05-create-project/#quand-vous-parlez-a-linformatique).
+    Le Serveur de requête doit autoriser cet ordinateur à faire C-ECHO et C-FIND. Pour l’import DICOM classique, il doit aussi autoriser **C-GET** et/ou **C-MOVE**. Lorsque le C-MOVE est utilisé, l’archive doit connaître votre **Serveur local** (adresse, port, AE Title) comme destination C-MOVE. Avec **DICOMweb** activé, l’import utilise WADO-RS en HTTP (pas de destination C-MOVE). Voir [Créer un projet → Quand vous parlez à l’informatique](../05-create-project/index.md#when-you-talk-to-it).
 
 ### 2. Rechercher des études
 
@@ -151,7 +151,7 @@ Autres contrôles :
 
     Préférez **STUDY** lorsque l’archive le prend en charge ; essayez **SERIES** ou **INSTANCE** si les transferts bloquent. Le contrôle reste visible pour DICOMweb et C-GET car le niveau s’applique toujours.
 3. Cliquez sur **Importer et anonymiser**. L’application construit une hiérarchie d’études pour le niveau de déplacement sélectionné, puis ouvre la boîte de dialogue de progression **Import Studies**.
-4. La progression suit la récupération des métadonnées, puis les images reçues par rapport à la hiérarchie. Une étude se termine lorsque tous les fichiers attendus arrivent **ou** qu’un [Délai réseau](../05-create-project/#delais-reseau) expire pour ce transfert.
+4. La progression suit la récupération des métadonnées, puis les images reçues par rapport à la hiérarchie. Une étude se termine lorsque tous les fichiers attendus arrivent **ou** qu’un [Délai réseau](../05-create-project/index.md#network-timeouts) expire pour ce transfert.
 5. Lorsque la boîte de dialogue affiche **Importation terminée**, cliquez sur **Fermer**.
 
 ![Boîte de dialogue Import Studies — import de série CT terminé](shots/macos/OrthancCT_Importing.png)
@@ -176,7 +176,7 @@ Beaucoup de VNA déplacent les images de façon asynchrone et ne se comportent p
 
 ## Ce qui indique que tout va bien
 
-- Les études apparaissent sous [Vue → Jeu de données](../07-view/).
+- Les études apparaissent sous [Vue → Jeu de données](../07-view/index.md).
 - Les compteurs patient / étude / image du Tableau de bord augmentent ; la quarantaine reste vide ou ne contient que les rejets attendus.
 - Les dialogues d’import local montrent une ligne claire de succès ou d’erreur par fichier avant que vous ne cliquiez sur **Fermer**.
 - Les imports distants montrent une surbrillance verte dans les résultats de requête après une exécution réussie.
@@ -198,4 +198,4 @@ Beaucoup de VNA déplacent les images de façon asynchrone et ne se comportent p
 
 ## Prochaines étapes
 
-Continuez avec [Vue](../07-view/) pour parcourir ce que vous avez importé.
+Continuez avec [Vue](../07-view/index.md) pour parcourir ce que vous avez importé.

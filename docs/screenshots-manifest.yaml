@@ -17,6 +17,7 @@ fixtures:
   davidson_cxr: tests/controller/assets/test_dcm_files/davidson_cxr
   CT_Head_With_Contrast: tests/controller/assets/test_dcm_files/CT_Head_With_Contrast
   us_rgb_single_frame: tests/controller/assets/test_dcm_files/us_rgb_single_frame
+  demo_report_pdf: tests/controller/assets/test_dcm_files/demo_report_pdf
   ctp_lookup: tests/controller/assets/ctp_lookup/test_dcm_files_lookup.properties
 
 languages:
@@ -137,6 +138,19 @@ workflows:
         deps: [project]
         ux_elements: [Transfer syntax list]
         caption: "Transfer Syntaxes accepted for receive/import."
+      - id: DeidentificationOptions
+        file: DeidentificationOptions.png
+        window: DeidentificationOptionsDialog
+        severity: required
+        deps: [language, temp_storage]
+        recipe:
+          options: retain
+        ux_elements:
+          - Basic / Retain presets
+          - Option checkboxes (Basic Profile, Modified Dates, cleaning options)
+          - Plain-language explanation panel
+          - OK / Cancel
+        caption: "De-identification Options — Retain preset selected; cleaning options need AI Features when installed."
       - id: AnonymizerScriptEditor
         file: AnonymizerScriptEditor.png
         window: AnonymizerScriptDialog
@@ -175,29 +189,6 @@ workflows:
         deps: [project]
         ux_elements: [Search, View, Send buttons, Totals]
         caption: "Dashboard after project create — Search, View, Send."
-      - id: Dashboard_Analytics
-        file: Dashboard_Analytics.png
-        window: Dashboard
-        severity: soft
-        deps:
-          - project
-          - imported
-          - fixture:CT_Head_With_Contrast
-          - fixture:davidson_cxr
-          - fixture:us_rgb_single_frame
-        recipe:
-          action: expand_analytics
-          min_widgets: 10
-          seed_tseg: true
-        ux_elements:
-          - Analytics expand
-          - Show
-          - Volumes
-          - Bin width
-          - Refresh
-          - Demographic tiles (sex age modality ethnicity AI)
-          - Organ volume histograms (≥10 board widgets total)
-        caption: "Dashboard Analytics expanded with demographic tiles and multiple organ-volume charts (≥10 widgets)."
 
   - id: 06-search
     doc: 06-search/index.md
@@ -273,8 +264,36 @@ workflows:
         window: DatasetView
         severity: required
         deps: [project, imported, fixture:davidson_cxr, fixture:CT_Head_With_Contrast, fixture:us_rgb_single_frame]
-        ux_elements: [Study/Series tree, AI status columns, View Projections, AI Batch Process]
+        ux_elements:
+          - Study/Series tree
+          - AI status columns
+          - View Projections
+          - Description Mappings
+          - AI Batch Process
         caption: "Dataset tree fitted to content — studies expanded with series rows visible."
+      - id: Dashboard_Analytics
+        file: Dashboard_Analytics.png
+        window: Dashboard
+        severity: soft
+        deps:
+          - project
+          - imported
+          - fixture:CT_Head_With_Contrast
+          - fixture:davidson_cxr
+          - fixture:us_rgb_single_frame
+        recipe:
+          action: expand_analytics
+          min_widgets: 10
+          seed_tseg: true
+        ux_elements:
+          - Analytics expand
+          - Show
+          - Volumes
+          - Bin width
+          - Refresh
+          - Demographic tiles (sex age modality ethnicity AI)
+          - Organ volume histograms (≥10 board widgets total)
+        caption: "Dashboard Analytics expanded with demographic tiles and multiple organ-volume charts (≥10 widgets)."
       - id: ViewProjections
         file: ViewProjections.png
         window: ProjectionView
@@ -303,8 +322,15 @@ workflows:
         deps: [project, fixture:davidson_cxr]
         recipe:
           mode: tree
-        ux_elements: [Field Name / Tag / Content tree, Search, Expand, Collapse, Detect PHI, Close]
-        caption: "Series View Metadata — DICOM tag tree for the current davidson_cxr image."
+        ux_elements:
+          - Field Name / Tag / Content tree
+          - Search
+          - Private tags
+          - Expand
+          - Collapse
+          - Detect PHI
+          - Close
+        caption: "Series View Metadata — DICOM tag tree for the current davidson_cxr image (Private tags on)."
       - id: MetadataAssessment_DetectPHI
         file: MetadataAssessment_DetectPHI.png
         window: MetadataAssessmentDialog
@@ -312,8 +338,36 @@ workflows:
         deps: [project, fixture:davidson_cxr, ocr_models]
         recipe:
           mode: detect
-        ux_elements: [Highlighted PHI cells, Entity color chips, Detection status]
-        caption: "Metadata after Detect PHI — leftover identifiers highlighted (view only; does not rewrite tags)."
+        ux_elements:
+          - Highlighted PHI cells
+          - Entity color chips
+          - Detection status
+          - Private tags
+          - Remove PHI / Blank (when PHI found)
+        caption: "Metadata after Detect PHI — leftover identifiers highlighted; Remove PHI can rewrite tags after Save."
+      - id: MetadataAssessment_RemovePHI
+        file: MetadataAssessment_RemovePHI.png
+        window: MetadataAssessmentDialog
+        severity: soft
+        deps: [project, fixture:davidson_cxr, ocr_models]
+        recipe:
+          mode: remove
+        ux_elements:
+          - Cleaned Content cells
+          - Status after remove
+          - Save enabled
+          - Private tags
+        caption: "Metadata after Remove PHI (Blank) — tree updated; Save writes cleaned tags to the current image."
+      - id: DescriptionMappings
+        file: DescriptionMappings.png
+        window: DescriptionMappingsDialog
+        severity: required
+        deps: [project]
+        ux_elements:
+          - Series (RadLex) / Study (LOINC) tabs
+          - Original / RadLex columns
+          - Select All / Clear Selection / Delete / Close
+        caption: "Description Mappings — project Series (RadLex) corrections from Dataset Set description / Harmonize."
       - id: Dataset_EditDescription
         file: Dataset_EditDescription.png
         window: DatasetView
@@ -438,6 +492,34 @@ workflows:
           wait: detect_complete
         ux_elements: [White dotted exclude under mindray, Green OCR outside block, parameters not boxed]
         caption: "us_rgb_single_frame Detect Text with Exclude Area — mindray parameter block skipped."
+      - id: ReportTextReview
+        file: ReportTextReview.png
+        window: ReportTextReview
+        severity: soft
+        deps: [project, fixture:demo_report_pdf]
+        recipe:
+          mode: review
+        ux_elements:
+          - PDF page preview
+          - Report text panel
+          - Detect Embedded PHI
+          - Metadata
+          - Blank / Synthetic
+          - Save
+        caption: "Report Text Review on demo Encapsulated PDF — page preview and extractable text (needs Clean Structured Content at import)."
+      - id: ReportTextReview_Metadata
+        file: ReportTextReview_Metadata.png
+        window: MetadataAssessmentDialog
+        severity: soft
+        deps: [project, fixture:demo_report_pdf]
+        recipe:
+          mode: metadata
+        ux_elements:
+          - Metadata tree from Report toolbar
+          - Field Name / Tag / Content
+          - Private tags
+          - Detect PHI
+        caption: "Metadata opened from Report Text Review toolbar for the demo Encapsulated PDF."
 
   - id: 08-process/03-harmonize-names
     doc: 08-process/03-harmonize-names/index.md

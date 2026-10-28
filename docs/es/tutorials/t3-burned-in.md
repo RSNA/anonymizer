@@ -11,4 +11,4 @@ Detectar y eliminar texto quemado en una serie conservando los marcadores L/R.
 ## Vídeo
 <!-- YouTube embed placeholder -->
 
-Véase [Quitar texto quemado](../08-process/02-remove-burned-in-text).
+Véase [Quitar texto quemado](../08-process/02-remove-burned-in-text/index.md).

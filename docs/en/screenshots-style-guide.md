@@ -36,7 +36,7 @@ missing, it falls back to the **same-language** macOS shot (never English):
 
 ## Automated capture
 
-Tooling lives in [`src/docs_help/`](../../src/docs_help/) (not the shipped app package).
+Tooling lives in [`src/docs_help/`](https://github.com/RSNA/anonymizer/tree/dev/src/docs_help) (not the shipped app package).
 
 **Developer-owned:** check out the latest code, run capture on **macOS** and again on **Windows**, then commit and push both PNG trees. There is no CI/cloud grab.
 
@@ -56,12 +56,17 @@ uv run python -m docs_help --language en_US --force --only Welcome
   - **8.3** Face blur → `CT_Head_With_Contrast` (Gaussian)
   - **8.4** Batch → options + running dialog with both fixtures selected in Dataset
 - Soft View / Dashboard demos:
-  - **Metadata** → `davidson_cxr` Series View → Metadata tree; Detect PHI needs Embedded PHI models (`MetadataAssessment`, `MetadataAssessment_DetectPHI`)
-  - **Analytics** → Dashboard with studies imported; expand Analytics board (`Dashboard_Analytics`); organ-volume tiles fill after Harmonize on CT/MR
-- Soft-fail AI-heavy Process / Metadata Detect PHI shots when models are missing
+  - **Metadata** → `davidson_cxr` Series View → Metadata tree / Detect PHI / Remove PHI (`MetadataAssessment`, `MetadataAssessment_DetectPHI`, `MetadataAssessment_RemovePHI`); Detect/Remove need Embedded PHI models
+  - **Description Mappings** → Dataset toolbar dialog with seeded Series/Study rows (`DescriptionMappings`)
+  - **Analytics** → after import; Dashboard expand Analytics board (`Dashboard_Analytics` under View); organ-volume tiles fill after Harmonize on CT/MR
+  - Create project:
+  - **De-identification Options** → New Project Settings → options dialog with Retain preset (`DeidentificationOptions`)
+- Soft Process report demo:
+  - **Report Text Review** → `demo_report_pdf` Encapsulated PDF (import with Clean Structured Content); optional Metadata from Report toolbar (`ReportTextReview`, `ReportTextReview_Metadata`)
+- Soft-fail AI-heavy Process / Metadata Detect PHI / Report shots when models or document text are missing
 - Hard-fail Orthanc-dependent Search shots when C-ECHO fails
 - If a Windows PNG is missing, the published site falls back to the macOS image
 
 ## Priority shots (V19)
 
-Welcome; AI Features; Create project settings (+ subdialogs including Anonymizer Script Editor); Dashboard (+ Analytics when studies exist); Search; View (Dataset + series/study description edit + Projections + Series + Metadata + Patient Lookup CSV); Process (Remove Pixel PHI, Harmonize, Face, batch); Send (initial → selection → sending → sent).
+Welcome; AI Features; Create project settings (+ De-identification Options + Anonymizer Script Editor + Lookup Table); Dashboard; Search; View (Dataset + Analytics after import + Description Mappings + series/study description edit + Projections + Series + Metadata Detect/Remove + Patient Lookup CSV); Process (Remove Pixel PHI, Report Text Review, Harmonize, Face, batch); Send (initial → selection → sending → sent).

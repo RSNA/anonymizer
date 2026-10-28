@@ -20,7 +20,7 @@ Eine Kohorte für eingebrannten Text, Harmonisieren und/oder Gesichtsunschärfe 
 ## Bevor Sie starten
 
 1. Die Demo-Serien oben (und weitere benötigte Studien) importieren.
-2. [KI-Funktionen einrichten](../../03-ai-features-setup/) für jedes auszuführende Werkzeug abschließen.
+2. [KI-Funktionen einrichten](../../03-ai-features-setup/index.md) für jedes auszuführende Werkzeug abschließen.
 3. Optional 8.1–8.3 einmal durchgehen, damit Sie die erwarteten Ergebnisse kennen.
 
 ## Stapel starten
@@ -53,7 +53,7 @@ Für jede Serie laufen ausgewählte Werkzeuge in einer stabilen Reihenfolge (Pix
 
 - Zusammenfassung lesen (abgeschlossen / übersprungen / fehlgeschlagen).
 - Serienansicht auf `davidson_cxr` und `CT_Head_With_Contrast` stichprobenartig prüfen vor dem Export.
-- Derselbe Job auf einem **Server ohne Fenster** → [Ohne Oberfläche ausführen](../../10-headless/).
+- Derselbe Job auf einem **Server ohne Fenster** → [Ohne Oberfläche ausführen](../../10-headless/index.md).
 
 ## So sieht es aus, wenn es passt
 
@@ -62,10 +62,10 @@ Für jede Serie laufen ausgewählte Werkzeuge in einer stabilen Reihenfolge (Pix
 
 ## Wenn es fehlschlägt
 
-- Funktionen nicht bereit → [KI-Funktionen](../../03-ai-features-setup/).
+- Funktionen nicht bereit → [KI-Funktionen](../../03-ai-features-setup/index.md).
 - Keine Serien für die Auswahl → Datensatz-Auswahl prüfen.
 - Zu wenig Speicher → andere Apps schließen oder weniger Studien verarbeiten.
 
 ## Nächste Schritte
 
-Weiter mit [Senden](../../09-send/), um anonymisierte Studien zu exportieren (oder [ohne Oberfläche ausführen](../../10-headless/) für Server-Stapel).
+Weiter mit [Senden](../../09-send/index.md), um anonymisierte Studien zu exportieren (oder [ohne Oberfläche ausführen](../../10-headless/index.md) für Server-Stapel).

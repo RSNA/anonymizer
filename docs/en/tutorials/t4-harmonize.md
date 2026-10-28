@@ -12,4 +12,4 @@ Run Harmonize on a CT/MR series (and optionally planar XR/US) and apply the sugg
 ## Video
 <!-- YouTube embed placeholder -->
 
-See [Harmonize names](../08-process/03-harmonize-names).
+See [Harmonize names](../08-process/03-harmonize-names/index.md).

@@ -19,8 +19,8 @@ Importez chaque dossier dans votre projet, puis ouvrez la série dans **Vue des 
 
 ## Avant de commencer
 
-1. Terminez [Configuration des Fonctions IA](../../03-ai-features-setup/) pour que les modèles OCR soient prêts.
-2. Importez les séries de démo et ouvrez-les dans Vue des séries depuis [Jeu de données](../../07-view/).
+1. Terminez [Configuration des Fonctions IA](../../03-ai-features-setup/index.md) pour que les modèles OCR soient prêts.
+2. Importez les séries de démo et ouvrez-les dans Vue des séries depuis [Jeu de données](../../07-view/index.md).
 
 ## Flux de travail sur `davidson_cxr` (noircir)
 
@@ -121,7 +121,7 @@ Sur cette frame, un bloc dense de paramètres machine (gain, depth, FR, DR et je
 - Le statut **PHI pixel** du Jeu de données doit se mettre à jour pour chaque série que vous avez enregistrée.
 - Les listes blanches de modalité et la liste déroulante de correspondance (Exact → Souple) vivent dans Vue des séries ; une correspondance plus stricte signifie que moins de hits OCR sont traités comme des conservations de liste blanche.
 - Les régions d’exclusion sont pour la session Vue des séries actuelle (comme les autres superpositions du canevas). Rouvrez la série et redessinez si vous en avez encore besoin.
-- Pour lancer le même outil sur plusieurs études, voir [8.4 Exécuter sur plusieurs études](../05-run-on-many-studies/).
+- Pour lancer le même outil sur plusieurs études, voir [8.4 Exécuter sur plusieurs études](../05-run-on-many-studies/index.md).
 
 ## Ce qui indique que tout va bien
 
@@ -134,8 +134,8 @@ Sur cette frame, un bloc dense de paramètres machine (gain, depth, FR, DR et je
 - Beaucoup de fausses cases → resserrez le niveau de correspondance ; mettez des conservations en liste blanche ; ou **Zone d'exclusion** pour des panneaux entiers.
 - Texte manqué → **Zone de noircissement** manuelle.
 - Texte de paramètres encore encadré → agrandissez le rectangle d’exclusion et Détectez à nouveau ; cliquez les contours pointillés pour supprimer et redessiner.
-- Outils grisés → terminez [Fonctions IA](../../03-ai-features-setup/).
+- Outils grisés → terminez [Fonctions IA](../../03-ai-features-setup/index.md).
 
 ## Prochaines étapes
 
-Continuez avec [8.2 Harmoniser les noms](../03-harmonize-names/) en utilisant **`CT_Head_With_Contrast`**.
+Continuez avec [8.2 Harmoniser les noms](../03-harmonize-names/index.md) en utilisant **`CT_Head_With_Contrast`**.
