@@ -29,10 +29,10 @@ from tests.controller.dicom.support.test_nodes import (
     PACSSimulatorSCP,
     RemoteSCPDict,
 )
-from tests.paths import DEFAULT_ANONYMIZER_SCRIPT, REPO_ROOT
+from anonymizer.controller.script.paths import packaged_default_script_path
 
 # Same install dir as anonymizer.main (relative assets/ paths resolve here).
-_INSTALL_DIR = REPO_ROOT / "src" / "anonymizer"
+_INSTALL_DIR = Path(__file__).resolve().parents[2] / "src" / "anonymizer"
 
 
 def pytest_sessionstart(session):
@@ -103,7 +103,7 @@ def controller(temp_dir: str) -> Generator[ProjectController, Any, None]:
         scp=LocalStorageSCP,
         remote_scps=RemoteSCPDict,
         network_timeouts=NetworkTimeouts(2, 5, 5, 15),
-        anonymizer_script_path=DEFAULT_ANONYMIZER_SCRIPT,
+        anonymizer_script_path=packaged_default_script_path(),
     )
 
     # Tests do not need UX worker polling delay; speeds queue drain / stop().

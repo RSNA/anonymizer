@@ -19,6 +19,7 @@ from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
 from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_default_whitelist
 from anonymizer.controller.jobs.runner import OcrEditContext, RemovePixelPhiRunner, RunOptions
 from anonymizer.controller.jobs.work_state import WorkState
+from anonymizer.controller.script.paths import packaged_default_script_path
 from anonymizer.controller.series.series_io import load_series_frames
 from anonymizer.model.anonymizer import AnonymizerModel
 from tests.controller.ocr.conftest import assert_dcm
@@ -32,9 +33,8 @@ from tests.controller.support.us_rgb_fixtures import (
     US_RGB_SERIES_VIEW_OCR_TEXTS,
 )
 from tests.opened_anonymizer_model import opened_anonymizer_model
-from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
 
-ANONYMIZER_SCRIPT = DEFAULT_ANONYMIZER_SCRIPT
+ANONYMIZER_SCRIPT = packaged_default_script_path()
 EXPECTED_OCR_TEXTS = US_RGB_SERIES_VIEW_OCR_TEXTS
 
 

@@ -148,6 +148,7 @@ except ImportError:
 import totalsegmentator.libs as ts_libs
 from totalsegmentator.libs import download_pretrained_weights
 
+from anonymizer.controller.ai.feature_ids import download_id_for_weight_kind
 from anonymizer.controller.ai.model_download import track_tqdm_model_download
 from anonymizer.controller.ai.tseg.config import is_multi_model_segmentation_mode
 from anonymizer.controller.ai.tseg.contrast import log_memory_usage, release_working_memory
@@ -716,15 +717,6 @@ def _ensure_pretrained_weights(task_id: int, *, trainer: str, model: str) -> Non
     logger.info("TS weights: task %s download complete", task_id)
 
 
-_TS_DOWNLOAD_ID: dict[str, str] = {
-    "anatomy": "harmonize_ct_models",
-    "anatomy_mr": "harmonize_mr_models",
-    "face": "face_ct_models",
-    "face_mr": "face_mr_models",
-    "brain_structures": "enable_brain_structures",
-}
-
-
 def ts_task_download_label(task_id: int) -> str:
     """Technical label for download progress (clinician copy lives in the view layer)."""
 
@@ -735,7 +727,7 @@ def ts_task_download_label(task_id: int) -> str:
 def _track_segmentation_model_download(kind: TsWeightKind, *, task_id: int | None = None):
     """Wire TotalSegmentator tqdm/stdout capture to generic model download progress."""
 
-    download_id = _TS_DOWNLOAD_ID[kind.value]
+    download_id = download_id_for_weight_kind(kind)
     label = ts_task_download_label(task_id) if task_id is not None else ""
     start_message = _("Downloading: {label}…").format(label=label) if label else _("Downloading…")
 

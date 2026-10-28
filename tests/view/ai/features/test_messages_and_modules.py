@@ -16,8 +16,8 @@ from anonymizer.controller.ai.tseg.config import (
 )
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.features.availability import friendly_task_label
+from anonymizer.controller.ai.feature_ids import AiFeatureId
 from anonymizer.view.ai.features.catalog import (
-    AiFeatureId,
     feature_description,
     feature_summary,
     feature_title,

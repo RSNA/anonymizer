@@ -3,7 +3,8 @@
 from pathlib import Path
 
 from anonymizer.utils.version import _version_from_pyproject, find_project_pyproject, get_version
-from tests.paths import REPO_ROOT
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_get_version_matches_pyproject_exactly() -> None:
@@ -18,7 +19,7 @@ def test_find_project_pyproject_from_repo_root() -> None:
     assert pyproject_path is not None
     assert pyproject_path.name == "pyproject.toml"
     assert _version_from_pyproject(pyproject_path) == _version_from_pyproject(
-        REPO_ROOT / "pyproject.toml"
+        _REPO_ROOT / "pyproject.toml"
     )
 
 

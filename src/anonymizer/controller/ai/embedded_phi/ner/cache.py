@@ -47,6 +47,7 @@ from pathlib import Path
 from huggingface_hub import snapshot_download
 from transformers import AutoModelForTokenClassification, AutoTokenizer, pipeline
 
+from anonymizer.controller.ai.feature_ids import DOWNLOAD_ID_EMBEDDED_PHI
 from anonymizer.controller.ai.model_download import update_model_download
 from anonymizer.utils.translate import _
 
@@ -63,7 +64,7 @@ logger = logging.getLogger(__name__)
 HF_REPO_ID = "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1"
 MODEL_DIR = Path("assets/ai/embedded_phi/model")
 _MIN_MODEL_FILES = 3
-DOWNLOAD_ID = "embedded_phi"
+DOWNLOAD_ID = DOWNLOAD_ID_EMBEDDED_PHI
 _downloading = False
 
 

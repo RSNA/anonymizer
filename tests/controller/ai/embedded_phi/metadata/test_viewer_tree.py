@@ -15,6 +15,7 @@ from anonymizer.controller.ai.embedded_phi.metadata.viewer_tree import (
     build_metadata_tree,
     filter_metadata_tree,
     flatten_tree_paths,
+    is_private_metadata_tag,
 )
 from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
 
@@ -120,6 +121,29 @@ def test_include_file_meta_and_empty_filter() -> None:
     assert any(p.startswith("file_meta.") for p in paths)
     assert filter_metadata_tree(roots, "") == roots
     assert filter_metadata_tree(roots, "   ") == roots
+
+
+def test_is_private_metadata_tag() -> None:
+    assert is_private_metadata_tag("0009,0010")
+    assert is_private_metadata_tag("(0009,1001)")
+    assert not is_private_metadata_tag("0008,0018")
+    assert not is_private_metadata_tag(STRUCTURAL_TAG)
+    assert not is_private_metadata_tag("")
+
+
+def test_filter_metadata_tree_hides_private_tags() -> None:
+    ds = _sc_dataset()
+    ds.Modality = "OT"
+    block = ds.private_block(0x0009, "ACME_VENDOR", create=True)
+    block.add_new(0x10, "LO", "secret")
+    roots = build_metadata_tree(ds)
+    all_paths = set(flatten_tree_paths(roots))
+    assert any(is_private_metadata_tag(n.tag) for r in roots for n in _walk(r))
+    public_only = filter_metadata_tree(roots, "", include_private=False)
+    public_paths = set(flatten_tree_paths(public_only))
+    assert "Modality" in public_paths
+    assert public_paths < all_paths
+    assert not any(is_private_metadata_tag(n.tag) for r in public_only for n in _walk(r))
 
 
 def test_pixel_data_summary_node() -> None:

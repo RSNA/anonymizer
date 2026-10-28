@@ -76,7 +76,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--ui",
         choices=("repl", "gradio"),
         default="repl",
-        help="Interface: repl (default) or gradio (requires uv sync --group dev)",
+        help="Interface: repl (default) or gradio (requires uv sync --group medgemma-chat)",
     )
     p.add_argument(
         "--host",

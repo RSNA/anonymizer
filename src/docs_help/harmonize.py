@@ -82,7 +82,8 @@ def _is_brain_structures_prompt(title: object, message: object) -> bool:
 def brain_structures_prompt_copy() -> tuple[str, str]:
     """Title + message used by the real Harmonize brain-structures askyesno."""
     from anonymizer.utils.translate import _
-    from anonymizer.view.ai.features.catalog import AiFeatureId, feature_description
+    from anonymizer.controller.ai.feature_ids import AiFeatureId
+    from anonymizer.view.ai.features.catalog import feature_description
 
     title = _("Brain structures")
     message = (

@@ -79,6 +79,9 @@ harmonize_cxr_view_has_models() -> bool
 
 harmonize_cxr_view_needs_download() -> bool
     Harmonize cxr view needs download.
+
+deid_option_ready(code) -> bool
+    Whether a de-identification option may be selected given model readiness.
 """
 from anonymizer.controller.ai.embedded_phi.ner.cache import NerModelStatus, ner_ready, probe_ner_models
 from anonymizer.controller.ai.embedded_phi.pixel.cache import OcrModelStatus, ocr_models_ready, probe_ocr_models
@@ -100,6 +103,8 @@ from anonymizer.controller.ai.tseg.readiness import (
     totalsegmentator_available,
     xgboost_available,
 )
+from anonymizer.model.project import AT_INGEST
+from anonymizer.utils.dicom import DeidMethodCode
 from anonymizer.utils.modalities import (
     ContentClass,
     Modality,
@@ -247,3 +252,29 @@ def harmonize_cxr_view_has_models() -> bool:
 def harmonize_cxr_view_needs_download() -> bool:
     status, _ = probe_cxp_view_models()
     return status in {CxpViewModelStatus.MISSING, CxpViewModelStatus.FAILED}
+
+
+def deid_option_ready(code: DeidMethodCode) -> bool:
+    """
+    Whether the option can be selected: its AI feature reports ready.
+
+    Ingest options need no download and are always ready; options no task
+    executes are never ready.
+
+    Args:
+        code: De-identification option code.
+
+    Returns:
+        True when the option may be selected.
+    """
+    code = DeidMethodCode(code)
+    if code in AT_INGEST:
+        return True
+    if code is DeidMethodCode.CLEAN_PIXEL_DATA:
+        return embedded_phi_allowed()
+    if code in (DeidMethodCode.CLEAN_STRUCTURED_CONTENT, DeidMethodCode.CLEAN_DESCRIPTORS):
+        return report_text_phi_ready()
+    if code is DeidMethodCode.CLEAN_VISUAL_FEATURES:
+        return face_blur_allowed()
+    return False
+

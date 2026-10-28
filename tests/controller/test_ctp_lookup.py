@@ -12,9 +12,9 @@ from anonymizer.controller.ctp_lookup import (
     lookup_table_context,
     preview_ctp_lookup,
 )
+from anonymizer.controller.script.paths import packaged_default_script_path
 from anonymizer.model.anonymizer import AnonymizerModel
 from tests.opened_anonymizer_model import opened_anonymizer_model
-from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
 
 
 def _write_properties(path: Path, lines: list[str]) -> None:
@@ -438,7 +438,7 @@ def test_commit_preserves_custom_operand_on_private_script(controller, tmp_path:
 
     src = Path(controller.model.anonymizer_script_path)
     if not src.is_file():
-        src = DEFAULT_ANONYMIZER_SCRIPT
+        src = packaged_default_script_path()
     doc = load_script_rules(src)
     sop = doc.get_rule("00080018")
     assert sop is not None

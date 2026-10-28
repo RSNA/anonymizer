@@ -66,7 +66,7 @@ OCR_SHORT_NUMERIC_MIN_AREA
     Ocr short numeric min area (600).
 
 OCR_WHITELIST_SIMILARITY
-    Ocr whitelist similarity (0.75).
+    Ocr whitelist similarity (0.85).
 
 OCR_WHITELIST_MIN_LENGTH_RATIO
     Ocr whitelist min length ratio (0.7).
@@ -184,7 +184,7 @@ class OcrWhitelistMatchMode(StrEnum):
 @dataclass(frozen=True)
 class OcrWhitelistMatchSettings:
     match_mode: OcrWhitelistMatchMode = OcrWhitelistMatchMode.STANDARD
-    similarity: float = 0.75
+    similarity: float = 0.85
     min_length_ratio: float = 0.7
 
     def to_dict(self) -> dict[str, Any]:
@@ -205,7 +205,7 @@ class OcrWhitelistMatchSettings:
             match_mode = OcrWhitelistMatchMode.STANDARD
         return cls(
             match_mode=match_mode,
-            similarity=float(data.get("similarity", 0.75)),
+            similarity=float(data.get("similarity", 0.85)),
             min_length_ratio=float(data.get("min_length_ratio", 0.7)),
         )
 
@@ -220,7 +220,7 @@ class WhitelistMatchResult:
 _PRESET_VALUES: dict[OcrWhitelistMatchMode, tuple[float, float]] = {
     OcrWhitelistMatchMode.EXACT: (1.0, 1.0),
     OcrWhitelistMatchMode.STRICT: (0.90, 0.85),
-    OcrWhitelistMatchMode.STANDARD: (0.75, 0.70),
+    OcrWhitelistMatchMode.STANDARD: (0.85, 0.70),
     OcrWhitelistMatchMode.LENIENT: (0.65, 0.60),
 }
 
@@ -433,7 +433,7 @@ OCR_MIN_BOX_AREA = 200
 OCR_MIN_BOX_AREA_PER_CHAR = 80
 OCR_SHORT_NUMERIC_MAX_LEN = 4
 OCR_SHORT_NUMERIC_MIN_AREA = 600
-OCR_WHITELIST_SIMILARITY = 0.75
+OCR_WHITELIST_SIMILARITY = 0.85
 OCR_WHITELIST_MIN_LENGTH_RATIO = 0.7
 OCR_CANVAS_SIZE_THRESHOLD = 1200
 

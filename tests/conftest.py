@@ -6,12 +6,13 @@ product code that resolves locales or calls get_current_language_code.
 
 import os
 
+from pathlib import Path
+
 from anonymizer.utils.logging import init_logging
 from anonymizer.utils.translate import set_language_code
-from tests.paths import REPO_ROOT
 
 # Same install dir as anonymizer.main (relative assets/ paths resolve here).
-_INSTALL_DIR = REPO_ROOT / "src" / "anonymizer"
+_INSTALL_DIR = Path(__file__).resolve().parents[1] / "src" / "anonymizer"
 
 pytest_plugins = ["tests.controller.tseg.fixtures"]
 

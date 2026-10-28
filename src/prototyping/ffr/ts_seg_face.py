@@ -4,7 +4,7 @@ Run TotalSegmentator ``face`` on one CT DICOM series directory via the tseg cont
 
 Usage::
 
-    uv sync --extra tseg --group dev
+    uv sync --group dev
     uv run totalseg_set_license -l aca_XXXXXXXXXXXXXX   # once, academic license
     uv run python src/prototyping/ffr/ts_seg_face.py /path/to/ct_head_series
     uv run python src/prototyping/ffr/ts_seg_face.py /path/to/ct_head_series --force

@@ -12,6 +12,7 @@ from anonymizer.mcp.modality_tokens import (
 from anonymizer.mcp.ops import apply_project_modalities
 from anonymizer.mcp.session import SESSION
 from anonymizer.model.project import ProjectModel
+from anonymizer.utils.dicom import DeidMethodCode
 
 
 @pytest.fixture(autouse=True)
@@ -44,18 +45,35 @@ def test_create_project_with_defaults_and_ultrasound():
     """MCP create path applies modalities via ``apply_project_modalities``."""
     controller = MagicMock()
     controller.model.modalities = list(ProjectModel.default_modalities())
+    controller.model.confidentiality_options = frozenset({DeidMethodCode.BASIC})
     mods = apply_project_modalities(controller, "defaults and ultrasound")
     assert "US" in mods
     for code in ProjectModel.default_modalities():
         assert code in mods
     controller.model.set_storage_classes_from_modalities.assert_called_once()
     controller.save_model.assert_called_once()
+    controller.apply_confidentiality_options.assert_not_called()
 
 
 def test_apply_project_modalities_resolves_aliases():
     """The live-project modality helper resolves aliases to DICOM codes."""
     controller = MagicMock()
     controller.model.modalities = list(ProjectModel.default_modalities())
+    controller.model.confidentiality_options = frozenset({DeidMethodCode.BASIC})
     mods = apply_project_modalities(controller, ["defaults", "ultrasound"])
     assert "US" in mods
     assert mods == resolve_project_modalities(["defaults", "ultrasound"])
+    controller.apply_confidentiality_options.assert_not_called()
+
+
+def test_apply_project_modalities_auto_enables_clean_structured_for_sr():
+    """Newly enabling SR enables Clean Structured Content and recompiles."""
+    controller = MagicMock()
+    controller.model.modalities = list(ProjectModel.default_modalities())
+    controller.model.confidentiality_options = frozenset({DeidMethodCode.BASIC})
+    mods = apply_project_modalities(controller, [*ProjectModel.default_modalities(), "SR"])
+    assert "SR" in mods
+    controller.apply_confidentiality_options.assert_called_once()
+    applied = controller.apply_confidentiality_options.call_args.args[0]
+    assert DeidMethodCode.CLEAN_STRUCTURED_CONTENT in applied
+    assert DeidMethodCode.BASIC in applied

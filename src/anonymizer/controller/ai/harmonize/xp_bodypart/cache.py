@@ -45,6 +45,7 @@ from pathlib import Path
 
 import requests
 
+from anonymizer.controller.ai.feature_ids import DOWNLOAD_ID_HARMONIZE_XR_BODYPART
 from anonymizer.controller.ai.harmonize.model_slot import ModelSlot
 from anonymizer.controller.ai.model_download import update_model_download
 from anonymizer.utils.translate import _
@@ -62,7 +63,7 @@ _HF_BASE = f"https://huggingface.co/spaces/{_HF_SPACE}/resolve/main"
 _WEIGHT_URL = f"{_HF_BASE}/{XP_BODYPART_WEIGHT_NAME}"
 _PARAMS_URL = f"{_HF_BASE}/parameters.json"
 
-DOWNLOAD_ID = "harmonize_xr_bodypart"
+DOWNLOAD_ID = DOWNLOAD_ID_HARMONIZE_XR_BODYPART
 
 _downloading = False
 

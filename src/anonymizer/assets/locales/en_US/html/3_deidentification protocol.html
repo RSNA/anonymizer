@@ -62,27 +62,13 @@ see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 			<li>113107 is appended to the DeIdentificationMethodCodeSequence element (0012,0064).</li>
 		</ul>
 		<h4>113108: Retain Patient Characteristics Option</h4>
-		<p>This option is partially implemented. Only the following elements defined by the option are kept:</p>
-		<ul>
-			<li>(0010,0040) PatientSex</li>
-			<li>(0010,1010) PatientAge</li>
-			<li>(0010,1020) PatientSize</li>
-			<li>(0010,1030) PatientWeight</li>
-			<li>(0010,2160) EthnicGroup</li>
-			<li>(90010,21a0) SmokingStatus</li>
-			<li>113108 is appended to the DeIdentificationMethodCodeSequence element (0012,0064).</li>
-		</ul>
+		<p>Keeps patient-characteristic attributes from DICOM PS 3.15 Table E.1-1 that the Basic profile removes (for example sex, size, weight, ethnic group, smoking status). Patient age stays band-rounded. 113108 is appended to DeIdentificationMethodCodeSequence (0012,0064).</p>
 		<h4>113109: Retain Device Identity Option</h4>
-		<p>This option is partially implemented. Only the following elements defined by the option are kept:</p>
-		<ul>
-			<li>(0008,0070) Manufacturer</li>
-			<li>(0008,1090) ManufacturerModelName</li>
-			<li>113109 is appended to the DeIdentificationMethodCodeSequence element (0012,0064).</li>
-		</ul>
+		<p>Keeps device-identity attributes from Table E.1-1 plus product manufacturer/model/software tags that Basic removes (for example Manufacturer, ManufacturerModelName, DeviceSerialNumber, StationName, SoftwareVersions). 113109 is appended to DeIdentificationMethodCodeSequence (0012,0064).</p>
 		<h4>113110: Retain UIDs Option</h4>
-		<p>Not Implemented</p>
+		<p>Keeps original DICOM UIDs instead of remapping them (script overlay).</p>
 		<h4>113111: Retain Safe Private Option</h4>
-		<p>Not Implemented</p>
+		<p>At import, applies the TCIA private-tag knowledge base instead of removing all private tags.</p>
 		
 		
 </div>

@@ -1,7 +1,11 @@
 """Deterministic synthetic PHI from offline locale pools (HMAC-seeded).
-Pools live under ner/pools/<locale>/ (first_names.txt, last_names.txt,
-streets.txt, cities.txt with city|state|zip rows). Unknown labels
-yield "REDACTED". Same project_id / anon_ptid / label /
+
+Pools live under ner/pools/<locale>/ (first_names_male.txt,
+first_names_female.txt, last_names.txt, streets.txt, cities.txt with
+city|state|zip rows). FIRST_NAME replacements keep the source sex when
+the original given name is in a gendered pool. Unknown labels yield
+"REDACTED". Same project_id / anon_ptid / label / ordinal / source →
+same value.
 
 Public API
 ----------
@@ -57,7 +61,8 @@ def generate_synthetic_phi(
     Return a synthetic replacement string for a PHI label.
 
     Values are deterministic for the same project_id, anon_ptid,
-    label, ordinal, and source_fragment (shape hint).
+    label, ordinal, and source_fragment (shape hint). FIRST_NAME picks
+    from the male or female pool when the source given name is known.
 
     Args:
         label: Product PHI label (FIRST_NAME, LAST_NAME, LOCATION,
@@ -66,12 +71,13 @@ def generate_synthetic_phi(
         anon_ptid: Anonymized patient id seed.
         locale: Pool locale directory name (falls back to en_US).
         ordinal: Occurrence index among same-label entities in one text.
-        source_fragment: Original span text used as a formatting shape hint.
+        source_fragment: Original span text used as a formatting shape hint
+            and, for FIRST_NAME, sex inference.
 
     Returns:
         Synthetic replacement string.
     """
-    first = _load_lines(locale, "first_names.txt") or ("Pat",)
+    male, female, first = _first_name_pools(locale)
     last = _load_lines(locale, "last_names.txt") or ("Example",)
     streets = _load_lines(locale, "streets.txt") or ("Main",)
     cities = _load_cities(locale) or (("Springfield", "IL", "62701"),)
@@ -84,7 +90,8 @@ def generate_synthetic_phi(
         source_fragment.casefold()[:32],
     )
     if label == "FIRST_NAME":
-        return first[a % len(first)]
+        pool = _first_name_pool_for_source(source_fragment, male=male, female=female, all_names=first)
+        return pool[a % len(pool)]
     if label == "LAST_NAME":
         return last[b % len(last)]
     if label == "LOCATION":
@@ -141,6 +148,86 @@ def _cached_load_lines(locale: str, name: str) -> tuple[str, ...]:
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.strip().startswith("#")
     )
+
+
+@lru_cache(maxsize=8)
+def _first_name_pools(locale: str) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+    """
+    Male, female, and combined first-name pools for locale.
+
+    Args:
+        locale: Pool locale directory name.
+
+    Returns:
+        (male, female, all) tuples; each falls back to ("Pat",) when empty.
+    """
+    male = _cached_load_lines(locale, "first_names_male.txt")
+    female = _cached_load_lines(locale, "first_names_female.txt")
+    if not male and not female:
+        # Legacy single-file locales: treat as unsexed combined pool.
+        combined = _cached_load_lines(locale, "first_names.txt") or ("Pat",)
+        return (), (), combined
+    male = male or ("Pat",)
+    female = female or ("Pat",)
+    return male, female, tuple(dict.fromkeys((*male, *female)))
+
+
+def _first_name_pool_for_source(
+    source_fragment: str,
+    *,
+    male: tuple[str, ...],
+    female: tuple[str, ...],
+    all_names: tuple[str, ...],
+) -> tuple[str, ...]:
+    """
+    Choose the first-name pool matching the source given name's sex.
+
+    Args:
+        source_fragment: Original FIRST_NAME span.
+        male: Male given-name pool.
+        female: Female given-name pool.
+        all_names: Combined pool when sex is unknown.
+
+    Returns:
+        Pool to sample from (never empty).
+    """
+    sex = _infer_first_name_sex(source_fragment, male=male, female=female)
+    if sex == "male" and male:
+        return male
+    if sex == "female" and female:
+        return female
+    return all_names or ("Pat",)
+
+
+def _infer_first_name_sex(
+    source_fragment: str,
+    *,
+    male: tuple[str, ...],
+    female: tuple[str, ...],
+) -> str | None:
+    """
+    Infer male/female from membership in gendered pools (case-insensitive).
+
+    Args:
+        source_fragment: Original given-name span.
+        male: Male given-name pool.
+        female: Female given-name pool.
+
+    Returns:
+        "male", "female", or None when unknown or listed in both pools.
+    """
+    needle = str(source_fragment or "").strip().casefold()
+    if not needle:
+        return None
+    male_keys = frozenset(name.casefold() for name in male)
+    female_keys = frozenset(name.casefold() for name in female)
+    in_male = needle in male_keys
+    in_female = needle in female_keys
+    if in_male and not in_female:
+        return "male"
+    if in_female and not in_male:
+        return "female"
+    return None
 
 
 def _load_cities(locale: str) -> tuple[tuple[str, str, str], ...]:

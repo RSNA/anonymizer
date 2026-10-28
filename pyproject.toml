@@ -80,7 +80,6 @@ torchvision = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 dev = [
     "pre-commit",
     "ruff",
-    "black",
     "pytest",
     "pytest-cov>=6.0.0",
     "python-dotenv",
@@ -88,7 +87,6 @@ dev = [
     "pytest-mock>=3.14.1",
     "watchfiles>=1.0.0",
     "setuptools>=70,<82",
-    "gradio>=6",
     # Default suite includes tests/mcp (optional product extra [mcp]).
     "fastmcp>=4.0",
 ]
@@ -96,21 +94,20 @@ docs = [
     "mkdocs-material>=9.5.0",
     "mkdocs-static-i18n>=1.2.0",
 ]
+# Extra viz libs only (matplotlib already in main deps).
 prototyping-viz = [
-    "matplotlib>=3.8.0",
     "scikit-image>=0.22.0",
 ]
+# MedGemma chat prototype; transformers/pillow already in main deps.
 medgemma-chat = [
-    "transformers>=5",
-    "pillow",
     "accelerate",
     "bitsandbytes>=0.50",
+    "gradio>=6",
 ]
+# Experiment NER stack; transformers/pypdf already in main deps.
 metadata-phi = [
     "presidio-analyzer>=2.2",
-    "transformers>=5",
     "spacy>=3.7",
-    "pypdf>=4.0",
 ]
 # Official CBIIT MIDI_validation_script (prototyping/midi_b score step).
 # pandas<3: upstream still uses DataFrame.applymap (removed in pandas 3).
@@ -160,7 +157,7 @@ max-complexity = 15
 
 [tool.pytest.ini_options]
 testpaths = ["tests/controller", "tests/model", "tests/mcp"]
-addopts = "--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model --cov=src/anonymizer/mcp -m \"not ocr_integration and not view_dev and not pseudo_phi_integration and not midi_b_integration and not mcp_e2e and not dicom_integration\""
+addopts = "--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model --cov=src/anonymizer/mcp -m \"not ocr_integration and not view_dev and not pseudo_phi_integration and not midi_b_integration and not deid_option_iod and not mcp_e2e and not dicom_integration\""
 pythonpath = ["src", "."]
 filterwarnings = [
     # batchgenerators (TotalSegmentator stack) still imports deprecated scipy.ndimage.* paths
@@ -173,6 +170,7 @@ markers = [
     "ocr_integration: EasyOCR on real burnt-in PHI fixtures under tests/controller/ocr (opt-in; excluded from default)",
     "pseudo_phi_integration: PseudoPHI local dataset pipeline (script+KB+NER); opt-in; needs DATA/Pseudo-PHI-DICOM-Dataset",
     "midi_b_integration: MIDI-B Synthetic Validation adversarial suite (opt-in; needs TCIA MIDI-B volume + official validator; excluded from default/CI)",
+    "deid_option_iod: SR/US/PDF synthetic IOD + Clean Descriptors/Structured execution (opt-in; excluded from default)",
     "mcp_e2e: live HTTP MCP server e2e (opt-in; excluded from default)",
     "dicom_integration: managed Orthanc PACS (DIMSE + DICOMweb); opt-in; excluded from default; CI path-filtered job",
     "rsna_local_data: requires local RSNA_TEST_DATA directory (skipped when absent)",

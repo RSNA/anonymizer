@@ -1,7 +1,10 @@
 """compile_script overlays, presets, and the one-date-strategy check."""
 
 from anonymizer.controller.dates import is_date_delta_operation
-from anonymizer.controller.script.compile import compile_script
+from anonymizer.controller.script.compile import (
+    CLEAN_STRUCTURED_KEEP_TAGS,
+    compile_script,
+)
 from anonymizer.controller.script.date_rules import (
     mismatched_date_rules,
     study_date_operation,
@@ -27,10 +30,10 @@ def test_basic_compile_matches_default_script() -> None:
 
 
 def test_retain_compile_keeps_default_dates_and_characteristics() -> None:
-    """RETAIN_OPTIONS is default + overlays (hashdate StudyDate, keep sex)."""
+    """RETAIN_OPTIONS overlays patient characteristics; institution stays removed."""
     ops = _ops(compile_script(RETAIN_OPTIONS, _DEFAULT))
     assert ops["00080020"] == "@hashdate"
-    assert ops["00100040"] != "@remove()"
+    assert ops["00100040"] == "@keep"
     assert ops["00080080"] == "@remove()"
 
 
@@ -65,6 +68,17 @@ def test_full_dates_overlay_keeps_dates() -> None:
     ops = _ops(compile_script(BASIC_OPTIONS | {DeidMethodCode.FULL_DATES}, _DEFAULT))
     assert ops["00080020"] == "@keep"
     assert not any(is_date_delta_operation(operation) for operation in ops.values())
+
+
+def test_clean_structured_keeps_report_document_tags() -> None:
+    """Clean Structured Content keeps Encapsulated PDF / SR text tags Basic removes."""
+    basic = _ops(compile_script(BASIC_OPTIONS, _DEFAULT))
+    ops = _ops(
+        compile_script(BASIC_OPTIONS | {DeidMethodCode.CLEAN_STRUCTURED_CONTENT}, _DEFAULT)
+    )
+    for tag in CLEAN_STRUCTURED_KEEP_TAGS:
+        assert basic[tag].startswith("@remove"), tag
+        assert ops[tag] == "@keep", tag
 
 
 def test_mismatched_date_rules_detected() -> None:

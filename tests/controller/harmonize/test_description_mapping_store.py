@@ -1,8 +1,8 @@
-"""Tests for view-owned description mapping CSVs."""
+"""Tests for project description mapping CSVs."""
 
 from pathlib import Path
 
-from anonymizer.view.project.description_mapping_store import (
+from anonymizer.controller.ai.harmonize.description_mapping_store import (
     delete_series_override,
     delete_study_override,
     list_series_overrides,

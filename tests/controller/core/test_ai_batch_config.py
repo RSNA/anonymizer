@@ -20,7 +20,8 @@ from anonymizer.controller.ai.batch_process import AiBatchProcessOptions, AiBatc
 from anonymizer.controller.ai.blur_face import FaceBlurMode
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import PixelPhiRemovalMode
 from anonymizer.controller.jobs.runner import OcrRemoveMode
-from tests.paths import REPO_ROOT
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_round_trip_json_to_options() -> None:
@@ -56,7 +57,7 @@ def test_round_trip_json_to_options() -> None:
 
 def test_from_dict_parses_plan_example() -> None:
     data = json.loads(
-        (REPO_ROOT / "docs/en/10-headless/AiBatchConfig.example.json").read_text(
+        (_REPO_ROOT / "docs/en/10-headless/AiBatchConfig.example.json").read_text(
             encoding="utf-8"
         )
     )

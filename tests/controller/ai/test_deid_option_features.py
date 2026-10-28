@@ -2,14 +2,14 @@
 
 import pytest
 
-from anonymizer.model.project import AT_INGEST
-from anonymizer.utils.dicom import DeidMethodCode
-from anonymizer.view.ai.features import catalog
-from anonymizer.view.ai.features.catalog import (
+from anonymizer.controller.ai import feature_availability as feature_gates
+from anonymizer.controller.ai.feature_availability import deid_option_ready
+from anonymizer.controller.ai.feature_ids import (
     AiFeatureId,
     ai_feature_for_deid_option,
-    deid_option_ready,
 )
+from anonymizer.model.project import AT_INGEST
+from anonymizer.utils.dicom import DeidMethodCode
 
 
 def test_cleaning_options_map_to_features() -> None:
@@ -32,9 +32,9 @@ def test_ingest_options_always_ready_and_graphics_never() -> None:
 
 def test_cleaning_readiness_follows_feature_gates(monkeypatch: pytest.MonkeyPatch) -> None:
     """Cleaning readiness mirrors the controller feature-availability predicates."""
-    monkeypatch.setattr(catalog.feature_gates, "embedded_phi_allowed", lambda: True)
-    monkeypatch.setattr(catalog.feature_gates, "report_text_phi_ready", lambda: False)
-    monkeypatch.setattr(catalog.feature_gates, "face_blur_allowed", lambda: True)
+    monkeypatch.setattr(feature_gates, "embedded_phi_allowed", lambda: True)
+    monkeypatch.setattr(feature_gates, "report_text_phi_ready", lambda: False)
+    monkeypatch.setattr(feature_gates, "face_blur_allowed", lambda: True)
     assert deid_option_ready(DeidMethodCode.CLEAN_PIXEL_DATA)
     assert not deid_option_ready(DeidMethodCode.CLEAN_STRUCTURED_CONTENT)
     assert not deid_option_ready(DeidMethodCode.CLEAN_DESCRIPTORS)

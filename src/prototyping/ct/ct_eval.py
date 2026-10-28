@@ -8,7 +8,7 @@ Ground truth is parsed from first-level label directory names under ``--data-dir
     A_DATA/HEAD_WITH/<study>/<series>/*.dcm
     A_DATA/CHEST_WITHOUT/<study>/<series>/*.dcm
 
-Requires: ``uv sync --extra tseg`` (TotalSegmentator, XGBoost). No FALCON.
+Requires: TotalSegmentator and XGBoost (main product deps). No FALCON.
 
 Run::
 

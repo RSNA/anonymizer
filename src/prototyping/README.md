@@ -41,12 +41,12 @@ uv run python -m docs_help --language en_US
 From repo root with dev dependencies:
 
 ```bash
-uv sync --extra tseg --group dev
+uv sync --group dev
 uv run python src/prototyping/ct/ct_eval.py --help
 uv run totalseg_set_license -l aca_XXXXXXXXXXXXXX   # once, if not already set
 uv run python src/prototyping/ffr/ts_seg_face.py /path/to/ct_head_series
 uv run python src/prototyping/ffr/ts_seg_face.py /path/to/ct_head_series --force
-uv sync --extra tseg --group dev --group prototyping-viz
+uv sync --group dev --group prototyping-viz
 uv run python -m prototyping.ffr.face /path/to/ct_head_series
 # → opens <series>/ts_seg/viz_poc/report.html in a browser
 # (runs face segmentation first if 0_TS_SEG/seg/face.nii.gz is missing)

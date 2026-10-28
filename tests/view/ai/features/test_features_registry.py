@@ -13,11 +13,13 @@ from anonymizer.view.ai.features.availability import (
     format_installed_inventory_status,
     friendly_task_label,
 )
-from anonymizer.view.ai.features.catalog import (
+from anonymizer.controller.ai.feature_ids import (
     AiModelGroupId,
     all_download_ids,
-    all_model_groups,
     download_id_for_weight_kind,
+)
+from anonymizer.view.ai.features.catalog import (
+    all_model_groups,
     top_level_features,
 )
 

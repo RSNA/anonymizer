@@ -1,3 +1,5 @@
+# Legacy combined list (male/female alternating). Authoritative pools:
+# first_names_male.txt and first_names_female.txt.
 James
 Mary
 John

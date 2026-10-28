@@ -12,6 +12,7 @@ from anonymizer.controller.private_tags import (
     private_tag_operation,
 )
 from anonymizer.controller.private_tags.tcia_kb_data import PRIVATE_KB
+from anonymizer.controller.script.paths import packaged_default_script_path
 from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.model.project import RETAIN_OPTIONS, ProjectModel
 from tests.controller.private_tags.support_private_ds import (
@@ -25,9 +26,8 @@ from tests.controller.private_tags.support_private_ds import (
     unknown_private_spec,
 )
 from tests.opened_anonymizer_model import load_model_script
-from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
 
-_DEFAULT = DEFAULT_ANONYMIZER_SCRIPT
+_DEFAULT = packaged_default_script_path()
 
 
 def test_collapse_keep_beats_delete() -> None:

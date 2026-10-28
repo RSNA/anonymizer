@@ -34,6 +34,7 @@ from pathlib import Path
 
 from easyocr import Reader
 
+from anonymizer.controller.ai.feature_ids import DOWNLOAD_ID_EMBEDDED_PHI
 from anonymizer.controller.ai.model_download import update_model_download
 from anonymizer.utils.network import ensure_ssl_certifi
 from anonymizer.utils.translate import _
@@ -43,7 +44,7 @@ logger = logging.getLogger(__name__)
 OCR_MODEL_DIR = Path("assets/ai/ocr/model")
 OCR_LANGS = ("en", "de", "fr", "es")
 _MIN_OCR_MODEL_FILES = 2
-DOWNLOAD_ID = "embedded_phi"
+DOWNLOAD_ID = DOWNLOAD_ID_EMBEDDED_PHI
 _ocr_downloading = False
 
 

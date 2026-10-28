@@ -10,6 +10,12 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 from anonymizer.controller.ai.feature_availability import embedded_phi_has_models, face_blur_needs_license
+from anonymizer.controller.ai.feature_ids import (
+    AiFeatureId,
+    AiModelGroupId,
+    all_download_ids,
+    weight_kind_for_download_id,
+)
 from anonymizer.controller.ai.harmonize.xp_bodypart import xp_bodypart_ready
 from anonymizer.controller.ai.harmonize.xr_chest_view import xr_chest_view_ready
 from anonymizer.controller.ai.model_download import get_model_download_progress
@@ -30,16 +36,12 @@ from anonymizer.view.ai.features.availability import (
     validate_face_license_format,
 )
 from anonymizer.view.ai.features.catalog import (
-    AiFeatureId,
-    AiModelGroupId,
-    all_download_ids,
     feature_description,
     feature_spec,
     group_by_download_id,
     groups_for,
     model_group_spec,
     top_level_features,
-    weight_kind_for_download_id,
 )
 from anonymizer.view.ai.features.look import (
     FEATURE_BLOCK_PADY,

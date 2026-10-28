@@ -30,12 +30,16 @@ from anonymizer.controller.dicom.hierarchies import StudyUIDHierarchy
 from anonymizer.controller.dicom.requests import MoveStudiesRequest
 from anonymizer.controller.jobs.runner import RemovePixelPhiRunner
 from anonymizer.controller.project import ProjectController
+from anonymizer.controller.script.options import (
+    apply_option_modality_effects,
+    enable_clean_structured_for_report_modalities,
+)
+from anonymizer.controller.script.paths import packaged_default_script_path
 from anonymizer.controller.series.series_io import load_series_frames
 from anonymizer.mcp.modality_tokens import resolve_project_modalities
 from anonymizer.mcp.session import (
     HeadlessSessionError,
     ProjectSession,
-    packaged_default_script_path,
 )
 from anonymizer.mcp.snapshots import (
     abridged_path,
@@ -63,11 +67,7 @@ from anonymizer.model.settings_validate import (
     validate_uid_root,
 )
 from anonymizer.utils.dicom import DeidMethodCode
-from anonymizer.utils.modalities import Modality, get_modality_catalog
-from anonymizer.utils.storage.dicom_tree import (
-    get_dcm_files,
-    list_import_directory_files,
-)
+from anonymizer.utils.storage.dicom_tree import ImportPathsError, expand_import_directory, get_dcm_files
 from anonymizer.utils.translate import _
 from anonymizer.utils.windowing import apply_windowing
 
@@ -241,21 +241,14 @@ def _apply_options_to_model(
 
     Args:
         model: Project model to update.
-        confidentiality_options: CID 7050 code values, or None for no change.
+        confidentiality_options: De-identification option code values, or None for no change.
     """
     if confidentiality_options is None:
         return
     codes = validate_confidentiality_options(confidentiality_options)
-    model.confidentiality_options = frozenset(DeidMethodCode(code) for code in codes)
-    if model.confidentiality_options & {
-        DeidMethodCode.CLEAN_STRUCTURED_CONTENT,
-        DeidMethodCode.CLEAN_DESCRIPTORS,
-    }:
-        catalog = get_modality_catalog()
-        for code in (Modality.SR, Modality.PDF):
-            if code in catalog and code.value not in model.modalities:
-                model.modalities.append(code.value)
-        model.ensure_storage_classes_from_modalities()
+    options = frozenset(DeidMethodCode(code) for code in codes)
+    model.confidentiality_options = options
+    apply_option_modality_effects(model, options)
 
 
 def _build_project_model(
@@ -297,7 +290,7 @@ def _build_project_model(
         project_name=model.project_name,
         storage_dir=storage_dir,
     )
-    model.anonymizer_script_path = packaged_default_script_path()
+    model.anonymizer_script_path = packaged_default_script_path(require_exists=True)
     if site_id is not None and str(site_id).strip():
         model.site_id = validate_site_id(site_id)
     if uid_root is not None and str(uid_root).strip():
@@ -810,6 +803,8 @@ def apply_project_modalities(
 
     None / empty leaves the project unchanged. Token defaults expands to
     ProjectModel.default_modalities() (CR, DX, CT, MR). Persists ProjectModel.json.
+    Newly enabling SR or PDF also enables Clean Structured Content and recompiles
+    the project script (same coupling as Project Settings).
     """
     try:
         resolved = resolve_project_modalities(modalities)
@@ -817,8 +812,20 @@ def apply_project_modalities(
         raise HeadlessOpsError(str(exc)) from exc
     if resolved is None:
         return list(controller.model.modalities)
+    previous = list(controller.model.modalities)
     controller.model.modalities = list(resolved)
     controller.model.set_storage_classes_from_modalities()
+    new_options = enable_clean_structured_for_report_modalities(
+        controller.model.confidentiality_options,
+        previous_modalities=previous,
+        selected_modalities=resolved,
+    )
+    if new_options is not None:
+        controller.apply_confidentiality_options(new_options)
+        logger.info(
+            "Auto-enabled Clean Structured Content for SR/PDF modalities: %s",
+            sorted(int(code) for code in new_options),
+        )
     controller.save_model()
     logger.info("Project modalities set to %s", resolved)
     return resolved
@@ -1811,42 +1818,21 @@ def _import_paths(
     source: str,
     progress: ProgressCallback | None = None,
 ) -> dict[str, Any]:
-    succeeded = 0
-    skipped = 0
-    failed = 0
-    anon_patient_ids: list[str] = []
-    seen_patient_ids: set[str] = set()
-    failures: list[dict[str, Any]] = []
-    already_stored = _("Instance already stored")
+    def on_progress(completed: int, total: int, message: str) -> None:
+        _notify(progress, float(completed), float(total), message)
 
-    total_files = len(paths)
-    for index, path in enumerate(paths, start=1):
-        error_msg, ds = controller.anonymizer.anonymize_file(Path(path))
-        anon_patient_id = str(ds.PatientID) if ds is not None and hasattr(ds, "PatientID") else None
-        if error_msg is None:
-            succeeded += 1
-            if anon_patient_id and anon_patient_id not in seen_patient_ids:
-                seen_patient_ids.add(anon_patient_id)
-                anon_patient_ids.append(anon_patient_id)
-        elif error_msg == already_stored or already_stored in str(error_msg):
-            skipped += 1
-        else:
-            failed += 1
-            # Only failures carry per-file detail: successes are fully
-            # described by the counts and the unique patient ids above.
-            if len(failures) < _MAX_FAILURE_DETAILS:
-                failures.append({"path": abridged_path(path), "error": error_msg})
-        if index == total_files or index % 10 == 0:
-            _notify(progress, index, total_files, f"Imported file {index} of {total_files}")
-
+    result = controller.import_paths(paths, progress=on_progress if progress else None)
     return {
         "source": source,
-        "files_seen": len(paths),
-        "succeeded": succeeded,
-        "skipped": skipped,
-        "failed": failed,
-        "anon_patient_ids": anon_patient_ids,
-        "failures": failures,
+        "files_seen": result.files_seen,
+        "succeeded": result.succeeded,
+        "skipped": result.skipped,
+        "failed": result.failed,
+        "anon_patient_ids": result.anon_patient_ids,
+        "failures": [
+            {"path": abridged_path(item["path"]), "error": item["error"]}
+            for item in result.failures
+        ],
         "project": serialize_project_import_summary(controller),
     }
 
@@ -1862,7 +1848,10 @@ def import_directory(
         raise HeadlessOpsError(
             f"Not a directory: {root}. For a single DICOM file use import_file instead."
         )
-    paths = list_import_directory_files(root)
+    try:
+        paths = expand_import_directory(root)
+    except ImportPathsError as exc:
+        raise HeadlessOpsError(f"Error reading DICOMDIR: {exc}") from exc
     return _import_paths(controller, paths, source=str(root), progress=progress)
 
 

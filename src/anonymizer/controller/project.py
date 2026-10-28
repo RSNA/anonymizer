@@ -2,6 +2,12 @@
 
 Public API
 ----------
+ImportProgressCallback
+    Callback type for local file import progress (completed, total, message).
+
+ImportPathsResult
+    Counts and failure samples from ProjectController.import_paths.
+
 ProjectController
     DICOM Application Entity (pynetdicom.ae sub-class) for the Anonymizer.
 """
@@ -10,7 +16,9 @@ import os
 import shutil
 import threading
 import time
+from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from queue import Queue
@@ -63,15 +71,32 @@ from anonymizer.controller.phi.phi_io import (
 from anonymizer.controller.phi.phi_io import import_java_phi_studies as phi_io_import_java_phi_studies
 from anonymizer.controller.script.compile import compile_script
 from anonymizer.controller.script.document import write_script_rules
+from anonymizer.controller.script.options import apply_option_modality_effects
 from anonymizer.model.anonymizer import PHI, SeriesProcessingStatus
 from anonymizer.model.project import AuthenticationError, DICOMRuntimeError, ProjectModel
 from anonymizer.utils.dicom import DeidMethodCode
 from anonymizer.utils.logging import set_logging_levels
-from anonymizer.utils.modalities import Modality, get_modality_catalog
 from anonymizer.utils.storage.java_index import JavaAnonymizerExportedStudy
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
+
+# Progress: completed count, total count, human-readable status.
+ImportProgressCallback = Callable[[int, int, str], None]
+
+_MAX_IMPORT_FAILURE_DETAILS = 25
+
+
+@dataclass(frozen=True)
+class ImportPathsResult:
+    """Counts and samples from anonymizing a list of local files."""
+
+    files_seen: int
+    succeeded: int
+    skipped: int
+    failed: int
+    anon_patient_ids: list[str]
+    failures: list[dict[str, str]]
 
 
 class ProjectController(
@@ -956,20 +981,69 @@ class ProjectController(
             compile_script(options, ProjectModel.default_anonymizer_script_path()),
         )
         self.anonymizer.reload_script(dest)
-
-        if options & {
-            DeidMethodCode.CLEAN_STRUCTURED_CONTENT,
-            DeidMethodCode.CLEAN_DESCRIPTORS,
-        }:
-            catalog = get_modality_catalog()
-            mods = list(self.model.modalities)
-            for code in (Modality.SR, Modality.PDF):
-                if code in catalog and code.value not in mods:
-                    mods.append(code.value)
-            self.model.modalities = mods
-            # Add SR/PDF SOP classes; keep any custom storage classes already selected.
-            self.model.ensure_storage_classes_from_modalities()
+        apply_option_modality_effects(self.model, options)
         logger.info(
             f"Applied confidentiality options {sorted(int(code) for code in options)} → {dest}"
         )
         return dest
+
+    def import_paths(
+        self,
+        paths: Sequence[str | Path],
+        *,
+        progress: ImportProgressCallback | None = None,
+        max_failure_details: int = _MAX_IMPORT_FAILURE_DETAILS,
+    ) -> ImportPathsResult:
+        """
+        Anonymize each local file path and return success / skip / failure counts.
+
+        Args:
+            paths: Files to anonymize (already expanded; directories are not walked).
+            progress: Optional callback (completed, total, message).
+            max_failure_details: Cap on per-file failure samples in the result.
+
+        Returns:
+            ImportPathsResult with counts, unique anon patient ids, and failure samples.
+        """
+        succeeded = 0
+        skipped = 0
+        failed = 0
+        anon_patient_ids: list[str] = []
+        seen_patient_ids: set[str] = set()
+        failures: list[dict[str, str]] = []
+        already_stored = _("Instance already stored")
+        path_list = [str(path) for path in paths]
+        total_files = len(path_list)
+
+        for index, path in enumerate(path_list, start=1):
+            error_msg, dataset = self.anonymizer.anonymize_file(Path(path))
+            anon_patient_id = (
+                str(dataset.PatientID)
+                if dataset is not None and hasattr(dataset, "PatientID")
+                else None
+            )
+            if error_msg is None:
+                succeeded += 1
+                if anon_patient_id and anon_patient_id not in seen_patient_ids:
+                    seen_patient_ids.add(anon_patient_id)
+                    anon_patient_ids.append(anon_patient_id)
+            elif error_msg == already_stored or already_stored in str(error_msg):
+                skipped += 1
+            else:
+                failed += 1
+                if len(failures) < max_failure_details:
+                    failures.append({"path": path, "error": str(error_msg)})
+            if progress is not None and (index == total_files or index % 10 == 0):
+                try:
+                    progress(index, total_files, f"Imported file {index} of {total_files}")
+                except Exception:
+                    logger.debug("Import progress callback failed", exc_info=True)
+
+        return ImportPathsResult(
+            files_seen=total_files,
+            succeeded=succeeded,
+            skipped=skipped,
+            failed=failed,
+            anon_patient_ids=anon_patient_ids,
+            failures=failures,
+        )

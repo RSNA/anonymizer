@@ -9,6 +9,18 @@ from functools import partial
 from anonymizer.controller.ai import feature_availability as feature_gates
 from anonymizer.controller.ai.embedded_phi.ner.cache import NerModelStatus, ner_ready, probe_ner_models
 from anonymizer.controller.ai.embedded_phi.pixel.cache import OcrModelStatus, ocr_models_ready, probe_ocr_models
+from anonymizer.controller.ai.feature_ids import (
+    DOWNLOAD_ID_BRAIN,
+    DOWNLOAD_ID_EMBEDDED_PHI,
+    DOWNLOAD_ID_FACE_CT,
+    DOWNLOAD_ID_FACE_MR,
+    DOWNLOAD_ID_HARMONIZE_CT,
+    DOWNLOAD_ID_HARMONIZE_CXR_VIEW,
+    DOWNLOAD_ID_HARMONIZE_MR,
+    DOWNLOAD_ID_HARMONIZE_XR_BODYPART,
+    AiFeatureId,
+    AiModelGroupId,
+)
 from anonymizer.controller.ai.model_download import (
     any_model_download_active,
     begin_model_download,
@@ -44,17 +56,7 @@ from anonymizer.controller.ai.tseg.readiness import (
 )
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.features.catalog import (
-    DOWNLOAD_ID_BRAIN,
-    DOWNLOAD_ID_EMBEDDED_PHI,
-    DOWNLOAD_ID_FACE_CT,
-    DOWNLOAD_ID_FACE_MR,
-    DOWNLOAD_ID_HARMONIZE_CT,
-    DOWNLOAD_ID_HARMONIZE_CXR_VIEW,
-    DOWNLOAD_ID_HARMONIZE_MR,
-    DOWNLOAD_ID_HARMONIZE_XR_BODYPART,
-    AiFeatureId,
     AiFeatureSpec,
-    AiModelGroupId,
     AiModelGroupSpec,
     download_embedded_phi,
     download_kind,

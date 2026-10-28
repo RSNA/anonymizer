@@ -39,7 +39,10 @@ from anonymizer.controller.script.operands import (
     operand_syntax,
     validate_operation,
 )
-from anonymizer.model.project import BASIC_OPTIONS, RETAIN_OPTIONS, ProjectModel
+from anonymizer.controller.script.option_explanations import script_status_line
+from anonymizer.controller.script.options import infer_options_from_script
+from anonymizer.controller.script.paths import packaged_default_script_path
+from anonymizer.model.project import ProjectModel
 from anonymizer.utils.dicom import deid_method_meaning
 from anonymizer.utils.dicom_dictionary import (
     dicom_applicable_standard_text,
@@ -52,6 +55,7 @@ from anonymizer.utils.translate import _
 from anonymizer.view.common.app_window import AppToplevel, install_modal_dismiss, place_toplevel_centered_on_parent
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import default_char_width_px
+from anonymizer.view.common.treeview_chrome import apply_zebra_tags, configure_zebra_row_tags
 from anonymizer.view.common.ux_fields import dicom_date_chars, int_entry, str_entry
 from anonymizer.view.settings.lookup_table_dialog import LookupTableDialog
 from anonymizer.view.settings.script_editor import (
@@ -62,7 +66,6 @@ from anonymizer.view.settings.script_editor import (
     filter_rules,
     format_incrementdate_affected_lines,
     has_missing_dictionary_tags,
-    infer_options_from_script,
     operand_tag_incompatibility,
     operands_for_tag,
     search_missing_dictionary_tags,
@@ -76,9 +79,7 @@ _HELP_WRAP = 320
 _HELP_BODY_INDENT = 12
 _NAME_COL_SLACK_CHARS = 2 - 18  # fit longest name, then shrink by 18 characters
 # Operands that need a CTP patient lookup table (load/replace via LookupTableDialog).
-_LOOKUP_TABLE_OPERANDS = frozenset(
-    {OperandId.LOOKUP_PTID, OperandId.LOOKUP_DATEOFFSET, OperandId.REBASEDATE}
-)
+_LOOKUP_TABLE_OPERANDS = frozenset({OperandId.LOOKUP_PTID, OperandId.LOOKUP_DATEOFFSET, OperandId.REBASEDATE})
 _OPERAND_DROPDOWN_PAD_CHARS = 3  # wider than longest catalog syntax
 # Shared by AnonymizerScriptDialog child dialogs (OperandParam, AddFromDictionary, etc.).
 _CHILD_DIALOG_PAD = 10
@@ -94,7 +95,8 @@ class AnonymizerScriptDialog(AppToplevel):
         project_controller: ProjectController | None = None,
         on_script_path_changed: Callable[[Path], None] | None = None,
         on_pending_lookup_preview: Callable[[CtpLookupPreview], None] | None = None,
-        pending_lookup_preview: CtpLookupPreview | None = None):
+        pending_lookup_preview: CtpLookupPreview | None = None,
+    ):
         super().__init__(master=parent)
         self.project_controller = project_controller
         self.project_model = project_model
@@ -114,7 +116,6 @@ class AnonymizerScriptDialog(AppToplevel):
         self._lookup_ctx = lookup_table_context(self.project_model, self._pending_lookup_preview)
         self._char_width_px = max(7, default_char_width_px())
         self._dict_dialog: "AddFromDictionaryDialog | None" = None
-
 
         self.title(_("Edit Anonymizer Script"))
         self.resizable(True, True)
@@ -149,7 +150,8 @@ class AnonymizerScriptDialog(AppToplevel):
             format_dicom_tag(rule.tag),
             display_tag_vr(rule.tag),
             rule.name,
-            (str(rule.operation or "").strip() or "@keep"))
+            (str(rule.operation or "").strip() or "@keep"),
+        )
 
     def _refresh_lookup_context(self) -> None:
         self._lookup_ctx = lookup_table_context(self.project_model, self._pending_lookup_preview)
@@ -167,10 +169,7 @@ class AnonymizerScriptDialog(AppToplevel):
 
     def _project_script_path_text(self) -> str:
         """Abridged path when editing the project script; empty for the packaged default."""
-        project_script = (
-            Path(self.project_model.storage_dir)
-            / f"{self.project_model.site_id}-anonymizer.script"
-        )
+        project_script = Path(self.project_model.storage_dir) / f"{self.project_model.site_id}-anonymizer.script"
         try:
             is_project = self._script_path.resolve() == project_script.resolve()
         except OSError:
@@ -179,32 +178,34 @@ class AnonymizerScriptDialog(AppToplevel):
             return ""
         return self.project_model.abridged_path(self._script_path, include_filename=True)
 
-    def _options_display_label(self) -> str:
-        options = self.project_model.confidentiality_options
-        if options == RETAIN_OPTIONS:
-            return _("Retain")
-        if options == BASIC_OPTIONS:
-            return _("Basic")
-        return _("Custom")
-
     def _refresh_path_label(self) -> None:
         """Refresh top-left options / script path chrome."""
-        self._options_value_label.configure(text=self._options_display_label())
+        self._options_value_label.configure(
+            text=script_status_line(
+                self._document,
+                frozenset(self.project_model.confidentiality_options),
+                base_script_path=packaged_default_script_path(),
+            )
+        )
         path_text = self._project_script_path_text()
         if path_text:
             self._script_meta_label.configure(text=_("Script") + ": " + path_text)
         else:
-            self._script_meta_label.configure(
-                text=_("Script") + ": " + Path(self._script_path).name
-            )
+            self._script_meta_label.configure(text=_("Script") + ": " + Path(self._script_path).name)
 
     def _create_widgets(self) -> None:
         pad = _CHILD_DIALOG_PAD
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        # Outer shell like Metadata Assessment: nested control bar gets top_fg_color.
+        self._sv_frame = ctk.CTkFrame(self)
+        self._sv_frame.grid(row=0, column=0, padx=pad, pady=pad, sticky="nsew")
+        self._sv_frame.grid_columnconfigure(0, weight=1)
+        self._sv_frame.grid_rowconfigure(1, weight=1)
 
         # --- Header controls (options / script / view / search) ---
-        header = ctk.CTkFrame(self, fg_color="transparent")
+        header = ctk.CTkFrame(self._sv_frame, fg_color="transparent")
         header.grid(row=0, column=0, sticky="ew", padx=pad, pady=(pad, 0))
         header.grid_columnconfigure(0, weight=1)
 
@@ -215,14 +216,12 @@ class AnonymizerScriptDialog(AppToplevel):
         meta_col.grid(row=0, column=0, sticky="nw")
         options_row = ctk.CTkFrame(meta_col, fg_color="transparent")
         options_row.grid(row=0, column=0, sticky="w")
-        ctk.CTkLabel(
-            options_row, text=_("De-identification Options") + ":", anchor="w"
-        ).pack(side="left", padx=(0, 4))
         self._options_value_label = ctk.CTkLabel(
             options_row,
             text="",
             anchor="w",
-            font=ctk.CTkFont(weight="bold"))
+            font=ctk.CTkFont(weight="bold"),
+        )
         self._options_value_label.pack(side="left")
         self._script_meta_label = ctk.CTkLabel(meta_col, text="", anchor="w", justify="left")
         self._script_meta_label.grid(row=1, column=0, sticky="w")
@@ -232,7 +231,8 @@ class AnonymizerScriptDialog(AppToplevel):
             text=_("Applicable Standard: {standard}").format(standard=dicom_ver) if dicom_ver else "",
             font=ctk.CTkFont(weight="bold"),
             anchor="e",
-            justify="right")
+            justify="right",
+        )
         self._dicom_version_label.grid(row=0, column=1, sticky="ne", padx=(pad, 0))
         if not dicom_ver:
             self._dicom_version_label.grid_remove()
@@ -242,25 +242,17 @@ class AnonymizerScriptDialog(AppToplevel):
         mode_row.grid(row=1, column=0, sticky="ew")
         ctk.CTkLabel(mode_row, text=_("View") + ":").pack(side="left", padx=(0, pad))
         self._view_var = tk.StringVar(value="active")
-        for value, label in (
-            ("active", _("Active")),
-            ("removed", _("Removed")),
-            ("all", _("All"))):
+        for value, label in (("active", _("Active")), ("removed", _("Removed")), ("all", _("All"))):
             ctk.CTkRadioButton(
-                mode_row,
-                text=label,
-                variable=self._view_var,
-                value=value,
-                command=self._on_view_changed).pack(side="left", padx=(0, pad))
+                mode_row, text=label, variable=self._view_var, value=value, command=self._on_view_changed
+            ).pack(side="left", padx=(0, pad))
 
         tool = ctk.CTkFrame(header, fg_color="transparent")
         tool.grid(row=2, column=0, sticky="ew", pady=(pad, pad))
         ctk.CTkLabel(tool, text=_("Search") + ":").pack(side="left")
         self._search_var = tk.StringVar(value="")
         self._search_var.trace_add("write", self._on_search_trace)
-        self._search_entry = ctk.CTkEntry(
-            tool, textvariable=self._search_var, width=self._search_entry_width_px()
-        )
+        self._search_entry = ctk.CTkEntry(tool, textvariable=self._search_var, width=self._search_entry_width_px())
         self._search_entry.pack(side="left", padx=(pad, pad))
         ctk.CTkLabel(tool, text=_("Operand") + ":").pack(side="left")
         self._operand_filter_var = tk.StringVar(value=_("All"))
@@ -270,27 +262,25 @@ class AnonymizerScriptDialog(AppToplevel):
             variable=self._operand_filter_var,
             width=self._operand_dropdown_width_px(),
             command=self._on_operand_filter,
-            state="readonly")
+            state="readonly",
+        )
         self._operand_filter.pack(side="left", padx=(pad, 0))
 
-        # --- Index chrome (Dataset-style framed tree + help) ---
-        index_frame = ctk.CTkFrame(self)
-        index_frame.grid(row=1, column=0, sticky="nsew", padx=pad, pady=(0, pad))
+        # --- Index body (transparent nested frames; row zebra via treeview_chrome) ---
+        index_frame = ctk.CTkFrame(self._sv_frame, fg_color="transparent")
+        index_frame.grid(row=1, column=0, sticky="nsew", padx=pad, pady=(0, 0))
         index_frame.grid_columnconfigure(0, weight=3)
         index_frame.grid_columnconfigure(1, weight=2)
         index_frame.grid_rowconfigure(0, weight=1)
 
         list_frame = ctk.CTkFrame(index_frame, fg_color="transparent")
-        list_frame.grid(row=0, column=0, sticky="nsew", padx=pad, pady=pad)
+        list_frame.grid(row=0, column=0, sticky="nsew", padx=(0, pad), pady=(0, pad))
         list_frame.grid_rowconfigure(0, weight=1)
         list_frame.grid_columnconfigure(0, weight=1)
 
         self._tree = ttk.Treeview(
-            list_frame,
-            columns=("tag", "vr", "name", "operand"),
-            show="headings",
-            style="Treeview",
-            selectmode="browse")
+            list_frame, columns=("tag", "vr", "name", "operand"), show="headings", style="Treeview", selectmode="browse"
+        )
         self._tree.heading("tag", text=_("Tag"), anchor="w")
         self._tree.heading("vr", text=_("VR"), anchor="center")
         self._tree.heading("name", text=_("Name"), anchor="w")
@@ -298,19 +288,16 @@ class AnonymizerScriptDialog(AppToplevel):
         self._tree.column("tag", width=self._char_width_px * 10, stretch=False, anchor="w")
         self._tree.column("vr", width=self._char_width_px * 5, stretch=False, anchor="center")
         self._tree.column("name", width=self._search_entry_width_px(), stretch=False, anchor="w")
-        self._tree.column(
-            "operand",
-            width=self._operand_column_width_px(),
-            stretch=True,
-            anchor="center")
+        self._tree.column("operand", width=self._operand_column_width_px(), stretch=True, anchor="center")
         yscroll = ttk.Scrollbar(list_frame, orient="vertical", command=self._tree.yview)
         self._tree.configure(yscrollcommand=yscroll.set)
         self._tree.grid(row=0, column=0, sticky="nsew")
         yscroll.grid(row=0, column=1, sticky="ns")
+        configure_zebra_row_tags(self._tree, self)
         self._tree.bind("<<TreeviewSelect>>", self._on_tree_select)
 
         help_panel = ctk.CTkFrame(index_frame, fg_color="transparent")
-        help_panel.grid(row=0, column=1, sticky="nsew", padx=(0, pad), pady=pad)
+        help_panel.grid(row=0, column=1, sticky="nsew", padx=(0, 0), pady=(0, pad))
         help_panel.grid_columnconfigure(0, weight=1)
         # Content stays top-packed; only the spacer row absorbs extra height.
         help_panel.grid_rowconfigure(1, weight=1)
@@ -328,15 +315,13 @@ class AnonymizerScriptDialog(AppToplevel):
             font=ctk.CTkFont(weight="bold"),
             anchor="w",
             justify="left",
-            wraplength=_HELP_WRAP)
+            wraplength=_HELP_WRAP,
+        )
         self._selection_label.grid(row=0, column=0, sticky="ew")
 
         self._tag_description_label = ctk.CTkLabel(
-            help_content,
-            text="",
-            anchor="w",
-            justify="left",
-            wraplength=_HELP_WRAP)
+            help_content, text="", anchor="w", justify="left", wraplength=_HELP_WRAP
+        )
         self._tag_description_label.grid(row=1, column=0, sticky="ew", pady=(4, pad))
         self._tag_description_label.grid_remove()
 
@@ -353,41 +338,31 @@ class AnonymizerScriptDialog(AppToplevel):
             variable=self._operand_var,
             command=self._on_operand_combo,
             width=self._operand_dropdown_width_px(),
-            state="disabled")
+            state="disabled",
+        )
         self._operand_combo.grid(row=0, column=1, sticky="w", padx=(pad, 0))
 
         self._action_row = ctk.CTkFrame(op_block, fg_color="transparent")
         # Shown only when Apply / Change parameter / Lookup buttons are visible.
         self._apply_operand_button = ctk.CTkButton(
-            self._action_row,
-            text=_("Apply"),
-            width=90,
-            command=self._on_apply_operand)
+            self._action_row, text=_("Apply"), width=90, command=self._on_apply_operand
+        )
         self._param_button = ctk.CTkButton(
-            self._action_row,
-            text=_("Change parameter"),
-            width=140,
-            command=self._on_change_param)
+            self._action_row, text=_("Change parameter"), width=140, command=self._on_change_param
+        )
         self._lookup_table_button = ctk.CTkButton(
-            self._action_row,
-            text=_("Load Lookup Table"),
-            width=160,
-            command=self._on_lookup_table_button)
+            self._action_row, text=_("Load Lookup Table"), width=160, command=self._on_lookup_table_button
+        )
 
         help_block = ctk.CTkFrame(help_content, fg_color="transparent")
         help_block.grid_columnconfigure(0, weight=1)
         self._help_block = help_block
-        ctk.CTkLabel(
-            help_block,
-            text=_("How this operand works"),
-            font=ctk.CTkFont(weight="bold"),
-            anchor="w").grid(row=0, column=0, sticky="w", pady=(0, 4))
+        ctk.CTkLabel(help_block, text=_("How this operand works"), font=ctk.CTkFont(weight="bold"), anchor="w").grid(
+            row=0, column=0, sticky="w", pady=(0, 4)
+        )
         self._help_label = ctk.CTkLabel(
-            help_block,
-            text="",
-            anchor="nw",
-            justify="left",
-            wraplength=_HELP_WRAP - _HELP_BODY_INDENT)
+            help_block, text="", anchor="nw", justify="left", wraplength=_HELP_WRAP - _HELP_BODY_INDENT
+        )
         self._help_label.grid(row=1, column=0, sticky="ew", padx=(_HELP_BODY_INDENT, 0))
         # Hidden until an operand help text is shown.
 
@@ -396,33 +371,29 @@ class AnonymizerScriptDialog(AppToplevel):
         )
         self._error_label.grid(row=4, column=0, sticky="ew", pady=(pad, 0))
 
-        ctk.CTkFrame(help_panel, fg_color="transparent", height=1).grid(
-            row=1, column=0, sticky="nsew"
-        )
+        ctk.CTkFrame(help_panel, fg_color="transparent", height=1).grid(row=1, column=0, sticky="nsew")
 
-        # --- Button bar (Dataset-style framed footer) ---
-        button_frame = ctk.CTkFrame(self)
-        button_frame.grid(row=2, column=0, sticky="ew", padx=pad, pady=(0, pad))
-        button_frame.grid_columnconfigure(1, weight=1)
+        # Nested in _sv_frame so this bar uses theme top_fg_color (Metadata chrome).
+        self.control_frame = ctk.CTkFrame(self._sv_frame)
+        self.control_frame.grid(row=2, column=0, sticky="ew", padx=pad, pady=pad)
+        self.control_frame.grid_columnconfigure(1, weight=1)
         btn_w = 120
 
         self._add_dictionary_button = ctk.CTkButton(
-            button_frame,
-            text=_("Add from Dictionary"),
-            width=150,
-            command=self._open_add_dictionary)
+            self.control_frame, text=_("Add from Dictionary"), width=150, command=self._open_add_dictionary
+        )
         self._add_dictionary_button.grid(row=0, column=0, sticky="w", padx=pad, pady=pad)
 
-        ctk.CTkButton(button_frame, text=_("Import…"), width=btn_w, command=self._on_import).grid(
+        ctk.CTkButton(self.control_frame, text=_("Import…"), width=btn_w, command=self._on_import).grid(
             row=0, column=1, sticky="w", padx=pad, pady=pad
         )
-        ctk.CTkButton(button_frame, text=_("Revert"), width=btn_w, command=self._on_revert).grid(
+        ctk.CTkButton(self.control_frame, text=_("Revert"), width=btn_w, command=self._on_revert).grid(
             row=0, column=2, sticky="e", padx=pad, pady=pad
         )
-        ctk.CTkButton(button_frame, text=_("Cancel"), width=btn_w, command=self._on_cancel).grid(
+        ctk.CTkButton(self.control_frame, text=_("Cancel"), width=btn_w, command=self._on_cancel).grid(
             row=0, column=3, sticky="e", padx=(0, pad), pady=pad
         )
-        ctk.CTkButton(button_frame, text=_("Accept"), width=btn_w, command=self._on_accept).grid(
+        ctk.CTkButton(self.control_frame, text=_("Accept"), width=btn_w, command=self._on_accept).grid(
             row=0, column=4, sticky="e", padx=(0, pad), pady=pad
         )
 
@@ -489,11 +460,7 @@ class AnonymizerScriptDialog(AppToplevel):
     def _autosize_name_column(self) -> None:
         """Keep Name column sized to longest script name (shrunk by slack); centre Operand."""
         self._tree.column("name", width=self._search_entry_width_px(), stretch=False, anchor="w")
-        self._tree.column(
-            "operand",
-            width=self._operand_column_width_px(),
-            stretch=True,
-            anchor="center")
+        self._tree.column("operand", width=self._operand_column_width_px(), stretch=True, anchor="center")
 
     def _schedule_fit_dialog_height(self) -> None:
         if self._help_fit_after_id is not None:
@@ -576,12 +543,7 @@ class AnonymizerScriptDialog(AppToplevel):
         show_apply = self._pending_operand_differs()
         pending = self._pending_operand_id() or OperandId.KEEP
         spec = operand_spec_by_id(pending)
-        show_param = (
-            not show_apply
-            and spec is not None
-            and spec.needs_param
-            and self._custom_operation is None
-        )
+        show_param = not show_apply and spec is not None and spec.needs_param and self._custom_operation is None
         show_lookup = not show_apply and pending in _LOOKUP_TABLE_OPERANDS
 
         if not (show_apply or show_param or show_lookup):
@@ -638,19 +600,14 @@ class AnonymizerScriptDialog(AppToplevel):
 
     def _refresh_list(self, *, focus_tag: str | None = None) -> None:
         self._filtered = filter_rules(
-            self._document,
-            view=self._view_mode,
-            query=self._search_var.get(),
-            operand_id=self._operand_filter_id())
+            self._document, view=self._view_mode, query=self._search_var.get(), operand_id=self._operand_filter_id()
+        )
 
         for item in self._tree.get_children():
             self._tree.delete(item)
         for rule in self._filtered:
-            self._tree.insert(
-                "",
-                "end",
-                iid=rule.tag,
-                values=self._rule_row_values(rule))
+            self._tree.insert("", "end", iid=rule.tag, values=self._rule_row_values(rule))
+        apply_zebra_tags(self._tree, self._tree.get_children(""))
 
         self._autosize_name_column()
         search_w = self._search_entry_width_px()
@@ -749,8 +706,7 @@ class AnonymizerScriptDialog(AppToplevel):
                 self._custom_operation = rule.operation
                 op_id = "keep"
                 help_text = _(
-                    "This rule uses a custom script value: {value}. "
-                    "Choose a catalog operand to replace it."
+                    "This rule uses a custom script value: {value}. Choose a catalog operand to replace it."
                 ).format(value=rule.operation or "@keep")
             elif op_id in ("lookup_ptid", "lookup_dateoffset") and not self._lookup_ctx.present:
                 self._custom_operation = None
@@ -766,9 +722,7 @@ class AnonymizerScriptDialog(AppToplevel):
                     "dateoffset entries. Use Replace Lookup Table, or choose a "
                     "different operand."
                 ).format(value=(str(rule.operation or "").strip() or "@keep"))
-            elif op_id == "rebasedate" and not (
-                self._lookup_ctx.present and self._lookup_ctx.has_basedate
-            ):
+            elif op_id == "rebasedate" and not (self._lookup_ctx.present and self._lookup_ctx.has_basedate):
                 self._custom_operation = None
                 help_text = _(
                     "This rule uses {value}, but no basedate entries are loaded. "
@@ -839,7 +793,8 @@ class AnonymizerScriptDialog(AppToplevel):
         kind: str = "int",
         message: str | None = None,
         detail: str | None = None,
-        detail_title: str | None = None) -> int | str | None:
+        detail_title: str | None = None,
+    ) -> int | str | None:
         title = _(spec.param_title_key) if spec.param_title_key else _("Operand parameter")
         return OperandParamDialog(
             self,
@@ -848,7 +803,8 @@ class AnonymizerScriptDialog(AppToplevel):
             detail=detail,
             detail_title=detail_title,
             initial=initial,
-            kind=kind).result
+            kind=kind,
+        ).result
 
     def _incrementdate_prompt_parts(self, spec: OperandSpec) -> tuple[str, str | None]:
         intro = _(spec.param_help_key)
@@ -864,25 +820,22 @@ class AnonymizerScriptDialog(AppToplevel):
             kind="int_signed",
             message=intro,
             detail=detail,
-            detail_title=_("Fields that will be set to @incrementdate(this,n):"))
+            detail_title=_("Fields that will be set to @incrementdate(this,n):"),
+        )
         return None if days is None else int(days)
 
     def _apply_incrementdate(self, days: int) -> None:
         """Apply shared DATEINC to every date-delta field (and the selection)."""
         if self._selected_tag is None or self._detail_updating:
             return
-        tags = apply_incrementdate_to_rules(
-            self._document, days, selected_tag=self._selected_tag
-        )
+        tags = apply_incrementdate_to_rules(self._document, days, selected_tag=self._selected_tag)
         self._error_label.configure(text="")
         self._custom_operation = None
         for tag in tags:
             if self._tree.exists(tag):
                 rule = self._document.get_rule(tag)
                 if rule is not None:
-                    self._tree.item(
-                        tag,
-                        values=self._rule_row_values(rule))
+                    self._tree.item(tag, values=self._rule_row_values(rule))
         self._autosize_name_column()
         self._update_help_for_operand("incrementdate")
         self._sync_operand_combo_from_rule()
@@ -895,7 +848,8 @@ class AnonymizerScriptDialog(AppToplevel):
         round_width: int | None = None,
         always_text: str | None = None,
         increment_days: int | None = None,
-        rebase_origin: str | None = None) -> tuple[str, str | None]:
+        rebase_origin: str | None = None,
+    ) -> tuple[str, str | None]:
         if self._custom_operation is not None and op_id == OperandId.KEEP:
             return self._custom_operation, None
         try:
@@ -922,7 +876,8 @@ class AnonymizerScriptDialog(AppToplevel):
         round_width: int | None = None,
         always_text: str | None = None,
         increment_days: int | None = None,
-        rebase_origin: str | None = None) -> None:
+        rebase_origin: str | None = None,
+    ) -> None:
         if self._selected_tag is None or self._detail_updating:
             return
         rule = self._document.get_rule(self._selected_tag)
@@ -933,7 +888,8 @@ class AnonymizerScriptDialog(AppToplevel):
             round_width=round_width,
             always_text=always_text,
             increment_days=increment_days,
-            rebase_origin=rebase_origin)
+            rebase_origin=rebase_origin,
+        )
         if err is not None:
             self._error_label.configure(text=err)
             return
@@ -954,6 +910,7 @@ class AnonymizerScriptDialog(AppToplevel):
                 self._clear_selection()
             else:
                 self._focus_tag_in_active(tag)
+            self._refresh_path_label()
             return
 
         if self._tree.exists(rule.tag):
@@ -961,6 +918,7 @@ class AnonymizerScriptDialog(AppToplevel):
             self._autosize_name_column()
         self._update_help_for_operand(op_id)
         self._refresh_operand_action_buttons()
+        self._refresh_path_label()
 
     def _sync_operand_combo_from_rule(self) -> None:
         if self._selected_tag is None:
@@ -999,11 +957,7 @@ class AnonymizerScriptDialog(AppToplevel):
         self._update_help_for_operand(op_id)
         self._refresh_operand_action_buttons()
         rule = self._document.get_rule(self._selected_tag)
-        warn = (
-            operand_tag_incompatibility(op_id, tag=rule.tag, name=rule.name or "")
-            if rule is not None
-            else None
-        )
+        warn = operand_tag_incompatibility(op_id, tag=rule.tag, name=rule.name or "") if rule is not None else None
         self._error_label.configure(text=_(warn) if warn else "")
 
     def _on_apply_operand(self) -> None:
@@ -1033,9 +987,7 @@ class AnonymizerScriptDialog(AppToplevel):
         spec = operand_spec_by_id(op_id)
         if spec is not None and spec.needs_param:
             if op_id == OperandId.ALWAYS:
-                always_text = self._prompt_operand_param(
-                    spec, initial=self._current_always_text(), kind="str"
-                )
+                always_text = self._prompt_operand_param(spec, initial=self._current_always_text(), kind="str")
                 if always_text is None:
                     self._sync_operand_combo_from_rule()
                     self._refresh_operand_action_buttons()
@@ -1054,9 +1006,7 @@ class AnonymizerScriptDialog(AppToplevel):
                 self._refresh_operand_action_buttons()
                 return
             if op_id == "rebasedate":
-                origin = self._prompt_operand_param(
-                    spec, initial=self._current_rebase_origin(), kind="da"
-                )
+                origin = self._prompt_operand_param(spec, initial=self._current_rebase_origin(), kind="da")
                 if origin is None:
                     self._sync_operand_combo_from_rule()
                     self._refresh_operand_action_buttons()
@@ -1065,9 +1015,7 @@ class AnonymizerScriptDialog(AppToplevel):
                 self._apply_operand(op_id, rebase_origin=str(origin))
                 self._refresh_operand_action_buttons()
                 return
-            round_width = self._prompt_operand_param(
-                spec, initial=self._current_round_width(), kind="int"
-            )
+            round_width = self._prompt_operand_param(spec, initial=self._current_round_width(), kind="int")
             if round_width is None:
                 self._sync_operand_combo_from_rule()
                 self._refresh_operand_action_buttons()
@@ -1088,9 +1036,7 @@ class AnonymizerScriptDialog(AppToplevel):
         if spec is None or not spec.needs_param:
             return
         if op_id == OperandId.ALWAYS:
-            always_text = self._prompt_operand_param(
-                spec, initial=self._current_always_text(), kind="str"
-            )
+            always_text = self._prompt_operand_param(spec, initial=self._current_always_text(), kind="str")
             if always_text is None:
                 return
             self._custom_operation = None
@@ -1105,9 +1051,7 @@ class AnonymizerScriptDialog(AppToplevel):
         if op_id == "rebasedate":
             if not self._ensure_lookup_for_operand(op_id):
                 return
-            origin = self._prompt_operand_param(
-                spec, initial=self._current_rebase_origin(), kind="da"
-            )
+            origin = self._prompt_operand_param(spec, initial=self._current_rebase_origin(), kind="da")
             if origin is None:
                 return
             self._custom_operation = None
@@ -1142,7 +1086,8 @@ class AnonymizerScriptDialog(AppToplevel):
             self,
             document=self._document,
             on_added=self._after_dictionary_add,
-            on_closed=self._on_dictionary_dialog_closed)
+            on_closed=self._on_dictionary_dialog_closed,
+        )
 
     def _restore_script_grab(self) -> None:
         with contextlib.suppress(tk.TclError):
@@ -1212,10 +1157,7 @@ class AnonymizerScriptDialog(AppToplevel):
             return False
         if self._lookup_ctx_ready(op_id):
             return True
-        messagebox.showerror(
-            _("Patient Lookup Table"),
-            self._lookup_unmet_message(op_id),
-            parent=self)
+        messagebox.showerror(_("Patient Lookup Table"), self._lookup_unmet_message(op_id), parent=self)
         return False
 
     def _on_lookup_table_button(self) -> None:
@@ -1226,10 +1168,7 @@ class AnonymizerScriptDialog(AppToplevel):
         if not self._run_lookup_table_dialog():
             return
         if op_id in _LOOKUP_TABLE_OPERANDS and not self._lookup_ctx_ready(op_id):
-            messagebox.showerror(
-                _("Patient Lookup Table"),
-                self._lookup_unmet_message(op_id),
-                parent=self)
+            messagebox.showerror(_("Patient Lookup Table"), self._lookup_unmet_message(op_id), parent=self)
         if self._selected_tag is not None:
             self._load_selection(self._selected_tag)
 
@@ -1245,8 +1184,7 @@ class AnonymizerScriptDialog(AppToplevel):
             self._pending_lookup_preview = preview if self.project_controller is None else None
             if self.project_controller is not None:
                 self._script_path = (
-                    Path(self.project_model.storage_dir)
-                    / f"{self.project_model.site_id}-anonymizer.script"
+                    Path(self.project_model.storage_dir) / f"{self.project_model.site_id}-anonymizer.script"
                 )
             self._refresh_lookup_context()
             self._refresh_path_label()
@@ -1258,7 +1196,8 @@ class AnonymizerScriptDialog(AppToplevel):
             on_script_path_changed=self._on_script_path_changed,
             on_pending_preview=on_pending if self.project_controller is None else None,
             script_document=self._document,
-            on_document_patched=on_document_patched)
+            on_document_patched=on_document_patched,
+        )
         self.wait_window(dialog)
         with contextlib.suppress(tk.TclError):
             if self.winfo_exists():
@@ -1271,7 +1210,8 @@ class AnonymizerScriptDialog(AppToplevel):
         path = filedialog.askopenfilename(
             parent=self,
             title=_("Import CTP Script"),
-            filetypes=[(_("Script Files"), "*.script"), (_("All Files"), "*.*")])
+            filetypes=[(_("Script Files"), "*.script"), (_("All Files"), "*.*")],
+        )
         if not path:
             return
         source = Path(path)
@@ -1283,9 +1223,8 @@ class AnonymizerScriptDialog(AppToplevel):
         errors = validate_document(document)
         if errors:
             messagebox.showerror(
-                _("Import CTP Script"),
-                _("Unsupported script:") + "\n" + "\n".join(errors[:20]),
-                parent=self)
+                _("Import CTP Script"), _("Unsupported script:") + "\n" + "\n".join(errors[:20]), parent=self
+            )
             return
         mismatched = mismatched_date_rules(document)
         if mismatched:
@@ -1295,7 +1234,8 @@ class AnonymizerScriptDialog(AppToplevel):
                 _("Date rules must match the StudyDate operation.")
                 + f"\n{tags}\n\n"
                 + _("Apply the StudyDate operation to all date fields?"),
-                parent=self):
+                parent=self,
+            ):
                 return
             apply_study_date_operation_to_rules(document)
         self._document = document
@@ -1307,9 +1247,8 @@ class AnonymizerScriptDialog(AppToplevel):
 
     def _on_revert(self) -> None:
         if not messagebox.askyesno(
-            _("Revert"),
-            _("Reload the script from disk and discard unsaved edits?"),
-            parent=self):
+            _("Revert"), _("Reload the script from disk and discard unsaved edits?"), parent=self
+        ):
             return
         try:
             self._document = load_script_rules(self._script_path)
@@ -1331,7 +1270,8 @@ class AnonymizerScriptDialog(AppToplevel):
                 _("Date rules must match the StudyDate operation.")
                 + f"\n{tags}\n\n"
                 + _("Apply the StudyDate operation to all date fields?"),
-                parent=self):
+                parent=self,
+            ):
                 return
             apply_study_date_operation_to_rules(self._document)
             self._refresh_list(focus_tag=self._selected_tag)
@@ -1340,8 +1280,7 @@ class AnonymizerScriptDialog(AppToplevel):
             if errors:
                 raise ValueError("\n".join(errors[:20]))
             self.project_model.anonymizer_script_path = (
-                Path(self.project_model.storage_dir)
-                / f"{self.project_model.site_id}-anonymizer.script"
+                Path(self.project_model.storage_dir) / f"{self.project_model.site_id}-anonymizer.script"
             )
             dest = self.project_model.anonymizer_script_path
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -1365,7 +1304,8 @@ class AnonymizerScriptDialog(AppToplevel):
         messagebox.showinfo(
             _("Edit Anonymizer Script"),
             _("Anonymizer script was updated successfully.") + f"\n\n{path_text}",
-            parent=self)
+            parent=self,
+        )
         teardown_ctk_toplevel(self, parent=self.master)
 
     def _confirm_imported_options(self) -> None:
@@ -1377,15 +1317,12 @@ class AnonymizerScriptDialog(AppToplevel):
         if self._imported_source is None:
             return
         options = infer_options_from_script(self._document)
-        labels = "\n".join(
-            f"• {_(deid_method_meaning(code))}"
-            for code in sorted(options, key=int)
-        )
+        labels = "\n".join(f"• {_(deid_method_meaning(code))}" for code in sorted(options, key=int))
         confirmed = messagebox.askyesno(
             _("Import CTP Script"),
-            _("Record these de-identification options for the imported script?")
-            + f"\n{labels}",
-            parent=self)
+            _("Record these de-identification options for the imported script?") + f"\n{labels}",
+            parent=self,
+        )
         if not confirmed:
             return
         self.project_model.confidentiality_options = options
@@ -1427,7 +1364,8 @@ class OperandParamDialog(AppToplevel):
         initial: int | str,
         kind: str = "int",
         detail: str | None = None,
-        detail_title: str | None = None):
+        detail_title: str | None = None,
+    ):
         super().__init__(master=parent)
         # Build while withdrawn so the first paint is already centered (no +0+0 flash).
         self.withdraw()
@@ -1476,7 +1414,8 @@ class OperandParamDialog(AppToplevel):
                 col=0,
                 pad=pad,
                 sticky="nw",
-                focus_set=True)
+                focus_set=True,
+            )
         elif self._kind == "int":
             self._int_var = int_entry(
                 view=frame,
@@ -1489,7 +1428,8 @@ class OperandParamDialog(AppToplevel):
                 col=0,
                 pad=pad,
                 sticky="nw",
-                focus_set=True)
+                focus_set=True,
+            )
         elif self._kind == "da":
             self._str_var = str_entry(
                 view=frame,
@@ -1504,7 +1444,8 @@ class OperandParamDialog(AppToplevel):
                 pad=pad,
                 sticky="nw",
                 width_chars=dicom_date_chars,
-                focus_set=True)
+                focus_set=True,
+            )
         else:
             self._str_var = str_entry(
                 view=frame,
@@ -1519,26 +1460,22 @@ class OperandParamDialog(AppToplevel):
                 pad=pad,
                 sticky="nw",
                 width_chars=24,
-                focus_set=True)
+                focus_set=True,
+            )
         row += 1
 
         if self._has_detail:
             assert self._detail is not None
             if self._detail_title:
-                ctk.CTkLabel(
-                    frame,
-                    text=self._detail_title,
-                    justify="left",
-                    wraplength=self._WRAP,
-                    anchor="w").grid(row=row, column=0, columnspan=2, sticky="ew", padx=pad, pady=(pad, 0))
+                ctk.CTkLabel(frame, text=self._detail_title, justify="left", wraplength=self._WRAP, anchor="w").grid(
+                    row=row, column=0, columnspan=2, sticky="ew", padx=pad, pady=(pad, 0)
+                )
                 row += 1
             detail_h = self._text_height(self._detail, parent=parent, chrome=self._CHROME_WITH_DETAIL)
             detail_box = ctk.CTkTextbox(frame, wrap="word", height=detail_h, activate_scrollbars=True)
             # No extra top pad when a title row already separated the list.
             detail_top = 0 if self._detail_title else pad
-            detail_box.grid(
-                row=row, column=0, columnspan=2, sticky="ew", padx=pad, pady=(detail_top, 0)
-            )
+            detail_box.grid(row=row, column=0, columnspan=2, sticky="ew", padx=pad, pady=(detail_top, 0))
             detail_box.insert("1.0", self._detail)
             detail_box.configure(state="disabled")
             row += 1
@@ -1592,10 +1529,7 @@ class OperandParamDialog(AppToplevel):
                 value = int(self._int_var.get())
             except (tk.TclError, ValueError):
                 if self._kind == "int_signed":
-                    messagebox.showerror(
-                        self._title,
-                        _("Enter a whole number (may be negative)."),
-                        parent=self)
+                    messagebox.showerror(self._title, _("Enter a whole number (may be negative)."), parent=self)
                 else:
                     messagebox.showerror(self._title, _("Enter a whole number ≥ 1."), parent=self)
                 return
@@ -1610,35 +1544,24 @@ class OperandParamDialog(AppToplevel):
         raw = self._str_var.get().strip()
         if self._kind == "da":
             if len(raw) != dicom_date_chars or not raw.isdigit():
-                messagebox.showerror(
-                    self._title,
-                    _("Enter a date as YYYYMMDD (eight digits)."),
-                    parent=self)
+                messagebox.showerror(self._title, _("Enter a date as YYYYMMDD (eight digits)."), parent=self)
                 return
             try:
-
                 datetime.strptime(raw, "%Y%m%d")
             except ValueError:
-                messagebox.showerror(
-                    self._title,
-                    _("Enter a valid calendar date as YYYYMMDD."),
-                    parent=self)
+                messagebox.showerror(self._title, _("Enter a valid calendar date as YYYYMMDD."), parent=self)
                 return
             self.result = raw
             teardown_ctk_toplevel(self, parent=self.master)
             return
 
         if not raw:
-            messagebox.showerror(
-                self._title,
-                _("Enter a non-empty fixed value."),
-                parent=self)
+            messagebox.showerror(self._title, _("Enter a non-empty fixed value."), parent=self)
             return
         if raw.startswith("@"):
             messagebox.showerror(
-                self._title,
-                _("Fixed value must be literal text, not another @ operand."),
-                parent=self)
+                self._title, _("Fixed value must be literal text, not another @ operand."), parent=self
+            )
             return
         self.result = raw
         teardown_ctk_toplevel(self, parent=self.master)
@@ -1659,7 +1582,8 @@ class AddFromDictionaryDialog(AppToplevel):
         *,
         document: ScriptDocument,
         on_added: Callable[[list[str]], None],
-        on_closed: Callable[[], None] | None = None):
+        on_closed: Callable[[], None] | None = None,
+    ):
         super().__init__(master=parent)
         self._document = document
         self._on_added = on_added
@@ -1699,7 +1623,8 @@ class AddFromDictionaryDialog(AppToplevel):
         ctk.CTkEntry(
             index_frame,
             textvariable=self._search_var,
-            placeholder_text=_("Search missing tags (optional, min 2 chars)")).grid(row=0, column=0, sticky="ew", padx=pad, pady=pad)
+            placeholder_text=_("Search missing tags (optional, min 2 chars)"),
+        ).grid(row=0, column=0, sticky="ew", padx=pad, pady=pad)
 
         list_frame = ctk.CTkFrame(index_frame, fg_color="transparent")
         list_frame.grid(row=1, column=0, sticky="nsew", padx=pad, pady=(0, pad))
@@ -1707,11 +1632,8 @@ class AddFromDictionaryDialog(AppToplevel):
         list_frame.grid_rowconfigure(0, weight=1)
 
         self._tree = ttk.Treeview(
-            list_frame,
-            columns=("name", "tag", "vr"),
-            show="headings",
-            style="Treeview",
-            selectmode="extended")
+            list_frame, columns=("name", "tag", "vr"), show="headings", style="Treeview", selectmode="extended"
+        )
         self._tree.heading("name", text=_("Name"))
         self._tree.heading("tag", text=_("Tag"))
         self._tree.heading("vr", text=_("VR"))
@@ -1722,6 +1644,7 @@ class AddFromDictionaryDialog(AppToplevel):
         self._tree.configure(yscrollcommand=yscroll.set)
         self._tree.grid(row=0, column=0, sticky="nsew")
         yscroll.grid(row=0, column=1, sticky="ns")
+        configure_zebra_row_tags(self._tree, self)
         self._tree.bind("<Double-Button-1>", lambda _e: self._on_add())
         self._tree.bind("<Return>", lambda _e: self._on_add())
 
@@ -1733,33 +1656,26 @@ class AddFromDictionaryDialog(AppToplevel):
             ),
             justify="left",
             anchor="w",
-            wraplength=520).grid(row=2, column=0, sticky="ew", padx=pad, pady=(0, pad))
+            wraplength=520,
+        ).grid(row=2, column=0, sticky="ew", padx=pad, pady=(0, pad))
 
         # Button bar (Dataset-style)
         button_frame = ctk.CTkFrame(self)
         button_frame.grid(row=1, column=0, sticky="ew", padx=pad, pady=pad)
         button_frame.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkButton(
-            button_frame,
-            text=_("Select All"),
-            width=btn_w,
-            command=self._select_all).grid(row=0, column=1, sticky="e", padx=pad, pady=pad)
-        ctk.CTkButton(
-            button_frame,
-            text=_("Clear Selection"),
-            width=btn_w,
-            command=self._clear_selection).grid(row=0, column=2, sticky="e", padx=(0, pad), pady=pad)
-        ctk.CTkButton(
-            button_frame,
-            text=_("Cancel"),
-            width=btn_w,
-            command=self._on_cancel).grid(row=0, column=3, sticky="e", padx=(0, pad), pady=pad)
-        ctk.CTkButton(
-            button_frame,
-            text=_("Add"),
-            width=btn_w,
-            command=self._on_add).grid(row=0, column=4, sticky="e", padx=(0, pad), pady=pad)
+        ctk.CTkButton(button_frame, text=_("Select All"), width=btn_w, command=self._select_all).grid(
+            row=0, column=1, sticky="e", padx=pad, pady=pad
+        )
+        ctk.CTkButton(button_frame, text=_("Clear Selection"), width=btn_w, command=self._clear_selection).grid(
+            row=0, column=2, sticky="e", padx=(0, pad), pady=pad
+        )
+        ctk.CTkButton(button_frame, text=_("Cancel"), width=btn_w, command=self._on_cancel).grid(
+            row=0, column=3, sticky="e", padx=(0, pad), pady=pad
+        )
+        ctk.CTkButton(button_frame, text=_("Add"), width=btn_w, command=self._on_add).grid(
+            row=0, column=4, sticky="e", padx=(0, pad), pady=pad
+        )
 
     def _on_search_trace(self, *_args) -> None:
         if self._search_after_id is not None:
@@ -1772,11 +1688,8 @@ class AddFromDictionaryDialog(AppToplevel):
         for item in self._tree.get_children():
             self._tree.delete(item)
         for hit in self._hits:
-            self._tree.insert(
-                "",
-                "end",
-                iid=hit.tag,
-                values=(hit.keyword, format_dicom_tag(hit.tag), hit.vr))
+            self._tree.insert("", "end", iid=hit.tag, values=(hit.keyword, format_dicom_tag(hit.tag), hit.vr))
+        apply_zebra_tags(self._tree, self._tree.get_children(""))
 
     def _select_all(self) -> None:
         self._tree.selection_set(*self._tree.get_children(""))

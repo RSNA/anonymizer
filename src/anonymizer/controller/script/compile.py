@@ -9,7 +9,8 @@ PATIENT_CHARACTERISTICS_TAGS
 DEVICE_IDENTITY_TAGS
 INSTITUTION_IDENTITY_TAGS
 KEEP_DEVICE_TAGS
-    Tag lists used by compile overlays and option inference.
+CLEAN_STRUCTURED_KEEP_TAGS
+    Tag lists used by compile overlays and option inference (from E.1-1 catalog).
 """
 import logging
 from pathlib import Path
@@ -17,33 +18,46 @@ from pathlib import Path
 from anonymizer.controller.dates import is_date_delta_operation
 from anonymizer.controller.script.date_rules import STUDY_DATE_TAG, study_date_operation
 from anonymizer.controller.script.document import ScriptDocument, load_script_rules
+from anonymizer.controller.script.operands import is_remove_operation
+from anonymizer.controller.script.retain_option_tags import (
+    device_identity_tags,
+    institution_identity_tags,
+    patient_age_tag,
+    patient_characteristics_tags,
+)
 from anonymizer.utils.dicom import DeidMethodCode
 
 logger = logging.getLogger(__name__)
 
-PATIENT_CHARACTERISTICS_TAGS = (
-    "00100040",
-    "00101010",
-    "00101020",
-    "00101030",
-    "00102160",
-    "001021A0",
+# Lazy-stable tuples for tests and inference (full catalog sets).
+PATIENT_CHARACTERISTICS_TAGS = patient_characteristics_tags()
+DEVICE_IDENTITY_TAGS = device_identity_tags()
+INSTITUTION_IDENTITY_TAGS = institution_identity_tags()
+
+# Inference samples: tags Basic strips and Device Identity restores.
+KEEP_DEVICE_TAGS = frozenset(
+    {
+        "00080070",  # Manufacturer (product extra)
+        "00081090",  # ManufacturerModelName (product extra)
+        "00181000",  # DeviceSerialNumber
+        "00081010",  # StationName
+        "00181020",  # SoftwareVersions (product extra)
+    }
 )
-DEVICE_IDENTITY_TAGS = (
-    "00080070",
-    "00081090",
-    "00181000",
-    "00081010",
-    "00181020",
+
+# Basic removes these; Clean Structured Content keeps them for Report View /
+# AI Batch scrub (then rewrite). Encapsulated PDF + SR text tree.
+CLEAN_STRUCTURED_KEEP_TAGS = frozenset(
+    {
+        "0040A040",  # ValueType
+        "0040A123",  # PersonName (SR PNAME content items)
+        "0040A160",  # TextValue
+        "0040A730",  # ContentSequence
+        "00420011",  # EncapsulatedDocument
+        "00420012",  # MIMETypeOfEncapsulatedDocument
+        "00420015",  # EncapsulatedDocumentLength
+    }
 )
-INSTITUTION_IDENTITY_TAGS = (
-    "00080080",
-    "00080081",
-    "00080082",
-    "00081040",
-    "00081041",
-)
-KEEP_DEVICE_TAGS = frozenset({"00181000", "00081010"})
 
 
 def compile_script(
@@ -54,8 +68,9 @@ def compile_script(
     Compile the project anonymizer script for a set of de-identification options.
 
     Starts from base_script_path, then applies option overlays. Retain Safe
-    Private and the cleaning options have no script overlay; they act at
-    ingest or in later tasks.
+    Private and most cleaning options have no script overlay (later tasks).
+    Clean Structured Content keeps Encapsulated PDF / SR text tags at ingest
+    so Report View and AI Batch can scrub them.
 
     Args:
         options: Selected de-identification options (Basic Profile is forced in).
@@ -68,6 +83,7 @@ def compile_script(
     selected = frozenset(DeidMethodCode(code) for code in options) | {DeidMethodCode.BASIC}
     document = load_script_rules(Path(base_script_path))
     base_ops = {rule.tag.upper(): rule.operation for rule in document.rules}
+    age_tag = patient_age_tag()
 
     def set_operation(tag: str, operation: str) -> None:
         """
@@ -86,12 +102,13 @@ def compile_script(
             if document.get_rule(tag) is None:
                 continue
             # Keep PatientAge band rounding from the default script.
-            if tag == "00101010":
+            if tag == age_tag:
                 continue
             set_operation(tag, "@keep")
 
     if DeidMethodCode.DEVICE_IDENTITY in selected:
-        # @safe(): retain value and exclude from Embedded PHI / PseudoPHI NER.
+        # @safe(): retain value and exclude from Embedded PHI / PseudoPHI NER
+        # (device strings like ManufacturerModelName must not be blanked).
         for tag in DEVICE_IDENTITY_TAGS:
             set_operation(tag, "@safe()")
 
@@ -118,4 +135,32 @@ def compile_script(
         for rule in document.rules:
             if "@uid" in rule.operation:
                 rule.operation = "@keep"
+
+    if DeidMethodCode.CLEAN_STRUCTURED_CONTENT in selected:
+        for tag in CLEAN_STRUCTURED_KEEP_TAGS:
+            set_operation(tag, "@keep")
+
     return document
+
+
+def normalize_script_operation(operation: str | None) -> str:
+    """Normalize empty script operands to @keep for comparisons."""
+    return str(operation or "").strip() or "@keep"
+
+
+def script_operations_by_tag(document: ScriptDocument) -> dict[str, str]:
+    """Uppercase tag → normalized operation for a script document."""
+    return {
+        rule.tag.upper(): normalize_script_operation(rule.operation)
+        for rule in document.rules
+    }
+
+
+def basic_strip_ok(operation: str) -> bool:
+    """True when a Basic operand strips or protects identity (remove/empty/round/date)."""
+    op = normalize_script_operation(operation)
+    if is_remove_operation(op) or op.startswith("@empty"):
+        return True
+    if op.startswith("@round"):
+        return True
+    return bool(is_date_delta_operation(op))

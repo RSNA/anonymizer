@@ -8,11 +8,11 @@ from pydicom.dataset import Dataset
 from anonymizer.controller.ai.embedded_phi.classify_series import SeriesKind, classify_series
 from anonymizer.controller.ai.embedded_phi.ner.synthetic_phi import generate_synthetic_phi
 from anonymizer.controller.private_tags import private_tag_operation
+from anonymizer.controller.script.paths import packaged_default_script_path
 from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.model.project import BASIC_OPTIONS, RETAIN_OPTIONS, ProjectModel
-from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
 
-_DEFAULT = DEFAULT_ANONYMIZER_SCRIPT
+_DEFAULT = packaged_default_script_path()
 
 
 def test_synth_name_stable_and_shape() -> None:
@@ -37,6 +37,38 @@ def test_synth_name_stable_and_shape() -> None:
         "LOCATION", project_id="p", anon_ptid="A1", ordinal=0, source_fragment="90210"
     )
     assert loc.isdigit() or "-" in loc
+
+
+def test_synth_first_name_keeps_sex() -> None:
+    """Synthetic FIRST_NAME stays in the same sex pool as the source name."""
+    pools = Path(__file__).resolve().parents[3] / "src/anonymizer/controller/ai/embedded_phi/ner/pools/en_US"
+    male_set = {
+        line.strip().casefold()
+        for line in (pools / "first_names_male.txt").read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+    female_set = {
+        line.strip().casefold()
+        for line in (pools / "first_names_female.txt").read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+    for source, expected in (
+        ("Jane", female_set),
+        ("MARY", female_set),
+        ("John", male_set),
+        ("michael", male_set),
+    ):
+        synth = generate_synthetic_phi(
+            "FIRST_NAME",
+            project_id="sex-check",
+            anon_ptid="P1",
+            ordinal=0,
+            source_fragment=source,
+        )
+        key = synth.casefold()
+        assert key in expected, f"{source} → {synth}"
+        other = male_set if expected is female_set else female_set
+        assert key not in other, f"{source} → {synth} crossed sex pools"
 
 
 def test_classify_series_kinds() -> None:

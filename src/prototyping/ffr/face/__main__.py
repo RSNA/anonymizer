@@ -9,7 +9,7 @@ Usage::
 Requires TotalSegmentator (``tseg`` extra) and viz dependencies. Face mask is read from
 ``0_TS_SEG/seg/face.nii.gz``; segmentation runs automatically if the mask is missing::
 
-    uv sync --extra tseg --group dev --group prototyping-viz
+    uv sync --group dev --group prototyping-viz
     uv run python -m prototyping.ffr.face /path/to/ct_head_series
 """
 

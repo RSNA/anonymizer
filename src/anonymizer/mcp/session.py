@@ -11,6 +11,7 @@ from typing import Any
 from anonymizer.controller.headless import create_headless_controller
 from anonymizer.controller.jobs.runner import RemovePixelPhiRunner
 from anonymizer.controller.project import ProjectController
+from anonymizer.controller.script.paths import packaged_default_script_path
 from anonymizer.model.project import ProjectModel
 
 logger = logging.getLogger(__name__)
@@ -24,12 +25,12 @@ class ProjectSessionError(Exception):
 HeadlessSessionError = ProjectSessionError
 
 
-def packaged_default_script_path() -> Path:
-    """Path to the shipped default anonymizer script (install-dir relative)."""
-    path = Path("assets/scripts/default-anonymizer.script")
-    if not path.is_file():
-        raise ProjectSessionError(f"Packaged anonymizer script missing: {path}")
-    return path
+def _required_packaged_script_path() -> Path:
+    """Packaged default script path, or ProjectSessionError if missing."""
+    try:
+        return packaged_default_script_path(require_exists=True)
+    except FileNotFoundError as exc:
+        raise ProjectSessionError(str(exc)) from exc
 
 
 def resolve_project_model_path(project_path: Path) -> Path:
@@ -96,7 +97,7 @@ def create_controller(
     model = ProjectModel()
     model.project_name = name
     model.storage_dir = storage
-    model.anonymizer_script_path = packaged_default_script_path()
+    model.anonymizer_script_path = _required_packaged_script_path()
     if site_id is not None and site_id.strip():
         model.site_id = site_id.strip()
     if uid_root is not None and uid_root.strip():
@@ -139,7 +140,7 @@ def create_controller_from_model(
 
     storage.mkdir(parents=True, exist_ok=True)
     model.storage_dir = storage
-    model.anonymizer_script_path = packaged_default_script_path()
+    model.anonymizer_script_path = _required_packaged_script_path()
 
     try:
         controller = ProjectController(model)

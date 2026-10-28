@@ -5,12 +5,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- De-identification Options dialog (Basic / Retain presets and plain-language explanations); anonymizer script compile under ``controller/script/``
+- Clean Structured Content keeps Encapsulated PDF / SR text at import for Report Text Review; enabling SR or PDF modalities auto-enables Clean Structured Content when it is off
+- Metadata (Series View and Report Text Review): Private tags switch; Detect PHI → Blank/Synthetic Remove PHI → Save to the current file; private UID/date fields reported as handled at import
+- Per-project description mapping memory under ``controller/ai/harmonize/``; Dataset Description Mappings viewer; Prefer description mappings in AI batch
+- Sticky Study/Series ``description`` (intake original); Harmonize/Set description write ``harmonized_description`` only; DICOM Original Attributes Sequence when rewriting Study/Series Description
+- Gendered synthetic first-name pools for Replace PHI; Report Text Review opens at a sensible window size
+- Help: EN macOS screenshots and docs for De-identification Options, Description Mappings, Metadata Detect/Remove PHI, and Report Text Review (``demo_report_pdf`` fixture)
+- MIDI-B ingest: reduce over-scrub in the anonymizer script and Retain Safe Private path
 - DICOMweb PACS I/O (QIDO-RS / WADO-RS / STOW-RS) when enabled on a remote; credentials and HTTP port/path in DICOM server dialog
-- Sticky Study/Series ``description`` (intake original); Harmonize/Set description write ``harmonized_description`` only
-- DICOM Original Attributes Sequence when rewriting Study/Series Description
-- Per-project description mapping memory; Dataset Description Mappings viewer; Prefer description mappings in AI batch
-- Group controller analytics into ``controller/analytics/``; move AI batch modules under ``controller/ai/``
-- Split ProjectController DICOM networking into ``controller/dicom/``; prefer Study-Root C-GET over C-MOVE when negotiated
+- Group controller packages (``analytics/``, ``ai/``, ``dicom/``, ``series/``, ``script/``, …); SeriesWorkspace façade for Series View; prototyping tree reorganized into topic folders
+- Prefer Study-Root C-GET over C-MOVE when negotiated
 
 ## [19.1.0.dev2]
 - PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)

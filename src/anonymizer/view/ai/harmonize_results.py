@@ -27,6 +27,11 @@ from anonymizer.controller.ai.harmonize import (
     format_harmonize_progress_message,
     harmonize_series,
 )
+from anonymizer.controller.ai.harmonize.description_mapping_store import (
+    load_study_loinc_overrides,
+    lookup_series_override,
+    remember_series_override,
+)
 from anonymizer.controller.ai.harmonize.playbook import (
     PLAYBOOK_TREE_IIDS,
     build_localizer_playbook_attributes,
@@ -53,11 +58,6 @@ from anonymizer.view.common.app_window import AppToplevel, position_toplevel_nea
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import AppFonts
 from anonymizer.view.common.job_poller import STAGE_POLL_MS, start_background_job
-from anonymizer.view.project.description_mapping_store import (
-    load_study_loinc_overrides,
-    lookup_series_override,
-    remember_series_override,
-)
 
 logger = logging.getLogger(__name__)
 

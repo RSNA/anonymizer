@@ -4,7 +4,6 @@ This module contains the SettingsDialog class, which is a dialog window for mana
 
 import logging
 import string
-import tkinter as tk
 from copy import copy
 from pathlib import Path
 from tkinter import filedialog, messagebox
@@ -14,34 +13,32 @@ import customtkinter as ctk
 
 from anonymizer.controller.ctp_lookup import CtpLookupPreview
 from anonymizer.controller.project import ProjectController
-from anonymizer.model.project import BASIC_OPTIONS, RETAIN_OPTIONS, AWSCognito, DICOMNode, ProjectModel
-from anonymizer.utils.dicom import DeidMethodCode, deid_method_meaning
+from anonymizer.controller.script.options import (
+    clean_structured_auto_enable_message,
+    confidentiality_options_changed,
+    enable_clean_structured_for_report_modalities,
+)
+from anonymizer.controller.script.paths import packaged_default_script_path
+from anonymizer.model.project import AWSCognito, DICOMNode, ProjectModel
+from anonymizer.utils.dicom import DeidMethodCode
 from anonymizer.utils.logging import set_logging_levels
 from anonymizer.utils.storage.java_index import (
     JavaAnonymizerExportedStudy,
     read_java_anonymizer_index_xlsx,
 )
 from anonymizer.utils.translate import _, get_current_language_code
-from anonymizer.view.ai.features.availability import get_download_manager
-from anonymizer.view.ai.features.catalog import (
-    ai_feature_for_deid_option,
-    deid_option_ready,
-    groups_for,
-)
 from anonymizer.view.common.app_window import AppToplevel, install_modal_dismiss
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import default_char_width_px
 from anonymizer.view.common.ux_fields import str_entry
 from anonymizer.view.settings.anonymizer_script_dialog import AnonymizerScriptDialog
 from anonymizer.view.settings.aws_cognito_dialog import AWSCognitoDialog
+from anonymizer.view.settings.deidentification_options_dialog import DeidentificationOptionsDialog
 from anonymizer.view.settings.dicom_node_dialog import DICOMNodeDialog
 from anonymizer.view.settings.logging_levels_dialog import LoggingLevelsDialog
 from anonymizer.view.settings.modalites_dialog import ModalitiesDialog
 from anonymizer.view.settings.network_timeouts_dialog import NetworkTimeoutsDialog
-from anonymizer.view.settings.script_editor import (
-    confidentiality_options_changed,
-    options_switch_confirm_message,
-)
+from anonymizer.view.settings.script_editor import options_switch_confirm_message
 from anonymizer.view.settings.sop_classes_dialog import SOPClassesDialog
 from anonymizer.view.settings.transfer_syntaxes_dialog import TransferSyntaxesDialog
 
@@ -265,37 +262,6 @@ class SettingsDialog(AppToplevel):
 
         # row += 1
 
-        self._options_label = ctk.CTkLabel(self._frame, text=_("De-identification Options") + ":")
-        self._options_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
-        options_frame = ctk.CTkFrame(self._frame, fg_color="transparent")
-        options_frame.grid(row=row, column=1, pady=(PAD, 0), padx=PAD, sticky="nw")
-        self._option_vars: dict[DeidMethodCode, tk.BooleanVar] = {}
-        self._options_change_guard = False
-        for code in DeidMethodCode:
-            var = tk.BooleanVar(value=code in self.model.confidentiality_options)
-            self._option_vars[code] = var
-            checkbox = ctk.CTkCheckBox(
-                options_frame,
-                text=_(deid_method_meaning(code)),
-                variable=var,
-                command=lambda c=code: self._on_option_checkbox(c),
-            )
-            if code is DeidMethodCode.BASIC:
-                checkbox.configure(state="disabled")
-            checkbox.pack(anchor="w")
-        preset_frame = ctk.CTkFrame(options_frame, fg_color="transparent")
-        preset_frame.pack(anchor="w", pady=(4, 0))
-        ctk.CTkButton(
-            preset_frame, text=_("Basic"), width=90,
-            command=lambda: self._apply_options_preset(BASIC_OPTIONS),
-        ).pack(side="left", padx=(0, 8))
-        ctk.CTkButton(
-            preset_frame, text=_("Retain"), width=90,
-            command=lambda: self._apply_options_preset(RETAIN_OPTIONS),
-        ).pack(side="left")
-
-        row += 1
-
         self._modalities_label = ctk.CTkLabel(self._frame, text=_("Modalities") + ":")
         self._modalities_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
 
@@ -330,6 +296,17 @@ class SettingsDialog(AppToplevel):
             command=self._open_transfer_syntaxes_dialog,
         )
         self._transfer_syntaxes_button.grid(row=row, column=1, pady=(PAD, 0), padx=PAD, sticky="nw")
+
+        row += 1
+
+        self._options_label = ctk.CTkLabel(self._frame, text=_("De-identification Options") + ":")
+        self._options_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
+        self._options_button = ctk.CTkButton(
+            self._frame,
+            text=_("Select De-identification Options"),
+            command=self._open_deidentification_options_dialog,
+        )
+        self._options_button.grid(row=row, column=1, pady=(PAD, 0), padx=PAD, sticky="nw")
 
         row += 1
 
@@ -393,9 +370,7 @@ class SettingsDialog(AppToplevel):
             scp = self.model.remote_scps[_("QUERY")]
         else:
             scp = DICOMNode("127.0.0.1", 104, "", False)
-        dlg = DICOMNodeDialog(
-            self, scp, title=_("Query Server"), controller=self.project_controller
-        )
+        dlg = DICOMNodeDialog(self, scp, title=_("Query Server"), controller=self.project_controller)
         scp = dlg.get_input()
         if scp is None:
             logger.info("Query Server cancelled")
@@ -408,9 +383,7 @@ class SettingsDialog(AppToplevel):
             scp = self.model.remote_scps[_("EXPORT")]
         else:
             scp = DICOMNode("127.0.0.1", 104, "", False)
-        dlg = DICOMNodeDialog(
-            self, scp, title=_("Export Server"), controller=self.project_controller
-        )
+        dlg = DICOMNodeDialog(self, scp, title=_("Export Server"), controller=self.project_controller)
         scp = dlg.get_input()
         if scp is None:
             logger.info("Export Server cancelled")
@@ -449,6 +422,7 @@ class SettingsDialog(AppToplevel):
             logger.info(f"Storage Directory updated: {self.model.storage_dir}")
 
     def _open_modalities_dialog(self):
+        previous_modalities = list(self.model.modalities)
         dlg = ModalitiesDialog(self, self.model.modalities)
         edited_modalities = dlg.get_input()
         if edited_modalities is None:
@@ -458,6 +432,23 @@ class SettingsDialog(AppToplevel):
         self.model.set_storage_classes_from_modalities()
         logger.info(f"Modalities updated: {self.model.modalities}")
         logger.info(f"Storage Classes set according to Modalities selected: {self.model.storage_classes}")
+        new_options = enable_clean_structured_for_report_modalities(
+            self.model.confidentiality_options,
+            previous_modalities=previous_modalities,
+            selected_modalities=edited_modalities,
+        )
+        if new_options is None:
+            return
+        self.model.confidentiality_options = new_options
+        logger.info(
+            "Auto-enabled Clean Structured Content for SR/PDF modalities: %s",
+            sorted(int(code) for code in new_options),
+        )
+        messagebox.showinfo(
+            _("De-identification Options"),
+            _(clean_structured_auto_enable_message()),
+            parent=self,
+        )
 
     def _open_storage_classes_dialog(self):
         dlg = SOPClassesDialog(self, self.model.storage_classes, self.model.modalities)
@@ -481,42 +472,6 @@ class SettingsDialog(AppToplevel):
         self.model.anonymizer_script_path = script_path
         logger.info(f"Anonymizer Script File updated: {self.model.anonymizer_script_path}")
 
-    def _selected_options(self) -> frozenset[DeidMethodCode]:
-        """
-        De-identification options from the checkbox set.
-
-        Returns:
-            Selected option codes, always including the Basic Profile.
-        """
-        return frozenset(
-            {code for code, var in self._option_vars.items() if var.get()}
-            | {DeidMethodCode.BASIC}
-        )
-
-    def _set_option_vars(self, options: frozenset[DeidMethodCode]) -> None:
-        """
-        Reflect options in the checkbox set without firing callbacks.
-
-        Args:
-            options: Option codes to show as selected.
-        """
-        self._options_change_guard = True
-        try:
-            for code, var in self._option_vars.items():
-                var.set(code in options)
-        finally:
-            self._options_change_guard = False
-
-    def _apply_options_preset(self, options: frozenset[DeidMethodCode]) -> None:
-        """
-        Fill the checkbox set from a preset (Basic / Retain).
-
-        Args:
-            options: Preset option codes.
-        """
-        self._set_option_vars(options)
-        self._on_confidentiality_options_selected()
-
     def _sync_model_from_controller_options(self) -> None:
         """Copy options/script/modalities/storage classes from the controller after install.
 
@@ -531,102 +486,32 @@ class SettingsDialog(AppToplevel):
         self.model.modalities = list(ctrl.modalities)
         self.model.storage_classes = list(ctrl.storage_classes)
 
-    def _on_option_checkbox(self, code: DeidMethodCode) -> None:
-        """
-        Gate one option toggle on its AI feature's readiness.
-
-        A cleaning option may only be selected when its feature reports
-        ready; otherwise offer the model download in-flow. Declining (or a
-        failed download) leaves the option unselected.
-
-        Args:
-            code: Option whose checkbox was toggled.
-        """
-        if self._options_change_guard:
+    def _open_deidentification_options_dialog(self) -> None:
+        """Open the list + explanation dialog; apply selection on OK."""
+        dlg = DeidentificationOptionsDialog(self, self.model.confidentiality_options)
+        selected = dlg.get_input()
+        if selected is None:
+            logger.info("De-identification Options Dialog cancelled")
             return
-        var = self._option_vars[code]
-        if var.get() and not deid_option_ready(code):
-            var.set(False)
-            self._offer_option_download(code)
-            return
-        self._on_confidentiality_options_selected()
-
-    def _offer_option_download(self, code: DeidMethodCode) -> None:
-        """
-        Offer to download the models for a not-ready cleaning option.
-
-        Args:
-            code: Option the user tried to select.
-        """
-        feature = ai_feature_for_deid_option(code)
-        if feature is None:
-            messagebox.showinfo(
-                _("De-identification Options"),
-                _("This option is not available yet."),
-                parent=self,
-            )
-            return
-        groups = [g for g in groups_for(feature) if g.needs_download()]
-        if not groups:
-            messagebox.showinfo(
-                _("De-identification Options"),
-                _("This option is not ready (models or license missing)."),
-                parent=self,
-            )
-            return
-        if not messagebox.askyesno(
-            _("De-identification Options"),
-            _("Models for this option are not installed. Download now?"),
-            parent=self,
-        ):
-            return
-        manager = get_download_manager()
-        group = groups[0]
-
-        def _done(event) -> None:  # noqa: ANN001 - DownloadCompleteEvent from availability
-            self.after(0, lambda: self._after_option_download(code, event))
-
-        if not manager.start(group.download_id, group.download, on_complete=_done):
-            messagebox.showinfo(
-                _("De-identification Options"),
-                _("Another download is already in progress."),
-                parent=self,
-            )
-
-    def _after_option_download(self, code: DeidMethodCode, event) -> None:  # noqa: ANN001
-        """
-        Re-check readiness after an in-flow option download finishes.
-
-        Args:
-            code: Option the download was for.
-            event: Download completion event.
-        """
-        get_download_manager().clear_pending(event.download_id)
-        if event.error is None and deid_option_ready(code):
-            self._option_vars[code].set(True)
-            self._on_confidentiality_options_selected()
-        else:
-            messagebox.showinfo(
-                _("De-identification Options"),
-                _("This option is not ready (models or license missing)."),
-                parent=self,
-            )
-
-    def _on_confidentiality_options_selected(self) -> None:
-        """Existing project: confirm, then recompile the project script from the options."""
-        if self._options_change_guard or self.new_model or self.project_controller is None:
-            return
-        selected = self._selected_options()
+        selected = frozenset(selected) | {DeidMethodCode.BASIC}
         current = self.model.confidentiality_options
         if selected == current:
             return
+
+        if self.new_model or self.project_controller is None:
+            self.model.confidentiality_options = selected
+            logger.info(
+                "Confidentiality options set for new project: %s",
+                sorted(int(c) for c in selected),
+            )
+            return
+
         confirmed = messagebox.askyesno(
             _("De-identification Options"),
             _(options_switch_confirm_message()),
             parent=self,
         )
         if not confirmed:
-            self._set_option_vars(current)
             return
         try:
             self.project_controller.apply_confidentiality_options(selected)
@@ -637,17 +522,17 @@ class SettingsDialog(AppToplevel):
                 _("Failed to apply de-identification options") + f":\n{exc}",
                 parent=self,
             )
-            self._set_option_vars(current)
             return
         self._sync_model_from_controller_options()
-        self._set_option_vars(self.model.confidentiality_options)
-        logger.info(f"Confidentiality options switched to {sorted(int(c) for c in selected)}")
+        logger.info(
+            "Confidentiality options switched to %s",
+            sorted(int(c) for c in selected),
+        )
 
     def _open_anonymizer_script_dialog(self) -> None:
         script_path = Path(self.model.anonymizer_script_path)
         if not script_path.is_file():
-
-            default_script = Path("assets/scripts/default-anonymizer.script")
+            default_script = packaged_default_script_path()
             if default_script.is_file():
                 script_path = default_script
         if not script_path.is_file():
@@ -744,10 +629,8 @@ class SettingsDialog(AppToplevel):
         self.model.language_code = get_current_language_code()
         self.model.project_name = self.project_name_var.get()
         self.model.uid_root = self.uidroot_var.get()
-        if hasattr(self, "_option_vars"):
-            self.model.confidentiality_options = self._selected_options()
-        # Existing project: recompile only when options still differ
-        # (checkbox change already applied it; re-install would wipe Edit Script customizations).
+        # Existing project: recompile only when options still differ from the
+        # controller (Configure dialog already applied when confirmed).
         # Do not sync from controller when options are unchanged — that used to rebuild
         # storage_classes from modalities and discard SOP classes added in this dialog.
         if self.project_controller is not None:

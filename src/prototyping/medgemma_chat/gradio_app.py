@@ -34,7 +34,7 @@ def _require_gradio():
     except ImportError as exc:  # pragma: no cover
         raise SystemExit(
             "Gradio is required for --ui gradio. Install with:\n"
-            "  uv sync --extra mcp --group medgemma-chat --group dev\n"
+            "  uv sync --extra mcp --group medgemma-chat\n"
             f"({exc})"
         ) from exc
     return gr

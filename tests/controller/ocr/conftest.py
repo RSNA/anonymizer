@@ -5,10 +5,9 @@ from pathlib import Path
 import pytest
 
 from anonymizer.controller.ai.embedded_phi.pixel.cache import ocr_models_ready
-from tests.paths import REPO_ROOT
 
 # EasyOCR cache is relative to the anonymizer package root (assets/ai/ocr/model).
-_ANONYMIZER_PKG_ROOT = REPO_ROOT / "src" / "anonymizer"
+_ANONYMIZER_PKG_ROOT = Path(__file__).resolve().parents[3] / "src" / "anonymizer"
 
 
 def assert_dcm(path: Path) -> Path:

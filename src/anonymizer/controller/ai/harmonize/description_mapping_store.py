@@ -1,7 +1,37 @@
-"""Per-project description mapping CSVs under storage_dir/mappings (UX only; no PHI).
+"""Per-project description mapping CSVs under storage_dir/mappings (no PHI).
 
-Series: sticky intake SeriesDescription → RadLex Playbook string.
-Study: sticky intake StudyDescription → LOINC number (resolve name via LOINC CSV).
+Sticky intake SeriesDescription → RadLex Playbook string, and StudyDescription →
+LOINC number (resolve name via LOINC CSV). Used by GUI, CLI batch, and harmonize.
+
+Public API
+----------
+SERIES_CSV_NAME, STUDY_CSV_NAME
+    Mapping CSV filenames under the project mappings directory.
+
+SeriesDescriptionOverride, StudyDescriptionOverride
+    Frozen row types for series and study mappings.
+
+ensure_mappings_dir(mappings_dir) -> Path
+    Create mappings_dir if missing.
+
+series_csv_path(mappings_dir) -> Path
+study_csv_path(mappings_dir) -> Path
+    Paths to the series and study mapping CSVs.
+
+load_series_overrides(mappings_dir) -> dict[str, str]
+load_study_loinc_overrides(mappings_dir) -> dict[str, str]
+    Load original→value maps for batch and CLI.
+
+list_series_overrides(mappings_dir) -> list[SeriesDescriptionOverride]
+list_study_overrides(mappings_dir) -> list[StudyDescriptionOverride]
+    Sorted row lists for the mappings inspector UI.
+
+lookup_series_override(mappings_dir, original) -> SeriesDescriptionOverride | None
+lookup_study_override(mappings_dir, original) -> StudyDescriptionOverride | None
+    Exact lookup by sticky original description.
+
+upsert_series_override / upsert_study_override / delete_* / remember_*
+    Persist or remove mapping rows.
 """
 
 import csv

@@ -5,9 +5,9 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from anonymizer.controller.script.document import load_script_rules, tag_keep_from_document
+from anonymizer.controller.script.paths import packaged_default_script_path
 from anonymizer.model.anonymizer import AnonymizerModel
 from tests.controller.dicom.support.test_nodes import TEST_SITEID, TEST_UIDROOT
-from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
 
 
 def load_model_script(model: AnonymizerModel, script_path: Path) -> None:
@@ -28,7 +28,7 @@ def opened_anonymizer_model(
     script_path: Path | None = None,
 ) -> Iterator[AnonymizerModel]:
     """Yield an AnonymizerModel; always call ``close()`` so sqlite pools do not leak."""
-    path = script_path or DEFAULT_ANONYMIZER_SCRIPT
+    path = script_path or packaged_default_script_path()
     model = AnonymizerModel(
         site_id=site_id,
         uid_root=uid_root,

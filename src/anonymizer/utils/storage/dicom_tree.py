@@ -17,6 +17,12 @@ is_non_dicom_import_name(name: str) -> bool
 list_import_directory_files(root_dir: str | Path) -> list[str]
     List files under root_dir, skipping hidden names and non-DICOM sidecars.
 
+ImportPathsError
+    Raised when a DICOMDIR cannot be read during import expansion.
+
+expand_import_directory(root_dir: str | Path) -> list[str]
+    List files under root_dir; honor DICOMDIR when present.
+
 count_studies_series_images(patient_path: str) -> tuple[int, int, int]
     Count studies, series, and images in a patient directory in the anonymizer store.
 
@@ -32,9 +38,14 @@ count_study_images(base_dir: Path, anon_pt_id: str, study_uid: str) -> int
 count_quarantine_images(quarantine_path: Path) -> int
     Count images stored in the quarantine directory.
 """
+import logging
 import os
 from pathlib import Path
 from typing import Optional
+
+from pydicom import dcmread
+
+logger = logging.getLogger(__name__)
 
 DICOM_FILE_SUFFIX = ".dcm"
 
@@ -102,6 +113,87 @@ def list_import_directory_files(root_dir: str | Path) -> list[str]:
             if is_hidden_name(filename) or is_non_dicom_import_name(filename):
                 continue
             file_paths.append(os.path.join(dirpath, filename))
+    return file_paths
+
+
+class ImportPathsError(Exception):
+    """Raised when expanding an import directory fails (e.g. bad DICOMDIR)."""
+
+
+def expand_import_directory(root_dir: str | Path) -> list[str]:
+    """
+    Expand a directory to importable file paths (DICOMDIR-aware).
+
+    When a DICOMDIR file is present, referenced image paths are collected from
+    the directory records. Otherwise the tree is walked with
+    list_import_directory_files.
+
+    Args:
+        root_dir: Directory to expand.
+
+    Returns:
+        Path strings suitable for anonymize_file / import_paths.
+
+    Raises:
+        ImportPathsError: When a DICOMDIR exists but cannot be read.
+    """
+    root = os.fspath(root_dir)
+    dicomdir_file = os.path.join(root, "DICOMDIR")
+    if not os.path.exists(dicomdir_file):
+        return list_import_directory_files(root)
+
+    file_paths: list[str] = []
+    try:
+        ds = dcmread(fp=dicomdir_file)
+        resolved_root = str(Path(str(ds.filename)).resolve().parent)
+        logger.info("Reading DICOMDIR root directory: %s", Path(resolved_root).stem)
+
+        for patient in ds.patient_records:
+            logger.info(
+                "PATIENT: PatientID=%s, PatientName=%s",
+                patient.PatientID,
+                patient.PatientName,
+            )
+            studies = [ii for ii in patient.children if ii.DirectoryRecordType == "STUDY"]
+            for study in studies:
+                descr = study.StudyDescription or "(no value available)"
+                logger.info(
+                    "  STUDY: StudyID=%s, StudyDate=%s, StudyDescription=%s",
+                    study.StudyID,
+                    study.StudyDate,
+                    descr,
+                )
+                all_series = [ii for ii in study.children if ii.DirectoryRecordType == "SERIES"]
+                for series in all_series:
+                    images = [ii for ii in series.children if ii.DirectoryRecordType == "IMAGE"]
+                    plural = ("", "s")[len(images) > 1]
+                    series_descr = getattr(series, "SeriesDescription", "(no value available)")
+                    logger.info(
+                        "    SERIES: SeriesNumber=%s, Modality=%s, SeriesDescription=%s - "
+                        "%s SOP Instance%s",
+                        series.SeriesNumber,
+                        series.Modality,
+                        series_descr,
+                        len(images),
+                        plural,
+                    )
+                    elems = [ii["ReferencedFileID"] for ii in images]
+                    path_parts: list[list[str]] = []
+                    for element in elems:
+                        if element.VM == 1:
+                            path_parts.append([str(element.value)])
+                        else:
+                            path_parts.append([str(part) for part in element.value])
+                    image_paths = [
+                        f"{resolved_root}/{Path(*parts)}" for parts in path_parts
+                    ]
+                    for fp in image_paths:
+                        if is_hidden_path(fp):
+                            continue
+                        logger.info("      IMAGE: Path=%s", os.fspath(fp))
+                        file_paths.append(fp)
+    except Exception as exc:
+        raise ImportPathsError(f"{dicomdir_file}, {exc}") from exc
     return file_paths
 
 

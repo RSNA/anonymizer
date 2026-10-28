@@ -1,0 +1,2572 @@
+{
+  "source": "DICOM PS3.15 Table E.1-1",
+  "edition_note": "Extracted from current NEMA HTML (aligned with project 2025e dict assets)",
+  "families": {
+    "device": [
+      {
+        "tag": "300C0127",
+        "name": "Beam Hold Transition DateTime",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "0014407E",
+        "name": "Calibration Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00181203",
+        "name": "Calibration DateTime",
+        "basic": "Z",
+        "option": "K"
+      },
+      {
+        "tag": "0014407C",
+        "name": "Calibration Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00181007",
+        "name": "Cassette ID",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00181205",
+        "name": "Date of Installation",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00181200",
+        "name": "Date of Last Calibration",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0018700C",
+        "name": "Date of Last Detector Calibration",
+        "basic": "X/D",
+        "option": "K"
+      },
+      {
+        "tag": "00181204",
+        "name": "Date of Manufacture",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00181202",
+        "name": "DateTime of Last Calibration",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "21000140",
+        "name": "Destination AE",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "0018700A",
+        "name": "Detector ID",
+        "basic": "X/D",
+        "option": "K"
+      },
+      {
+        "tag": "00500020",
+        "name": "Device Description",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "3010002D",
+        "name": "Device Label",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "00181000",
+        "name": "Device Serial Number",
+        "basic": "X/Z/D",
+        "option": "K"
+      },
+      {
+        "tag": "00181002",
+        "name": "Device UID",
+        "basic": "U",
+        "option": "K"
+      },
+      {
+        "tag": "00181008",
+        "name": "Gantry ID",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00181005",
+        "name": "Generator ID",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00181011",
+        "name": "Hardcopy Creation Device ID",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0016004F",
+        "name": "Lens Make",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00160050",
+        "name": "Lens Model",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00160051",
+        "name": "Lens Serial Number",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0016004E",
+        "name": "Lens Specification",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0018100B",
+        "name": "Manufacturer's Device Class UID",
+        "basic": "U",
+        "option": "K"
+      },
+      {
+        "tag": "30100043",
+        "name": "Manufacturer's Device Identifier",
+        "basic": "Z",
+        "option": "K"
+      },
+      {
+        "tag": "00203401",
+        "name": "Modifying Device ID",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "04000563",
+        "name": "Modifying System",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "00081000",
+        "name": "Network ID",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "21000070",
+        "name": "Originator",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00400241",
+        "name": "Performed Station AE Title",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00404030",
+        "name": "Performed Station Geographic Location Code Sequence",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00400242",
+        "name": "Performed Station Name",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00404028",
+        "name": "Performed Station Name Code Sequence",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00181004",
+        "name": "Plate ID",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00741234",
+        "name": "Receiving AE",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00741236",
+        "name": "Requesting AE",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00080054",
+        "name": "Retrieve AE Title",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00400011",
+        "name": "Scheduled Procedure Step Location",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00400001",
+        "name": "Scheduled Station AE Title",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00404027",
+        "name": "Scheduled Station Geographic Location Code Sequence",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00400010",
+        "name": "Scheduled Station Name",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00404025",
+        "name": "Scheduled Station Name Code Sequence",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00321020",
+        "name": "Scheduled Study Location",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00321021",
+        "name": "Scheduled Study Location AE Title",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00181010",
+        "name": "Secondary Capture Device ID",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0072005E",
+        "name": "Selector AE Value",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "300A0216",
+        "name": "Source Manufacturer",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "30080105",
+        "name": "Source Serial Number",
+        "basic": "X/Z",
+        "option": "K"
+      },
+      {
+        "tag": "00080055",
+        "name": "Station AE Title",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00081010",
+        "name": "Station Name",
+        "basic": "X/Z/D",
+        "option": "K"
+      },
+      {
+        "tag": "00181201",
+        "name": "Time of Last Calibration",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0018700E",
+        "name": "Time of Last Detector Calibration",
+        "basic": "X/D",
+        "option": "K"
+      },
+      {
+        "tag": "00185011",
+        "name": "Transducer Identification Sequence",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "300A00B2",
+        "name": "Treatment Machine Name",
+        "basic": "X/Z",
+        "option": "K"
+      },
+      {
+        "tag": "0018100A",
+        "name": "UDI Sequence",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00181009",
+        "name": "Unique Device Identifier",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00189371",
+        "name": "X-Ray Detector ID",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "00189373",
+        "name": "X-Ray Detector Label",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00189367",
+        "name": "X-Ray Source ID",
+        "basic": "D",
+        "option": "K"
+      }
+    ],
+    "institution": [
+      {
+        "tag": "00120060",
+        "name": "Clinical Trial Coordinating Center Name",
+        "basic": "Z",
+        "option": "K"
+      },
+      {
+        "tag": "00120081",
+        "name": "Clinical Trial Protocol Ethics Committee Name",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "00120030",
+        "name": "Clinical Trial Site ID",
+        "basic": "Z",
+        "option": "K"
+      },
+      {
+        "tag": "00120031",
+        "name": "Clinical Trial Site Name",
+        "basic": "Z",
+        "option": "K"
+      },
+      {
+        "tag": "00080081",
+        "name": "Institution Address",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00081040",
+        "name": "Institutional Department Name",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00081041",
+        "name": "Institutional Department Type Code Sequence",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00080082",
+        "name": "Institution Code Sequence",
+        "basic": "X/Z/D",
+        "option": "K"
+      },
+      {
+        "tag": "00080080",
+        "name": "Institution Name",
+        "basic": "X/Z/D",
+        "option": "K"
+      },
+      {
+        "tag": "04000564",
+        "name": "Source of Previous Values",
+        "basic": "Z",
+        "option": "K"
+      }
+    ],
+    "patient_characteristics": [
+      {
+        "tag": "00102110",
+        "name": "Allergies",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00102160",
+        "name": "Ethnic Group",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00102161",
+        "name": "Ethnic Group Code Sequence",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00102162",
+        "name": "Ethnic Groups",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00101010",
+        "name": "Patient's Age",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00100040",
+        "name": "Patient's Sex",
+        "basic": "Z",
+        "option": "K"
+      },
+      {
+        "tag": "00102203",
+        "name": "Patient's Sex Neutered",
+        "basic": "X/Z",
+        "option": "K"
+      },
+      {
+        "tag": "00101020",
+        "name": "Patient's Size",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00101030",
+        "name": "Patient's Weight",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00380500",
+        "name": "Patient State",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "001021C0",
+        "name": "Pregnancy Status",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00400012",
+        "name": "Pre-Medication",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "0072005F",
+        "name": "Selector AS Value",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "00100046",
+        "name": "Sex Parameters for Clinical Use Category Code Sequence",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00100042",
+        "name": "Sex Parameters for Clinical Use Category Comment",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00100047",
+        "name": "Sex Parameters for Clinical Use Category Reference",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00100043",
+        "name": "Sex Parameters for Clinical Use Category Sequence",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "001021A0",
+        "name": "Smoking Status",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00380050",
+        "name": "Special Needs",
+        "basic": "X",
+        "option": "C"
+      }
+    ],
+    "full_dates": [
+      {
+        "tag": "00080022",
+        "name": "Acquisition Date",
+        "basic": "X/Z",
+        "option": "K"
+      },
+      {
+        "tag": "0008002A",
+        "name": "Acquisition DateTime",
+        "basic": "X/Z/D",
+        "option": "K"
+      },
+      {
+        "tag": "00080032",
+        "name": "Acquisition Time",
+        "basic": "X/Z",
+        "option": "K"
+      },
+      {
+        "tag": "00380020",
+        "name": "Admitting Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00380021",
+        "name": "Admitting Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0040B034",
+        "name": "Annotation DateTime",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00440004",
+        "name": "Approval Status DateTime",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00440104",
+        "name": "Assertion DateTime",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "00440105",
+        "name": "Assertion Expiration DateTime",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "04000562",
+        "name": "Attribute Modification DateTime",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "300C0127",
+        "name": "Beam Hold Transition DateTime",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "0014407E",
+        "name": "Calibration Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00181203",
+        "name": "Calibration DateTime",
+        "basic": "Z",
+        "option": "K"
+      },
+      {
+        "tag": "0014407C",
+        "name": "Calibration Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "04000310",
+        "name": "Certified Timestamp",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00080023",
+        "name": "Content Date",
+        "basic": "Z/D",
+        "option": "K"
+      },
+      {
+        "tag": "00080033",
+        "name": "Content Time",
+        "basic": "Z/D",
+        "option": "K"
+      },
+      {
+        "tag": "00080107",
+        "name": "Context Group Local Version",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "00080106",
+        "name": "Context Group Version",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "00181042",
+        "name": "Contrast/Bolus Start Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00181043",
+        "name": "Contrast/Bolus Stop Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0018A002",
+        "name": "Contribution DateTime",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "21000040",
+        "name": "Creation Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "21000050",
+        "name": "Creation Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00080025",
+        "name": "Curve Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00080035",
+        "name": "Curve Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0040A121",
+        "name": "Date",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "0040A110",
+        "name": "Date of Document or Verbal Transaction (Trial)",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00181205",
+        "name": "Date of Installation",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00181200",
+        "name": "Date of Last Calibration",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0018700C",
+        "name": "Date of Last Detector Calibration",
+        "basic": "X/D",
+        "option": "K"
+      },
+      {
+        "tag": "00181204",
+        "name": "Date of Manufacture",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00181012",
+        "name": "Date of Secondary Capture",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0040A120",
+        "name": "DateTime",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "00181202",
+        "name": "DateTime of Last Calibration",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00189701",
+        "name": "Decay Correction DateTime",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "04000105",
+        "name": "Digital Signature DateTime",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "00380030",
+        "name": "Discharge Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00380032",
+        "name": "Discharge Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00686226",
+        "name": "Effective DateTime",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "0040A034",
+        "name": "Effective Start DateTime",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0040A035",
+        "name": "Effective Stop DateTime",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00189517",
+        "name": "End Acquisition DateTime",
+        "basic": "X/D",
+        "option": "K"
+      },
+      {
+        "tag": "00120087",
+        "name": "Ethics Committee Approval Effectiveness End Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00120086",
+        "name": "Ethics Committee Approval Effectiveness Start Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00189804",
+        "name": "Exclusion Start DateTime",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "00404011",
+        "name": "Expected Completion DateTime",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0040A023",
+        "name": "Findings Group Recording Date (Trial)",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0040A024",
+        "name": "Findings Group Recording Time (Trial)",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "30080054",
+        "name": "First Treatment Date",
+        "basic": "X/D",
+        "option": "K"
+      },
+      {
+        "tag": "00189074",
+        "name": "Frame Acquisition DateTime",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "00340007",
+        "name": "Frame Origin Timestamp",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "00189151",
+        "name": "Frame Reference DateTime",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "00189623",
+        "name": "Functional Sync Pulse",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "0016008D",
+        "name": "GPS Date\u200b Stamp",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0072000A",
+        "name": "Hanging Protocol Creation DateTime",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "0040E004",
+        "name": "HL7 Document Effective Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "003A0314",
+        "name": "Impedance Measurement DateTime",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "00686270",
+        "name": "Information Issue DateTime",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "00080015",
+        "name": "Instance Coercion DateTime",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00080012",
+        "name": "Instance Creation Date",
+        "basic": "X/D",
+        "option": "K"
+      },
+      {
+        "tag": "00080013",
+        "name": "Instance Creation Time",
+        "basic": "X/Z/D",
+        "option": "K"
+      },
+      {
+        "tag": "00189919",
+        "name": "Instruction Performed DateTime",
+        "basic": "Z/D",
+        "option": "K"
+      },
+      {
+        "tag": "30100085",
+        "name": "Intended Fraction Start Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "3010004D",
+        "name": "Intended Phase End Date",
+        "basic": "X/D",
+        "option": "K"
+      },
+      {
+        "tag": "3010004C",
+        "name": "Intended Phase Start Date",
+        "basic": "X/D",
+        "option": "K"
+      },
+      {
+        "tag": "300A0741",
+        "name": "Interlock DateTime",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "40080112",
+        "name": "Interpretation Approval Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "40080113",
+        "name": "Interpretation Approval Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "40080100",
+        "name": "Interpretation Recorded Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "40080101",
+        "name": "Interpretation Recorded Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "40080108",
+        "name": "Interpretation Transcription Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "40080109",
+        "name": "Interpretation Transcription Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00180035",
+        "name": "Intervention Drug Start Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00180027",
+        "name": "Intervention Drug Stop Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00402004",
+        "name": "Issue Date of Imaging Service Request",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00402005",
+        "name": "Issue Time of Imaging Service Request",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "001021D0",
+        "name": "Last Menstrual Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00203403",
+        "name": "Modified Image Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00203405",
+        "name": "Modified Image Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "30080056",
+        "name": "Most Recent Treatment Date",
+        "basic": "X/D",
+        "option": "K"
+      },
+      {
+        "tag": "0040A192",
+        "name": "Observation Date (Trial)",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0040A032",
+        "name": "Observation DateTime",
+        "basic": "X/D",
+        "option": "K"
+      },
+      {
+        "tag": "0040A033",
+        "name": "Observation Start DateTime",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0040A193",
+        "name": "Observation Time (Trial)",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00080024",
+        "name": "Overlay Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00080034",
+        "name": "Overlay Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "300A0760",
+        "name": "Override DateTime",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "0040A082",
+        "name": "Participation DateTime",
+        "basic": "Z",
+        "option": "K"
+      },
+      {
+        "tag": "00400250",
+        "name": "Performed Procedure Step End Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00404051",
+        "name": "Performed Procedure Step End DateTime",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00400251",
+        "name": "Performed Procedure Step End Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00400244",
+        "name": "Performed Procedure Step Start Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00404050",
+        "name": "Performed Procedure Step Start DateTime",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00400245",
+        "name": "Performed Procedure Step Start Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00700082",
+        "name": "Presentation Creation Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00700083",
+        "name": "Presentation Creation Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00404052",
+        "name": "Procedure Step Cancellation DateTime",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0044000B",
+        "name": "Product Expiration DateTime",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00181078",
+        "name": "Radiopharmaceutical Start DateTime",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00181072",
+        "name": "Radiopharmaceutical Start Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00181079",
+        "name": "Radiopharmaceutical Stop DateTime",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00181073",
+        "name": "Radiopharmaceutical Stop Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "300A073A",
+        "name": "Recorded RT Control Point DateTime",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "0040A13A",
+        "name": "Referenced DateTime",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "300E0004",
+        "name": "Review Date",
+        "basic": "Z",
+        "option": "K"
+      },
+      {
+        "tag": "300E0005",
+        "name": "Review Time",
+        "basic": "Z",
+        "option": "K"
+      },
+      {
+        "tag": "3006002D",
+        "name": "ROI DateTime",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "3006002E",
+        "name": "ROI Observation DateTime",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "300A0006",
+        "name": "RT Plan Date",
+        "basic": "X/D",
+        "option": "K"
+      },
+      {
+        "tag": "300A0007",
+        "name": "RT Plan Time",
+        "basic": "X/D",
+        "option": "K"
+      },
+      {
+        "tag": "30080162",
+        "name": "Safe Position Exit Date",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "30080164",
+        "name": "Safe Position Exit Time",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "30080166",
+        "name": "Safe Position Return Date",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "30080168",
+        "name": "Safe Position Return Time",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "0038001A",
+        "name": "Scheduled Admission Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0038001B",
+        "name": "Scheduled Admission Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0038001C",
+        "name": "Scheduled Discharge Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0038001D",
+        "name": "Scheduled Discharge Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00400004",
+        "name": "Scheduled Procedure Step End Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00400005",
+        "name": "Scheduled Procedure Step End Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00404008",
+        "name": "Scheduled Procedure Step Expiration DateTime",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00404010",
+        "name": "Scheduled Procedure Step Modification DateTime",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00400002",
+        "name": "Scheduled Procedure Step Start Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00404005",
+        "name": "Scheduled Procedure Step Start DateTime",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00400003",
+        "name": "Scheduled Procedure Step Start Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00321000",
+        "name": "Scheduled Study Start Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00321001",
+        "name": "Scheduled Study Start Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00321010",
+        "name": "Scheduled Study Stop Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00321011",
+        "name": "Scheduled Study Stop Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0040B036",
+        "name": "Segment Definition DateTime",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00720061",
+        "name": "Selector DA Value",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "00720063",
+        "name": "Selector DT Value",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "0072006B",
+        "name": "Selector TM Value",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "00080021",
+        "name": "Series Date",
+        "basic": "X/D",
+        "option": "K"
+      },
+      {
+        "tag": "00080031",
+        "name": "Series Time",
+        "basic": "X/D",
+        "option": "K"
+      },
+      {
+        "tag": "01000420",
+        "name": "SOP Authorization DateTime",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0018936A",
+        "name": "Source End DateTime",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "00189369",
+        "name": "Source Start DateTime",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "300A022C",
+        "name": "Source Strength Reference Date",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "300A022E",
+        "name": "Source Strength Reference Time",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "00189516",
+        "name": "Start Acquisition DateTime",
+        "basic": "X/D",
+        "option": "K"
+      },
+      {
+        "tag": "30060008",
+        "name": "Structure Set Date",
+        "basic": "Z",
+        "option": "K"
+      },
+      {
+        "tag": "30060009",
+        "name": "Structure Set Time",
+        "basic": "Z",
+        "option": "K"
+      },
+      {
+        "tag": "00321040",
+        "name": "Study Arrival Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00321041",
+        "name": "Study Arrival Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00321050",
+        "name": "Study Completion Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00321051",
+        "name": "Study Completion Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00080020",
+        "name": "Study Date",
+        "basic": "Z",
+        "option": "K"
+      },
+      {
+        "tag": "00320034",
+        "name": "Study Read Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00320035",
+        "name": "Study Read Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00080030",
+        "name": "Study Time",
+        "basic": "Z",
+        "option": "K"
+      },
+      {
+        "tag": "00320032",
+        "name": "Study Verified Date",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00320033",
+        "name": "Study Verified Time",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00440010",
+        "name": "Substance Administration DateTime",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0040DB07",
+        "name": "Template Local Version",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0040DB06",
+        "name": "Template Version",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0040A122",
+        "name": "Time",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "0040A112",
+        "name": "Time of Document Creation or Verbal Transaction (Trial)",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00181201",
+        "name": "Time of Last Calibration",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "0018700E",
+        "name": "Time of Last Detector Calibration",
+        "basic": "X/D",
+        "option": "K"
+      },
+      {
+        "tag": "00181014",
+        "name": "Time of Secondary Capture",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "00080201",
+        "name": "Timezone Offset From UTC",
+        "basic": "X",
+        "option": "K"
+      },
+      {
+        "tag": "30080024",
+        "name": "Treatment Control Point Date",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "30080025",
+        "name": "Treatment Control Point Time",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "30080250",
+        "name": "Treatment Date",
+        "basic": "X/D",
+        "option": "K"
+      },
+      {
+        "tag": "30080251",
+        "name": "Treatment Time",
+        "basic": "X/D",
+        "option": "K"
+      },
+      {
+        "tag": "300A0736",
+        "name": "Treatment Tolerance Violation DateTime",
+        "basic": "D",
+        "option": "K"
+      },
+      {
+        "tag": "0040A030",
+        "name": "Verification DateTime",
+        "basic": "D",
+        "option": "K"
+      }
+    ],
+    "modified_dates": [
+      {
+        "tag": "00080022",
+        "name": "Acquisition Date",
+        "basic": "X/Z",
+        "option": "C"
+      },
+      {
+        "tag": "0008002A",
+        "name": "Acquisition DateTime",
+        "basic": "X/Z/D",
+        "option": "C"
+      },
+      {
+        "tag": "00080032",
+        "name": "Acquisition Time",
+        "basic": "X/Z",
+        "option": "C"
+      },
+      {
+        "tag": "00380020",
+        "name": "Admitting Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00380021",
+        "name": "Admitting Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "0040B034",
+        "name": "Annotation DateTime",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00440004",
+        "name": "Approval Status DateTime",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00440104",
+        "name": "Assertion DateTime",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "00440105",
+        "name": "Assertion Expiration DateTime",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "04000562",
+        "name": "Attribute Modification DateTime",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "300C0127",
+        "name": "Beam Hold Transition DateTime",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "0014407E",
+        "name": "Calibration Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00181203",
+        "name": "Calibration DateTime",
+        "basic": "Z",
+        "option": "C"
+      },
+      {
+        "tag": "0014407C",
+        "name": "Calibration Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "04000310",
+        "name": "Certified Timestamp",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00080023",
+        "name": "Content Date",
+        "basic": "Z/D",
+        "option": "C"
+      },
+      {
+        "tag": "00080033",
+        "name": "Content Time",
+        "basic": "Z/D",
+        "option": "C"
+      },
+      {
+        "tag": "00080107",
+        "name": "Context Group Local Version",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "00080106",
+        "name": "Context Group Version",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "00181042",
+        "name": "Contrast/Bolus Start Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00181043",
+        "name": "Contrast/Bolus Stop Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "0018A002",
+        "name": "Contribution DateTime",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "21000040",
+        "name": "Creation Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "21000050",
+        "name": "Creation Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00080025",
+        "name": "Curve Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00080035",
+        "name": "Curve Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "0040A121",
+        "name": "Date",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "0040A110",
+        "name": "Date of Document or Verbal Transaction (Trial)",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00181205",
+        "name": "Date of Installation",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00181200",
+        "name": "Date of Last Calibration",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "0018700C",
+        "name": "Date of Last Detector Calibration",
+        "basic": "X/D",
+        "option": "C"
+      },
+      {
+        "tag": "00181204",
+        "name": "Date of Manufacture",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00181012",
+        "name": "Date of Secondary Capture",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "0040A120",
+        "name": "DateTime",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "00181202",
+        "name": "DateTime of Last Calibration",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00189701",
+        "name": "Decay Correction DateTime",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "04000105",
+        "name": "Digital Signature DateTime",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "00380030",
+        "name": "Discharge Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00380032",
+        "name": "Discharge Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00686226",
+        "name": "Effective DateTime",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "0040A034",
+        "name": "Effective Start DateTime",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "0040A035",
+        "name": "Effective Stop DateTime",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00189517",
+        "name": "End Acquisition DateTime",
+        "basic": "X/D",
+        "option": "C"
+      },
+      {
+        "tag": "00120087",
+        "name": "Ethics Committee Approval Effectiveness End Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00120086",
+        "name": "Ethics Committee Approval Effectiveness Start Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00189804",
+        "name": "Exclusion Start DateTime",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "00404011",
+        "name": "Expected Completion DateTime",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "0040A023",
+        "name": "Findings Group Recording Date (Trial)",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "0040A024",
+        "name": "Findings Group Recording Time (Trial)",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "30080054",
+        "name": "First Treatment Date",
+        "basic": "X/D",
+        "option": "C"
+      },
+      {
+        "tag": "00189074",
+        "name": "Frame Acquisition DateTime",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "00340007",
+        "name": "Frame Origin Timestamp",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "00189151",
+        "name": "Frame Reference DateTime",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "00189623",
+        "name": "Functional Sync Pulse",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "0016008D",
+        "name": "GPS Date\u200b Stamp",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "0072000A",
+        "name": "Hanging Protocol Creation DateTime",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "0040E004",
+        "name": "HL7 Document Effective Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "003A0314",
+        "name": "Impedance Measurement DateTime",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "00686270",
+        "name": "Information Issue DateTime",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "00080015",
+        "name": "Instance Coercion DateTime",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00080012",
+        "name": "Instance Creation Date",
+        "basic": "X/D",
+        "option": "C"
+      },
+      {
+        "tag": "00080013",
+        "name": "Instance Creation Time",
+        "basic": "X/Z/D",
+        "option": "C"
+      },
+      {
+        "tag": "00189919",
+        "name": "Instruction Performed DateTime",
+        "basic": "Z/D",
+        "option": "C"
+      },
+      {
+        "tag": "30100085",
+        "name": "Intended Fraction Start Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "3010004D",
+        "name": "Intended Phase End Date",
+        "basic": "X/D",
+        "option": "C"
+      },
+      {
+        "tag": "3010004C",
+        "name": "Intended Phase Start Date",
+        "basic": "X/D",
+        "option": "C"
+      },
+      {
+        "tag": "300A0741",
+        "name": "Interlock DateTime",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "40080112",
+        "name": "Interpretation Approval Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "40080113",
+        "name": "Interpretation Approval Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "40080100",
+        "name": "Interpretation Recorded Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "40080101",
+        "name": "Interpretation Recorded Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "40080108",
+        "name": "Interpretation Transcription Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "40080109",
+        "name": "Interpretation Transcription Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00180035",
+        "name": "Intervention Drug Start Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00180027",
+        "name": "Intervention Drug Stop Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00402004",
+        "name": "Issue Date of Imaging Service Request",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00402005",
+        "name": "Issue Time of Imaging Service Request",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "001021D0",
+        "name": "Last Menstrual Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00203403",
+        "name": "Modified Image Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00203405",
+        "name": "Modified Image Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "30080056",
+        "name": "Most Recent Treatment Date",
+        "basic": "X/D",
+        "option": "C"
+      },
+      {
+        "tag": "0040A192",
+        "name": "Observation Date (Trial)",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "0040A032",
+        "name": "Observation DateTime",
+        "basic": "X/D",
+        "option": "C"
+      },
+      {
+        "tag": "0040A033",
+        "name": "Observation Start DateTime",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "0040A193",
+        "name": "Observation Time (Trial)",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00080024",
+        "name": "Overlay Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00080034",
+        "name": "Overlay Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "300A0760",
+        "name": "Override DateTime",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "0040A082",
+        "name": "Participation DateTime",
+        "basic": "Z",
+        "option": "C"
+      },
+      {
+        "tag": "00400250",
+        "name": "Performed Procedure Step End Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00404051",
+        "name": "Performed Procedure Step End DateTime",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00400251",
+        "name": "Performed Procedure Step End Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00400244",
+        "name": "Performed Procedure Step Start Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00404050",
+        "name": "Performed Procedure Step Start DateTime",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00400245",
+        "name": "Performed Procedure Step Start Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00700082",
+        "name": "Presentation Creation Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00700083",
+        "name": "Presentation Creation Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00404052",
+        "name": "Procedure Step Cancellation DateTime",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "0044000B",
+        "name": "Product Expiration DateTime",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00181078",
+        "name": "Radiopharmaceutical Start DateTime",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00181072",
+        "name": "Radiopharmaceutical Start Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00181079",
+        "name": "Radiopharmaceutical Stop DateTime",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00181073",
+        "name": "Radiopharmaceutical Stop Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "300A073A",
+        "name": "Recorded RT Control Point DateTime",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "0040A13A",
+        "name": "Referenced DateTime",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "300E0004",
+        "name": "Review Date",
+        "basic": "Z",
+        "option": "C"
+      },
+      {
+        "tag": "300E0005",
+        "name": "Review Time",
+        "basic": "Z",
+        "option": "C"
+      },
+      {
+        "tag": "3006002D",
+        "name": "ROI DateTime",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "3006002E",
+        "name": "ROI Observation DateTime",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "300A0006",
+        "name": "RT Plan Date",
+        "basic": "X/D",
+        "option": "C"
+      },
+      {
+        "tag": "300A0007",
+        "name": "RT Plan Time",
+        "basic": "X/D",
+        "option": "C"
+      },
+      {
+        "tag": "30080162",
+        "name": "Safe Position Exit Date",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "30080164",
+        "name": "Safe Position Exit Time",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "30080166",
+        "name": "Safe Position Return Date",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "30080168",
+        "name": "Safe Position Return Time",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "0038001A",
+        "name": "Scheduled Admission Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "0038001B",
+        "name": "Scheduled Admission Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "0038001C",
+        "name": "Scheduled Discharge Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "0038001D",
+        "name": "Scheduled Discharge Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00400004",
+        "name": "Scheduled Procedure Step End Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00400005",
+        "name": "Scheduled Procedure Step End Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00404008",
+        "name": "Scheduled Procedure Step Expiration DateTime",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00404010",
+        "name": "Scheduled Procedure Step Modification DateTime",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00400002",
+        "name": "Scheduled Procedure Step Start Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00404005",
+        "name": "Scheduled Procedure Step Start DateTime",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00400003",
+        "name": "Scheduled Procedure Step Start Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00321000",
+        "name": "Scheduled Study Start Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00321001",
+        "name": "Scheduled Study Start Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00321010",
+        "name": "Scheduled Study Stop Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00321011",
+        "name": "Scheduled Study Stop Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "0040B036",
+        "name": "Segment Definition DateTime",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00720061",
+        "name": "Selector DA Value",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "00720063",
+        "name": "Selector DT Value",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "0072006B",
+        "name": "Selector TM Value",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "00080021",
+        "name": "Series Date",
+        "basic": "X/D",
+        "option": "C"
+      },
+      {
+        "tag": "00080031",
+        "name": "Series Time",
+        "basic": "X/D",
+        "option": "C"
+      },
+      {
+        "tag": "01000420",
+        "name": "SOP Authorization DateTime",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "0018936A",
+        "name": "Source End DateTime",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "00189369",
+        "name": "Source Start DateTime",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "300A022C",
+        "name": "Source Strength Reference Date",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "300A022E",
+        "name": "Source Strength Reference Time",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "00189516",
+        "name": "Start Acquisition DateTime",
+        "basic": "X/D",
+        "option": "C"
+      },
+      {
+        "tag": "30060008",
+        "name": "Structure Set Date",
+        "basic": "Z",
+        "option": "C"
+      },
+      {
+        "tag": "30060009",
+        "name": "Structure Set Time",
+        "basic": "Z",
+        "option": "C"
+      },
+      {
+        "tag": "00321040",
+        "name": "Study Arrival Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00321041",
+        "name": "Study Arrival Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00321050",
+        "name": "Study Completion Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00321051",
+        "name": "Study Completion Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00080020",
+        "name": "Study Date",
+        "basic": "Z",
+        "option": "C"
+      },
+      {
+        "tag": "00320034",
+        "name": "Study Read Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00320035",
+        "name": "Study Read Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00080030",
+        "name": "Study Time",
+        "basic": "Z",
+        "option": "C"
+      },
+      {
+        "tag": "00320032",
+        "name": "Study Verified Date",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00320033",
+        "name": "Study Verified Time",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00440010",
+        "name": "Substance Administration DateTime",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "0040DB07",
+        "name": "Template Local Version",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "0040DB06",
+        "name": "Template Version",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "0040A122",
+        "name": "Time",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "0040A112",
+        "name": "Time of Document Creation or Verbal Transaction (Trial)",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00181201",
+        "name": "Time of Last Calibration",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "0018700E",
+        "name": "Time of Last Detector Calibration",
+        "basic": "X/D",
+        "option": "C"
+      },
+      {
+        "tag": "00181014",
+        "name": "Time of Secondary Capture",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "00080201",
+        "name": "Timezone Offset From UTC",
+        "basic": "X",
+        "option": "C"
+      },
+      {
+        "tag": "30080024",
+        "name": "Treatment Control Point Date",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "30080025",
+        "name": "Treatment Control Point Time",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "30080250",
+        "name": "Treatment Date",
+        "basic": "X/D",
+        "option": "C"
+      },
+      {
+        "tag": "30080251",
+        "name": "Treatment Time",
+        "basic": "X/D",
+        "option": "C"
+      },
+      {
+        "tag": "300A0736",
+        "name": "Treatment Tolerance Violation DateTime",
+        "basic": "D",
+        "option": "C"
+      },
+      {
+        "tag": "0040A030",
+        "name": "Verification DateTime",
+        "basic": "D",
+        "option": "C"
+      }
+    ]
+  }
+}

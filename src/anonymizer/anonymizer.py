@@ -20,7 +20,6 @@ from tkinter import filedialog, messagebox, ttk
 import click
 import customtkinter as ctk
 from customtkinter import ThemeManager
-from pydicom import dcmread
 from pydicom._version import __version__ as pydicom_version
 from pynetdicom._version import __version__ as pynetdicom_version
 
@@ -33,6 +32,10 @@ from anonymizer.controller.ai.batch_config import (
 from anonymizer.controller.ai.batch_process import format_ai_batch_completion_summary
 from anonymizer.controller.ai.embedded_phi.ner.cache import NerModelStatus, probe_ner_models
 from anonymizer.controller.ai.embedded_phi.pixel.cache import OCR_MODEL_DIR, OcrModelStatus, probe_ocr_models
+from anonymizer.controller.ai.harmonize.description_mapping_store import (
+    load_series_overrides,
+    load_study_loinc_overrides,
+)
 from anonymizer.controller.ai.tseg.config import apply_ai_features_preferences, merge_ai_features_into_state
 from anonymizer.controller.ai.tseg.readiness import log_runtime_status
 from anonymizer.controller.analytics.prefs import apply_analytics_preferences, merge_analytics_into_state
@@ -43,10 +46,7 @@ from anonymizer.mcp.server import MCP_HTTP_PATH, run_MCP
 from anonymizer.model.project import DICOMRuntimeError, ProjectModel
 from anonymizer.utils.app_state import ai_features_from_state, analytics_from_state, get_app_state_path
 from anonymizer.utils.logging import init_logging
-from anonymizer.utils.storage.dicom_tree import (
-    is_hidden_path,
-    list_import_directory_files,
-)
+from anonymizer.utils.storage.dicom_tree import ImportPathsError, expand_import_directory
 from anonymizer.utils.translate import (
     _,
     get_current_language,
@@ -77,10 +77,6 @@ from anonymizer.view.common.fonts import AppFonts, create_app_fonts
 from anonymizer.view.common.help_docs import license_html_path, open_help_page, open_tutorials_channel
 from anonymizer.view.common.html_view import HTMLView
 from anonymizer.view.project.dataset import DatasetView
-from anonymizer.view.project.description_mapping_store import (
-    load_series_overrides,
-    load_study_loinc_overrides,
-)
 from anonymizer.view.project.export import ExportView
 from anonymizer.view.project.import_files_dialog import ImportFilesDialog
 from anonymizer.view.project.query_retrieve_import import QueryView
@@ -1106,61 +1102,27 @@ class Anonymizer(ctk.CTk):
             logger.error("Internal Error: no Dashboard")
             return None
 
-        file_paths: list[str] = []
         dicomdir_file = os.path.join(root_dir, "DICOMDIR")
         if os.path.exists(dicomdir_file):
-            try:
-                ds = dcmread(fp=dicomdir_file)
-                root_dir = str(Path(str(ds.filename)).resolve().parent)
-                msg = _("Reading DICOMDIR Root directory" + f": {Path(root_dir).stem}...")
-                logger.info(msg)
-                self.dashboard.set_status(msg)
-
-                for patient in ds.patient_records:
-                    logger.info(f"PATIENT: PatientID={patient.PatientID}, PatientName={patient.PatientName}")
-                    studies = [ii for ii in patient.children if ii.DirectoryRecordType == "STUDY"]
-                    for study in studies:
-                        descr = study.StudyDescription or "(no value available)"
-                        logging.info(
-                            f"{'  ' * 1}STUDY: StudyID={study.StudyID}, "
-                            f"StudyDate={study.StudyDate}, StudyDescription={descr}"
-                        )
-                        all_series = [ii for ii in study.children if ii.DirectoryRecordType == "SERIES"]
-                        for series in all_series:
-                            images = [ii for ii in series.children if ii.DirectoryRecordType == "IMAGE"]
-                            plural = ("", "s")[len(images) > 1]
-                            descr = getattr(series, "SeriesDescription", "(no value available)")
-                            logging.info(
-                                f"{'  ' * 2}SERIES: SeriesNumber={series.SeriesNumber}, "
-                                f"Modality={series.Modality}, SeriesDescription={descr} - "
-                                f"{len(images)} SOP Instance{plural}"
-                            )
-                            elems = [ii["ReferencedFileID"] for ii in images]
-                            paths = [[ee.value] if ee.VM == 1 else ee.value for ee in elems]
-                            paths = [f"{root_dir}/{Path(*fp)}" for fp in paths]
-                            for fp in paths:
-                                if is_hidden_path(fp):
-                                    continue
-                                logger.info(f"{'  ' * 3}IMAGE: Path={os.fspath(fp)}")
-                                file_paths.append(fp)
-            except Exception as e:
-                msg_prefix = _("Error reading DICOMDIR file")
-                msg_detail = f"{dicomdir_file}, {str(e)}"
-                logger.error(msg_prefix + ": " + msg_detail)
-                self.dashboard.set_status(msg_prefix)
-                messagebox.showerror(
-                    title=_("Import Directory Error"),
-                    message=msg_prefix + "\n\n" + msg_detail,
-                    parent=self,
-                )
-                return None
+            msg = _("Reading DICOMDIR Root directory" + f": {Path(root_dir).stem}...")
         else:
             msg = _("Reading filenames from") + f" {Path(root_dir).stem}..."
-            logger.info(msg)
-            self.dashboard.set_status(msg)
-            file_paths = list_import_directory_files(root_dir)
+        logger.info(msg)
+        self.dashboard.set_status(msg)
 
-        return file_paths
+        try:
+            return expand_import_directory(root_dir)
+        except ImportPathsError as exc:
+            msg_prefix = _("Error reading DICOMDIR file")
+            msg_detail = str(exc)
+            logger.error(msg_prefix + ": " + msg_detail)
+            self.dashboard.set_status(msg_prefix)
+            messagebox.showerror(
+                title=_("Import Directory Error"),
+                message=msg_prefix + "\n\n" + msg_detail,
+                parent=self,
+            )
+            return None
 
     def _import_directory_path(self, root_dir: str) -> None:
         """Import one directory with the same confirm UX as File → Import Directory."""

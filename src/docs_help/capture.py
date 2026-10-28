@@ -225,22 +225,45 @@ def _ensure_project(ctx: CaptureContext) -> None:
 
 
 def _ensure_modalities_for_fixtures(ctx: CaptureContext, keys: list[str]) -> None:
-    """Enable storage classes needed by fixtures (e.g. US for ultrasound demos)."""
+    """Enable storage classes needed by fixtures (e.g. US / Encapsulated PDF demos)."""
+    model = ctx.app.controller.model
+    changed = False
     need_us = any(
         k in {"us", "us_rgb_single_frame", "us_mf", "us_multi_frame_grayscale"}
         or "us_rgb" in k.lower()
         or "us_multi" in k.lower()
         for k in keys
     )
-    if not need_us:
+    if need_us and "US" not in model.modalities:
+        model.modalities = list(model.modalities) + ["US"]
+        changed = True
+    need_report = any(
+        k in {"demo_report_pdf", "report_pdf"} or "demo_report" in k.lower() for k in keys
+    )
+    if need_report:
+        from anonymizer.utils.dicom import DeidMethodCode
+
+        # Keep Encapsulated Document / SR text at import for Report Text Review.
+        options = frozenset(model.confidentiality_options) | {
+            DeidMethodCode.BASIC,
+            DeidMethodCode.CLEAN_STRUCTURED_CONTENT,
+        }
+        if options != frozenset(model.confidentiality_options):
+            ctx.app.controller.apply_confidentiality_options(options)
+            changed = True
+        for code in ("PDF", "SR"):
+            if code not in model.modalities:
+                model.modalities = list(model.modalities) + [code]
+                changed = True
+    if not changed:
         return
-    model = ctx.app.controller.model
-    if "US" in model.modalities:
-        return
-    model.modalities = list(model.modalities) + ["US"]
     model.set_storage_classes_from_modalities()
     ctx.app.controller.save_model()
-    logger.info("Enabled US modality for capture project (%d storage classes)", len(model.storage_classes))
+    logger.info(
+        "Updated modalities/options for capture fixtures %s (%d storage classes)",
+        keys,
+        len(model.storage_classes),
+    )
 
 
 def _seed_imported_fixture_caches(ctx: CaptureContext, keys: list[str]) -> None:
@@ -444,6 +467,9 @@ def run_language(
     tk.Misc.wait_visibility = _capture_safe_wait_visibility  # type: ignore[method-assign]
 
     app = Anonymizer(logs_dir)
+    # Capture owns when a project opens. Clear resume-last-project so settle
+    # cannot flip WelcomeView to the Dashboard before the Welcome shot runs.
+    app.current_open_project_dir = None
     set_language_code(language)
     ctk.set_appearance_mode("Light")
     settle(app, settle_ms)

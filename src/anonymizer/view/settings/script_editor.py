@@ -20,28 +20,18 @@ apply_incrementdate_to_rules, format_incrementdate_affected_lines
 options_switch_confirm_message, embedded_phi_batch_explainer
     Settings copy.
 
-infer_options_from_script, confidentiality_options_changed
-    DeId option inference and change detection.
-
 available_operands, operands_for_tag, operand_tag_incompatibility
     Operand pickers for the editor.
 """
 import re
 from enum import Enum
 
-from anonymizer.controller.dates import is_date_delta_operation
-from anonymizer.controller.script.compile import (
-    INSTITUTION_IDENTITY_TAGS,
-    KEEP_DEVICE_TAGS,
-)
 from anonymizer.controller.script.date_rules import (
-    STUDY_DATE_TAG,
     rules_for_incrementdate_bulk,
 )
 from anonymizer.controller.script.document import (
     ScriptDocument,
     ScriptRule,
-    load_script_rules,
 )
 from anonymizer.controller.script.operands import (
     OPERANDS,
@@ -54,7 +44,6 @@ from anonymizer.controller.script.operands import (
     operand_syntax,
     validate_operation,
 )
-from anonymizer.model.project import ProjectModel
 from anonymizer.utils.dicom import DeidMethodCode
 from anonymizer.utils.dicom_dictionary import (
     DictHit,
@@ -109,7 +98,8 @@ def options_switch_confirm_message() -> str:
         "What does not change:\n"
         "• Already anonymized data is not re-processed.\n\n"
         "Selecting Clean Structured Content or Clean Descriptors enables SR "
-        "and PDF modalities if they are not already selected."
+        "and PDF modalities if they are not already selected. Enabling SR or "
+        "PDF modalities enables Clean Structured Content when it is off."
     )
 
 
@@ -132,69 +122,6 @@ def embedded_phi_batch_explainer(options: frozenset[DeidMethodCode]) -> str:
         "Basic Profile already removed most private and clinical text at ingest. "
         "This step is OCR on burnt-in image pixels."
     )
-
-
-def confidentiality_options_changed(
-    *,
-    selected: frozenset[DeidMethodCode],
-    installed: frozenset[DeidMethodCode],
-) -> bool:
-    """
-    Whether applying options must recompile the project script.
-
-    Args:
-        selected: Options chosen in the dialog.
-        installed: Options stored on the project.
-
-    Returns:
-        True when the two option sets differ.
-    """
-    return frozenset(selected) != frozenset(installed)
-
-
-def infer_options_from_script(document: ScriptDocument) -> frozenset[DeidMethodCode]:
-    """
-    Infer de-identification options from a script's rules (prefill).
-
-    Compares category operations against the packaged default script.
-
-    Args:
-        document: Script document to inspect.
-
-    Returns:
-        Inferred option codes, always including the Basic Profile.
-    """
-    base_doc = load_script_rules(ProjectModel.default_anonymizer_script_path())
-    base_ops = {r.tag.upper(): (r.operation or "@keep") for r in base_doc.rules}
-    ops = {r.tag.upper(): (r.operation or "@keep") for r in document.rules}
-
-    options: set[DeidMethodCode] = {DeidMethodCode.BASIC}
-
-    study_op = ops.get(STUDY_DATE_TAG, "@keep")
-    base_study = base_ops.get(STUDY_DATE_TAG, "@keep")
-    if not any(is_date_delta_operation(op) for op in ops.values()):
-        if STUDY_DATE_TAG in ops and study_op == "@keep":
-            options.add(DeidMethodCode.FULL_DATES)
-    elif (
-        "@incrementdate" in study_op
-        or "@rebasedate" in study_op.lower()
-        or "dateoffset" in study_op
-        or ("@hashdate" in study_op and study_op != base_study)
-    ):
-        options.add(DeidMethodCode.MODIFIED_DATES)
-
-    device_kept = [t for t in KEEP_DEVICE_TAGS if t in ops and ops[t] == "@keep"]
-    if device_kept and any(is_remove_operation(base_ops.get(t, "")) for t in device_kept):
-        options.add(DeidMethodCode.DEVICE_IDENTITY)
-
-    institution = [t for t in INSTITUTION_IDENTITY_TAGS if t in ops]
-    if institution and all(ops[t] == "@keep" for t in institution) and any(
-        base_ops.get(t, "@keep") != "@keep" for t in institution
-    ):
-        options.add(DeidMethodCode.INSTITUTION_IDENTITY)
-    if ops and not any("@uid" in op for op in ops.values()):
-        options.add(DeidMethodCode.RETAIN_UIDS)
-    return frozenset(options)
 
 
 def operand_tag_incompatibility(

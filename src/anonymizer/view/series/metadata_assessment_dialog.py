@@ -31,6 +31,7 @@ from anonymizer.controller.ai.embedded_phi.metadata.viewer_tree import (
     MetadataTreeNode,
     build_metadata_tree,
     filter_metadata_tree,
+    is_private_metadata_tag,
 )
 from anonymizer.controller.ai.embedded_phi.ner.engine import REPLACE_MODE_VALUES, SCORED_LABELS, Entity, ReplaceMode
 from anonymizer.controller.ai.embedded_phi.ner.radiology_filters import MetadataNerItem
@@ -46,14 +47,15 @@ from anonymizer.view.common.app_window import (
 )
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import char_width_px
-from anonymizer.view.common.tooltip import MotionTooltipController, TooltipContent
-from anonymizer.view.common.ux_fields import button_width_for_label, truncate_series_description
-from anonymizer.view.reports.entity_colors import entity_color_hex, entity_label_display, entity_scored_family
-from anonymizer.view.reports.report_text_review import (
+from anonymizer.view.common.phi_action_labels import (
     detect_phi_button_label,
     remove_phi_button_label,
     replace_mode_labels,
 )
+from anonymizer.view.common.tooltip import MotionTooltipController, TooltipContent
+from anonymizer.view.common.treeview_chrome import configure_zebra_row_tags
+from anonymizer.view.common.ux_fields import button_width_for_label, truncate_series_description
+from anonymizer.view.reports.entity_colors import entity_color_hex, entity_label_display, entity_scored_family
 
 logger = logging.getLogger(__name__)
 
@@ -154,54 +156,6 @@ def _mono_char_width_px() -> int:
     return char_width_px(ctk.CTkFont(family=_treeview_font_family(), size=12))
 
 
-def _treeview_theme_colors(host: tk.Misc) -> tuple[str, str, str, str]:
-    """Resolve Treeview bg / fg / selected colors (same path as Dataset / app startup)."""
-    apply = getattr(host, "_apply_appearance_mode", None)
-    if apply is None:
-        parent = getattr(host, "master", None)
-        apply = getattr(parent, "_apply_appearance_mode", None) if parent is not None else None
-    if apply is None:
-        apply = ctk.CTk()._apply_appearance_mode  # type: ignore[attr-defined]
-
-    theme = ThemeManager.theme
-    bg = apply(theme["CTkFrame"]["fg_color"])
-    fg = apply(theme["CTkLabel"]["text_color"])
-    select_bg = apply(theme["CTkButton"]["fg_color"])
-    select_fg = apply(theme["CTkButton"]["text_color"])
-    tv = theme.get("Treeview") or {}
-    if "bg_color" in tv:
-        bg = apply(tv["bg_color"])
-    if "text_color" in tv:
-        fg = apply(tv["text_color"])
-    if "selected_bg_color" in tv:
-        select_bg = apply(tv["selected_bg_color"])
-    if "selected_color" in tv:
-        select_fg = apply(tv["selected_color"])
-    return str(bg), str(fg), str(select_bg), str(select_fg)
-
-
-def _stripe_pair(host: tk.Misc, base_bg: str) -> tuple[str, str]:
-    """Even/odd row backgrounds from theme grays (never pure white)."""
-    apply = getattr(host, "_apply_appearance_mode", None)
-    if apply is None:
-        parent = getattr(host, "master", None)
-        apply = getattr(parent, "_apply_appearance_mode", None) if parent is not None else None
-    def _pick(pair: object) -> object:
-        return pair[0] if isinstance(pair, (list, tuple)) else pair
-
-    if apply is None:
-        apply = _pick
-
-    # Treeview bg (gray90 / gray13) + CTkFrame top_fg (gray85 / gray16).
-    frame = ThemeManager.theme.get("CTkFrame") or {}
-    alt = frame.get("top_fg_color", ["gray85", "gray16"])
-    odd = str(apply(alt))
-    even = base_bg
-    if odd.casefold() == even.casefold():
-        odd = str(apply(["gray86", "gray16"]))
-    return even, odd
-
-
 def _primary_phi_label(entities: Sequence[Entity]) -> str:
     """First Report Viewer color family by span start (NER or DICOM-keyword label)."""
     if not entities:
@@ -237,15 +191,15 @@ def _format_detection_status(
     field_count is the number of fields (tree rows) where PHI was
     detected; when omitted it falls back to the number of distinct Content
     values with entities. Private UID/date fields are reported separately:
-    they are handled by the anonymizer script (UID remapping / date
-    shifting), not scored by Detect PHI — the user must see that.
+    they are handled at import (UID remapping / date shift), not by
+    Remove PHI in this dialog — the user must see that.
     """
     private_note = ""
     if private_uid_count or private_date_count:
         private_note = (
             f" · Private data: {private_uid_count} UID, {private_date_count} date "
-            "fields handled by anonymizer UID remapping / date delta "
-            "(not scored by Detect PHI)"
+            "fields handled at import (UID remapping / date shift) — "
+            "not changed by Remove PHI"
         )
     raw = entity_count_by_label(entities_by_text)
     counts: dict[str, int] = {}
@@ -291,13 +245,14 @@ class MetadataTreePanel(ctk.CTkFrame):
         self._excluded_contents: set[str] = set()
         self._pending_cleaned_by_tag_path: dict[str, str] = {}
         self._search_var = tk.StringVar(value="")
+        self._show_private_var = ctk.BooleanVar(value=True)
         self._char_width_px = _mono_char_width_px()
         self._name_col_px = _NAME_CHARS * self._char_width_px
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
-        # Search (Field Name width) + Expand/Collapse top-right.
+        # Search left; Private tags switch + Expand/Collapse top-right.
         toolbar = ctk.CTkFrame(self, fg_color="transparent")
         toolbar.grid(row=0, column=0, sticky="ew", padx=_PAD, pady=(_PAD, 0))
         toolbar.grid_columnconfigure(2, weight=1)
@@ -309,6 +264,15 @@ class MetadataTreePanel(ctk.CTkFrame):
         )
         self._search_entry.grid(row=0, column=1, sticky="w", padx=(4, 0))
         self._search_var.trace_add("write", self._on_search_changed)
+        self._private_tags_switch = ctk.CTkSwitch(
+            toolbar,
+            text=_("Private tags"),
+            variable=self._show_private_var,
+            onvalue=True,
+            offvalue=False,
+            command=self._on_private_tags_toggled,
+        )
+        self._private_tags_switch.grid(row=0, column=3, padx=(0, 8), sticky="e")
         expand_label = _("Expand")
         self._expand_button = ctk.CTkButton(
             toolbar,
@@ -316,7 +280,7 @@ class MetadataTreePanel(ctk.CTkFrame):
             text=expand_label,
             command=self.expand_all,
         )
-        self._expand_button.grid(row=0, column=3, padx=(0, 4), sticky="e")
+        self._expand_button.grid(row=0, column=4, padx=(0, 4), sticky="e")
         collapse_label = _("Collapse")
         self._collapse_button = ctk.CTkButton(
             toolbar,
@@ -324,7 +288,7 @@ class MetadataTreePanel(ctk.CTkFrame):
             text=collapse_label,
             command=self.collapse_all,
         )
-        self._collapse_button.grid(row=0, column=4, sticky="e")
+        self._collapse_button.grid(row=0, column=5, sticky="e")
 
         # Dataset-style framed index: tree + scrollbar inside CTkFrame.
         self._index_frame = ctk.CTkFrame(self)
@@ -481,17 +445,12 @@ class MetadataTreePanel(ctk.CTkFrame):
             for node in nodes:
                 tag = str(node.tag or "").strip()
                 raw_name = str(node.name or "").strip()
-                if len(tag) >= 4 and raw_name != VALUE_NAME:
-                    try:
-                        group = int(tag[:4], 16)
-                    except ValueError:
-                        group = 0
-                    if group % 2 == 1:
-                        vr = str(node.vr or "").upper()
-                        if vr == "UI":
-                            uids += 1
-                        elif vr in {"DA", "DT"}:
-                            dates += 1
+                if is_private_metadata_tag(tag) and raw_name != VALUE_NAME:
+                    vr = str(node.vr or "").upper()
+                    if vr == "UI":
+                        uids += 1
+                    elif vr in {"DA", "DT"}:
+                        dates += 1
                 walk(node.children)
 
         walk(self._roots)
@@ -559,10 +518,7 @@ class MetadataTreePanel(ctk.CTkFrame):
         self._restripe_visible()
 
     def _configure_row_tags(self) -> None:
-        bg, fg, _sel_bg, _sel_fg = _treeview_theme_colors(self)
-        even, odd = _stripe_pair(self, bg)
-        self._tree.tag_configure("row_even", background=even, foreground=fg)
-        self._tree.tag_configure("row_odd", background=odd, foreground=fg)
+        configure_zebra_row_tags(self._tree, self)
         # PHI rows: same highlight pattern as Dataset View's "green" tag —
         # entity class background, white foreground, applied as the row's
         # only tag (see _restripe_visible).
@@ -583,13 +539,21 @@ class MetadataTreePanel(ctk.CTkFrame):
     def _on_search_changed(self, *_args: object) -> None:
         self._rebuild()
 
+    def _on_private_tags_toggled(self) -> None:
+        """Rebuild the tree when the Private tags switch changes."""
+        self._rebuild()
+
     def _on_tree_open_close(self, _event: tk.Event | None = None) -> None:
         self._restripe_visible()
 
     def _rebuild(self) -> None:
         self._tree.delete(*self._tree.get_children())
         self._content_by_iid.clear()
-        visible = filter_metadata_tree(self._roots, self._search_var.get())
+        visible = filter_metadata_tree(
+            self._roots,
+            self._search_var.get(),
+            include_private=bool(self._show_private_var.get()),
+        )
         for index, node in enumerate(visible):
             self._insert_node("", node, path_key=f"r{index}")
         if self._search_var.get().strip():

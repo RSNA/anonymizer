@@ -27,12 +27,15 @@ from anonymizer.controller.ai.harmonize.profile_2d import (
 )
 from anonymizer.utils.modalities import Modality
 from anonymizer.view.ai.harmonize_description import harmonize_button_visible
-from tests.paths import REPO_ROOT
+from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
 
-TEST_DCM = REPO_ROOT / "tests" / "controller" / "assets" / "test_dcm_files"
-DAVIDSON_CXR = TEST_DCM / "davidson_cxr" / "davidson_cxr_monochrome1_uncompressed.dcm"
-US_RGB = TEST_DCM / "us_rgb_single_frame" / "US_RGB_SingleFrame.dcm"
-US_MULTI_FRAME = TEST_DCM / "us_multi_frame_grayscale" / "us_multi_frame_grayscale_JPG2000.dcm"
+DAVIDSON_CXR = (
+    CONTROLLER_TEST_DCM_FILES_DIR / "davidson_cxr" / "davidson_cxr_monochrome1_uncompressed.dcm"
+)
+US_RGB = CONTROLLER_TEST_DCM_FILES_DIR / "us_rgb_single_frame" / "US_RGB_SingleFrame.dcm"
+US_MULTI_FRAME = (
+    CONTROLLER_TEST_DCM_FILES_DIR / "us_multi_frame_grayscale" / "us_multi_frame_grayscale_JPG2000.dcm"
+)
 
 
 @pytest.fixture

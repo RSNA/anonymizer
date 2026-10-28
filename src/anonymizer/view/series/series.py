@@ -3,125 +3,88 @@ import logging
 import queue
 import threading
 import tkinter as tk
-from collections import Counter
-from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from pprint import pformat
-from tkinter import messagebox
-from typing import TYPE_CHECKING
+from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 import numpy as np
 from pydicom import Dataset, dcmread
 
-from anonymizer.controller.ai.blur_face import (
-    CachedRegionSignal,
-    FaceBlurEligibility,
-    FaceBlurGateDecision,
-    FaceBlurGateReason,
-    FaceBlurMode,
-    MetadataSignal,
-    cached_region_signal,
-    evaluate_face_blur_eligibility,
-    face_blur_gate_message,
-    face_blur_status_applicable,
-    metadata_signal,
-)
-from anonymizer.controller.ai.embedded_phi.classify_series import SeriesKind, classify_series
-from anonymizer.controller.ai.embedded_phi.ner.engine import SCORED_LABELS
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    OcrWhitelistMatchMode,
-    OcrWhitelistMatchSettings,
-    PixelPhiRemovalMode,
-    build_series_view_ocr_pixels,
-    default_whitelist_match_settings,
-    describe_match_settings,
-    filter_ocr_outside_exclude_rects,
-    filter_ocr_whitelist_only,
-    load_modality_whitelist,
-    load_modality_whitelist_match_settings,
-    match_mode_description,
-    match_mode_menu_label,
-    match_mode_menu_labels,
-    normalize_pixel_phi_removal_mode,
-    ocr_image_for_frame,
-    pixel_phi_removal_mode_menu_labels,
-    pixel_phi_removal_mode_option_label,
-    save_modality_whitelist_match_settings,
-)
-from anonymizer.controller.ai.embedded_phi.pixel.exclude_zones import (
-    filter_ocr_for_remove_mode,
-    modality_exclude_rects_for_series,
-    normalize_user_rects,
-)
-from anonymizer.controller.ai.embedded_phi.pixel.ocr_transcript_sr import cleansed_ocr_lines, write_ocr_report_sr
-from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
-    apply_series_view_embedded_phi,
-    blackout_rectangular_areas,
-    collect_series_view_embedded_phi_texts,
-    remove_ocr_text_from_frame,
-)
-from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
-    load_default_whitelist,
-    load_project_exclude_rects,
-    save_project_exclude_rects,
-    save_project_whitelist,
-)
-from anonymizer.controller.ai.feature_availability import face_blur_allowed, harmonize_allowed_for_modality
-from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir, tseg_cache_summary
-from anonymizer.controller.ai.tseg.config import TSEG_CACHE_DIRNAME
-from anonymizer.controller.ai.tseg.dicom_geometry import (
-    SeriesGeometryResult,
-    ensure_series_geometry,
-    format_series_view_geometry_line,
-    load_geometry_cache,
-    stackable_dicom_paths,
-)
-from anonymizer.controller.ai.tseg.seg_retention import read_primary_segment_voxels
-from anonymizer.controller.annotations import (
-    AnnotateSession,
-    ImportProfile,
-    add_user_label,
-    annotations_exist,
-    begin_stroke_capture,
-    commit_stroke_undo,
-    detect_and_import,
-    ensure_series_annotation_geometry,
-    ensure_ts_edit,
-    load_annotate_session,
-    save_annotate_session,
-    stamp_brush,
-    undo_last_stroke,
-)
-from anonymizer.controller.annotations.import_nii import AnnotationGeometryUnsupported
-from anonymizer.controller.jobs.runner import (
-    Algorithm,
-    OcrEditContext,
-    OcrRemoveMode,
-    RunOptions,
-    edit_context_display_label,
-    edit_context_menu_values,
-    normalize_edit_context,
-    normalize_ocr_remove_mode,
-    ocr_detect_tooltip,
-    ocr_remove_mode_display_label,
-    ocr_remove_mode_menu_labels,
-    ocr_remove_mode_tooltip,
-    run_job,
-)
-from anonymizer.controller.jobs.work_state import WorkState
-from anonymizer.controller.series.create_projections import invalidate_projection_cache
+from anonymizer.controller.project import ProjectController
 from anonymizer.controller.series.series_io import (
     LoadedSeries,
     SeriesProjections,
     compute_series_projections,
-    load_series_frames,
-    save_series_frames,
 )
 from anonymizer.controller.series.series_overlay import LayerType, OCRText, OverlayData, Segmentation, UserRectangle
+from anonymizer.controller.series.workspace import (
+    TSEG_CACHE_DIRNAME,
+    Algorithm,
+    AnnotateSession,
+    FaceBlurEligibility,
+    FaceBlurGateDecision,
+    FaceBlurGateReason,
+    FaceBlurMode,
+    ImportProfile,
+    OcrEditContext,
+    OcrRemoveMode,
+    OcrWhitelistMatchMode,
+    OcrWhitelistMatchSettings,
+    PixelPhiRemovalMode,
+    SeriesGeometryResult,
+    SeriesLoadError,
+    SeriesViewSaveRequest,
+    SeriesWorkspace,
+    WorkState,
+    blur_face_toolbar_visible,
+    clear_cache_button_visible,
+    collect_series_view_embedded_phi_texts,
+    commit_user_rects_to_exclude,
+    default_whitelist_match_settings,
+    describe_match_settings,
+    edit_context_display_label,
+    edit_context_menu_values,
+    edit_context_toolbar_visible,
+    exclude_rects_fingerprint,
+    face_blur_allowed,
+    face_blur_gate_message,
+    face_blur_status_applicable,
+    filter_series_view_ocr_overlay,
+    format_ocr_detection_complete_status,
+    format_series_view_geometry_line,
+    harmonize_allowed_for_modality,
+    load_default_whitelist,
+    load_modality_whitelist,
+    load_modality_whitelist_match_settings,
+    load_project_exclude_rects,
+    match_mode_description,
+    match_mode_menu_label,
+    match_mode_menu_labels,
+    modality_exclude_rects_for_series,
+    normalize_edit_context,
+    normalize_ocr_remove_mode,
+    normalize_pixel_phi_removal_mode,
+    normalize_user_rects,
+    ocr_detect_tooltip,
+    ocr_image_for_frame,
+    ocr_remove_enabled,
+    ocr_remove_mode_display_label,
+    ocr_remove_mode_menu_labels,
+    ocr_remove_mode_tooltip,
+    ocr_results_available_for_edit_context,
+    pixel_phi_removal_mode_menu_labels,
+    pixel_phi_removal_mode_option_label,
+    read_cached_segmentation_mode,
+    read_primary_segment_voxels,
+    save_modality_whitelist_match_settings,
+    save_project_whitelist,
+    stackable_dicom_paths,
+)
 from anonymizer.utils.dicom import get_wl_ww
 from anonymizer.utils.memory import collect_garbage_safe, log_process_memory
+from anonymizer.utils.modalities import Modality
 from anonymizer.utils.storage.dicom_tree import get_dcm_files
 from anonymizer.utils.translate import _
 from anonymizer.utils.windowing import apply_windowing
@@ -139,8 +102,11 @@ from anonymizer.view.common.fonts import AppFonts
 from anonymizer.view.common.job_poller import start_background_job
 from anonymizer.view.common.navigation import find_dataset_view_parent, return_to_dataset_view
 from anonymizer.view.common.tooltip import bind_hover_tooltip
-from anonymizer.view.common.ux_fields import button_width_for_label, option_menu_width_for_labels
-from anonymizer.view.reports.entity_colors import entity_label_display
+from anonymizer.view.common.ux_fields import (
+    button_width_for_label,
+    option_menu_width_for_labels,
+    truncate_series_description,
+)
 from anonymizer.view.series.anatomy_overlay import (
     collect_primary_segment_voxels,
     color_bgr_for_structure,
@@ -154,38 +120,15 @@ from anonymizer.view.series.anatomy_overlay import (
 )
 from anonymizer.view.series.image import ImageViewer
 from anonymizer.view.series.metadata_assessment_dialog import MetadataAssessmentDialog
-
-if TYPE_CHECKING:
-    from anonymizer.controller.project import ProjectController
-from tkinter import filedialog
-
-from easyocr import Reader
-
-from anonymizer.controller.ai.embedded_phi.ner.cache import download_ner_models
-from anonymizer.controller.ai.embedded_phi.pixel.cache import (
-    OCR_LANGS,
-    OCR_MODEL_DIR,
-    download_ocr_models,
-)
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import detect_text
-from anonymizer.controller.ai.feature_availability import embedded_phi_has_models
-from anonymizer.controller.ai.tseg.segment import read_cached_segmentation_mode
-from anonymizer.controller.analytics.dataset import upsert_series_ledger_from_cache
-from anonymizer.utils.modalities import Modality
-from anonymizer.view.common.ux_fields import truncate_series_description
 from anonymizer.view.series.new_segment_dialog import show_new_segment_dialog
 
 logger = logging.getLogger(__name__)
 
 
-class SeriesLoadError(Exception):
-    """Raised when DICOM series pixels cannot be loaded for Series View."""
-
-
 def show_series_view(
     parent: tk.Misc,
     *,
-    controller: "ProjectController",
+    controller: ProjectController,
     series_path: Path,
     fonts: AppFonts | None = None,
     preloaded: LoadedSeries | None = None,
@@ -206,147 +149,6 @@ def show_series_view(
         fonts=fonts,
         preloaded=preloaded,
     )
-
-
-def ocr_results_available_for_edit_context(
-    edit_context: OcrEditContext,
-    *,
-    current_frame_index: int,
-    overlay_ocr_by_frame: dict[int, list],
-) -> bool:
-    """True when Detect left OCR overlays usable by Remove for the edit context."""
-    if edit_context is OcrEditContext.FRAME:
-        return bool(overlay_ocr_by_frame.get(current_frame_index))
-    return any(texts for texts in overlay_ocr_by_frame.values())
-
-
-def ocr_remove_enabled(
-    *,
-    interaction_allowed: bool,
-    detecting: bool,
-    results_available: bool,
-) -> bool:
-    """True when Remove may be clicked: text is identified for the edit context.
-
-    Enablement follows the current Remove Scope filtering of the detected boxes,
-    so changing scope never disables Remove while removable text remains in scope.
-    """
-    return interaction_allowed and not detecting and results_available
-
-
-def edit_context_toolbar_visible(*, single_frame: bool) -> bool:
-    """Show Edit Context only when the series has more than one frame to choose between."""
-    return not single_frame
-
-
-def filter_series_view_ocr_overlay(
-    detections: Sequence[OCRText],
-    *,
-    remove_mode: OcrRemoveMode,
-    whitelist: Sequence[str],
-    whitelist_match_settings: OcrWhitelistMatchSettings | None = None,
-    exclude_rects: Sequence[UserRectangle] | None = None,
-) -> list[OCRText]:
-    """WYSIWYG overlay: exclude zones, then remove-mode (PHI / whitelist / all)."""
-    return filter_ocr_for_remove_mode(
-        detections,
-        remove_mode=remove_mode,
-        whitelist=whitelist,
-        whitelist_match_settings=whitelist_match_settings,
-        exclude_rects=exclude_rects,
-    )
-
-
-def format_ocr_detection_complete_status(
-    detections_by_frame: Mapping[int, Sequence[OCRText]],
-    *,
-    whitelist: Sequence[str],
-    whitelist_match_settings: OcrWhitelistMatchSettings | None = None,
-    exclude_rects_by_frame: Mapping[int, Sequence[UserRectangle]] | None = None,
-    frames_scanned: int | None = None,
-    remove_mode: OcrRemoveMode = OcrRemoveMode.NON_WHITELISTED,
-) -> str:
-    """Status line after Series View detect: totals, NER classes, exclude/whitelist hides."""
-    exclude_map = exclude_rects_by_frame or {}
-    active: list[OCRText] = []
-    excluded = 0
-    frames_with_text = 0
-    for frame_i, texts in detections_by_frame.items():
-        if not texts:
-            continue
-        kept_spatial = filter_ocr_outside_exclude_rects(texts, exclude_map.get(frame_i))
-        excluded += len(texts) - len(kept_spatial)
-        if kept_spatial:
-            frames_with_text += 1
-            active.extend(kept_spatial)
-    total = len(active)
-    if remove_mode is OcrRemoveMode.NON_WHITELISTED:
-        shown = filter_ocr_whitelist_only(
-            active,
-            whitelist=whitelist,
-            whitelist_match_settings=whitelist_match_settings,
-        )
-        whitelisted = max(0, total - len(shown))
-    else:
-        whitelisted = 0
-
-    ner_counts: Counter[str] = Counter()
-    unlabeled = 0
-    for item in active:
-        label = (item.phi_label or "").strip().upper()
-        if label:
-            ner_counts[label] += 1
-        else:
-            unlabeled += 1
-
-    ner_parts: list[str] = []
-    for label in SCORED_LABELS:
-        n = ner_counts.get(label, 0)
-        if n:
-            ner_parts.append(f"{entity_label_display(label)} {n}")
-    for label, n in sorted(ner_counts.items()):
-        if label not in SCORED_LABELS and n:
-            ner_parts.append(f"{entity_label_display(label)} {n}")
-    if unlabeled:
-        ner_parts.append(f"{_('unlabeled')} {unlabeled}")
-
-    status = _("Text detection complete") + f": {total} " + _("detections")
-    if ner_parts:
-        status += f" ({', '.join(ner_parts)})"
-    if excluded:
-        status += f"; {excluded} " + _("excluded")
-    if whitelisted:
-        status += f"; {whitelisted} " + _("whitelisted")
-    if frames_scanned is not None:
-        status += f", {frames_with_text}/{frames_scanned} " + _("frames with text")
-    return status
-
-
-def clear_cache_button_visible(
-    *,
-    modality: str | None,
-    already_harmonized: bool,
-    has_segment_masks: bool = False,
-) -> bool:
-    """Show Clear when Harmonize completed or orphan segment masks remain on disk."""
-
-    return Modality.from_code(modality) in {Modality.CT, Modality.MR} and (
-        already_harmonized or has_segment_masks
-    )
-
-
-def blur_face_toolbar_visible(
-    *,
-    face_blur_models_ready: bool,
-    face_blur_already_applied: bool,
-    is_head_series: bool,
-) -> bool:
-    """Show Face Blur when models are ready, series is head, and ORM flag is unset."""
-    if not face_blur_models_ready:
-        return False
-    if face_blur_already_applied:
-        return False
-    return is_head_series
 
 
 @dataclass(frozen=True)
@@ -377,7 +179,7 @@ class SeriesView(AppCTkToplevel):
     def __init__(
         self,
         parent,
-        controller: "ProjectController",
+        controller: ProjectController,
         series_path: Path,
         fonts: AppFonts | None = None,
         *,
@@ -389,6 +191,7 @@ class SeriesView(AppCTkToplevel):
         self._parent = parent
         self._controller = controller
         self._series_path = series_path
+        self._workspace = SeriesWorkspace(controller, series_path)
         self.edit_context: OcrEditContext = OcrEditContext.FRAME
         self.ocr_remove_mode: OcrRemoveMode = OcrRemoveMode.NON_WHITELISTED
         self.detected_text: dict[int, list[OCRText]] = {}  # Store all detected text per frame
@@ -598,52 +401,23 @@ class SeriesView(AppCTkToplevel):
         pos_y = max(0, min(pos_y, self.winfo_screenheight() - height))
         self.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
 
-    @staticmethod
-    def _load_series_data(
-        series_path: Path,
-        *,
-        dcm_paths: list[Path] | None = None,
-    ) -> tuple[LoadedSeries, np.ndarray, SeriesProjections | None, SeriesGeometryResult | None]:
-        log_process_memory("load_series_data_start", extra=str(series_path.name))
-        loaded = load_series_frames(series_path, dcm_paths=dcm_paths)
-        frames = loaded.frames
-        projections = compute_series_projections(frames) if not loaded.is_single_frame else None
-
-        log_process_memory(
-            "after_load_series",
-            array=frames,
-            extra=str(series_path.name),
-        )
-
-        series_geometry: SeriesGeometryResult | None = None
-
-        if Modality.from_code(getattr(loaded.metadata, "Modality", None)) in {Modality.CT, Modality.MR}:
-            series_geometry = load_geometry_cache(series_path)
-
-        log_process_memory(
-            "load_series_data_done",
-            array=frames,
-            extra=str(series_path.name),
-        )
-        return loaded, frames, projections, series_geometry
-
     def _ensure_series_geometry(self) -> SeriesGeometryResult | None:
-        self._series_geometry = ensure_series_geometry(
-            self._series_path,
-            ds=self._ds,
-            cached=self._series_geometry,
-        )
+        self._series_geometry = self._workspace.ensure_geometry(ds=self._ds)
         return self._series_geometry
 
     def _load_worker(self) -> None:
         self._log_series_memory("load_worker_start")
         try:
-            payload = self._load_series_data(
-                self._series_path,
+            workspace_load = self._workspace.load_series_workspace(
                 dcm_paths=self._cached_dcm_paths,
             )
-            _, frames, _, _ = payload
-            self._log_series_memory("load_worker_done", array=frames)
+            payload = (
+                workspace_load.loaded,
+                workspace_load.frames,
+                workspace_load.projections,
+                workspace_load.series_geometry,
+            )
+            self._log_series_memory("load_worker_done", array=workspace_load.frames)
             self._load_queue.put(("done", payload))
         except SeriesLoadError as exc:
             self._load_queue.put(("error", exc))
@@ -718,6 +492,7 @@ class SeriesView(AppCTkToplevel):
         self._projections = projections
         self._slice_paths = loaded.slice_paths
         self._series_geometry = series_geometry
+        self._workspace.set_geometry_cache(series_geometry)
         self.single_frame = loaded.is_single_frame
         self._dicom_wl, self._dicom_ww = loaded.default_window
 
@@ -1658,14 +1433,10 @@ class SeriesView(AppCTkToplevel):
     def _blur_face_toolbar_visible(self) -> bool:
         anon_uid = self._anon_series_uid()
         already_applied = anon_uid is not None and self._controller.series_has_face_blur(anon_uid)
-        is_head = (
-            cached_region_signal(self._series_path) == CachedRegionSignal.HEAD
-            or metadata_signal(self._ds) == MetadataSignal.HEAD
-        )
         return blur_face_toolbar_visible(
             face_blur_models_ready=face_blur_allowed(),
             face_blur_already_applied=already_applied,
-            is_head_series=is_head,
+            is_head_series=self._workspace.is_head_series(self._ds),
         )
 
     def _clear_ts_cache_button_visible(self) -> bool:
@@ -1735,7 +1506,7 @@ class SeriesView(AppCTkToplevel):
         self._refresh_segmentation_controls(defer_render=defer_render)
 
     def _seg_dir(self) -> Path:
-        return resolve_series_cache_dir(self._series_path) / "seg"
+        return self._workspace.seg_dir()
 
     def _seg_dir_likely_has_structures(self) -> bool:
         """Fast check for harmonized segmentation masks without reading NIfTI volumes."""
@@ -1849,8 +1620,9 @@ class SeriesView(AppCTkToplevel):
         self._ensure_segmentation_overlays_for_frame(frame_index)
 
     def metadata_assessment_button_clicked(self) -> None:
-        """Open view-only Metadata tree for the current slice dataset."""
+        """Open Metadata tree for the current slice (Detect / Remove PHI → Save)."""
 
+        path = self._current_slice_path()
         ds = self._current_slice_dataset()
         if ds is None:
             return
@@ -1861,14 +1633,15 @@ class SeriesView(AppCTkToplevel):
         MetadataAssessmentDialog(
             self,
             dataset=ds,
+            dataset_path=path,
             project_dir=project_dir,
             modality=str(getattr(ds, "Modality", "") or "") or None,
             whitelist=whitelist,
             whitelist_match_settings=getattr(self, "_whitelist_match_settings", None),
         )
 
-    def _current_slice_dataset(self) -> Dataset | None:
-        """Load header for the anatomical slice under the cine index (no pixel dump)."""
+    def _current_slice_path(self) -> Path | None:
+        """Path of the anatomical slice under the cine index, if loaded."""
         loaded = self._loaded
         if loaded is None:
             return None
@@ -1879,8 +1652,17 @@ class SeriesView(AppCTkToplevel):
         )
         slice_index = self._anatomical_slice_for_viewer_frame(frame_index)
         if slice_index is None or slice_index >= len(loaded.slice_paths):
+            return None
+        return loaded.slice_paths[slice_index]
+
+    def _current_slice_dataset(self) -> Dataset | None:
+        """Load header for the anatomical slice under the cine index (no pixel dump)."""
+        loaded = self._loaded
+        if loaded is None:
+            return None
+        path = self._current_slice_path()
+        if path is None:
             return loaded.metadata
-        path = loaded.slice_paths[slice_index]
         try:
             return dcmread(str(path), stop_before_pixels=True, force=True)
         except Exception:
@@ -2216,23 +1998,16 @@ class SeriesView(AppCTkToplevel):
                 index._update_tree_from_phi_index()
 
     def _face_blur_eligibility(self) -> FaceBlurEligibility:
-        geometry = self._ensure_series_geometry()
-        if self._face_blur_eligibility_cache is not None and geometry is self._face_blur_eligibility_geometry:
-            return self._face_blur_eligibility_cache
-
-        eligibility = evaluate_face_blur_eligibility(
-            self._series_path,
-            ds=self._ds,
-            geometry=geometry,
-            enable_tseg_face=face_blur_allowed(),
-            face_blur_already_applied=(
-                self._controller.series_has_face_blur(str(self._ds.SeriesInstanceUID))
-                if self._ds is not None
-                else False
-            ),
+        already_applied = (
+            self._controller.series_has_face_blur(str(self._ds.SeriesInstanceUID))
+            if self._ds is not None
+            else False
         )
-        self._face_blur_eligibility_cache = eligibility
-        self._face_blur_eligibility_geometry = geometry
+        eligibility = self._workspace.face_blur_eligibility(
+            ds=self._ds,
+            already_applied=already_applied,
+        )
+        self._series_geometry = self._workspace.ensure_geometry(ds=self._ds)
         return eligibility
 
     def _ocr_results_available_for_edit_context(self) -> bool:
@@ -2340,25 +2115,10 @@ class SeriesView(AppCTkToplevel):
 
     def process_single_frame_ocr(self, frame_index: int):
         """Performs OCR on a single frame (sync fallback — prefer background detect_text job)."""
-
-
         if self._ds is None:
             return
-        if not embedded_phi_has_models():
-            download_ocr_models()
-            download_ner_models()
-        reader = Reader(lang_list=list(OCR_LANGS), model_storage_directory=str(OCR_MODEL_DIR))
         frame = self.image_viewer.images[frame_index]
-        bgr = ocr_image_for_frame(self._ds, frame)
-        results = detect_text(
-            bgr,
-            reader,
-            draw_boxes_and_text=False,
-            modality=str(self._ds.get("Modality", "") or ""),
-            apply_noise_filter=False,
-            apply_phi_ner_filter=False,
-            annotate_phi_labels=True,
-        )
+        results = self._workspace.detect_text_on_frame_sync(ds=self._ds, frame=frame)
         if results:
             logger.debug(f"OCR Results:\n{pformat(results)}")
             self._apply_ocr_detections_for_frame(frame_index, results)
@@ -2446,35 +2206,26 @@ class SeriesView(AppCTkToplevel):
             return
         edit_context = self._resolve_edit_context()
         logger.info("Series View starting OCR background job edit_context=%s", edit_context)
-        self._ocr_work_state.reset()
         wl, ww = self._dicom_wl or 0.0, self._dicom_ww or 0.0
         if self._ds is not None:
-
             wl, ww = get_wl_ww(self._ds)
-        self._ocr_work_state.bind(
-            self._ds,
-            self._frames,
-            self._slice_paths,
-            (wl, ww),
+        frame_index = self.image_viewer.current_image_index if hasattr(self, "image_viewer") else 0
+        ocr_source = self.image_viewer.images if hasattr(self, "image_viewer") else None
+        options = self._workspace.prepare_ocr_job(
+            self._ocr_work_state,
+            ds=self._ds,
+            frames=self._frames,
+            slice_paths=self._slice_paths,
+            default_window=(wl, ww),
             single_frame=self.single_frame,
+            edit_context=edit_context,
+            frame_index=frame_index,
+            ocr_source_images=ocr_source,
         )
-        if hasattr(self, "image_viewer"):
-            self._ocr_work_state.ocr_pixels = build_series_view_ocr_pixels(
-                self.image_viewer.images,
-                self._ds,
-            )
-        if edit_context is OcrEditContext.FRAME:
-            self._ocr_work_state.frame_index = self.image_viewer.current_image_index
-        else:
+        if edit_context is not OcrEditContext.FRAME:
             self.detected_text.clear()
             if hasattr(self, "image_viewer"):
                 self.image_viewer.clear_text_overlays()
-        project_dir = self._controller.model.storage_dir
-        options = RunOptions(
-            edit_context=edit_context,
-            whitelist=[],
-            project_dir=project_dir,
-        )
         self._ocr_detecting = True
         self._refresh_ocr_toolbar_buttons()
         self._ocr_poll_frame_index = -1
@@ -2484,7 +2235,7 @@ class SeriesView(AppCTkToplevel):
             self.update_status(_("Detecting text in all images") + "…", debug_log=True)
 
         def _worker() -> None:
-            run_job(Algorithm.REMOVE_PIXEL_PHI, self._ocr_work_state, options=options)
+            self._workspace.run_ocr_job(self._ocr_work_state, options)
 
         start_background_job(
             self,
@@ -2552,10 +2303,6 @@ class SeriesView(AppCTkToplevel):
         exclude_rects: list[UserRectangle] = []
         if frame_index in self.image_viewer.overlay_data:
             exclude_rects = list(self.image_viewer.overlay_data[frame_index].exclude_rects)
-        ocr_texts[:] = filter_ocr_outside_exclude_rects(ocr_texts, exclude_rects)
-        if not ocr_texts:
-            logger.info("No OCR text remains to remove after exclude-rect filter on frame %s", frame_index)
-            return
         raw_frame = self.image_viewer.images[frame_index]
         windowed_frame = (
             ocr_image_for_frame(self._ds, raw_frame)
@@ -2563,26 +2310,27 @@ class SeriesView(AppCTkToplevel):
             else apply_windowing(self.image_viewer.current_wl, self.image_viewer.current_ww, raw_frame)
         )
         removal_mode = normalize_pixel_phi_removal_mode(self.remove_text_mode_var.get())
-        removed_keys = {(t.text, t.get_bounding_box()) for t in ocr_texts}
-        removed_labels = [t.text.strip() for t in ocr_texts if (t.text or "").strip()]
-        if removed_labels:
-            pending = self._removed_pixel_phi_by_frame.setdefault(frame_index, [])
-            for label in removed_labels:
-                if label not in pending:
-                    pending.append(label)
-        self.image_viewer.images[frame_index] = remove_ocr_text_from_frame(
-            raw_frame,
-            windowed_frame,
-            ocr_texts,
+        result = self._workspace.remove_ocr_from_frame(
+            raw_frame=raw_frame,
+            windowed_frame=windowed_frame,
+            ocr_texts=ocr_texts,
+            exclude_rects=exclude_rects,
             removal_mode=removal_mode,
         )
+        if result is None:
+            return
+        if result.removed_labels:
+            pending = self._removed_pixel_phi_by_frame.setdefault(frame_index, [])
+            for label in result.removed_labels:
+                if label not in pending:
+                    pending.append(label)
+        self.image_viewer.images[frame_index] = result.frame
         self._pixel_phi_dirty = True
         self._refresh_save_button()
-        ocr_texts.clear()
         cached = self.detected_text.get(frame_index, [])
         if cached:
             self.detected_text[frame_index] = [
-                item for item in cached if (item.text, item.get_bounding_box()) not in removed_keys
+                item for item in cached if (item.text, item.get_bounding_box()) not in result.removed_keys
             ]
 
     def remove_text_from_series(self):
@@ -2625,10 +2373,9 @@ class SeriesView(AppCTkToplevel):
 
     def blackout_areas_in_single_frame(self, frame_index: int, user_rects: list[UserRectangle]):
         logger.debug(f"Blackout {len(user_rects)} rects from frame {frame_index}")
-        blackout_rectangular_areas(self.image_viewer.images[frame_index], user_rects)
+        self._workspace.blackout_rects_on_frame(self.image_viewer.images[frame_index], user_rects)
         self._pixel_phi_dirty = True
         self._refresh_save_button()
-        user_rects.clear()
 
     def blackout_areas_in_series(self) -> int:
         """Black out pending user rects across the series; return rects applied.
@@ -2686,16 +2433,10 @@ class SeriesView(AppCTkToplevel):
             self.update_status(_("Blackout applied to all images"))
 
     def _commit_user_rects_to_exclude(self, frame_index: int) -> int:
-        """Move pending ``user_rects`` on ``frame_index`` onto ``exclude_rects``. Returns count moved."""
+        """Move pending user_rects on frame_index onto exclude_rects. Returns count moved."""
         if frame_index not in self.image_viewer.overlay_data:
             return 0
-        overlay = self.image_viewer.overlay_data[frame_index]
-        pending = list(overlay.user_rects)
-        if not pending:
-            return 0
-        overlay.exclude_rects.extend(pending)
-        overlay.user_rects.clear()
-        return len(pending)
+        return commit_user_rects_to_exclude(self.image_viewer.overlay_data[frame_index])
 
     def exclude_areas_in_single_frame(self, frame_index: int) -> int:
         moved = self._commit_user_rects_to_exclude(frame_index)
@@ -2797,11 +2538,8 @@ class SeriesView(AppCTkToplevel):
             round(float(rect["y2"]), 4),
         )
 
-    def _exclude_rects_fingerprint(self, rects: list[dict]) -> tuple[tuple[float, float, float, float], ...]:
-        return tuple(sorted(self._exclude_rect_key(rect) for rect in rects))
-
     def _exclude_areas_dirty(self) -> bool:
-        return self._exclude_rects_fingerprint(self._all_active_exclude_normalized()) != self._saved_exclude_fingerprint
+        return exclude_rects_fingerprint(self._all_active_exclude_normalized()) != self._saved_exclude_fingerprint
 
     def _save_changes_pending(self) -> bool:
         return bool(self._pixel_phi_dirty or self._exclude_areas_dirty())
@@ -2835,30 +2573,13 @@ class SeriesView(AppCTkToplevel):
         with contextlib.suppress(tk.TclError):
             self.save_button.configure(state="enabled" if enabled else "disabled")
 
-    def _persist_active_exclude_areas(self) -> str:
-        if self._ds is None:
-            return ""
-        rects = self._all_active_exclude_normalized()
-        project_dir = self._controller.model.storage_dir
-        modality = str(self._ds.get("Modality", "") or "")
-        save_project_exclude_rects(project_dir, modality, rects)
-        self._saved_exclude_fingerprint = self._exclude_rects_fingerprint(rects)
-        if not rects:
-            return " — " + _("cleared exclude areas for {modality}").format(
-                modality=modality.upper() or "?",
-            )
-        return " — " + _("saved {count} exclude area(s) for {modality}").format(
-            count=len(rects),
-            modality=modality.upper() or "?",
-        )
-
     def _load_saved_exclude_areas(self) -> None:
         if self._ds is None or not hasattr(self, "image_viewer"):
             return
         project_dir = self._controller.model.storage_dir
         modality = str(self._ds.get("Modality", "") or "")
         stored = load_project_exclude_rects(project_dir, modality)
-        self._saved_exclude_fingerprint = self._exclude_rects_fingerprint(stored)
+        self._saved_exclude_fingerprint = exclude_rects_fingerprint(stored)
         width, height = self._frame_size(self.image_viewer.current_image_index)
         loaded = modality_exclude_rects_for_series(project_dir, modality, width=width, height=height)
         if loaded:
@@ -2914,38 +2635,14 @@ class SeriesView(AppCTkToplevel):
             self._harmonize_view = view
 
     def _cache_dir(self) -> Path:
-        return resolve_series_cache_dir(self._series_path)
+        return self._workspace.cache_dir()
 
     def _ensure_annotate_session(self) -> AnnotateSession | None:
-        if self._annotate_session is not None:
-            # Re-validate against the displayed stack (stale planar grids paint off-image).
-            frames = self._frames
-            if frames is not None:
-                z, y, x = int(frames.shape[0]), int(frames.shape[1]), int(frames.shape[2])
-                if self._annotate_session.labels.shape != (z, y, x):
-                    logger.warning(
-                        "Dropping in-memory annotation session %s; Series View frames are %s",
-                        self._annotate_session.labels.shape,
-                        frames.shape,
-                    )
-                    self._annotate_session = None
-            if self._annotate_session is not None:
-                return self._annotate_session
-        try:
-            session = ensure_series_annotation_geometry(
-                self._series_path,
-                self._cache_dir(),
-                reference_frames=self._frames,
-            )
-        except AnnotationGeometryUnsupported as exc:
-            # Expected when modality cannot host a label grid — Annotate disabled.
-            logger.info("%s", exc)
-            session = None
-        except Exception:
-            logger.exception("Could not ensure annotation geometry for %s", self._series_path)
-            session = load_annotate_session(self._cache_dir())
-        self._annotate_session = session
-        return session
+        self._annotate_session = self._workspace.ensure_annotate_session(
+            existing=self._annotate_session,
+            frames=self._frames,
+        )
+        return self._annotate_session
 
     def _sync_annotate_availability(self) -> None:
         if not hasattr(self, "image_viewer"):
@@ -3046,7 +2743,12 @@ class SeriesView(AppCTkToplevel):
             paths = [Path(p) for p in selected]
 
         try:
-            result = detect_and_import(session, paths=paths, folder=folder, profile=profile)
+            result = self._workspace.import_annotate_segments(
+                session,
+                paths=paths,
+                folder=folder,
+                profile=profile,
+            )
         except Exception as exc:
             logger.exception("Segment import failed")
             messagebox.showerror(title=_("Import Segments"), message=str(exc), parent=self)
@@ -3123,7 +2825,7 @@ class SeriesView(AppCTkToplevel):
                 except Exception:
                     logger.exception("Cannot load TS mask for edit target %s", name)
                     return
-            volume = ensure_ts_edit(session, name, source_mask=source)
+            volume = self._workspace.ensure_ts_edit_volume(session, name, source_mask=source)
             self._structure_mask_by_name[name] = volume
             value = 0 if tool == "erase" else 1
             kind = "ts_edit"
@@ -3132,13 +2834,20 @@ class SeriesView(AppCTkToplevel):
             return
 
         if self._stroke_before is None:
-            self._stroke_before = begin_stroke_capture(volume, slice_index=slice_index)
             self._stroke_kind = kind
             self._stroke_structure = structure
             self._stroke_slice = slice_index
 
-        stamp_brush(volume, slice_index=slice_index, cy=cy, cx=cx, radius=radius, value=value)
-        session.dirty = True
+        self._stroke_before = self._workspace.apply_annotate_stroke(
+            session,
+            volume=volume,
+            slice_index=slice_index,
+            cy=cy,
+            cx=cx,
+            radius=radius,
+            value=value,
+            stroke_before=self._stroke_before,
+        )
         # Throttle full-slice recontour + frame redraw while the mouse is moving.
         self._schedule_annotate_recontour(target_key, slice_index)
 
@@ -3146,9 +2855,9 @@ class SeriesView(AppCTkToplevel):
         session = self._annotate_session
         if session is None or self._stroke_before is None:
             return
-        commit_stroke_undo(
+        self._workspace.finish_annotate_stroke(
             session,
-            kind=self._stroke_kind or "user",  # type: ignore[arg-type]
+            kind=self._stroke_kind or "user",
             structure_name=self._stroke_structure,
             slice_index=int(self._stroke_slice or 0),
             before_slice=self._stroke_before,
@@ -3251,7 +2960,7 @@ class SeriesView(AppCTkToplevel):
         session = self._annotate_session
         if session is None:
             return
-        if not undo_last_stroke(session):
+        if not self._workspace.undo_annotate_stroke(session):
             return
         visible = self._visible_segmentation_keys()
         # Refresh structure masks from edits for visible TS targets only.
@@ -3284,7 +2993,7 @@ class SeriesView(AppCTkToplevel):
         if not result.applied or not result.name:
             return
         try:
-            entry = add_user_label(
+            entry = self._workspace.add_annotate_user_label(
                 session,
                 result.name,
                 normative_organ=result.normative_organ,
@@ -3321,16 +3030,10 @@ class SeriesView(AppCTkToplevel):
             with contextlib.suppress(tk.TclError):
                 self.after_cancel(self._annotate_save_after_id)
             self._annotate_save_after_id = None
-        session = self._annotate_session
-        if session is None or not session.dirty:
-            return
-        try:
-            save_annotate_session(session)
-            if update_ledger:
-
-                upsert_series_ledger_from_cache(session.cache_dir)
-        except Exception:
-            logger.exception("Failed to save annotations")
+        self._workspace.flush_annotate_session(
+            self._annotate_session,
+            update_ledger=update_ledger,
+        )
 
     def clear_ts_cache_button_clicked(self) -> None:
 
@@ -3342,11 +3045,10 @@ class SeriesView(AppCTkToplevel):
         if not self._clear_ts_cache_button_visible():
             return
 
-        summary = tseg_cache_summary(self._series_path)
+        summary, has_annotations = self._workspace.tseg_cache_info()
         size_mb = summary.size_bytes / (1024 * 1024) if summary.exists else 0.0
         size_text = f"{size_mb:.1f} MB" if size_mb >= 0.1 else _("< 0.1 MB")
         file_count = summary.file_count if summary.exists else 0
-        has_annotations = annotations_exist(self._cache_dir())
 
         cache_message = (
             _("Delete analysis cache for this series?")
@@ -3405,8 +3107,7 @@ class SeriesView(AppCTkToplevel):
         self._flush_annotate_save()
         self._annotate_session = None
         self._user_label_overlays.clear()
-        self._controller.clear_series_tseg_cache(
-            self._series_path,
+        self._workspace.clear_series_tseg_cache(
             anon_series_uid=anon_uid,
             also_clear_annotations=also_clear_annotations,
         )
@@ -3502,18 +3203,6 @@ class SeriesView(AppCTkToplevel):
             except Exception as e:
                 logger.error(f"Error saving whitelist match settings: {e}")
 
-    def _promote_ocr_report_note(self) -> str:
-        """For pixel text reports, write the PHI-cleansed OCR transcript as a Basic Text SR; return a status suffix."""
-        modality = str(getattr(self._ds, "Modality", "") or "")
-        if classify_series(self._series_path, modality=modality) is not SeriesKind.PIXEL_TEXT_REPORT:
-            return ""
-        lines = cleansed_ocr_lines(self._ocr_transcript_by_frame)
-        out = write_ocr_report_sr(self._series_path, lines)
-        if out is None:
-            return ""
-        self._ocr_transcript_by_frame.clear()
-        return " — " + _("Basic Text SR written for research use")
-
     def save_series_button_clicked(self):
         if self._ds is None:
             logger.error("CRITICAL: No frames or dataset to save")
@@ -3526,58 +3215,72 @@ class SeriesView(AppCTkToplevel):
             logger.error("CRITICAL: No frames or dataset to save")
             return
 
-        self._persist_whitelist_if_changed()
-        exclude_note = ""
-        if not pixel_dirty:
-            exclude_note = self._persist_active_exclude_areas()
-            self._refresh_save_button()
-            self.update_status(_("Changes saved") + exclude_note)
-            return
+        whitelist_items: list[str] | None = None
+        whitelist_match: OcrWhitelistMatchSettings | None = None
+        if self._whitelist_changed:
+            whitelist_set = self.get_whitelist_set()
+            if whitelist_set:
+                whitelist_items = list(whitelist_set)
+        if self._whitelist_match_changed:
+            whitelist_match = self._whitelist_match_settings_from_ui()
+            self._whitelist_match_settings = whitelist_match
 
-        if save_series_frames(
-            self._series_path,
-            self._frames,
-            self._ds,
-        ):
-            logger.info(f"Saved series frames to {self._series_path}")
-            invalidate_projection_cache(self._series_path)
-            if hasattr(self, "image_viewer"):
-                texts_by_frame = collect_series_view_embedded_phi_texts(self.image_viewer)
-                for frame_index, removed in self._removed_pixel_phi_by_frame.items():
-                    merged = list(texts_by_frame.get(frame_index, []))
-                    for label in removed:
-                        if label not in merged:
-                            merged.append(label)
-                    if merged:
-                        texts_by_frame[frame_index] = merged
-                anon_series_uid = str(self._ds.SeriesInstanceUID)
-                if texts_by_frame:
-                    apply_series_view_embedded_phi(
-                        self._controller.anonymizer.model,
-                        self._slice_paths,
-                        texts_by_frame,
-                        projection_frame_count=0,
-                        anon_series_uid=anon_series_uid,
-                    )
-                elif pixel_dirty:
-                    # Blackout-only (or cleared overlays): still mark series scanned for Dataset status.
-                    self._controller.anonymizer.model.set_series_embedded_phi_scanned(anon_series_uid, scanned=True)
-            self._removed_pixel_phi_by_frame.clear()
-            self._pixel_phi_dirty = False
-            if exclude_dirty:
-                exclude_note = self._persist_active_exclude_areas()
-            self._refresh_save_button()
-            self._refresh_series_processing_status()
-            self.update_status(_("Changes saved") + exclude_note + self._promote_ocr_report_note())
-            self._on_cancel()
-        else:
-            logger.error(f"Failed to save series frames to {self._series_path}")
+        texts_by_frame: dict[int, list[str]] = {}
+        if pixel_dirty and hasattr(self, "image_viewer"):
+            texts_by_frame = dict(collect_series_view_embedded_phi_texts(self.image_viewer))
+            for frame_index, removed in self._removed_pixel_phi_by_frame.items():
+                merged = list(texts_by_frame.get(frame_index, []))
+                for label in removed:
+                    if label not in merged:
+                        merged.append(label)
+                if merged:
+                    texts_by_frame[frame_index] = merged
+
+        result = self._workspace.save_series_view_edits(
+            SeriesViewSaveRequest(
+                series_path=self._series_path,
+                frames=self._frames,
+                dataset=self._ds,
+                slice_paths=self._slice_paths,
+                project_dir=self._controller.model.storage_dir,
+                anon_model=self._controller.anonymizer.model,
+                pixel_dirty=pixel_dirty,
+                exclude_dirty=exclude_dirty,
+                exclude_rects_normalized=self._all_active_exclude_normalized(),
+                whitelist_items=whitelist_items,
+                whitelist_match_settings=whitelist_match,
+                texts_by_frame=texts_by_frame,
+                ocr_transcript_by_frame=self._ocr_transcript_by_frame,
+            )
+        )
+        if not result.ok:
             messagebox.showerror(
                 title=_("Save Changes Error"),
-                message=_("Failed to save changes to series frames"),
+                message=result.error_message or _("Failed to save changes to series frames"),
                 parent=self,
             )
             self.update_status(_("Could not save changes"))
+            return
+
+        if whitelist_items is not None:
+            self._whitelist_changed = False
+        if whitelist_match is not None:
+            self._whitelist_match_changed = False
+        self._saved_exclude_fingerprint = result.saved_exclude_fingerprint
+        if result.ocr_sr_note:
+            self._ocr_transcript_by_frame.clear()
+
+        if result.should_close:
+            self._removed_pixel_phi_by_frame.clear()
+            self._pixel_phi_dirty = False
+            self._refresh_save_button()
+            self._refresh_series_processing_status()
+            self.update_status(_("Changes saved") + result.exclude_note + result.ocr_sr_note)
+            self._on_cancel()
+            return
+
+        self._refresh_save_button()
+        self.update_status(_("Changes saved") + result.exclude_note)
 
     def whitelist_defaults_button_clicked(self):
         self.clear_whitelist()

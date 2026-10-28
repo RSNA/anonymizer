@@ -424,7 +424,7 @@ def test_overlay_filter_excludes_portable_when_on_whitelist() -> None:
 def test_resolve_whitelist_match_standard_preset() -> None:
     settings = OcrWhitelistMatchSettings(match_mode=OcrWhitelistMatchMode.STANDARD)
     similarity, length_ratio = resolve_whitelist_match(settings)
-    assert similarity == 0.75
+    assert similarity == 0.85
     assert length_ratio == 0.70
 
 

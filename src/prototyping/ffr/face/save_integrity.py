@@ -11,7 +11,7 @@ Default output: ``<series_directory>/1_blurred_face``
 
 Usage::
 
-    uv sync --extra tseg --group dev
+    uv sync --group dev
     uv run python -m prototyping.ffr.face.save_integrity /path/to/ct_head_series
     uv run python -m prototyping.ffr.face.save_integrity /path/to/series --check-only
 """

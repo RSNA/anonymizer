@@ -33,6 +33,10 @@ from anonymizer.controller.ai.harmonize import (
     study_loinc_prefix_for_edit,
     study_ready_for_description_edit,
 )
+from anonymizer.controller.ai.harmonize.description_mapping_store import (
+    remember_series_override,
+    remember_study_override,
+)
 from anonymizer.controller.phi.phi_io import PHI_IndexRecord, PHI_SeriesIndexRecord
 from anonymizer.controller.project import ProjectController
 from anonymizer.utils.modalities import ContentClass, Modality, get_modality_catalog
@@ -51,10 +55,6 @@ from anonymizer.view.common.filesystem_drop import enable_filesystem_drops
 from anonymizer.view.common.fonts import AppFonts, char_width_px
 from anonymizer.view.common.tooltip import MotionTooltipController, bind_hover_tooltip
 from anonymizer.view.project.delete_studies_dialog import DeleteStudiesDialog
-from anonymizer.view.project.description_mapping_store import (
-    remember_series_override,
-    remember_study_override,
-)
 from anonymizer.view.project.description_mappings import show_description_mappings_dialog
 from anonymizer.view.reports.open_workspace import open_series_workspace
 from anonymizer.view.series.projection import ProjectionView, projection_study_uids, study_has_projection_series
@@ -1444,8 +1444,9 @@ class DatasetView(AppToplevel):
         self._description_combo_open_after_id = self.after(10, open_dropdown)
 
     def _description_mappings_button_pressed(self) -> None:
-
-        show_description_mappings_dialog(self, mappings_dir=self._controller.model.mappings_dir())
+        show_description_mappings_dialog(
+            self, mappings_dir=self._controller.model.mappings_dir()
+        )
 
     def _edit_study_description(self, iid: str, anon_study_uid: str) -> None:
 

@@ -45,6 +45,8 @@ def test_metadata_tree_panel_expand_and_search(tk_root: tk.Tk) -> None:
     assert panel.tree.get_children()
     assert panel._expand_button.cget("text") == "Expand"
     assert panel._collapse_button.cget("text") == "Collapse"
+    assert panel._private_tags_switch.cget("text") == "Private tags"
+    assert bool(panel._show_private_var.get()) is True
     panel.expand_all()
     nested = []
     for top in panel.tree.get_children():
@@ -151,8 +153,8 @@ def test_format_detection_status_reports_private_uid_date_handling() -> None:
     status = _format_detection_status({}, private_uid_count=2, private_date_count=3)
     assert status.startswith("No PHI detected.")
     assert "Private data: 2 UID, 3 date fields" in status
-    assert "UID remapping / date delta" in status
-    assert "not scored by Detect PHI" in status
+    assert "handled at import" in status
+    assert "not changed by Remove PHI" in status
 
 
 def test_format_detection_status_empty_and_counts() -> None:
@@ -428,6 +430,23 @@ def test_private_uid_date_counts_on_panel(tk_root: tk.Tk) -> None:
     uids, dates = panel.private_uid_date_counts()
     assert uids >= 1
     assert dates >= 1
+
+
+def test_private_tags_switch_hides_private_rows(tk_root: tk.Tk) -> None:
+    ds = _sc_dataset()
+    ds.PatientName = "Public^Name"
+    block = ds.private_block(0x0009, "ACME_VENDOR", create=True)
+    block.add_new(0x10, "LO", "vendor-secret")
+    panel = MetadataTreePanel(tk_root)
+    panel.set_dataset(ds)
+    with_private = set(panel._content_by_iid.values())
+    assert "vendor-secret" in with_private
+    assert "Public^Name" in with_private
+    panel._show_private_var.set(False)
+    panel._on_private_tags_toggled()
+    without_private = set(panel._content_by_iid.values())
+    assert "vendor-secret" not in without_private
+    assert "Public^Name" in without_private
 
 
 def test_remove_synth_and_blank_modes(tk_root: tk.Tk) -> None:

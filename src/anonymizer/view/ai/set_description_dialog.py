@@ -9,13 +9,13 @@ from dataclasses import dataclass
 from typing import Literal
 
 import customtkinter as ctk
-from customtkinter import ThemeManager
 
 from anonymizer.controller.ai.harmonize.playbook import playbook_component_code_tooltip
 from anonymizer.utils.translate import _
 from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.tooltip import MotionTooltipController
+from anonymizer.view.common.treeview_chrome import find_appearance_host, treeview_theme_colors
 
 logger = logging.getLogger(__name__)
 
@@ -94,40 +94,6 @@ def _expand_button_label(kind: CatalogKind) -> str:
         return _("Show full LOINC catalog…")
     return _("Compose RadLex…")
 
-
-def _find_theme_host(widget: tk.Misc) -> tk.Misc | None:
-    """Walk masters to the CTk root that applies appearance-mode theme colors."""
-    current: tk.Misc | None = widget
-    visited: set[int] = set()
-    while current is not None and id(current) not in visited:
-        visited.add(id(current))
-        if callable(getattr(current, "_apply_appearance_mode", None)):
-            return current
-        nxt = getattr(current, "master", None)
-        if nxt is None or nxt is current:
-            break
-        current = nxt
-    return None
-
-
-def _listbox_theme_colors(host: tk.Misc) -> tuple[str, str, str, str]:
-    """Same Treeview palette the app configures globally at startup."""
-    apply = host._apply_appearance_mode  # type: ignore[attr-defined]
-    theme = ThemeManager.theme
-    bg = apply(theme["CTkFrame"]["fg_color"])
-    fg = apply(theme["CTkLabel"]["text_color"])
-    select_bg = apply(theme["CTkButton"]["fg_color"])
-    select_fg = apply(theme["CTkButton"]["text_color"])
-    tv = theme.get("Treeview") or {}
-    if "bg_color" in tv:
-        bg = apply(tv["bg_color"])
-    if "text_color" in tv:
-        fg = apply(tv["text_color"])
-    if "selected_bg_color" in tv:
-        select_bg = apply(tv["selected_bg_color"])
-    if "selected_color" in tv:
-        select_fg = apply(tv["selected_color"])
-    return str(bg), str(fg), str(select_bg), str(select_fg)
 
 
 def _display_code(code: str) -> str:
@@ -279,9 +245,9 @@ class SetDescriptionDialog(AppToplevel):
         self._list_host.grid_columnconfigure(0, weight=1)
         self._list_host.grid_rowconfigure(0, weight=1)
 
-        theme_host = _find_theme_host(self.master) or _find_theme_host(self)
+        theme_host = find_appearance_host(self.master) or find_appearance_host(self)
         if theme_host is not None:
-            self._list_theme = _listbox_theme_colors(theme_host)
+            self._list_theme = treeview_theme_colors(theme_host)
         bg, fg, select_bg, select_fg = self._list_theme
 
         scrollbar = ctk.CTkScrollbar(self._list_host, orientation="vertical")

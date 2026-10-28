@@ -5,7 +5,7 @@ Compare visualization modes and verify **no HU change outside** the face mask.
 ## Prerequisites
 
 ```bash
-uv sync --extra tseg --group dev --group prototyping-viz
+uv sync --group dev --group prototyping-viz
 uv run totalseg_set_license -l aca_XXXXXXXXXXXXXX   # if not already done
 ```
 

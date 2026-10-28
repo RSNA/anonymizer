@@ -17,7 +17,7 @@ from anonymizer.utils.windowing import apply_windowing
 from anonymizer.view.common.ctk_safe import dispose_photo_image
 from anonymizer.view.common.tk_mouse import pointer_buttons
 from anonymizer.view.common.tooltip import MotionTooltipController, TooltipContent
-from anonymizer.view.reports.entity_colors import ENTITY_COLORS_HEX, entity_color_bgr
+from anonymizer.view.reports.entity_colors import entity_color_bgr, entity_color_hex
 from anonymizer.view.series.anatomy_overlay import bgr_to_hex, latch_button_width_px, structure_button_label
 from anonymizer.view.series.histogram import Histogram
 from anonymizer.view.series.series_overlay import render_segmentations_overlay
@@ -1215,7 +1215,7 @@ class ImageViewer(ctk.CTkFrame):
             label = hit.phi_entities[0][0]
             return TooltipContent(
                 text=label,
-                bg=ENTITY_COLORS_HEX.get(label, "#666666"),
+                bg=entity_color_hex(label),
                 fg="#ffffff",
                 bold=True,
             )
@@ -1223,7 +1223,7 @@ class ImageViewer(ctk.CTkFrame):
         if label:
             return TooltipContent(
                 text=label,
-                bg=ENTITY_COLORS_HEX.get(label, "#666666"),
+                bg=entity_color_hex(label),
                 fg="#ffffff",
                 bold=True,
             )

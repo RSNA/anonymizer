@@ -17,8 +17,12 @@ MetadataTreeNode
 build_metadata_tree(ds: Dataset, *, include_file_meta: bool=False) -> list[MetadataTreeNode]
     Walk ds into a Horos-like tree: SQ → item children, VM>1 → value children.
 
-filter_metadata_tree(nodes: Sequence[MetadataTreeNode], query: str) -> list[MetadataTreeNode]
+filter_metadata_tree(nodes, query, *, include_private=True) -> list[MetadataTreeNode]
     Keep nodes matching query (case-insensitive) and ancestors of matches.
+    When include_private is False, drop private-tag rows (odd group).
+
+is_private_metadata_tag(tag: str) -> bool
+    True when a Metadata tree Tag cell is a private DICOM tag (odd group).
 
 flatten_tree_paths(nodes: Sequence[MetadataTreeNode]) -> list[str]
     All tag_path values depth-first (tests / search helpers).
@@ -74,17 +78,55 @@ def build_metadata_tree(
     return roots
 
 
+def is_private_metadata_tag(tag: str) -> bool:
+    """
+    True when a Metadata tree Tag cell is a private DICOM tag.
+
+    Private tags use an odd group number (DICOM). Structural rows ('-') are
+    not private.
+
+    Args:
+        tag: Tag column text (GGGG,EEEE or similar).
+
+    Returns:
+        True for private (odd-group) tags.
+    """
+    text = str(tag or "").strip()
+    if not text or text == STRUCTURAL_TAG:
+        return False
+    cleaned = text.replace("(", "").replace(")", "").replace(" ", "")
+    group_str = cleaned.split(",", 1)[0] if "," in cleaned else cleaned[:4]
+    try:
+        group = int(group_str, 16)
+    except ValueError:
+        return False
+    return group % 2 == 1
+
+
 def filter_metadata_tree(
     nodes: Sequence[MetadataTreeNode],
     query: str,
+    *,
+    include_private: bool = True,
 ) -> list[MetadataTreeNode]:
-    """Keep nodes matching query (case-insensitive) and ancestors of matches."""
+    """
+    Keep nodes matching query (case-insensitive) and ancestors of matches.
+
+    Args:
+        nodes: Root Metadata tree nodes.
+        query: Case-insensitive search text; empty keeps all (subject to
+            include_private).
+        include_private: When False, drop private-tag rows (odd group).
+
+    Returns:
+        Filtered tree roots.
+    """
     needle = str(query or "").strip().lower()
-    if not needle:
+    if not needle and include_private:
         return list(nodes)
     out: list[MetadataTreeNode] = []
     for node in nodes:
-        filtered = _filter_node(node, needle)
+        filtered = _filter_node(node, needle, include_private=include_private)
         if filtered is not None:
             out.append(filtered)
     return out
@@ -104,8 +146,32 @@ def flatten_tree_paths(nodes: Sequence[MetadataTreeNode]) -> list[str]:
     return paths
 
 
-def _filter_node(node: MetadataTreeNode, needle: str) -> MetadataTreeNode | None:
-    child_hits = [c for c in (_filter_node(ch, needle) for ch in node.children) if c is not None]
+def _filter_node(
+    node: MetadataTreeNode,
+    needle: str,
+    *,
+    include_private: bool,
+) -> MetadataTreeNode | None:
+    if not include_private and is_private_metadata_tag(node.tag):
+        return None
+    child_hits = [
+        c
+        for c in (
+            _filter_node(ch, needle, include_private=include_private) for ch in node.children
+        )
+        if c is not None
+    ]
+    if not needle:
+        if child_hits == list(node.children):
+            return node
+        return MetadataTreeNode(
+            name=node.name,
+            tag=node.tag,
+            vr=node.vr,
+            content=node.content,
+            tag_path=node.tag_path,
+            children=tuple(child_hits),
+        )
     self_hit = needle in " ".join(
         (node.name, node.tag, node.vr, node.content, node.tag_path)
     ).lower()

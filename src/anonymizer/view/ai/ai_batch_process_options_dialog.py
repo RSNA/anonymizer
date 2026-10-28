@@ -27,6 +27,11 @@ from anonymizer.controller.ai.feature_availability import (
     face_blur_allowed,
     harmonize_allowed,
 )
+from anonymizer.controller.ai.feature_ids import AiFeatureId
+from anonymizer.controller.ai.harmonize.description_mapping_store import (
+    load_series_overrides,
+    load_study_loinc_overrides,
+)
 from anonymizer.controller.jobs.runner import (
     OcrRemoveMode,
     normalize_ocr_remove_mode,
@@ -36,7 +41,7 @@ from anonymizer.controller.jobs.runner import (
 )
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.blur_face_results import face_blur_mode_from_menu_label, face_blur_mode_menu_values
-from anonymizer.view.ai.features.catalog import AiFeatureId, feature_capability_description, feature_title
+from anonymizer.view.ai.features.catalog import feature_capability_description, feature_title
 from anonymizer.view.ai.features.look import (
     FEATURE_ACTION_BUTTON_WIDTH,
     FEATURE_DETAIL_PADX,
@@ -55,10 +60,6 @@ from anonymizer.view.common.app_window import (
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.tooltip import bind_hover_tooltip
 from anonymizer.view.common.ux_fields import option_menu_width_for_labels
-from anonymizer.view.project.description_mapping_store import (
-    load_series_overrides,
-    load_study_loinc_overrides,
-)
 
 
 @dataclass(frozen=True)

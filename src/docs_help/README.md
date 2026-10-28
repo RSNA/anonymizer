@@ -50,8 +50,16 @@ committed boxes in `src/docs_help/ocr_cache/` instead of running EasyOCR.
 Soft shots for clinician UX also include:
 
 - `Dashboard_Analytics` — expand Analytics after importing `CT_Head_With_Contrast`
-- `MetadataAssessment` / `MetadataAssessment_DetectPHI` — Series View Metadata on
-  `davidson_cxr` (Detect PHI soft-fails when Embedded PHI models are missing)
+- `MetadataAssessment` / `MetadataAssessment_DetectPHI` / `MetadataAssessment_RemovePHI` —
+  Series View Metadata on `davidson_cxr` (Detect/Remove soft-fail when Embedded PHI
+  models are missing; force-recapture after UI changes with `--force-shot`)
+- `ReportTextReview` / `ReportTextReview_Metadata` — Encapsulated PDF
+  `demo_report_pdf` (needs Clean Structured Content at import; soft-fail if text empty)
+
+Required chrome also includes:
+
+- `DeidentificationOptions` — New Project Settings Retain preset
+- `DescriptionMappings` — Dataset toolbar mappings inspector (seeded rows)
 
 Markdown embeds the macOS path (`shots/macos/….png`) under the **current
 language** page. The published site’s `docs/javascripts/os_shots.js` swaps only

@@ -50,10 +50,10 @@ uv run python -m prototyping.medgemma_chat \
 
 ### 3. Optional — Gradio UI
 
-`gradio` is in the `dev` dependency group:
+`gradio` is in the `medgemma-chat` dependency group:
 
 ```bash
-uv sync --extra mcp --group medgemma-chat --group dev
+uv sync --extra mcp --group medgemma-chat
 uv run python -m prototyping.medgemma_chat \
   --model /path/to/medgemma_hf_weights \
   --mcp-url http://127.0.0.1:8000/mcp \

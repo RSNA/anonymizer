@@ -25,6 +25,8 @@ from anonymizer.controller.script.operands import (
     operand_id_from_syntax,
     validate_operation,
 )
+from anonymizer.controller.script.options import confidentiality_options_changed
+from anonymizer.controller.script.paths import packaged_default_script_path
 from anonymizer.model.project import BASIC_OPTIONS, RETAIN_OPTIONS
 from anonymizer.utils.dicom_dictionary import (
     dicom_applicable_standard_text,
@@ -39,7 +41,6 @@ from anonymizer.view.settings.script_editor import (
     ScriptViewMode,
     add_rule_from_dictionary,
     apply_incrementdate_to_rules,
-    confidentiality_options_changed,
     demote_rule,
     embedded_phi_batch_explainer,
     filter_rules,
@@ -53,7 +54,6 @@ from anonymizer.view.settings.script_editor import (
     search_missing_dictionary_tags,
     search_removed_rules,
 )
-from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
 
 
 def _mini_script(path: Path) -> Path:
@@ -337,13 +337,10 @@ def test_write_project_script_path_and_reload(controller, tmp_path: Path) -> Non
 
 
 def test_packaged_script_paths() -> None:
-    default = DEFAULT_ANONYMIZER_SCRIPT
+    default = packaged_default_script_path()
     assert default.name == "default-anonymizer.script"
     assert default.is_file()
-    # Install-dir relative path used by product code after main chdir / test conftest.
-    relative = Path("assets/scripts/default-anonymizer.script")
-    assert relative.is_file()
-    assert relative.resolve() == default.resolve()
+    assert default == Path("assets/scripts/default-anonymizer.script")
 
 
 def test_confidentiality_options_changed() -> None:
@@ -366,4 +363,5 @@ def test_options_switch_confirm_message() -> None:
     assert "Custom script edits will be lost" in message
     assert "not re-processed" in message
     assert "SR" in message and "PDF" in message
+    assert "Enabling SR or PDF" in message
 

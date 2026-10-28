@@ -6,11 +6,12 @@ from dataclasses import dataclass
 
 import customtkinter as ctk
 
+from anonymizer.controller.ai.feature_ids import AiFeatureId
+from anonymizer.controller.ai.harmonize.description_mapping_store import SeriesDescriptionOverride
 from anonymizer.utils.translate import _
-from anonymizer.view.ai.features.catalog import AiFeatureId, feature_description
+from anonymizer.view.ai.features.catalog import feature_description
 from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
-from anonymizer.view.project.description_mapping_store import SeriesDescriptionOverride
 
 
 @dataclass(frozen=True)

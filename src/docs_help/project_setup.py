@@ -108,6 +108,7 @@ def fixture_dirs() -> dict[str, Path]:
         "us_rgb_single_frame": us_rgb,
         "us_mf": TEST_DCM_ROOT / "us_multi_frame_grayscale",
         "us_multi_frame_grayscale": TEST_DCM_ROOT / "us_multi_frame_grayscale",
+        "demo_report_pdf": TEST_DCM_ROOT / "demo_report_pdf",
     }
 
 
@@ -245,6 +246,26 @@ def series_for_fixture(images_dir: Path, fixture_key: str) -> Path | None:
             if str(getattr(ds, "Modality", "") or "").upper() == "US":
                 return ser
         return series_dirs[-1]
+    if "demo_report" in key or key in {"report_pdf", "demo_report_pdf"}:
+        from pydicom import dcmread
+
+        from anonymizer.controller.ai.embedded_phi.classify_series import (
+            ENCAPSULATED_PDF_SOP_CLASS_UID,
+        )
+
+        for ser in reversed(series_dirs):
+            dcms = list(ser.glob("*.dcm"))
+            if not dcms:
+                continue
+            try:
+                ds = dcmread(dcms[0], stop_before_pixels=True, force=True)
+            except Exception:
+                continue
+            sop = str(getattr(ds, "SOPClassUID", "") or "")
+            mod = str(getattr(ds, "Modality", "") or "").upper()
+            if sop == ENCAPSULATED_PDF_SOP_CLASS_UID or mod in {"DOC", "PDF"}:
+                return ser
+        return None
     return series_dirs[-1]
 
 

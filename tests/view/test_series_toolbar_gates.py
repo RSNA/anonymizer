@@ -2,16 +2,16 @@
 
 from anonymizer.controller.jobs.runner import OcrEditContext
 from anonymizer.controller.series.series_overlay import OCRText, OverlayData, UserRectangle
-from anonymizer.view.series.series import (
-    SeriesView,
+from anonymizer.controller.series.workspace import (
     blur_face_toolbar_visible,
     clear_cache_button_visible,
     edit_context_toolbar_visible,
     format_ocr_detection_complete_status,
-    harmonize_button_visible,
     ocr_remove_enabled,
     ocr_results_available_for_edit_context,
 )
+from anonymizer.view.ai.harmonize_description import harmonize_button_visible
+from anonymizer.view.series.series import SeriesView
 
 
 def _ocr(

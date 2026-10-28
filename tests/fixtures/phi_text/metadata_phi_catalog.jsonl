@@ -1,0 +1,11 @@
+{"id":"study_first_last","scope":"public","keyword":"StudyDescription","vr":"LO","text":"MAMMO screening for Jane Doe","expect_labels":["FIRST_NAME","LAST_NAME"],"assert_unmasked":["Jane","Doe"]}
+{"id":"scott_vs_scout","scope":"public","keyword":"StudyDescription","vr":"LO","text":"XR CHEST AP PORTABLE for Scott Kaufman","expect_labels":["FIRST_NAME","LAST_NAME"],"whitelist":["CHEST","AP","PORTABLE","SCOUT"],"assert_unmasked":["Scott","Kaufman","XR","for"],"assert_masked":["CHEST","AP","PORTABLE"]}
+{"id":"prose_date","scope":"public","keyword":"ImageComments","vr":"LT","text":"Patient DOB 06.16.1976 on chart","expect_labels":["DATE"],"assert_unmasked":["06.16.1976"]}
+{"id":"prose_phone","scope":"public","keyword":"Occupation","vr":"LO","text":"Call (404) 555-0162 before visit","expect_labels":["PHONE"],"assert_unmasked":["(404) 555-0162"]}
+{"id":"prose_email","scope":"public","keyword":"ImageComments","vr":"LT","text":"Contact jane.doe@hospital.org for records","expect_labels":["EMAIL"],"assert_unmasked":["jane.doe@hospital.org"]}
+{"id":"prose_location","scope":"public","keyword":"StudyDescription","vr":"LO","text":"Clinic at 100 Main Street Springfield","expect_labels":["LOCATION"],"assert_unmasked":["Springfield"]}
+{"id":"prose_id","scope":"public","keyword":"SeriesDescription","vr":"LO","text":"Follow-up for MRN ABC-X9Y8Z7","expect_labels":["ID"],"assert_unmasked":["ABC-X9Y8Z7"]}
+{"id":"anon_surface_id","scope":"public","keyword":"StudyDescription","vr":"LO","text":"Study for patient 994250-000003 done","patient_id":"994250-000003","assert_masked":["994250-000003"],"assert_unmasked":["Study","patient","done"]}
+{"id":"private_name_lo","scope":"private","private_creator":"ACME_VENDOR","group":30583,"element_suffix":16,"vr":"LO","text":"Patient Jane Doe","expect_labels":["FIRST_NAME","LAST_NAME"],"assert_unmasked":["Jane","Doe"]}
+{"id":"private_contact_lt","scope":"private","private_creator":"ACME_CONTACT","group":30585,"element_suffix":16,"vr":"LT","text":"Reach jane.doe@hospital.org or (404) 555-0162","expect_labels":["EMAIL","PHONE"],"assert_unmasked":["jane.doe@hospital.org","(404) 555-0162"]}
+{"id":"combo_public_private","scope":"both","plant_ids":["study_first_last","private_contact_lt"],"expect_labels":["FIRST_NAME","LAST_NAME","EMAIL","PHONE"]}

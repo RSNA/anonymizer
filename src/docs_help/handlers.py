@@ -34,7 +34,13 @@ logger = logging.getLogger("docs_help")
 
 
 def shot_welcome(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
-    dest = ctx.grab(ctx.app, shot)
+    app = ctx.app
+    if getattr(app, "controller", None) is not None or getattr(app, "dashboard", None) is not None:
+        raise RuntimeError("Welcome must run before project open")
+    welcome = getattr(app, "welcome_view", None)
+    if welcome is None or not welcome.winfo_exists():
+        raise RuntimeError("WelcomeView missing")
+    dest = ctx.grab(app, shot)
     return ShotResult(shot.id, "ok", "WelcomeView", dest)
 
 
@@ -144,6 +150,43 @@ def shot_logging_levels(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
         return LoggingLevelsDialog(settings, settings.model.logging_levels)
 
     return shot_settings_subdialog(ctx, shot, opener)
+
+
+def shot_deidentification_options(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
+    """New Project Settings → De-identification Options with Retain preset filled."""
+    from anonymizer.model.project import RETAIN_OPTIONS
+    from anonymizer.view.settings.deidentification_options_dialog import DeidentificationOptionsDialog
+
+    settings = _open_settings(ctx, new_model=True)
+    dlg: Any = None
+    try:
+        settle(settings, max(ctx.settle_ms, 500))
+        dlg = DeidentificationOptionsDialog(settings, RETAIN_OPTIONS)
+        settle(dlg, max(ctx.settle_ms, 800))
+        wait_mapped(dlg)
+        # Focus a cleaning option explanation when present (optional chrome).
+        with contextlib.suppress(Exception):
+            from anonymizer.utils.dicom import DeidMethodCode
+
+            dlg._focused = DeidMethodCode.MODIFIED_DATES
+            dlg._show_explanation(DeidMethodCode.MODIFIED_DATES)
+            settle(dlg, 200)
+        try:
+            dlg.lift()
+            dlg.attributes("-topmost", True)
+        except Exception:
+            pass
+        settle(dlg, 300)
+        dest = ctx.grab(dlg, shot, settle_ms=max(ctx.settle_ms, 700))
+        try:
+            dlg.attributes("-topmost", False)
+        except Exception:
+            pass
+        return ShotResult(shot.id, "ok", "retain", dest)
+    finally:
+        if dlg is not None:
+            close_toplevel(dlg)
+        close_toplevel(settings)
 
 
 def shot_anonymizer_script_editor(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
@@ -346,7 +389,7 @@ def shot_dashboard_analytics(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
 
 
 def shot_metadata_assessment(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
-    """Series View Metadata tree; optional Detect PHI highlight (recipe.mode=detect)."""
+    """Series View Metadata tree; Detect / Remove PHI (recipe.mode=tree|detect|remove)."""
     import time
     import tkinter as tk
 
@@ -369,6 +412,9 @@ def shot_metadata_assessment(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
         ds = view._current_slice_dataset()
         if ds is None:
             raise RuntimeError("No slice dataset for Metadata")
+        dataset_path = None
+        with contextlib.suppress(Exception):
+            dataset_path = view._current_slice_path()
         project_dir = ctx.app.controller.model.storage_dir
         whitelist: list[str] = []
         if hasattr(view, "whitelist"):
@@ -377,6 +423,7 @@ def shot_metadata_assessment(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
         dlg = MetadataAssessmentDialog(
             view,
             dataset=ds,
+            dataset_path=dataset_path,
             project_dir=project_dir,
             modality=str(getattr(ds, "Modality", "") or "") or None,
             whitelist=whitelist,
@@ -384,8 +431,11 @@ def shot_metadata_assessment(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
         )
         settle(dlg, max(ctx.settle_ms, 800))
         wait_mapped(dlg)
+        # Product default is Private tags on — keep it for tree/detect/remove shots.
+        with contextlib.suppress(Exception):
+            dlg._panel._show_private_var.set(True)
         mode = str((shot.recipe or {}).get("mode") or "tree").strip().lower()
-        if mode == "detect":
+        if mode in {"detect", "remove"}:
             if not report_text_phi_ready():
                 if shot.soft:
                     return ShotResult(shot.id, "soft_fail", "ner_models_missing")
@@ -401,6 +451,19 @@ def shot_metadata_assessment(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
                     return ShotResult(shot.id, "soft_fail", "detect_timeout")
                 raise RuntimeError("Timed out waiting for Metadata Detect PHI")
             settle(dlg, max(ctx.settle_ms, 500))
+            if mode == "remove":
+                if not dlg._panel.has_phi():
+                    if shot.soft:
+                        return ShotResult(shot.id, "soft_fail", "no_phi_for_remove")
+                    raise RuntimeError("Metadata Detect PHI found nothing to remove")
+                # Blank mode so Remove PHI label and dirty Save are visible.
+                with contextlib.suppress(Exception):
+                    labels = list(dlg._mode_labels)
+                    if labels:
+                        dlg.mode_var.set(labels[0])
+                        dlg._refresh_remove_label()
+                dlg._on_remove()
+                settle(dlg, max(ctx.settle_ms, 400))
         try:
             dlg.lift()
             dlg.attributes("-topmost", True)
@@ -416,7 +479,167 @@ def shot_metadata_assessment(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
         return ShotResult(shot.id, "ok", detail, dest)
     finally:
         if dlg is not None:
+            # Discard unsaved Remove PHI edits without a confirm dialog.
+            with contextlib.suppress(Exception):
+                dlg._dirty = False
             close_toplevel(dlg)
+        close_toplevel(view)
+
+
+def shot_description_mappings(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
+    """Dataset Description Mappings dialog with seeded Series / Study rows."""
+    from anonymizer.controller.ai.harmonize.description_mapping_store import (
+        upsert_series_override,
+        upsert_study_override,
+    )
+    from anonymizer.view.project.description_mappings import DescriptionMappingsDialog
+
+    _ensure_project(ctx)
+    mappings_dir = ctx.app.controller.model.mappings_dir()
+    upsert_series_override(
+        mappings_dir,
+        original="CHEST PA PORTABLE",
+        harmonized="XR Chest AP Portable",
+    )
+    upsert_series_override(
+        mappings_dir,
+        original="CT HEAD W CONTRAST",
+        harmonized="CT Head w/ IV Contrast",
+    )
+    upsert_study_override(
+        mappings_dir,
+        original="CHEST XRAY",
+        loinc_number="36643-5",
+    )
+    upsert_study_override(
+        mappings_dir,
+        original="CT HEAD",
+        loinc_number="24725-4",
+    )
+    parent = ctx.app.dashboard or ctx.app
+    # Prefer Dataset as parent when open (product opens from Dataset toolbar).
+    ctx.app.view()
+    settle(ctx.app, max(ctx.settle_ms, 600))
+    parent = ctx.app.dataset_view or parent
+    dlg = DescriptionMappingsDialog(parent, mappings_dir=mappings_dir)
+    try:
+        settle(dlg, max(ctx.settle_ms, 800))
+        wait_mapped(dlg)
+        try:
+            dlg.lift()
+            dlg.attributes("-topmost", True)
+        except Exception:
+            pass
+        settle(dlg, 300)
+        dest = ctx.grab(dlg, shot, settle_ms=max(ctx.settle_ms, 700))
+        try:
+            dlg.attributes("-topmost", False)
+        except Exception:
+            pass
+        return ShotResult(shot.id, "ok", f"mappings:{mappings_dir}", dest)
+    finally:
+        close_toplevel(dlg)
+
+
+def shot_report_text_review(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
+    """Report Text Review on demo Encapsulated PDF; optional Metadata from toolbar."""
+    import time
+
+    from anonymizer.controller.ai.embedded_phi.report.process_report_text import extract_report_text
+    from anonymizer.view.reports.report_text_review import show_report_text_review
+    from anonymizer.view.series.metadata_assessment_dialog import MetadataAssessmentDialog
+
+    fixture = _fixture_from_deps(shot.deps) or "demo_report_pdf"
+    # Import once under Clean Structured Content (see _ensure_modalities_for_fixtures).
+    # Do not force re-import: a second anonymize of the same SOP fails in an existing project.
+    _import_fixtures(ctx, fixture)
+    series = series_for_fixture(ctx.app.controller.model.images_dir(), fixture)
+    if series is None:
+        if shot.soft:
+            return ShotResult(shot.id, "soft_fail", "report_series_missing")
+        raise RuntimeError(f"No series for {fixture}")
+    parent = ctx.app.dashboard or ctx.app
+    view = show_report_text_review(
+        parent,
+        controller=ctx.app.controller,
+        series_path=series,
+        document_kind="pdf",
+        fonts=ctx.app.fonts,
+    )
+    if view is None:
+        if shot.soft:
+            return ShotResult(shot.id, "soft_fail", "report_view_failed")
+        raise RuntimeError("ReportTextReview failed")
+    meta_dlg: Any = None
+    try:
+        settle(view, max(ctx.settle_ms, 1200))
+        wait_mapped(view)
+        # PDF withdraws until pages ready — wait for deiconify.
+        deadline = time.monotonic() + 30.0
+        while time.monotonic() < deadline:
+            settle(view, 200)
+            try:
+                if bool(view.winfo_viewable()):
+                    break
+            except Exception:
+                break
+        settle(view, max(ctx.settle_ms, 500))
+        text = ""
+        with contextlib.suppress(Exception):
+            if view._ds is not None:
+                text = extract_report_text(view._ds)
+        if not (text or "").strip():
+            if shot.soft:
+                return ShotResult(shot.id, "soft_fail", "report_text_empty")
+            raise RuntimeError("Report text empty after import (Clean Structured Content?)")
+        mode = str((shot.recipe or {}).get("mode") or "review").strip().lower()
+        if mode == "metadata":
+            from pydicom import dcmread
+
+            if view._ds is None or view._dcm_path is None:
+                if shot.soft:
+                    return ShotResult(shot.id, "soft_fail", "report_dataset_missing")
+                raise RuntimeError("Report Text Review has no loaded dataset")
+            try:
+                ds = dcmread(str(view._dcm_path), stop_before_pixels=True, force=True)
+            except Exception:
+                ds = view._ds
+            meta_dlg = MetadataAssessmentDialog(
+                view,
+                dataset=ds,
+                dataset_path=view._dcm_path,
+                project_dir=ctx.app.controller.model.storage_dir,
+                modality=str(getattr(ds, "Modality", "") or "") or None,
+            )
+            settle(meta_dlg, max(ctx.settle_ms, 800))
+            wait_mapped(meta_dlg)
+            try:
+                meta_dlg.lift()
+                meta_dlg.attributes("-topmost", True)
+            except Exception:
+                pass
+            settle(meta_dlg, 300)
+            dest = ctx.grab(meta_dlg, shot)
+            try:
+                meta_dlg.attributes("-topmost", False)
+            except Exception:
+                pass
+            return ShotResult(shot.id, "ok", f"{fixture}:metadata", dest)
+        try:
+            view.lift()
+            view.attributes("-topmost", True)
+        except Exception:
+            pass
+        settle(view, 300)
+        dest = ctx.grab(view, shot)
+        try:
+            view.attributes("-topmost", False)
+        except Exception:
+            pass
+        return ShotResult(shot.id, "ok", f"{fixture}:review", dest)
+    finally:
+        if meta_dlg is not None:
+            close_toplevel(meta_dlg)
         close_toplevel(view)
 
 
@@ -2735,6 +2958,7 @@ SHOT_HANDLERS: dict[str, Callable[[CaptureContext, ShotSpec], ShotResult]] = {
     "Modalities": shot_modalities,
     "StorageClasses": shot_storage_classes,
     "TransferSyntaxes": shot_transfer_syntaxes,
+    "DeidentificationOptions": shot_deidentification_options,
     "AnonymizerScriptEditor": shot_anonymizer_script_editor,
     "LookupTable": shot_lookup_table,
     "LoggingLevels": shot_logging_levels,
@@ -2761,6 +2985,10 @@ SHOT_HANDLERS: dict[str, Callable[[CaptureContext, ShotSpec], ShotResult]] = {
     "SeriesView_Review": shot_series_review,
     "MetadataAssessment": shot_metadata_assessment,
     "MetadataAssessment_DetectPHI": shot_metadata_assessment,
+    "MetadataAssessment_RemovePHI": shot_metadata_assessment,
+    "DescriptionMappings": shot_description_mappings,
+    "ReportTextReview": shot_report_text_review,
+    "ReportTextReview_Metadata": shot_report_text_review,
     "AiBatchOptions": shot_ai_batch_options,
     "AiBatchRunning": shot_ai_batch_running,
     "SendView_Initial": shot_send_view,

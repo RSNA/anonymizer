@@ -18,7 +18,7 @@ from anonymizer.controller.script.document import (
 )
 from anonymizer.model.project import BASIC_OPTIONS, RETAIN_OPTIONS, ProjectModel
 from anonymizer.utils.dicom import DeidMethodCode
-from anonymizer.view.settings.script_editor import infer_options_from_script
+from anonymizer.controller.script.options import infer_options_from_script
 
 _DEFAULT = ProjectModel.default_anonymizer_script_path()
 

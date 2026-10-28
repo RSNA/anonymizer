@@ -22,9 +22,9 @@ def test_set_language_code_valid_code():
 def test_locales_dir_is_install_relative(monkeypatch):
     """Locales resolve under assets/locales after chdir to the install dir."""
     from anonymizer.utils.translate import _, locales_dir, set_language_code
-    from tests.paths import REPO_ROOT
 
-    monkeypatch.chdir(REPO_ROOT / "src" / "anonymizer")
+    install_dir = Path(__file__).resolve().parents[3] / "src" / "anonymizer"
+    monkeypatch.chdir(install_dir)
     assert locales_dir() == Path("assets/locales")
     assert locales_dir().is_dir()
     set_language_code("de")

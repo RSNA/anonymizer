@@ -36,23 +36,20 @@ from anonymizer.view.common.app_window import AppCTkToplevel, refresh_app_window
 from anonymizer.view.common.ctk_safe import mark_ctk_window_destroyed
 from anonymizer.view.common.fonts import AppFonts
 from anonymizer.view.common.navigation import find_dataset_view_parent, return_to_dataset_view
-from anonymizer.view.common.ux_fields import truncate_series_description
+from anonymizer.view.common.phi_action_labels import (
+    detect_phi_button_label,
+    remove_phi_button_label,
+    replace_mode_labels,
+)
+from anonymizer.view.common.tooltip import bind_hover_tooltip
+from anonymizer.view.common.ux_fields import button_width_for_label, truncate_series_description
 from anonymizer.view.reports.pdf_page_view import PdfPageView
 from anonymizer.view.reports.report_canvas import ReportCanvas
+from anonymizer.view.series.metadata_assessment_dialog import MetadataAssessmentDialog
 
 logger = logging.getLogger(__name__)
 
 DocumentKind = Literal["sr", "pdf"]
-
-
-def _replace_mode_display_label(mode: ReplaceMode) -> str:
-    if mode == "synth":
-        return _("Synthetic")
-    return _("Blank")
-
-
-def replace_mode_labels() -> dict[str, ReplaceMode]:
-    return {_replace_mode_display_label(mode): mode for mode in REPLACE_MODE_VALUES}
 
 
 def _display_report_text(text: str) -> str:
@@ -64,16 +61,6 @@ def _display_report_text(text: str) -> str:
     return body
 
 
-def detect_phi_button_label() -> str:
-    return _("Detect PHI")
-
-
-def remove_phi_button_label(mode: ReplaceMode) -> str:
-    if mode == "synth":
-        return _("Replace PHI")
-    return _("Remove PHI")
-
-
 class ReportTextReview(AppCTkToplevel):
     """Detect → Remove (Blank|Synthetic) → Save; text side panel with entity highlights."""
 
@@ -81,7 +68,8 @@ class ReportTextReview(AppCTkToplevel):
     BUTTON_WIDTH = 140
     POLL_MS = 100
     DEFAULT_WIDTH = 1100
-    DEFAULT_HEIGHT = 900
+    DEFAULT_HEIGHT = 720
+    _MAX_SCREEN_HEIGHT_FRACTION = 0.75
 
     def __init__(
         self,
@@ -123,11 +111,11 @@ class ReportTextReview(AppCTkToplevel):
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Escape>", lambda _event: self._on_cancel())
 
+        width, height = self._window_size()
+        self.geometry(f"{width}x{height}")
         if self._page_kind:
+            # Wait for PDF raster before showing (avoids empty-frame flash).
             self.withdraw()
-        else:
-            width, height = self._window_size()
-            self.geometry(f"{width}x{height}")
 
         self._build_ui()
         self._load_content()
@@ -136,57 +124,25 @@ class ReportTextReview(AppCTkToplevel):
             self.lift()
 
     def _window_size(self) -> tuple[int, int]:
+        """Sensible startup size for the current display (not full A4 page)."""
         try:
             sw = int(self.winfo_screenwidth())
             sh = int(self.winfo_screenheight())
         except tk.TclError:
             return self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT
         w = min(self.DEFAULT_WIDTH, max(800, int(sw * 0.65)))
-        h = min(self.DEFAULT_HEIGHT, max(640, int(sh * 0.85)))
+        h = min(self.DEFAULT_HEIGHT, max(520, int(sh * self._MAX_SCREEN_HEIGHT_FRACTION)))
         return w, h
 
-    def _size_window_to_page(self) -> None:
-        """One-shot size to page aspect, paint once, then show (no resize flicker)."""
+    def _on_pdf_pages_ready(self) -> None:
+        """Show the window once pages are ready; PDF fits the panel and scrolls."""
         if self.pdf_view is None:
             return
-        aspect = self.pdf_view.first_page_aspect()
-        if aspect is None or aspect <= 0:
-            self.pdf_view._on_pages_ready = None
-            self.deiconify()
-            self.lift()
-            return
-        try:
-            sw = int(self.winfo_screenwidth())
-            sh = int(self.winfo_screenheight())
-        except tk.TclError:
-            sw, sh = 1440, 900
-        chrome_w = 2 * self.PAD + 28 + 360  # room for text side panel
-        chrome_h = 2 * self.PAD + 120
-        max_w = max(720, int(sw * 0.92) - chrome_w)
-        max_h = max(520, int(sh * 0.92) - chrome_h)
-        page_w = min(max_w, int(max_h / aspect))
-        page_w = max(480, page_w)
-        page_h = int(page_w * aspect)
-        if page_h > max_h:
-            page_h = max_h
-            page_w = max(480, int(page_h / aspect))
-        self.geometry(f"{page_w + chrome_w}x{page_h + chrome_h}")
-        self.pdf_view._suspend_configure_refit = True
-        try:
-            self.pdf_view._display_width = page_w
-            self.update_idletasks()
-            self.pdf_view._refit()
-        finally:
-            self.pdf_view._suspend_configure_refit = False
         self.pdf_view._on_pages_ready = None
         self.deiconify()
         self.lift()
-        self.pdf_view._suspend_configure_refit = True
-        self.after(120, self._release_configure_refit)
-
-    def _release_configure_refit(self) -> None:
-        if self.pdf_view is not None:
-            self.pdf_view._suspend_configure_refit = False
+        self.update_idletasks()
+        self.pdf_view._refit()
 
     def _update_title(self) -> None:
 
@@ -232,7 +188,7 @@ class ReportTextReview(AppCTkToplevel):
         if self._page_kind:
             body.grid_columnconfigure(0, weight=3)
             body.grid_columnconfigure(1, weight=2)
-            self.pdf_view = PdfPageView(body, on_pages_ready=self._size_window_to_page)
+            self.pdf_view = PdfPageView(body, on_pages_ready=self._on_pdf_pages_ready)
             self.pdf_view.grid(row=0, column=0, sticky="nsew", padx=(0, pad // 2))
             self.text_panel = ReportCanvas(body, on_toggle=self._on_toggle_entity)
             self.text_panel.grid(row=0, column=1, sticky="nsew", padx=(pad // 2, 0))
@@ -277,6 +233,20 @@ class ReportTextReview(AppCTkToplevel):
         self.remove_button.grid_remove()
         self.mode_menu.grid_remove()
 
+        metadata_label = _("Metadata")
+        self.metadata_button = ctk.CTkButton(
+            action_group,
+            width=button_width_for_label(metadata_label, minimum=self.BUTTON_WIDTH),
+            text=metadata_label,
+            command=self._on_metadata,
+        )
+        self.metadata_button.grid(row=0, column=3, padx=(2, pad), pady=0)
+        bind_hover_tooltip(
+            self.metadata_button,
+            _("View DICOM metadata for this report."),
+            parent=self,
+        )
+
         self.status_label = ctk.CTkLabel(self.control_frame, text="", anchor="w", justify="left")
         self.status_label.grid(row=1, column=0, padx=pad, pady=(0, pad), sticky="w")
 
@@ -302,9 +272,14 @@ class ReportTextReview(AppCTkToplevel):
             return
         self._dcm_path = paths[0]
         self._ds = dcmread(self._dcm_path)
+        pdf_data: bytes | None = None
         if self.pdf_view is not None and self._document_kind == "pdf":
-            data = encapsulated_pdf_bytes(self._ds)
-            self.pdf_view.show_pdf_bytes(data)
+            pdf_data = encapsulated_pdf_bytes(self._ds)
+            self.pdf_view.show_pdf_bytes(pdf_data)
+            # Empty PDF never fires on_pages_ready (window starts withdrawn).
+            if not pdf_data:
+                self.deiconify()
+                self.lift()
         try:
             text = extract_report_text(self._ds)
         except ValueError as exc:
@@ -323,7 +298,15 @@ class ReportTextReview(AppCTkToplevel):
                 self._dcm_path,
                 self._document_kind,
             )
-            self._set_status(_("No extractable report text found."))
+            if self._document_kind == "pdf" and not pdf_data:
+                self._set_status(
+                    _(
+                        "No encapsulated PDF in this file. "
+                        "Enable Clean Structured Content and re-import to keep the document for review."
+                    )
+                )
+            else:
+                self._set_status(_("No extractable report text found."))
         elif self._document_kind == "pdf":
             self._set_status(_("PDF loaded. Click Detect PHI."))
         else:
@@ -396,12 +379,32 @@ class ReportTextReview(AppCTkToplevel):
         if show_remove:
             self.remove_button.configure(state="normal" if has_active else "disabled")
             self.mode_menu.configure(state="normal")
+        self.metadata_button.configure(
+            state="disabled" if (self._ds is None or self._detecting) else "normal"
+        )
         self.save_button.configure(
             state="normal" if (self._ds is not None and (self._dirty or self._removed_since_save)) else "disabled"
         )
         self._set_harmonize_button_present(self._harmonize_button_visible() and not self._detecting)
         self._refresh_remove_label()
         self._sync_highlights()
+
+    def _on_metadata(self) -> None:
+        """Open the Metadata tree for the loaded report DICOM file."""
+        if self._ds is None or self._dcm_path is None:
+            return
+        try:
+            ds = dcmread(str(self._dcm_path), stop_before_pixels=True, force=True)
+        except Exception:
+            logger.exception("Could not read metadata for report %s", self._dcm_path)
+            ds = self._ds
+        MetadataAssessmentDialog(
+            self,
+            dataset=ds,
+            dataset_path=self._dcm_path,
+            project_dir=self._controller.model.storage_dir,
+            modality=str(getattr(ds, "Modality", "") or "") or None,
+        )
 
     def _on_series_description_updated(self) -> None:
         self._update_title()

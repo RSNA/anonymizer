@@ -1,0 +1,54 @@
+[
+  {
+    "id": "name_pair",
+    "text": "Patient Jane Doe",
+    "raw": [
+      {"entity_group": "first_name", "start": 8, "end": 12, "score": 0.99},
+      {"entity_group": "last_name", "start": 13, "end": 16, "score": 0.98}
+    ],
+    "expect": [
+      {"label": "FIRST_NAME", "start": 8, "end": 12},
+      {"label": "LAST_NAME", "start": 13, "end": 16}
+    ]
+  },
+  {
+    "id": "phone",
+    "text": "Call (404) 555-0162",
+    "raw": [
+      {"entity_group": "PHONE_NUMBER", "start": 5, "end": 19, "score": 0.95}
+    ],
+    "expect": [
+      {"label": "PHONE", "start": 5, "end": 19}
+    ]
+  },
+  {
+    "id": "email",
+    "text": "Email jane.doe@hospital.org please",
+    "raw": [
+      {"entity_group": "EMAIL_ADDRESS", "start": 6, "end": 27, "score": 0.97}
+    ],
+    "expect": [
+      {"label": "EMAIL", "start": 6, "end": 27}
+    ]
+  },
+  {
+    "id": "dotted_dob_as_date",
+    "text": "DOB: 06.16.1976",
+    "raw": [
+      {"entity_group": "DATE_OF_BIRTH", "start": 5, "end": 15, "score": 0.91}
+    ],
+    "expect": [
+      {"label": "DATE", "start": 5, "end": 15}
+    ]
+  },
+  {
+    "id": "mrn_as_id",
+    "text": "MRN 99887766",
+    "raw": [
+      {"entity_group": "MRN", "start": 4, "end": 12, "score": 0.88}
+    ],
+    "expect": [
+      {"label": "ID", "start": 4, "end": 12}
+    ]
+  }
+]

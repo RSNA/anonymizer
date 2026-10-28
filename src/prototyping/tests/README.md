@@ -33,7 +33,7 @@ Prototyping tests are **not** run in CI. Run them locally when working on protot
 ```bash
 pytest src/prototyping -q
 pytest src/prototyping/ct -q
-pytest src/prototyping/ct -m tseg_integration -q   # slow; needs uv sync --extra tseg
+pytest src/prototyping/ct -m tseg_integration -q   # slow; needs TotalSegmentator (main deps)
 ```
 
 Prototyping integration tests that run TotalSegmentator should use `@pytest.mark.tseg_integration`.

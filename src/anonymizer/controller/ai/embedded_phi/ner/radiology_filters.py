@@ -6,7 +6,7 @@ OpenMed expects clinical-report-style prose. Before NER:
 Public API
 ----------
 DEFAULT_WHITELIST_SIMILARITY
-    Default whitelist similarity (0.75).
+    Default whitelist similarity (0.85).
 
 DEFAULT_WHITELIST_MIN_LENGTH_RATIO
     Default whitelist min length ratio (0.7).
@@ -65,7 +65,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 # Default similarity (aligned with OCR modality whitelist STANDARD preset).
-DEFAULT_WHITELIST_SIMILARITY = 0.75
+DEFAULT_WHITELIST_SIMILARITY = 0.85
 DEFAULT_WHITELIST_MIN_LENGTH_RATIO = 0.7
 
 # DICOM keywords whose current (anonymized) values must not be re-scored by NER.

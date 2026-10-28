@@ -13,11 +13,7 @@ from tkinter import messagebox, ttk
 
 import customtkinter as ctk
 
-from anonymizer.controller.ai.harmonize.loinc_study import long_common_name_for_loinc
-from anonymizer.utils.translate import _
-from anonymizer.view.common.app_window import AppToplevel
-from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
-from anonymizer.view.project.description_mapping_store import (
+from anonymizer.controller.ai.harmonize.description_mapping_store import (
     SeriesDescriptionOverride,
     StudyDescriptionOverride,
     delete_series_override,
@@ -25,6 +21,15 @@ from anonymizer.view.project.description_mapping_store import (
     list_series_overrides,
     list_study_overrides,
 )
+from anonymizer.controller.ai.harmonize.loinc_study import long_common_name_for_loinc
+from anonymizer.utils.translate import _
+from anonymizer.view.common.app_window import (
+    AppToplevel,
+    install_modal_dismiss,
+    present_toplevel_centered_on_parent,
+)
+from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
+from anonymizer.view.common.treeview_chrome import apply_zebra_tags, configure_zebra_row_tags
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +38,8 @@ _TAB_STUDY = "Study (LOINC)"
 
 
 class DescriptionMappingsDialog(AppToplevel):
+    """Modal child of View Dataset: inspect/delete description mapping CSVs."""
+
     PAD = 10
     BUTTON_WIDTH = 120
     DIALOG_WIDTH = 900
@@ -42,25 +49,47 @@ class DescriptionMappingsDialog(AppToplevel):
     _DESC_COL_WIDTH = 220
 
     def __init__(self, parent: tk.Misc, *, mappings_dir: Path) -> None:
-        super().__init__(parent)
-        self.title(_("Description Mappings"))
+        super().__init__(master=parent)
+        # Build while withdrawn so the first paint is already centered (no +0+0 flash).
+        self.withdraw()
+        self._parent = parent
         self._mappings_dir = Path(mappings_dir)
-        self.geometry(f"{self.DIALOG_WIDTH}x{self.DIALOG_HEIGHT}")
+
+        self.title(_("Description Mappings"))
         self.minsize(self.MIN_WIDTH, self.MIN_HEIGHT)
         self.resizable(True, True)
-        self.grab_set()
-        self.focus_set()
+        self.transient(parent)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
-        self.bind("<Escape>", lambda _e: self._on_close())
+        self.bind("<Escape>", self._escape_keypress)
 
+        self._create_widgets()
+        present_toplevel_centered_on_parent(
+            self,
+            parent,
+            width=self.DIALOG_WIDTH,
+            height=self.DIALOG_HEIGHT,
+        )
+        install_modal_dismiss(self, self._on_close)
+        self.grab_set()
+
+    def _escape_keypress(self, _event=None) -> None:
+        self._on_close()
+
+    def _create_widgets(self) -> None:
         pad = self.PAD
+        # Dataset View chrome: framed index + nested bottom button bar (top_fg).
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(2, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        self._index_frame = ctk.CTkFrame(self)
+        self._index_frame.grid(row=0, column=0, padx=pad, pady=(pad, pad), sticky="nsew")
+        self._index_frame.grid_columnconfigure(0, weight=1)
+        self._index_frame.grid_rowconfigure(2, weight=1)
 
         self._tab_series = _(_TAB_SERIES)
         self._tab_study = _(_TAB_STUDY)
         self._tab = ctk.CTkSegmentedButton(
-            self,
+            self._index_frame,
             values=[self._tab_series, self._tab_study],
             command=self._on_tab_changed,
         )
@@ -68,15 +97,15 @@ class DescriptionMappingsDialog(AppToplevel):
         self._tab.grid(row=0, column=0, padx=pad, pady=(pad, 0), sticky="ew")
 
         self._hint = ctk.CTkLabel(
-            self,
+            self._index_frame,
             text="",
-            wraplength=self.DIALOG_WIDTH - pad * 4,
+            wraplength=self.DIALOG_WIDTH - pad * 6,
             justify="left",
             anchor="w",
         )
         self._hint.grid(row=1, column=0, padx=pad, pady=(pad // 2, 0), sticky="ew")
 
-        tree_frame = ctk.CTkFrame(self, fg_color="transparent")
+        tree_frame = ctk.CTkFrame(self._index_frame, fg_color="transparent")
         tree_frame.grid(row=2, column=0, padx=pad, pady=pad, sticky="nsew")
         tree_frame.grid_columnconfigure(0, weight=1)
         tree_frame.grid_rowconfigure(0, weight=1)
@@ -87,56 +116,60 @@ class DescriptionMappingsDialog(AppToplevel):
             tree_frame,
             columns=self._columns_series,
             show="headings",
+            style="Treeview",
             selectmode="extended",
         )
         self._tree.grid(row=0, column=0, sticky="nsew")
         scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=self._tree.yview)
         scrollbar.grid(row=0, column=1, sticky="ns")
         self._tree.configure(yscrollcommand=scrollbar.set)
+        configure_zebra_row_tags(self._tree, self)
 
         self._empty_label = ctk.CTkLabel(
-            self,
+            self._index_frame,
             text="",
-            wraplength=self.DIALOG_WIDTH - pad * 4,
+            wraplength=self.DIALOG_WIDTH - pad * 6,
             justify="left",
+            anchor="w",
         )
-        self._empty_label.grid(row=3, column=0, padx=pad, pady=(0, pad), sticky="w")
+        self._empty_label.grid(row=3, column=0, padx=pad, pady=(0, pad), sticky="ew")
 
-        button_row = ctk.CTkFrame(self, fg_color="transparent")
-        button_row.grid(row=4, column=0, padx=pad, pady=(0, pad), sticky="ew")
-        button_row.grid_columnconfigure(0, weight=1)
+        # Same bottom bar as View Dataset: nested CTkFrame, PAD around each button.
+        self._button_frame = ctk.CTkFrame(self)
+        self._button_frame.grid(row=1, column=0, padx=pad, pady=(0, pad), sticky="ew")
+        self._button_frame.grid_columnconfigure(0, weight=1)
 
         self._select_all_button = ctk.CTkButton(
-            button_row,
+            self._button_frame,
             width=self.BUTTON_WIDTH,
             text=_("Select All"),
             command=self._select_all_button_pressed,
         )
-        self._select_all_button.grid(row=0, column=1, padx=(pad, 0), sticky="e")
+        self._select_all_button.grid(row=0, column=1, padx=pad, pady=pad, sticky="e")
 
         self._clear_selection_button = ctk.CTkButton(
-            button_row,
+            self._button_frame,
             width=self.BUTTON_WIDTH,
             text=_("Clear Selection"),
             command=self._clear_selection_button_pressed,
         )
-        self._clear_selection_button.grid(row=0, column=2, padx=(pad, 0), sticky="e")
+        self._clear_selection_button.grid(row=0, column=2, padx=pad, pady=pad, sticky="e")
 
         self._delete_button = ctk.CTkButton(
-            button_row,
+            self._button_frame,
             width=self.BUTTON_WIDTH,
             text=_("Delete"),
             command=self._delete_button_pressed,
         )
-        self._delete_button.grid(row=0, column=3, padx=(pad, 0), sticky="e")
+        self._delete_button.grid(row=0, column=3, padx=pad, pady=pad, sticky="e")
 
         self._close_button = ctk.CTkButton(
-            button_row,
+            self._button_frame,
             width=self.BUTTON_WIDTH,
             text=_("Close"),
             command=self._on_close,
         )
-        self._close_button.grid(row=0, column=4, padx=(pad, 0), sticky="e")
+        self._close_button.grid(row=0, column=4, padx=pad, pady=pad, sticky="e")
 
         self._series_by_iid: dict[str, SeriesDescriptionOverride] = {}
         self._study_by_iid: dict[str, StudyDescriptionOverride] = {}
@@ -215,6 +248,7 @@ class DescriptionMappingsDialog(AppToplevel):
                 iid = row.original
                 self._series_by_iid[iid] = row
                 self._tree.insert("", "end", iid=iid, values=(row.original, row.harmonized))
+            apply_zebra_tags(self._tree, self._tree.get_children(""))
             return
 
         rows = list_study_overrides(self._mappings_dir)
@@ -233,6 +267,7 @@ class DescriptionMappingsDialog(AppToplevel):
                 iid=iid,
                 values=(row.original, row.loinc_number, name),
             )
+        apply_zebra_tags(self._tree, self._tree.get_children(""))
 
     def _select_all_button_pressed(self) -> None:
         children = self._tree.get_children("")
@@ -280,9 +315,9 @@ class DescriptionMappingsDialog(AppToplevel):
         self._refresh()
 
     def _on_close(self) -> None:
-        teardown_ctk_toplevel(self)
+        teardown_ctk_toplevel(self, parent=self._parent)
 
 
 def show_description_mappings_dialog(parent: tk.Misc, *, mappings_dir: Path) -> None:
-    """Open the description mappings inspector for mappings_dir."""
+    """Open the description mappings inspector for mappings_dir (modal on parent)."""
     DescriptionMappingsDialog(parent, mappings_dir=mappings_dir)

@@ -19,6 +19,7 @@ Layout contract
 * Count axes: labeled majors every 5 (scaled 1/2/5×10^k up to 1e6 patients);
   unlabeled minors subdivide each major interval (e.g. 1–4 between 0 and 5).
 """
+
 import contextlib
 import io
 import logging
@@ -245,9 +246,7 @@ def load_chart_theme() -> ChartTheme:
     panel_fg = "transparent"
     fig = _theme_mpl(analytics.get("fig_color", frame.get("fg_color", ["gray90", "gray13"])))
     text = _theme_mpl(analytics.get("text_color", label.get("text_color", ["#014F8F", "white"])))
-    muted = _theme_mpl(
-        analytics.get("muted_text_color", entry.get("placeholder_text_color", ["gray52", "gray62"]))
-    )
+    muted = _theme_mpl(analytics.get("muted_text_color", entry.get("placeholder_text_color", ["gray52", "gray62"])))
     accent = _theme_mpl(analytics.get("accent_color", button.get("fg_color", ["#3a7ebf", "#1f538d"])))
     spine = _theme_mpl(analytics.get("spine_color", ["gray70", "gray40"]))
     wedge_edge = _theme_mpl(analytics.get("wedge_edge_color", frame.get("fg_color", ["gray90", "gray13"])))
@@ -622,9 +621,7 @@ def _embed_figure(
             frame._mpl_images = [(label, photo_image, pil_image)]  # type: ignore[attr-defined]
             dispose_photo_image(frame, old_photo)
             if isinstance(organ_hit, dict):
-                _bind_organ_histogram_interactions(
-                    label, organ_hit, on_bar_activate=on_organ_bar_activate
-                )
+                _bind_organ_histogram_interactions(label, organ_hit, on_bar_activate=on_organ_bar_activate)
             return
 
         label = ctk.CTkLabel(frame, text="", image=photo_image, fg_color="transparent")
@@ -634,9 +631,7 @@ def _embed_figure(
         label.image = photo_image  # type: ignore[attr-defined]
         frame._mpl_images = [(label, photo_image, pil_image)]  # type: ignore[attr-defined]
         if isinstance(organ_hit, dict):
-            _bind_organ_histogram_interactions(
-                label, organ_hit, on_bar_activate=on_organ_bar_activate
-            )
+            _bind_organ_histogram_interactions(label, organ_hit, on_bar_activate=on_organ_bar_activate)
     finally:
         plt.close(fig)
 
@@ -736,9 +731,7 @@ def _organ_histogram(
     plot_lo, plot_hi, norm_lo, norm_hi, bin_width = organ_volume_axis_span(
         samples_ml, organ_name=organ.organ_name, bin_width_pct=bin_width_pct
     )
-    edges = organ_volume_bin_edges(
-        samples_ml, organ_name=organ.organ_name, bin_width_pct=bin_width_pct
-    )
+    edges = organ_volume_bin_edges(samples_ml, organ_name=organ.organ_name, bin_width_pct=bin_width_pct)
     has_under = bool(edges) and float(edges[0]) < plot_lo - 1e-9
     has_over = bool(edges) and float(edges[-1]) > plot_hi + 1e-9
     show_normative = has_organ_volume_range(organ.organ_name)
@@ -751,9 +744,7 @@ def _organ_histogram(
     max_count = 1.0
     under_n = over_n = 0
     if samples_ml:
-        hist_vals = organ_volume_clip_samples_for_hist(
-            samples_ml, edges, plot_lo=plot_lo, plot_hi=plot_hi
-        )
+        hist_vals = organ_volume_clip_samples_for_hist(samples_ml, edges, plot_lo=plot_lo, plot_hi=plot_hi)
         counts, bin_edges, patches = ax.hist(
             hist_vals,
             bins=edges,
@@ -762,9 +753,7 @@ def _organ_histogram(
             zorder=2,
         )
         last = len(patches) - 1
-        for i, (patch, left, right) in enumerate(
-            zip(patches, bin_edges[:-1], bin_edges[1:], strict=False)
-        ):
+        for i, (patch, left, right) in enumerate(zip(patches, bin_edges[:-1], bin_edges[1:], strict=False)):
             count_i = float(counts[i])
             if (has_under and i == 0) or (has_over and i == last):
                 if count_i > 0:
@@ -879,9 +868,7 @@ def _organ_bar_bin_hits(
     hi_bound = float(plot_hi if plot_hi is not None else edges[-1])
     n_lo = float(norm_lo if norm_lo is not None else lo_bound)
     n_hi = float(norm_hi if norm_hi is not None else hi_bound)
-    id_bins = organ_volume_bin_patient_ids(
-        samples, edges, plot_lo=lo_bound, plot_hi=hi_bound
-    )
+    id_bins = organ_volume_bin_patient_ids(samples, edges, plot_lo=lo_bound, plot_hi=hi_bound)
     under_mls = [float(s.ml) for s in samples if float(s.ml) < lo_bound]
     over_mls = [float(s.ml) for s in samples if float(s.ml) > hi_bound]
     last = len(id_bins) - 1
@@ -985,12 +972,13 @@ def _bind_organ_histogram_interactions(
     *,
     on_bar_activate: OrganBarActivate | None = None,
 ) -> None:
-    """Bar tip (value + n) preferred; Norm tip on empty band; double-click selects patients.
+    """Bar tip (value + n) preferred; Norm tip on empty band; click selects patients.
 
     Hit data is stored on the label so bin-width in-place image swaps can refresh
     tip/click targets without stacking another MotionTooltipController.
     """
     label._analytics_organ_hit = hit  # type: ignore[attr-defined]
+    label._analytics_organ_clickable = on_bar_activate is not None  # type: ignore[attr-defined]
     if getattr(label, "_analytics_organ_bound", False):
         return
     label._analytics_organ_bound = True  # type: ignore[attr-defined]
@@ -1003,7 +991,7 @@ def _bind_organ_histogram_interactions(
     if on_bar_activate is None:
         return
 
-    def _on_double_click(event: tk.Event) -> str | None:
+    def _on_click(event: tk.Event) -> str | None:
         current = getattr(label, "_analytics_organ_hit", None)
         if not isinstance(current, dict):
             return None
@@ -1019,7 +1007,7 @@ def _bind_organ_histogram_interactions(
         on_bar_activate(str(current.get("organ_name") or ""), patient_ids)
         return "break"
 
-    label.bind("<Double-Button-1>", _on_double_click, add="+")
+    label.bind("<Button-1>", _on_click, add="+")
 
 
 def _organ_histogram_tooltip_at(label: tk.Misc, event: tk.Event) -> str | None:
@@ -1031,7 +1019,10 @@ def _organ_histogram_tooltip_at(label: tk.Misc, event: tk.Event) -> str | None:
         return None
     bar = _bin_at_data_x(hit, data_x)
     if bar is not None and int(bar.get("count") or 0) > 0:
-        return str(bar.get("tip") or "") or None
+        tip = str(bar.get("tip") or "") or None
+        if tip and getattr(label, "_analytics_organ_clickable", False):
+            return f"{tip}\n{_('Click to select these patients in View Dataset')}"
+        return tip
     if float(hit["norm_lo"]) <= data_x <= float(hit["norm_hi"]):
         return str(hit.get("norm_tip") or "") or None
     return None
@@ -1077,9 +1068,7 @@ def build_ethnicity_figure(
     ethnicity = analytics.demographics.ethnicity
     return build_chart_figure(
         theme,
-        lambda ax: _count_hbar(
-            ax, theme, ethnicity, _chart_title(_("Ethnicity"), ethnicity.known_total)
-        ),
+        lambda ax: _count_hbar(ax, theme, ethnicity, _chart_title(_("Ethnicity"), ethnicity.known_total)),
         figsize=figsize,
     )
 
@@ -1291,16 +1280,12 @@ def select_board_sections(
     charts = tuple(
         spec
         for spec in registry
-        if spec.graphical
-        and spec.relevant(analytics)
-        and (allowed_keys is None or spec.key in allowed_keys)
+        if spec.graphical and spec.relevant(analytics) and (allowed_keys is None or spec.key in allowed_keys)
     )
     texts = tuple(
         spec
         for spec in registry
-        if not spec.graphical
-        and spec.relevant(analytics)
-        and (allowed_keys is None or spec.key in allowed_keys)
+        if not spec.graphical and spec.relevant(analytics) and (allowed_keys is None or spec.key in allowed_keys)
     )
     available = analytics.anatomy.organ_volumes
     if selected_organs is None:
