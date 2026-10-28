@@ -9,7 +9,7 @@ Für Autoren, die dieses Handbuch aktualisieren.
 - **PHI:** nur Test-Fixtures — niemals echte Patientendaten
 - **Ablage:** Screenshots liegen unter jedem nummerierten Workflow als `shots/macos/*.png` und `shots/windows/*.png`
 - **Katalog:** [`docs/screenshots-manifest.yaml`](../screenshots-manifest.yaml) listet jedes UX-Element und jeden Shot
-- **Skalierung / Auflösung:** Aufnahme speichert **logische UI-Punkte** (Retina 2× → 1 PNG-px ≈ 1 App-pt), dann erzwingt `normalize_for_docs` jedes PNG auf **`DOCS_SHOT_MAX_WIDTH`** (960): breite Fenster werden verkleinert, schmale Dialoge letterboxed (kein UI-Upscale). Gleiche Dateibreite ⇒ gleiche MkDocs-Skalierung ⇒ gleicher kleinster UI-Text über Seiten hinweg.
+- **Skalierung / Auflösung:** Aufnahme speichert **logische UI-Punkte** (Retina 2× → 1 PNG-px ≈ 1 App-pt), dann erzwingt `normalize_for_docs` jedes PNG auf **`DOCS_SHOT_MAX_WIDTH`** (1200): breite Fenster werden verkleinert, schmale Dialoge letterboxed (kein UI-Upscale). Gleiche Dateibreite ⇒ gleiche MkDocs-Skalierung ⇒ gleicher kleinster UI-Text über Seiten hinweg.
 - **Keine Schatten:** macOS-Aufnahmen nutzen `screencapture -o` (Fensterschatten weglassen); restliche weiche Ränder werden vor dem Speichern entfernt. Keine Shots mit Schlagschatten ausliefern.
 - **Ecken:** macOS nutzt Window-ID-Capture (`screencapture -l`), sodass PNGs abgerundete Ecken und Alpha behalten; Windows nutzt PrintWindow / BitBlt
 

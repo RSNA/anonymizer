@@ -54,6 +54,20 @@ Après avoir Accepté une exécution Harmonize qui incluait les structures cér�
 
 ![Vue des séries avec tous les segments cérébraux sur la coupe du milieu](shots/macos/Process_Harmonize_SegmentedSeries.png)
 
+#### Après l’apparition des superpositions
+
+Les masques d’anatomie issus d’Harmoniser sont prêts pour relecture et export. Suite dans Vue des séries / Tableau de bord :
+
+| Objectif | Où |
+| --- | --- |
+| Verrouiller les puces TotalSegmentator (contours multi-sélection) | [Vue → Annotation](../../07-view/index.md#annotation) — mode **View** |
+| Créer ou peindre un ROI utilisateur (**New Segment**, Brush / Erase) — **3D** sur CT/MR | Même page — mode **Annotate** |
+| Importer des masques NIfTI / NRRD de recherche | [Annotation](../../07-view/index.md#annotation) — **Import…** |
+| Graphiques de **volume d’organes** depuis les masques d’anatomie Harmonize (CT/MR uniquement) | [Analytics](../../07-view/index.md#analytics) du Tableau de bord — **Volumes** / **Show** / **Refresh** (pas depuis les ROI utilisateur peints) |
+| Envoyer les masques avec l’étude | [Exporter les segments en DICOM-SEG](../../09-send/index.md#export-segments-as-dicom-seg) |
+
+XR/US/MG planaires n’obtiennent pas de puces TotalSegmentator via Harmoniser. **Annotate** y fonctionne en ROI utilisateur **2D** espace pixel ; ils n’alimentent pas les graphiques de volume d’organes Analytics.
+
 ## Harmonize planaire (XR et US)
 
 CR/DX, échographie et mammographie utilisent un chemin Harmonize **séparé** de CT/MR : pas de TotalSegmentator, pas de buckets d’épaisseur/contraste. Le tableau Playbook utilise toujours **Preuve** (ce qui a été mesuré) et **Source** (d’où cela vient).
@@ -93,6 +107,7 @@ CR/DX, échographie et mammographie utilisent un chemin Harmonize **séparé** d
 - CT : SeriesDescription paraît cohérente pour ce CT tête ; **Harmonisé** du Jeu de données se met à jour ; après Oui cerveau, les superpositions latch se dessinent sur la coupe du milieu.
 - CXR : **Source** Playbook nomme **Xp-Bodypart** / **CXp-Projection-Rotation** (ou DICOM) avec une preuve de confiance lisible.
 - US : les lignes Playbook citent **DICOM metadata** / **RadLex Playbook** ; le nom suggéré correspond à l’anatomie/mode échographique.
+- Après Harmoniser CT/MR, les histogrammes **Volumes** de [Analytics](../../07-view/index.md#analytics) du Tableau de bord se remplissent pour les organes de la cohorte (graphiques vides → harmoniser plus de séries ou **Refresh**).
 
 ## En cas d’échec
 
@@ -102,4 +117,5 @@ CR/DX, échographie et mammographie utilisent un chemin Harmonize **séparé** d
 
 ## Prochaines étapes
 
-Continuez avec [8.3 Flouter les visages](../04-blur-faces/index.md) sur la **même** série `CT_Head_With_Contrast` (Gaussien).
+1. Revoir ou peindre des segments (**3D** sur CT/MR) : [Vue → Annotation](../../07-view/index.md#annotation). Séparément, graphiques de volume d’organes CT/MR depuis les masques d’anatomie Harmonize : [Analytics](../../07-view/index.md#analytics).
+2. Continuez avec [8.3 Flouter les visages](../04-blur-faces/index.md) sur la **même** série `CT_Head_With_Contrast` (Gaussien).

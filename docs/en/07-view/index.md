@@ -6,17 +6,17 @@ Dashboard **View** opens the **Dataset** — the list of everything in your proj
 
 ## Goal
 
-See what you imported, check AI status columns, open projections for a study, open a series for review or [Process](../08-process/index.md) tools, review **Analytics** on the Dashboard, and export a **Patient Lookup** CSV when needed.
+See what you imported, check AI status columns, open projections for a study, open a series for review or [Process](../08-process/index.md) tools, latch or paint **2D / 3D segments** in Series View ([Annotation](#annotation)), review CT/MR **organ-volume distributions** from Harmonize on the Dashboard ([Analytics](#analytics)), and export a **Patient Lookup** CSV when needed.
 
 ## Demo studies
 
-After importing from `tests/controller/assets/test_dcm_files` (see [Search](../06-search/index.md)), Dataset should list these three studies (help shots do **not** use synthetic phantoms):
+After importing the repository demos ([Search — Demo studies from the repository](../06-search/index.md#demo-studies-from-the-repository)), Dataset should list these three studies (help shots do **not** use synthetic phantoms). Full path in a clone: `tests/controller/assets/test_dcm_files/` ([GitHub](https://github.com/RSNA/anonymizer/tree/dev/tests/controller/assets/test_dcm_files)).
 
 | Fixture | Role in the manual |
 | --- | --- |
-| **`davidson_cxr`** | Open in Series View here; [Metadata](#metadata-dicom-tags); burned-in text in [Remove Pixel PHI](../08-process/02-remove-burned-in-text/index.md) |
-| **`CT_Head_With_Contrast`** | [Harmonize](../08-process/03-harmonize-names/index.md) and [Face blur](../08-process/04-blur-faces/index.md) |
-| **`us_rgb_single_frame`** | Ultrasound single-frame; burned-in overlays in [Remove Pixel PHI](../08-process/02-remove-burned-in-text/index.md) (exclude-area demos) |
+| **`davidson_cxr`** | Open in Series View here; [Metadata](#metadata-dicom-tags); burned-in text in [Embedded PHI — Pixel](../08-process/02-remove-burned-in-text/index.md#pixel) |
+| **`CT_Head_With_Contrast`** | [Harmonize](../08-process/03-harmonize-names/index.md) (then latch / Annotate; [Analytics](#analytics) for organ volumes); [Face blur](../08-process/04-blur-faces/index.md) |
+| **`us_rgb_single_frame`** | Ultrasound single-frame; burned-in overlays in [Embedded PHI — Pixel](../08-process/02-remove-burned-in-text/index.md#pixel) (exclude-area demos) |
 
 ## Open Dataset
 
@@ -34,7 +34,7 @@ After importing from `tests/controller/assets/test_dcm_files` (see [Search](../0
 | **Original Description** | Sticky intake Study/Series Description from import |
 | **Harmonized** | Series description standardized (or study-level description applied) |
 | **Face blur** | Face de-identification applied |
-| **Pixel PHI** | Burned-in text scan / removal recorded |
+| **Embedded PHI** | Burned-in text scan / removal recorded |
 
 ## Analytics {#analytics}
 
@@ -48,7 +48,9 @@ Once at least one study is in the project, an **Analytics** control appears on t
 
 ![Dashboard Analytics expanded](shots/macos/Dashboard_Analytics.png)
 
-Analytics is for **review inside this project**. It does not change pixels or what you Send. After Harmonize on CT/MR (masks under the series cache), use **Volumes** to choose organs and **Show** for demographic tiles — a full board can include sex, age, modality, ethnicity, AI coverage, and many organ-volume histograms. Empty volume charts usually mean Harmonize has not produced anatomy masks yet for those series.
+Analytics is for **review inside this project**. It does not change pixels or what you Send. **Organ-volume** histograms come from [Harmonize](../08-process/03-harmonize-names/index.md) anatomy masks on **CT/MR** (TotalSegmentator under the series cache) — not from user ROIs you paint in Annotate, and not from planar XR/US/MG. Use **Volumes** to choose organs and **Show** for demographic tiles (sex, age, modality, ethnicity, AI coverage, and volume distributions). Empty volume charts usually mean Harmonize has not produced anatomy masks yet for those series.
+
+To **create or edit** segment labels on a series (latch TotalSegmentator chips, **New Segment**, Brush / Erase — **2D** on planar frames or **3D** on CT/MR), use Series View [Annotation](#annotation). Those labels are for review and export (NIfTI / DICOM-SEG), not for filling Analytics volume charts.
 
 ## Right-click in Dataset (most important)
 
@@ -110,9 +112,9 @@ This Dataset **View Projections** window is separate from the slice / min / mean
 2. **Right-click the series row** (not the study row).
 3. **Series View** opens and loads the images.
 
-That is the main way to open a series for review and for Process tools (Remove Pixel PHI, Harmonize, Face blur).
+That is the main way to open a series for review and for Process tools (Embedded PHI, Harmonize, Face blur).
 
-![Series View on davidson_cxr](shots/macos/SeriesView_Review.png)
+![Series View on davidson_cxr](../../08-process/02-remove-burned-in-text/shots/macos/Process_RemovePixel_Whitelist.png)
 
 ### Which window opens?
 
@@ -160,82 +162,96 @@ Hover tooltips explain what a click or toolbar action will do (including why a b
 
 With a **single** study or series selected, **Select Similar** adds other rows that share the same **original** (intake) description text and cohort. Then right-click the selection to set one description on all selected rows.
 
-### Description Mappings
+### Description Mappings {#description-mappings}
 
 Open **Description Mappings** from the Dataset toolbar to list, inspect, or delete saved corrections for this project. Tabs are **Series (RadLex)** and **Study (LOINC)**. Row management matches Dataset: **Select All**, **Clear Selection**, and **Delete** (multi-select with Shift / Cmd-Ctrl). Mappings are created when you apply **Set description** (**Origin** = Manual) or when AI accepts / auto-applies a description (**Origin** = succinct process label, e.g. `TS 1.5mm+brain`, `LOINC rank`, `XR body+view`). Blank originals and identity mappings (same original and harmonized text) are not stored.
 
 ![Description Mappings](shots/macos/DescriptionMappings.png)
 
-## Series View — what you can do
+## Series View — what you can do {#series-view-what-you-can-do}
 
-Series View is where you look at pixels and run per-series tools (models must be ready — see [AI Features setup](../03-ai-features-setup/index.md)):
+Series View is where you look at pixels and run per-series tools (models must be ready — see [AI Features setup](../03-ai-features-setup/index.md)). For a real cohort, use this window to validate Harmonize, face-blur mode, whitelists, and PHI detection **before** [AI Batch](../08-process/05-run-on-many-studies/index.md) — see [Site workflow](../08-process/index.md#recommended-site-workflow).
 
 - Scroll frames; zoom and pan the viewport; adjust window/level
 - **Metadata** — browse DICOM tags for the current image; optional **Detect PHI** on tag values (below)
-- **Detect / remove burned-in text** (OCR) and whitelist editing → [Remove Pixel PHI](../08-process/02-remove-burned-in-text/index.md)
+- **Detect / remove burned-in text** (OCR) and whitelist editing → [Embedded PHI — Pixel](../08-process/02-remove-burned-in-text/index.md#pixel)
 - **Harmonize Description** → [Harmonize names](../08-process/03-harmonize-names/index.md)
 - **Face blur** (when eligible) → [Blur faces](../08-process/04-blur-faces/index.md)
-- **Segmentation latch** overlays from cached anatomy masks (after Harmonize) — see [Annotation](#annotation) below
+- **Segmentation** — latch anatomy overlays after Harmonize, or **Annotate** to create / paint user segments — see [Annotation](#annotation)
 - Manual blackout rectangles (left-drag in **View** mode)
 - Clear analysis cache (does not by itself rewrite DICOM pixels)
 
 Inside Series View, multi-frame series can also show **slice / min / mean / max** projection modes in the viewer (same idea as the multi-frame strip above, but for interactive scrolling).
 
-Open a series as described above ([Right-click a series → Series View](#right-click-a-series-series-view)); the review chrome is shown there (`SeriesView_Review.png`). After Harmonize with brain structures accepted, latch chips and overlays appear on the right — see the segmented middle-slice shot in [Harmonize names](../08-process/03-harmonize-names/index.md#3-segmented-series-view) (`Process_Harmonize_SegmentedSeries.png`). Dedicated Annotate / zoom help shots are not captured yet; use the tables below until those land.
+Open a series as described above ([Right-click a series → Series View](#right-click-a-series-series-view)); the review chrome is the same davidson Series View shot as [Embedded PHI — Pixel](../08-process/02-remove-burned-in-text/index.md#pixel) (`Process_RemovePixel_Whitelist.png`). After Harmonize with brain structures accepted, latch chips and overlays appear on the right — see the segmented middle-slice shot in [Harmonize names](../08-process/03-harmonize-names/index.md#3-segmented-series-view) (`Process_Harmonize_SegmentedSeries.png`). Full Annotate / **New Segment** steps (**2D** or **3D** by modality), including the Brush / Erase toolbar shot, are under [Annotation](#annotation). Mouse and keyboard for the viewport are in [Mouse and keyboard (viewport)](#mouse-and-keyboard-viewport). CT/MR organ-volume **distributions** from Harmonize anatomy masks: [Analytics](#analytics).
 
-### Metadata (DICOM tags)
+### Metadata (DICOM tags) {#metadata-dicom-tags}
 
 Import already replaces or removes patient identifiers in the file labels. **Metadata** lets you **spot-check** the tag tree for the **current image** — useful when a study still looks “too personal” in free-text fields, or when your project keeps more report-oriented text (for example the **Retain** preset).
 
-This is **not** the same as burned-in text on the picture. Pixel cleanup is [Remove Pixel PHI](../08-process/02-remove-burned-in-text/index.md). Reports open in [Report Text Review](../08-process/02-remove-burned-in-text/index.md#reports-and-free-text-report-text-review).
+This is **not** the same as burned-in text on the picture. Pixel cleanup is [Embedded PHI — Pixel](../08-process/02-remove-burned-in-text/index.md#pixel). Tag cleanup lives under [Embedded PHI — Metadata](../08-process/02-remove-burned-in-text/index.md#metadata). Reports open in [Report Text Review](../08-process/02-remove-burned-in-text/index.md#reports-and-free-text-report-text-review).
 
 #### Steps
 
-1. Open a series in Series View (demo: **`davidson_cxr`**).
+1. Open a series in Series View (demo: **`davidson_cxr`**, **before** Harmonize Description).
 2. Click **Metadata** in the Series View toolbar.
 3. Browse the tree (**Field Name**, **Tag**, **Content**). Use **Search** to narrow by field name; **Expand** / **Collapse** to open or close branches.
-4. Optional — click **Detect PHI** (needs [Embedded PHI](../03-ai-features-setup/index.md) models). The dialog opens centered on Series View, sized so field names are fully visible (up to 85% of the screen height when the tag list is long). Highlighted rows are colored with the entity color (same highlight style as Dataset View) and show their category in the Content cell (for example **[LOCATION]**); hovering Content with detected PHI shows the entity color chip (fields without PHI have no hover tooltip). Entity colors match Report Text Review (Name, Location, ID, Phone, Date, Email). The status line summarizes counts. Detection uses the same effective modality whitelist as burned-in text: whitelisted words, DICOM code values, UIDs, and dates are not sent to the model. The dialog title names the series it belongs to, and the completion status also reports private-tag UID/date fields: those are handled at import (UID remapping / date shift), not changed by Remove PHI.
-5. Optional — like Report Text Review: click a highlighted field to exclude it from removal, choose **Blank** or **Synthetic**, then click **Remove PHI** / **Replace PHI**. Removal updates the tree; click **Save** to write the cleaned tags back to the current image file.
+4. Optional — click **Detect PHI** (needs [Embedded PHI](../03-ai-features-setup/index.md) models). The dialog opens centered on Series View, sized so field names are fully visible (up to 85% of the screen height when the tag list is long). On `davidson_cxr`, **Study Description** still holds free-text PHI such as `… for Douglas Davidson` — Detect colours those spans as **First name** / **Last name**. Highlighted rows use the entity color (same highlight style as Dataset View) and show their category in the Content cell; hovering Content with detected PHI shows the entity color chip (fields without PHI have no hover tooltip). Entity colours match Report Text Review ([OpenMed types](../08-process/02-remove-burned-in-text/index.md#named-entities-openmed)). The status line summarizes counts. Detection uses the same effective modality whitelist as burned-in text: whitelisted words, DICOM code values, UIDs, and dates are not sent to the model. The dialog title names the series it belongs to, and the completion status also reports private-tag UID/date fields: those are handled at import (UID remapping / date shift), not changed by Remove / Replace PHI.
+5. Optional — like Report Text Review: click a highlighted field to exclude it from cleanup, choose **Blank** or **Synthetic**, then click **Remove PHI** / **Replace PHI**. The tree updates; click **Save** to write the cleaned tags back to the current image file.
 6. Click **Close** when finished (you will be asked about unsaved changes).
 
 ![Metadata tree](shots/macos/MetadataAssessment.png)
 
-![Metadata after Detect PHI](shots/macos/MetadataAssessment_DetectPHI.png)
+![Metadata after Detect PHI — Study Description orange First/Last name highlight](shots/macos/MetadataAssessment_DetectPHI.png)
 
-![Metadata after Remove PHI](shots/macos/MetadataAssessment_RemovePHI.png)
+After Detect, review the coloured rows. Leave a row unselected so the orange entity colour stays visible. Click a highlighted field only if you want to **exclude** it from cleanup. Choose how to handle the rest:
+
+- **Blank** → button reads **Remove PHI** (deletes the span).
+- **Synthetic** → button reads **Replace PHI** (swaps each span for a realistic fake of the same type — “hide in plain sight”).
+
+The demo below uses **Synthetic**: set the menu to **Synthetic**, click **Replace PHI**, then **Save** when you are ready to write the file.
+
+![Metadata after Replace PHI (Synthetic)](shots/macos/MetadataAssessment_RemovePHI.png)
 
 !!! note "Current image only"
-    Metadata removal applies to the **current image** in Series View. Use AI Batch Process when you need to clean tags across a whole series.
+    Metadata Blank / Synthetic apply to the **current image** in Series View. Use AI Batch Process when you need to clean tags across a whole series.
 
 #### What good looks like
 
 - The tree shows the current slice’s tags without crashing on large sequences.
 - After Detect PHI, colored cells and a status rollup appear when leftover identifiers are found; **No PHI detected** is also a valid result on a clean demo.
 
-### Mouse and keyboard (viewport)
+### Mouse and keyboard (viewport) {#mouse-and-keyboard-viewport}
 
-Bindings follow a PACS-style map: left button is the active tool, right button is window/level, wheel changes slices (or brush size in Annotate). Zoom and pan are modifiers so they never steal the tool button.
+Bindings follow a PACS-style map. The three mouse buttons and the wheel always mean the same things in Series View; only what the **left** button does changes between **View** and **Annotate**.
 
 | Input | Action |
 | --- | --- |
-| **Mouse wheel** | Change slice / frame (View). In **Annotate**, change **brush size**; hold **Shift** + wheel to change slice instead |
-| **Ctrl+wheel** (Windows/Linux) or **Cmd+wheel** (macOS) | Zoom in / out toward the pointer |
+| **Left-click / left-drag** | **View:** draw or remove blackout / OCR boxes. **Annotate:** paint (**Brush**) or remove paint (**Erase**) on the selected segment |
+| **Right-drag** | Window/level — vertical = brightness (WL), horizontal = contrast (WW) |
 | **Middle mouse** drag | Pan when zoomed |
 | **Double-click middle mouse** | Fit image to the viewport (reset zoom and pan) |
+| **Mouse wheel** | Change slice / frame (**View**). In **Annotate**, change **brush size**; hold **Shift** + wheel to change slice instead |
+| **Ctrl+wheel** (Windows/Linux) or **Cmd+wheel** (macOS) | Zoom in / out toward the pointer |
 | **Shift+left-drag** | Pan (same as middle-mouse drag) |
-| **Right-drag** | Window/level — vertical = brightness (WL), horizontal = contrast (WW) |
-| **Left-click / left-drag** | **View:** draw or remove blackout / OCR boxes. **Annotate:** paint or erase on the selected segment |
 | **Fit** button or **F** | Reset zoom and pan to fit the viewport |
-| **← / → / ↑ / ↓** | Previous / next frame (one frame)
+| **← / → / ↑ / ↓** | Previous / next frame (one frame) |
 | **Page Up / Page Down** | Jump by a larger number of frames |
 | **Home / End** | First / last frame |
 | **Space** | Play / pause cine (multi-frame series) |
 
 Zoom uses nearest-neighbor magnification so voxel edges and 1 px segment outlines stay crisp for accurate brush work. Fit at 1× still uses smooth resampling for comfortable review.
 
-### Annotation
+### Annotation {#annotation}
 
-ROI annotation works once the series has a voxel grid for labels. For **CT/MR**, the grid comes from the Harmonize / TotalSegmentator cache, or is created automatically when you annotate or import. For **CR/DX (XR), US, and MG**, Annotate builds a **pixel-space** grid aligned to Series View frames when patient orientation tags (`ImageOrientationPatient` / `ImagePositionPatient`) are missing — no TotalSegmentator run is required. Millilitre volumes are not reported for those pixel-space grids.
+Segments you latch or paint are **2D or 3D by modality**:
+
+| Modality | Segment shape | Grid |
+| --- | --- | --- |
+| **CT / MR** | **3D** labels on a voxel volume | From the Harmonize / TotalSegmentator cache, or created when you Annotate / Import |
+| **CR / DX (XR), US, MG** | **2D** (frame / pixel-space) ROIs | Built from Series View frames when patient orientation tags are missing — no TotalSegmentator |
+
+Millilitre organ volumes in Dashboard [Analytics](#analytics) come from Harmonize anatomy masks on CT/MR, **not** from these user ROIs. Planar 2D annotations do not appear in Analytics volume charts.
 
 The **Segmentation** panel shows TotalSegmentator structure chips (after Harmonize on CT/MR) and **user segments** you create or import.
 
@@ -270,20 +286,23 @@ Volumes that do not match the series grid are nearest-neighbor resampled. Import
 | Mode | Purpose |
 | --- | --- |
 | **View** | Review overlays. Click chips to **multi-select** (latch) any combination of TotalSegmentator structures and user segments. Outlines draw for every latched chip. Left-drag draws blackout rectangles, not paint. |
-| **Annotate** | Edit labels. Only the **selected paint target** is drawn. Brush / Erase / size / Undo appear. Left-drag paints. Leaving Annotate restores your previous View multi-select. |
+| **Annotate** | Edit labels. Only the **selected paint target** is drawn. **Brush** / **Erase** / size / **Undo** appear. Left-drag paints or erases. Leaving Annotate restores your previous View multi-select. |
 
 Use **View** / **Annotate** in the Segmentation header to switch. **Esc** cancels an in-progress stroke, or returns to View if you are not painting.
+
+![Series View Annotate — Brush tools and a painted Demo lesion segment](shots/macos/SeriesView_Annotate.png)
+
+The shot shows **Annotate** active with **Brush** selected, a **Demo lesion** chip, and a painted ROI on the image. Use **Brush** (left-drag adds the selected label) or **Erase** (left-drag clears that label). Change brush size with **− / +**, **[ / ]**, or the mouse wheel; hold **Shift** + wheel to change slice. **Undo** removes the last stroke. Full mouse map: [Mouse and keyboard (viewport)](#mouse-and-keyboard-viewport).
 
 #### Paint workflow
 
 1. Open a series with Annotate available (CT/MR after Harmonize, or CR/DX/US/MG with a displayable frame stack).
-2. Click **Annotate**.
-3. Select the paint target: click a chip, or press **1–9** for the first nine chips in the list.
-4. Optional: **New Segment** to create a named user label, or **Import…** for external NIfTI/NRRD (see table above).
-5. Choose **Brush** or **Erase** (or **B** / **E**). Adjust size with **− / +**, **[ / ]**, or the mouse wheel.
-6. Left-drag on the image. A cyan ring shows the brush footprint (canvas overlay — not part of the pixel paint).
-7. Scroll slices with **Shift+wheel** (or the scrollbar / arrow keys). Zoom with **Ctrl/Cmd+wheel**; pan with middle-mouse or **Shift+left-drag**.
-8. **Undo** or **Ctrl/Cmd+Z** reverts the last stroke. Strokes save automatically into the series annotate session.
+2. Click **Annotate** so Brush / Erase / **New Segment** appear.
+3. Select the paint target: click a chip, or press **1–9** for the first nine chips in the list — or **New Segment** to create a named user label (as in the shot), or **Import…** for external NIfTI/NRRD (see table above).
+4. Choose **Brush** or **Erase** (or **B** / **E**). Adjust size with **− / +**, **[ / ]**, or the mouse wheel.
+5. Left-drag on the image to paint. A cyan ring shows the brush footprint (canvas overlay — not part of the pixel paint).
+6. Scroll slices with **Shift+wheel** (or the scrollbar / arrow keys). Zoom with **Ctrl/Cmd+wheel**; pan with middle-mouse or **Shift+left-drag**.
+7. **Undo** or **Ctrl/Cmd+Z** reverts the last stroke. Strokes save automatically into the series annotate session.
 
 | Input (Annotate) | Action |
 | --- | --- |
@@ -310,7 +329,7 @@ User segments and TotalSegmentator edits persist with the series cache. Clearing
 
 ## Create Patient Lookup CSV
 
-Use Dataset to export a spreadsheet that maps PHI identifiers to anonymized IDs (and series AI status). This is separate from the optional [CTP Patient Lookup Table](../05-create-project/index.md#patient-lookup-table) used at import time.
+Use Dataset to export a spreadsheet that maps PHI identifiers to anonymized IDs (and series AI status). This is separate from the optional [CTP Patient Lookup Table](../05-create-project/anonymizer-script.md#patient-lookup-table) used at import time.
 
 ### When to use it
 
@@ -369,4 +388,4 @@ Use Dataset to export a spreadsheet that maps PHI identifiers to anonymized IDs 
 
 ## Next steps
 
-Continue with [Process](../08-process/index.md) — Remove Pixel PHI, Harmonize, Face blur, and batch. After review, [Send](../09-send/index.md) anonymized patients.
+Continue with [Process](../08-process/index.md) — Embedded PHI, Harmonize, Face blur, and batch. After Harmonize on CT/MR, return here to latch / Annotate ([Annotation](#annotation)) and, separately, to review organ-volume charts from those Harmonize masks ([Analytics](#analytics)). After review, [Send](../09-send/index.md) anonymized patients (optionally [export segments as DICOM-SEG](../09-send/index.md#export-segments-as-dicom-seg)).

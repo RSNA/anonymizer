@@ -41,7 +41,9 @@ Example AI batch config (downloadable: [`AiBatchConfig.example.json`](AiBatchCon
   "blur_mode": "gaussian",
   "pixel_phi_removal_mode": "blackout",
   "ocr_remove_mode": "non_whitelisted",
+  "ocr_use_exclude_areas": false,
   "include_brain_structures": false,
+  "prefer_description_mappings": true,
   "ct_segmentation_mode": "3mm",
   "mr_segmentation_mode": "3mm",
   "studies": "all",
@@ -49,7 +51,7 @@ Example AI batch config (downloadable: [`AiBatchConfig.example.json`](AiBatchCon
 }
 ```
 
-OCR whitelists and exclude areas remain under the project `whitelists/` directory (same as the GUI). Set `ocr_use_exclude_areas` to true to apply saved `whitelists/{modality}.exclude.json` rectangles. `use_modality_whitelist` is still accepted and maps true to `non_whitelisted`, false to `all_text`.
+OCR whitelists and exclude areas remain under the project `whitelists/` directory (same as the GUI). Set `ocr_use_exclude_areas` to true to apply saved `whitelists/{modality}.exclude.json` rectangles. `prefer_description_mappings` skips re-running anatomy AI when a saved description mapping already covers the original text (same idea as Prefer description mappings in the GUI batch dialog). `use_modality_whitelist` is still accepted and maps true to `non_whitelisted`, false to `all_text`.
 
 ## MCP server
 
@@ -157,13 +159,27 @@ that data flow.
 
 Per the [MCP tools specification](https://modelcontextprotocol.io/specification/2025-11-25/server/tools):
 
-1. **`initialize`** — server instructions (API howto + selectors)
+1. **`initialize`** — server instructions (behavior rules from `anonymizer/mcp/assets/instructions.md` plus the generated Tool API from the catalog)
 2. **`tools/list`** — each tool’s `name`, `description`, and `inputSchema`
 3. **`tools/call`** — plain text results (`list_inventory` is a TSV table; other tools return compact JSON or `error: …`)
 
-Tool groups: guidance (`anonymizer_usage`), jobs (`job_status`), session (`list_projects`, `project_settings_defaults`, `create_project`, `project_open`, `project_info`, `update_project_settings`), local ingest (`import_directory`, `import_file`), PACS (`configure_remote`, `pacs_find`, `pacs_move`), inventory (`list_inventory`), process (`remove_pixel_phi`, `harmonize_studies`, `export_series_preview`). Full argument tables live in the server instructions asset shipped with the package (`anonymizer/mcp/assets/instructions.md`).
+Advertised tools (catalog order):
 
-Long-running batch/AI tools (`import_directory`, `remove_pixel_phi`, `harmonize_studies`) run as background jobs: they return `status: "pending"` with a `job_id` immediately, and the client polls `job_status` until the job completes — so multi-minute work no longer hits client request timeouts.
+| Group | Tools |
+| --- | --- |
+| Guidance | `anonymizer_usage` |
+| Jobs | `job_status` |
+| Session | `list_projects`, `project_settings_defaults`, `create_project`, `project_open`, `project_info`, `update_project_settings` |
+| Local ingest | `import_directory`, `import_file` |
+| PACS | `configure_remote`, `pacs_find`, `pacs_move` |
+| Inventory | `list_inventory` |
+| Process / preview | `remove_pixel_phi`, `harmonize_studies`, `export_series_preview` |
+
+There is **no** MCP tool for face blur; use the desktop app or headless `--ai-batch` with `"face_blur"` in `algorithms`. AWS Cognito for cloud Send stays desktop-only.
+
+Full argument tables are generated into initialize instructions from the package catalog (`anonymizer/mcp/api/catalog.py`). Clinician wording for “how do I…?” comes from `anonymizer/mcp/assets/setup_help.json` via `anonymizer_usage`.
+
+Long-running tools (`import_directory`, `remove_pixel_phi`, `harmonize_studies`) start a background job: they return `status: "pending"` with a `job_id` immediately; the client polls `job_status` until `completed` or `failed`. Only one job runs at a time.
 
 Always pass `arguments` (use `{}` for zero-argument tools). Do not invent client result markers such as `TOOL_RESULT` / `END_TOOL_RESULT`.
 
@@ -177,11 +193,11 @@ Local tool-trained models work best with **complete field values in one message*
 
 You can create and tune a project through chat (no prior GUI create required for MCP-only workflows):
 
-1. Give a project name and any settings that matter. The server prepares the complete configuration (your choices combined with defaults) and returns it for review; nothing is created yet.
-2. Change any setting and review the revised configuration, or confirm the exact revision to create/open the project.
-3. For PACS remotes, give **DIMSE or DICOMweb** plus exact fields (`ip`, `port`, `aet`, …) before `configure_remote` — see the user guide above.
-4. Later edits use `project_info` → `update_project_settings` (modalities, transfer syntaxes, local SCP, timeouts, confidentiality_options). Identity fields (`project_name`, `site_id`, `uid_root`, storage path) and the language chosen at creation stay fixed after create — the language is picked once, like the desktop welcome-screen selector, and is not part of the Settings dialog.
-5. To learn the workflow in chat, ask: “How do I create a new project and change its settings later? Do not create anything yet.”
+1. Give a project name and any settings that matter. The first `create_project` call uses `confirm=false`; the server returns `status=confirmation_required` with the complete configuration (your choices combined with defaults). Nothing is created yet.
+2. Change any setting with another `confirm=false` call and review the new `revision`, or confirm with `confirm=true` and that revision to create and open the project. Never confirm on the first create call.
+3. For PACS remotes, give **DIMSE or DICOMweb** plus exact fields (`ip`, `port`, `aet`, …) before `configure_remote` — see the user guide above. Then `pacs_find` → `pacs_move` using study IDs from find results.
+4. Later edits use `project_info` → `update_project_settings` (modalities, transfer syntaxes, local SCP, timeouts, de-identification options). Identity fields (`project_name`, `site_id`, `uid_root`, storage path) and the language chosen at creation stay fixed after create — the language is picked once, like the desktop welcome-screen selector, and is not part of the Settings dialog.
+5. To learn the workflow in chat, ask: “How do I create a new project and change its settings later? Do not create anything yet.” The assistant should call `anonymizer_usage` and return that text verbatim.
 
 Field ranges match the desktop GUI (ports 104–65535, name/site/UID lengths, timeout maxes). Invalid values are rejected.
 
@@ -243,7 +259,7 @@ Full flags: [`src/prototyping/medgemma_chat/README.md`](https://github.com/RSNA/
 
 - Receive mode: process stays running; new studies appear under storage / Dataset when you open the GUI later.
 - Batch mode: log shows phases and a summary; process exits when finished (exit code 0 on success).
-- MCP: client `tools/list` shows anonymizer tools; `list_inventory` returns a TSV table.
+- MCP: client `tools/list` shows the catalog tools above; `list_inventory` returns a TSV table; long jobs return `pending` then complete via `job_status`; “how do I…?” answers come from `anonymizer_usage` without creating a project.
 
 ## Common failures
 

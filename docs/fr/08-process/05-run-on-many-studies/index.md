@@ -21,7 +21,7 @@ Traiter une cohorte pour texte incrusté, Harmoniser et/ou flou facial avec prog
 
 1. Importez les séries de démo ci-dessus (et toute autre étude nécessaire).
 2. Terminez [Configuration des Fonctions IA](../../03-ai-features-setup/index.md) pour chaque outil que vous lancerez.
-3. Optionnellement parcourez 8.1–8.3 une fois pour connaître les résultats attendus.
+3. Préférez le [flux sur site](../index.md#recommended-site-workflow) : validez Harmonize / correspondances de description, mode de flou facial, listes blanches par modalité, Détecter PHI dans Métadonnées et NER des comptes rendus sur des séries d’échantillon en Vue des séries **avant** de lancer le lot sur tout le Jeu de données.
 
 ## Démarrer un lot
 

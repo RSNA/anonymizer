@@ -6,7 +6,7 @@
 
 ## Objetivo
 
-Ver lo que importó, comprobar columnas de estado de IA, abrir proyecciones de un estudio, abrir una serie para revisión o herramientas de [Procesar](../08-process/index.md), revisar **Analytics** en el Panel, y exportar un CSV de **Búsqueda de Pacientes** cuando haga falta.
+Ver lo que importó, comprobar columnas de estado de IA, abrir proyecciones de un estudio, abrir una serie para revisión o herramientas de [Procesar](../08-process/index.md), fijar o pintar **segmentos 2D / 3D** en Vista de Series ([Anotación](#annotation)), revisar **distribuciones** de volumen de órganos CT/MR de Armonizar en el Panel ([Analytics](#analytics)), y exportar un CSV de **Búsqueda de Pacientes** cuando haga falta.
 
 ## Estudios de demo
 
@@ -15,7 +15,7 @@ Tras importar desde `tests/controller/assets/test_dcm_files` (véase [Buscar](..
 | Fixture | Papel en el manual |
 | --- | --- |
 | **`davidson_cxr`** | Abrir en Vista de Series aquí; texto quemado en [Quitar PHI de píxeles](../08-process/02-remove-burned-in-text/index.md) |
-| **`CT_Head_With_Contrast`** | [Armonizar](../08-process/03-harmonize-names/index.md) y [Desenfoque facial](../08-process/04-blur-faces/index.md) |
+| **`CT_Head_With_Contrast`** | [Armonizar](../08-process/03-harmonize-names/index.md) (luego fijar / Annotate; [Analytics](#analytics) para volúmenes de órganos); [Desenfoque facial](../08-process/04-blur-faces/index.md) |
 | **`us_rgb_single_frame`** | Ecografía de un solo fotograma; superposiciones quemadas en [Quitar PHI de píxeles](../08-process/02-remove-burned-in-text/index.md) (demos de área de exclusión) |
 
 ## Abrir el Conjunto de datos
@@ -46,7 +46,9 @@ Cuando hay al menos un estudio en el proyecto, aparece el control **Analytics** 
 
 ![Analytics del Panel expandido](shots/macos/Dashboard_Analytics.png)
 
-Analytics es para **revisar dentro de este proyecto**. No cambia píxeles ni lo que Envía. Tras Armonizar en CT/MR (máscaras bajo la caché de la serie), use **Volumes** para órganos y **Show** para mosaicos demográficos — un tablero completo puede incluir sexo, edad, modalidad, etnia, cobertura de IA y muchos histogramas de volumen de órganos. Gráficos de volumen vacíos suelen significar que Armonizar aún no ha producido máscaras anatómicas para esas series.
+Analytics es para **revisar dentro de este proyecto**. No cambia píxeles ni lo que Envía. Los histogramas de **volumen de órganos** vienen de máscaras de anatomía de [Armonizar](../08-process/03-harmonize-names/index.md) en **CT/MR** (TotalSegmentator bajo la caché de la serie) — no de ROIs de usuario que pinte en Annotate, ni de XR/US/MG planar. Use **Volumes** para órganos y **Show** para mosaicos demográficos. Gráficos de volumen vacíos suelen significar que Armonizar aún no ha producido máscaras anatómicas para esas series.
+
+Para **crear o editar** etiquetas de segmento (**2D** en fotogramas planares o **3D** en CT/MR), use [Anotación](#annotation). Esas etiquetas sirven para revisión y exportación (NIfTI / DICOM-SEG), no para llenar los gráficos de volumen de Analytics.
 
 ## Clic derecho en el Conjunto de datos (lo más importante)
 
@@ -147,19 +149,44 @@ Las sugerencias al pasar el ratón explican qué hará un clic o una acción de 
 
 Con un **solo** estudio o serie seleccionado, **Seleccionar similares** añade otras filas que ya comparten las mismas descripciones de serie (estudios) o el mismo texto de descripción de serie (series). Luego clic derecho en la selección para fijar una descripción en todas las filas seleccionadas.
 
-## Vista de Series — qué puede hacer
+## Vista de Series — qué puede hacer {#series-view-what-you-can-do}
 
-Vista de Series es donde mira píxeles y ejecuta herramientas por serie (los modelos deben estar listos — véase [Configuración de Funciones de IA](../03-ai-features-setup/index.md)):
+Vista de Series es donde mira píxeles y ejecuta herramientas por serie (los modelos deben estar listos — véase [Configuración de Funciones de IA](../03-ai-features-setup/index.md)). Para una cohorte real, valide aquí Harmonize, el modo de desenfoque facial, listas blancas y detección de PHI **antes** del [lote de IA](../08-process/05-run-on-many-studies/index.md) — véase [Flujo del centro](../08-process/index.md#recommended-site-workflow):
 
 - Desplazarse por fotogramas; use el histograma y las barras de herramientas según necesite
 - **Detectar / eliminar texto quemado** (OCR) y edición de lista blanca → [Quitar PHI de píxeles](../08-process/02-remove-burned-in-text/index.md)
 - **Armonizar descripción** → [Armonizar nombres](../08-process/03-harmonize-names/index.md)
 - **Desenfoque facial** (cuando sea elegible) → [Desenfocar caras](../08-process/04-blur-faces/index.md)
-- Superposiciones de **pestillo de segmentación** desde máscaras de anatomía en caché (tras Harmonize)
+- **Segmentación** — fijar superposiciones de anatomía tras Armonizar, o **Annotate** para crear / pintar segmentos de usuario — véase [Anotación](#annotation)
 - Rectángulos de ocultación manual
 - Borrar caché de análisis (por sí solo no reescribe píxeles DICOM)
 
-Dentro de Vista de Series, las series multi-fotograma también pueden mostrar modos de proyección **corte / mín / media / máx** en el visor (misma idea que la franja multi-fotograma anterior, pero para desplazamiento interactivo).
+Dentro de Vista de Series, las series multi-fotograma también pueden mostrar modos de proyección **corte / mín / media / máx** en el visor (misma idea que la franja multi-fotograma anterior, pero para desplazamiento interactivo). Tras Armonizar: segmentos (**2D**/**3D**) en [Anotación](#annotation); volúmenes de órganos CT/MR desde máscaras de anatomía de Armonizar: [Analytics](#analytics).
+
+### Anotación {#annotation}
+
+Los segmentos que fija o pinta son **2D o 3D según la modalidad**:
+
+| Modalidad | Forma | Rejilla |
+| --- | --- | --- |
+| **CT / MR** | Etiquetas **3D** en un volumen de vóxeles | Caché Harmonize / TotalSegmentator, o al anotar / importar |
+| **CR / DX (XR), US, MG** | ROIs **2D** (fotograma / espacio de píxeles) | Desde fotogramas de Vista de Series — sin TotalSegmentator |
+
+Los volúmenes de órganos en mililitros de [Analytics](#analytics) del Panel vienen de máscaras de anatomía de Armonizar en CT/MR, **no** de estos ROIs de usuario. Las anotaciones 2D planares no aparecen en los gráficos de volumen de Analytics.
+
+El panel **Segmentation** muestra chips de estructuras TotalSegmentator (tras Armonizar en CT/MR) y **segmentos de usuario** que cree o importe.
+
+| Modo | Propósito |
+| --- | --- |
+| **View** | Revisar superposiciones. **Multi-seleccionar** chips (pestillo). Arrastre izquierdo dibuja rectángulos de ocultación, no pintura. |
+| **Annotate** | Editar etiquetas. Solo se dibuja el **objetivo de pintura seleccionado**. Brush / Erase / tamaño / Undo. Arrastre izquierdo pinta. |
+
+1. Abra una serie (CT/MR tras Armonizar, o CR/DX/US/MG con fotogramas visibles).
+2. Pulse **Annotate**.
+3. Elija el objetivo de pintura (chip o **1–9**); opcional **New Segment** o **Import…** (NIfTI/NRRD).
+4. **Brush** / **Erase**, tamaño con la rueda o **− / +**, luego arrastre izquierdo.
+
+Los segmentos de usuario permanecen en la caché de la serie. En [Enviar](../09-send/index.md#export-segments-as-dicom-seg), active opcionalmente **Export segments as DICOM-SEG**.
 
 ## Otras acciones del Conjunto de datos
 
@@ -169,7 +196,7 @@ Dentro de Vista de Series, las series multi-fotograma también pueden mostrar mo
 
 ## Crear CSV de Búsqueda de Pacientes
 
-Use el Conjunto de datos para exportar una hoja que mapea identificadores PHI a IDs anonimizados (y estado de IA de series). Esto es distinto de la [Tabla de búsqueda de pacientes CTP](../05-create-project/index.md#patient-lookup-table) opcional usada en la importación.
+Use el Conjunto de datos para exportar una hoja que mapea identificadores PHI a IDs anonimizados (y estado de IA de series). Esto es distinto de la [Tabla de búsqueda de pacientes CTP](../05-create-project/anonymizer-script.md#patient-lookup-table) opcional usada en la importación.
 
 ### Cuándo usarlo
 
@@ -214,6 +241,8 @@ Use el Conjunto de datos para exportar una hoja que mapea identificadores PHI a 
 - `davidson_cxr` carga y se desplaza en Vista de Series.
 - Las columnas de IA se actualizan tras las herramientas de Procesar.
 - **Crear Búsqueda de Pacientes** escribe un CSV bajo `private/phi_export/` que se abre con las columnas esperadas.
+- **Analytics** del Panel muestra **distribuciones** de volumen de órganos tras Armonizar en CT/MR — véase [Analytics](#analytics).
+- Tras Armonizar: **View** fija superposiciones; **Annotate** pinta un segmento — véase [Anotación](#annotation).
 
 ## Si falla
 
@@ -225,4 +254,4 @@ Use el Conjunto de datos para exportar una hoja que mapea identificadores PHI a 
 
 ## Siguientes pasos
 
-Continúe con [Procesar](../08-process/index.md) — Quitar PHI de píxeles, Harmonize, Desenfoque facial y lote. Tras la revisión, [Enviar](../09-send/index.md) pacientes anonimizados.
+Continúe con [Procesar](../08-process/index.md) — Quitar PHI de píxeles, Harmonize, Desenfoque facial y lote. Tras Armonizar en CT/MR, vuelva aquí para fijar / Annotate ([Anotación](#annotation)) y, por separado, para revisar gráficos de volumen de órganos desde esas máscaras de Armonizar ([Analytics](#analytics)). Tras la revisión, [Enviar](../09-send/index.md) pacientes anonimizados (opcionalmente [exportar segmentos como DICOM-SEG](../09-send/index.md#export-segments-as-dicom-seg)).

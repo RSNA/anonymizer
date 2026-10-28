@@ -61,7 +61,7 @@ Dates are shifted so the **order and spacing** of a patient’s studies stay mea
 - **@incrementdate(this,n)** — fixed trial-wide day offset (CTP DATEINC; packaged default offset in `controller/private_tags/dateinc.txt`). Private date elements under Retain Safe Private shift by the same single resolved delta as public dates.
 - **@rebasedate(this,origin)** — epoch rebase from registration `basedate/` + ORIGIN parameter (default `19600101`)
 
-When any of these run, the anonymizer writes `(0028,0303) LongitudinalTemporalInformationModified = MODIFIED`, and records code 113107 when the Modified Dates option is selected. See [Create project — longitudinal dates](05-create-project/index.md#longitudinal-dates-tcia-style).
+When any of these run, the anonymizer writes `(0028,0303) LongitudinalTemporalInformationModified = MODIFIED`, and records code 113107 when the Modified Dates option is selected. See [Anonymizer script — longitudinal dates](05-create-project/anonymizer-script.md#longitudinal-dates-tcia-style).
 
 ## What may be kept (partial options)
 
@@ -85,4 +85,4 @@ Capture stores **removed PHI entity text only** (`EmbeddedPHI` / `EmbeddedPHIRem
 Curve/overlay groups are removed. Whether Structured Report / Encapsulated PDF objects are accepted is controlled by project modalities; selecting Clean Structured Content or Clean Descriptors enables SR/PDF, and selecting SR or PDF enables Clean Structured Content.
 
 !!! note "For compliance review"
-    Have your privacy officer review the [de-identification options](05-create-project/index.md#2-de-identification-options) and any [custom script edits](05-create-project/index.md#4-custom-script-edits), plus AI tools for your institution. See also the [DICOM Conformance Statement](dicom-conformance-statement.md) and [HIPAA Safe Harbor and MIDI-B](#hipaa-safe-harbor-and-midi-b). This manual is operational guidance, not legal advice.
+    Have your privacy officer review the [de-identification options](05-create-project/index.md#2-de-identification-options) and any [custom script edits](05-create-project/anonymizer-script.md#4-custom-script-edits), plus AI tools for your institution. See also the [DICOM Conformance Statement](dicom-conformance-statement.md) and [HIPAA Safe Harbor and MIDI-B](#hipaa-safe-harbor-and-midi-b). This manual is operational guidance, not legal advice.

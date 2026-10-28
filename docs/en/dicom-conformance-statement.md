@@ -102,8 +102,9 @@ Script `@always()…` rules may also **create** missing non-sequence elements wi
 
 Presets and UI: [Create a project — De-identification options](05-create-project/index.md#2-de-identification-options). Option meanings: [De-identification protocol](deidentification-protocol.md#de-identification-options-ingest).
 
-!!! note "Why Clean Graphics is not executed"
-    The DICOM **Clean Graphics** option targets **non-text** burned-in graphics in pixels (logos, rulers, decorative marks) beyond ordinary curve/overlay groups. Under Basic Profile, this product already **removes curve and overlay groups** at import. Remaining non-text burned-in graphics are uncommon in modern clinical research archives (most residual pixel PHI is **text**, handled by Clean Pixel Data / Embedded PHI). Building a separate detector/scrubber for that legacy edge case has not been prioritized; selecting Clean Graphics only records project intent and does **not** stamp or run a processing task.
+### Why Clean Graphics is not executed {#why-clean-graphics-is-not-executed}
+
+The DICOM **Clean Graphics** option targets **non-text** burned-in graphics in pixels (logos, rulers, decorative marks) beyond ordinary curve/overlay groups. Under Basic Profile, this product already **removes curve and overlay groups** at import. Remaining non-text burned-in graphics are uncommon in modern clinical research archives (most residual pixel PHI is **text**, handled by Clean Pixel Data / Embedded PHI). Building a separate detector/scrubber for that legacy edge case has not been prioritized; selecting Clean Graphics only records project intent and does **not** stamp or run a processing task.
 
 ### Additional restrictions
 
@@ -114,4 +115,4 @@ Presets and UI: [Create a project — De-identification options](05-create-proje
 - **MIDI-B** scores are evidence for header review, not a substitute for institutional determination ([protocol](deidentification-protocol.md#hipaa-safe-harbor-and-midi-b)).
 
 !!! note "For compliance review"
-    Have your privacy officer review this statement together with the project’s [de-identification options](05-create-project/index.md#2-de-identification-options), compiled script, and any [custom script edits](05-create-project/index.md#4-custom-script-edits). This manual is operational and standards documentation, not legal advice.
+    Have your privacy officer review this statement together with the project’s [de-identification options](05-create-project/index.md#2-de-identification-options), compiled script, and any [custom script edits](05-create-project/anonymizer-script.md#4-custom-script-edits). This manual is operational and standards documentation, not legal advice.

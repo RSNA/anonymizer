@@ -3,7 +3,7 @@
 # Languages (in order): en_US → de → es → fr
 # One language:         uv run python -m docs_help --language de -v
 # Existing PNGs are skipped; work under docs/.capture_work/<lang> is kept.
-# Shared TSEG/OCR cache: docs/.capture_work/fixture_cache/ (+ docs_help/ocr_cache/)
+# Shared TSEG cache: docs/.capture_work/fixture_cache/ (Pixel PHI Detect runs live EasyOCR)
 # Reset language work:   --reset-work   Recapture PNGs: --force
 #
 # Shot order = MkDocs nav chapter numbers (not folder names):
@@ -66,6 +66,14 @@ workflows:
     title: Create a project
     shots_dir: shots
     shots:
+      - id: NewProject_Menu
+        file: NewProject_Menu.png
+        window: WelcomeView
+        severity: required
+        deps: [language]
+        ux_elements: [Welcome screen, File menu, New Project]
+        caption: "Welcome — File → New Project to start."
+        # Manual: native macOS File menu (system menu bar); do not synthesize in-window.
       - id: NewProjectSettings
         file: NewProjectSettings.png
         window: SettingsDialog
@@ -150,7 +158,7 @@ workflows:
           - Option checkboxes (Basic Profile, Modified Dates, cleaning options)
           - Plain-language explanation panel
           - OK / Cancel
-        caption: "De-identification Options — Retain preset selected; cleaning options need AI Features when installed."
+        caption: "De-identification Options — Basic preset; RHS help shows Basic Application Confidentiality Profile."
       - id: AnonymizerScriptEditor
         file: AnonymizerScriptEditor.png
         window: AnonymizerScriptDialog
@@ -201,8 +209,8 @@ workflows:
         window: FileMenu
         severity: required
         deps: [project]
-        ux_elements: [Import Files, Import Directory]
-        caption: "File menu — Import Files (pick files) or Import Directory (folder tree)."
+        ux_elements: [Import Files, Import Directory, Dashboard]
+        caption: "Dashboard with File menu — Import Files / Import Directory (manual native menu; drag-drop also onto Dashboard or Dataset)."
       - id: ImportDirectory_Chooser
         file: ImportDirectory_Chooser.png
         window: NativeFolderDialog
@@ -315,6 +323,23 @@ workflows:
         deps: [project, fixture:davidson_cxr]
         ux_elements: [Image viewport, Frame navigator, Toolbar]
         caption: "Series View reviewing davidson_cxr (before Process tools)."
+      - id: SeriesView_Annotate
+        file: SeriesView_Annotate.png
+        window: SeriesView
+        severity: soft
+        deps: [project, fixture:davidson_cxr]
+        recipe:
+          actions: [open_series, annotate_mode, new_user_segment, brush_paint]
+        ux_elements:
+          - View / Annotate mode
+          - New Segment
+          - Brush
+          - Erase
+          - Brush size − / +
+          - Undo
+          - Demo lesion chip
+          - Painted ROI outline
+        caption: "Series View Annotate — Brush tools plus a painted Demo lesion ROI on davidson_cxr."
       - id: MetadataAssessment
         file: MetadataAssessment.png
         window: MetadataAssessmentDialog
@@ -339,12 +364,15 @@ workflows:
         recipe:
           mode: detect
         ux_elements:
+          - Study Description PHI (First name / Last name)
           - Highlighted PHI cells
           - Entity color chips
           - Detection status
           - Private tags
-          - Remove PHI / Blank (when PHI found)
-        caption: "Metadata after Detect PHI — leftover identifiers highlighted; Remove PHI can rewrite tags after Save."
+          - Replace PHI / Synthetic (when PHI found)
+          - Harmonized None (before Harmonize)
+          - Orange entity highlight (row not selected)
+        caption: "davidson_cxr Metadata before Harmonize — Detect PHI on Study Description (Douglas Davidson; orange First/Last name highlight, row not selected)."
       - id: MetadataAssessment_RemovePHI
         file: MetadataAssessment_RemovePHI.png
         window: MetadataAssessmentDialog
@@ -352,12 +380,13 @@ workflows:
         deps: [project, fixture:davidson_cxr, ocr_models]
         recipe:
           mode: remove
+          replace: synthetic
         ux_elements:
-          - Cleaned Content cells
-          - Status after remove
+          - Study Description with synthetic name
+          - Status after Replace PHI
           - Save enabled
           - Private tags
-        caption: "Metadata after Remove PHI (Blank) — tree updated; Save writes cleaned tags to the current image."
+        caption: "Metadata after Replace PHI (Synthetic) — Study Description uses fake name spans; Save writes cleaned tags to the current image."
       - id: DescriptionMappings
         file: DescriptionMappings.png
         window: DescriptionMappingsDialog
@@ -428,8 +457,8 @@ workflows:
           edit_context: frame
           actions: [detect_text]
           wait: detect_complete
-        ux_elements: [Green OCR rectangles, Whitelist Standard, Portable/L not boxed]
-        caption: "davidson_cxr after Detect Text — green boxes on PHI; Portable and L skipped (whitelist)."
+        ux_elements: [Entity-coloured OCR rectangles, Whitelist Standard, Portable/L not boxed]
+        caption: "davidson_cxr after Detect — NAME/DATE entity boxes on PHI; Portable and L skipped (whitelist)."
       - id: Process_RemovePixel_Remove
         file: Process_RemovePixel_Remove.png
         window: SeriesView
@@ -499,14 +528,16 @@ workflows:
         deps: [project, fixture:demo_report_pdf]
         recipe:
           mode: review
+          actions: [detect_phi]
+          replace_mode: synthetic
         ux_elements:
           - PDF page preview
-          - Report text panel
-          - Detect Embedded PHI
+          - RHS text panel with OpenMed entity colours
+          - Detect PHI
+          - Remove PHI / Synthetic
           - Metadata
-          - Blank / Synthetic
           - Save
-        caption: "Report Text Review on demo Encapsulated PDF — page preview and extractable text (needs Clean Structured Content at import)."
+        caption: "demo_report_pdf after Detect PHI — RHS spans coloured by OpenMed entity type; Synthetic selected."
       - id: ReportTextReview_Metadata
         file: ReportTextReview_Metadata.png
         window: MetadataAssessmentDialog

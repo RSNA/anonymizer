@@ -6,7 +6,7 @@
 
 ## Objectif
 
-Voir ce que vous avez importé, vérifier les colonnes de statut IA, ouvrir les projections d’une étude, ouvrir une série pour relecture ou outils [Traiter](../08-process/index.md), consulter **Analytics** sur le Tableau de bord, et exporter un CSV **Créer une Recherche de Patient** si besoin.
+Voir ce que vous avez importé, vérifier les colonnes de statut IA, ouvrir les projections d’une étude, ouvrir une série pour relecture ou outils [Traiter](../08-process/index.md), verrouiller ou peindre des **segments 2D / 3D** dans Vue des séries ([Annotation](#annotation)), consulter les **distributions** de volume d’organes CT/MR issues d’Harmoniser sur le Tableau de bord ([Analytics](#analytics)), et exporter un CSV **Créer une Recherche de Patient** si besoin.
 
 ## Études de démo
 
@@ -15,7 +15,7 @@ Après import depuis `tests/controller/assets/test_dcm_files` (voir [Rechercher]
 | Fixture | Rôle dans le manuel |
 | --- | --- |
 | **`davidson_cxr`** | Ouvrir dans Vue des séries ici ; texte incrusté dans [Supprimer le PHI pixel](../08-process/02-remove-burned-in-text/index.md) |
-| **`CT_Head_With_Contrast`** | [Harmoniser](../08-process/03-harmonize-names/index.md) et [Flouter les visages](../08-process/04-blur-faces/index.md) |
+| **`CT_Head_With_Contrast`** | [Harmoniser](../08-process/03-harmonize-names/index.md) (puis latch / Annotate ; [Analytics](#analytics) pour les volumes d’organes) ; [Flouter les visages](../08-process/04-blur-faces/index.md) |
 | **`us_rgb_single_frame`** | Échographie mono-image ; incrustations dans [Supprimer le PHI pixel](../08-process/02-remove-burned-in-text/index.md) (démos zone d’exclusion) |
 
 ## Ouvrir Jeu de données
@@ -46,7 +46,9 @@ Dès qu’au moins une étude est dans le projet, un contrôle **Analytics** app
 
 ![Analytics du Tableau de bord développé](shots/macos/Dashboard_Analytics.png)
 
-Analytics sert à la **revue dans ce projet**. Cela ne modifie ni les pixels ni ce que vous Envoyez. Après Harmoniser sur CT/MR (masques sous le cache de série), utilisez **Volumes** pour les organes et **Show** pour les tuiles démographiques — un panneau complet peut inclure sexe, âge, modalité, ethnicité, couverture IA et de nombreux histogrammes de volume d’organes. Des graphiques de volume vides signifient souvent qu’Harmoniser n’a pas encore produit de masques anatomiques pour ces séries.
+Analytics sert à la **revue dans ce projet**. Cela ne modifie ni les pixels ni ce que vous Envoyez. Les histogrammes de **volume d’organes** viennent des masques d’anatomie [Harmoniser](../08-process/03-harmonize-names/index.md) sur **CT/MR** (TotalSegmentator sous le cache de série) — pas des ROI utilisateur peints dans Annotate, ni du XR/US/MG planaire. Utilisez **Volumes** pour les organes et **Show** pour les tuiles démographiques. Des graphiques de volume vides signifient souvent qu’Harmoniser n’a pas encore produit de masques anatomiques pour ces séries.
+
+Pour **créer ou modifier** des libellés de segment (**2D** sur frames planaires ou **3D** sur CT/MR), utilisez [Annotation](#annotation). Ces libellés servent à la relecture et à l’export (NIfTI / DICOM-SEG), pas à remplir les graphiques de volume Analytics.
 
 ## Clic droit dans Jeu de données (le plus important)
 
@@ -147,19 +149,44 @@ Les info-bulles expliquent ce qu’un clic ou une action de barre d’outils fer
 
 Avec une **seule** étude ou série sélectionnée, **Sélectionner similaires** ajoute d’autres lignes qui partagent déjà les mêmes descriptions de série (études) ou le même texte de description de série (séries). Puis clic droit sur la sélection pour définir une description sur toutes les lignes sélectionnées.
 
-## Vue des séries — ce que vous pouvez faire
+## Vue des séries — ce que vous pouvez faire {#series-view-what-you-can-do}
 
-Vue des séries est l’endroit où vous regardez les pixels et lancez les outils par série (les modèles doivent être prêts — voir [Configuration des Fonctions IA](../03-ai-features-setup/index.md)) :
+Vue des séries est l’endroit où vous regardez les pixels et lancez les outils par série (les modèles doivent être prêts — voir [Configuration des Fonctions IA](../03-ai-features-setup/index.md)). Pour une cohorte réelle, validez ici Harmonize, le mode de flou facial, les listes blanches et la détection PHI **avant** le [lot IA](../08-process/05-run-on-many-studies/index.md) — voir [Flux sur site](../08-process/index.md#recommended-site-workflow) :
 
 - Faire défiler les frames ; utiliser l’histogramme et les barres d’outils selon besoin
 - **Détecter / supprimer le texte incrusté** (OCR) et édition de liste blanche → [Supprimer le PHI pixel](../08-process/02-remove-burned-in-text/index.md)
 - **Harmoniser la description** → [Harmoniser les noms](../08-process/03-harmonize-names/index.md)
 - **Flou facial** (lorsque éligible) → [Flouter les visages](../08-process/04-blur-faces/index.md)
-- Superpositions **Segmentation latch** depuis les masques d’anatomie en cache (après Harmoniser)
+- **Segmentation** — verrouiller les superpositions d’anatomie après Harmoniser, ou **Annotate** pour créer / peindre des segments utilisateur — voir [Annotation](#annotation)
 - Rectangles de noircissement manuels
 - Vider le cache d’analyse (ne réécrit pas à lui seul les pixels DICOM)
 
-Dans Vue des séries, les séries multi-frame peuvent aussi afficher les modes de projection **slice / min / mean / max** dans le visualiseur (même idée que la bande multi-frame ci-dessus, mais pour le défilement interactif).
+Dans Vue des séries, les séries multi-frame peuvent aussi afficher les modes de projection **slice / min / mean / max** dans le visualiseur (même idée que la bande multi-frame ci-dessus, mais pour le défilement interactif). Après Harmoniser : segments (**2D**/**3D**) sous [Annotation](#annotation) ; volumes d’organes CT/MR depuis les masques d’anatomie Harmonize : [Analytics](#analytics).
+
+### Annotation {#annotation}
+
+Les segments que vous verrouillez ou peignez sont **2D ou 3D selon la modalité** :
+
+| Modalité | Forme | Grille |
+| --- | --- | --- |
+| **CT / MR** | Libellés **3D** sur un volume voxel | Cache Harmonize / TotalSegmentator, ou à l’annotation / import |
+| **CR / DX (XR), US, MG** | ROI **2D** (frame / espace pixel) | Depuis les frames de Vue des séries — sans TotalSegmentator |
+
+Les volumes d’organes en millilitres de [Analytics](#analytics) du Tableau de bord viennent des masques d’anatomie Harmonize sur CT/MR, **pas** de ces ROI utilisateur. Les annotations 2D planaires n’apparaissent pas dans les graphiques de volume Analytics.
+
+Le panneau **Segmentation** montre les puces de structures TotalSegmentator (après Harmoniser sur CT/MR) et les **segments utilisateur** que vous créez ou importez.
+
+| Mode | Rôle |
+| --- | --- |
+| **View** | Revoir les superpositions. **Multi-sélectionner** les puces (latch). Glisser gauche dessine des rectangles de noircissement, pas de peinture. |
+| **Annotate** | Éditer les libellés. Seule la **cible de peinture sélectionnée** est dessinée. Brush / Erase / taille / Undo. Glisser gauche peint. |
+
+1. Ouvrez une série (CT/MR après Harmoniser, ou CR/DX/US/MG avec frames affichables).
+2. Cliquez sur **Annotate**.
+3. Choisissez la cible de peinture (puce ou **1–9**) ; optionnel **New Segment** ou **Import…** (NIfTI/NRRD).
+4. **Brush** / **Erase**, taille avec la molette ou **− / +**, puis glisser gauche.
+
+Les segments utilisateur restent dans le cache de série. À [Envoyer](../09-send/index.md#export-segments-as-dicom-seg), cochez éventuellement **Export segments as DICOM-SEG**.
 
 ## Autres actions Jeu de données
 
@@ -169,7 +196,7 @@ Dans Vue des séries, les séries multi-frame peuvent aussi afficher les modes d
 
 ## Créer une Recherche de Patient CSV
 
-Utilisez Jeu de données pour exporter un tableur qui mappe les identifiants PHI vers les identifiants anonymisés (et le statut IA des séries). Ceci est distinct de la [Table de correspondance des patients CTP](../05-create-project/index.md#patient-lookup-table) optionnelle utilisée à l’import.
+Utilisez Jeu de données pour exporter un tableur qui mappe les identifiants PHI vers les identifiants anonymisés (et le statut IA des séries). Ceci est distinct de la [Table de correspondance des patients CTP](../05-create-project/anonymizer-script.md#patient-lookup-table) optionnelle utilisée à l’import.
 
 ### Quand l’utiliser
 
@@ -214,6 +241,8 @@ Utilisez Jeu de données pour exporter un tableur qui mappe les identifiants PHI
 - `davidson_cxr` se charge et défile dans Vue des séries.
 - Les colonnes IA se mettent à jour après les outils Traiter.
 - **Créer une Recherche de Patient** écrit un CSV sous `private/phi_export/` qui s’ouvre avec les colonnes attendues.
+- **Analytics** du Tableau de bord montre les **distributions** de volume d’organes après Harmoniser sur CT/MR — voir [Analytics](#analytics).
+- Après Harmoniser : **View** verrouille les superpositions ; **Annotate** peint un segment — voir [Annotation](#annotation).
 
 ## En cas d’échec
 
@@ -225,4 +254,4 @@ Utilisez Jeu de données pour exporter un tableur qui mappe les identifiants PHI
 
 ## Prochaines étapes
 
-Continuez avec [Traiter](../08-process/index.md) — Supprimer le PHI pixel, Harmoniser, Flou facial et lots. Après relecture, [Envoyer](../09-send/index.md) les patients anonymisés.
+Continuez avec [Traiter](../08-process/index.md) — Supprimer le PHI pixel, Harmoniser, Flou facial et lots. Après Harmoniser sur CT/MR, revenez ici pour latch / Annotate ([Annotation](#annotation)) et, séparément, pour revoir les graphiques de volume d’organes issus de ces masques Harmonize ([Analytics](#analytics)). Après relecture, [Envoyer](../09-send/index.md) les patients anonymisés (éventuellement [exporter des segments en DICOM-SEG](../09-send/index.md#export-segments-as-dicom-seg)).

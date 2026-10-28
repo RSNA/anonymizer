@@ -4,7 +4,7 @@
 
 Faire entrer des études DICOM dans votre projet pour qu’elles soient désidentifiées et listées sous **Vue → Jeu de données**. Vous pouvez :
 
-1. **Importer depuis cet ordinateur** — fichiers ou dossier via le menu **Fichier**.
+1. **Importer depuis cet ordinateur** — fichiers ou dossier via le menu **Fichier**, ou glisser-déposer sur le **Tableau de bord** / **Jeu de données**.
 2. **Interroger un système d’imagerie distant** — PACS / VNA / Orthanc via **Rechercher** sur le Tableau de bord.
 
 Configurez le [Serveur de requête, les modalités, les classes de stockage et les délais réseau](../05-create-project/index.md) avant de vous fier à Rechercher à distance.
@@ -19,6 +19,8 @@ Avec un projet ouvert, utilisez :
 
 - **Fichier → Importer des fichiers** — choisissez un ou plusieurs fichiers (le filtre par défaut est souvent `.dcm` ; vous pouvez le changer dans la boîte de dialogue).
 - **Fichier → Répertoire d'importation** — chaque fichier sous ce dossier et ses sous-dossiers est tenté, pas seulement `.dcm`.
+
+Vous pouvez aussi **glisser-déposer** des fichiers ou dossiers sur le **Tableau de bord** ou la vue **Jeu de données** ; les mêmes règles d’import s’appliquent.
 
 ![Menu Fichier — Importer des fichiers / Répertoire d'importation](shots/macos/ImportFiles_Menu.png)
 
@@ -42,7 +44,7 @@ Un fichier n’est accepté que si tout ceci est vrai :
 4. L’identité protégée (PHI) peut être capturée avec succès.
 5. Il n’a pas déjà été importé dans ce projet.
 
-Si une [table de correspondance des patients](../05-create-project/index.md#patient-lookup-table) est requise, l’identifiant patient PHI doit aussi correspondre à une entrée — sinon le fichier est mis en quarantaine comme **Lookup_Miss**.
+Si une [table de correspondance des patients](../05-create-project/anonymizer-script.md#patient-lookup-table) est requise, l’identifiant patient PHI doit aussi correspondre à une entrée — sinon le fichier est mis en quarantaine comme **Lookup_Miss**.
 
 ### 4. Importer `davidson_cxr` (démo d’une seule étude)
 

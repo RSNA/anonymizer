@@ -4,7 +4,7 @@
 
 Traer estudios DICOM a su proyecto para que se desidentifiquen y aparezcan en **Vista → Conjunto de datos**. Puede:
 
-1. **Importar desde este ordenador** — archivos o una carpeta mediante el menú **Archivo**.
+1. **Importar desde este ordenador** — archivos o una carpeta mediante el menú **Archivo**, o arrastrar y soltar sobre el **Panel de control** / **Conjunto de datos**.
 2. **Buscar en un sistema de imagen remoto** — PACS / VNA / Orthanc mediante **Buscar** del Panel de control.
 
 Configure el [Servidor de Consulta, modalidades, clases de almacenamiento y tiempos de espera de red](../05-create-project/index.md) antes de confiar en Buscar remoto.
@@ -19,6 +19,8 @@ Con un proyecto abierto, use:
 
 - **Archivo → Importar Archivos** — elija uno o más archivos (el filtro predeterminado suele ser `.dcm`; puede cambiarlo en el diálogo de archivos).
 - **Archivo → Directorio de Importación** — se intenta cada archivo bajo esa carpeta y sus subcarpetas, no solo `.dcm`.
+
+También puede **arrastrar y soltar** archivos o carpetas sobre el **Panel de control** o la vista **Conjunto de datos**; se aplican las mismas reglas de importación.
 
 ![Menú Archivo — Importar Archivos / Directorio de Importación](shots/macos/ImportFiles_Menu.png)
 
@@ -42,7 +44,7 @@ Un archivo solo se acepta si se cumplen todas estas condiciones:
 4. La identidad protegida (PHI) puede capturarse correctamente.
 5. No se ha importado ya en este proyecto.
 
-Si se requiere una [tabla de búsqueda de pacientes](../05-create-project/index.md#patient-lookup-table), el ID de Paciente PHI también debe coincidir con una entrada—o el archivo se pone en cuarentena como **Lookup_Miss**.
+Si se requiere una [tabla de búsqueda de pacientes](../05-create-project/anonymizer-script.md#patient-lookup-table), el ID de Paciente PHI también debe coincidir con una entrada—o el archivo se pone en cuarentena como **Lookup_Miss**.
 
 ### 4. Importar `davidson_cxr` (demo de un solo estudio)
 

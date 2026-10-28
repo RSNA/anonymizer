@@ -54,6 +54,20 @@ Nachdem Sie einen Harmonize-Lauf mit Hirnstrukturen akzeptiert haben (**Ja** auf
 
 ![Serienansicht mit allen Hirnsegmenten auf dem mittleren Schnitt](shots/macos/Process_Harmonize_SegmentedSeries.png)
 
+#### Nachdem Overlays erscheinen
+
+Anatomie-Masken aus Harmonisieren sind bereit zur Prüfung und zum Export. Als Nächstes in Serienansicht / Dashboard:
+
+| Ziel | Wo |
+| --- | --- |
+| TotalSegmentator-Chips latchen (Mehrfachauswahl-Umrisse) | [Ansicht → Annotation](../../07-view/index.md#annotation) — Modus **View** |
+| Benutzer-ROI erstellen oder malen (**New Segment**, Brush / Erase) — **3D** auf CT/MR | Dieselbe Seite — Modus **Annotate** |
+| Forschungs-NIfTI / NRRD importieren | [Annotation](../../07-view/index.md#annotation) — **Import…** |
+| Kohorten-**Organvolumen**-Diagramme aus Harmonize-Anatomie-Masken (nur CT/MR) | Dashboard-[Analytics](../../07-view/index.md#analytics) — **Volumes** / **Show** / **Refresh** (nicht aus gemalten Benutzer-ROIs) |
+| Masken mit der Studie senden | [Segmente als DICOM-SEG exportieren](../../09-send/index.md#export-segments-as-dicom-seg) |
+
+Planare XR/US/MG erhalten keine TotalSegmentator-Chips von Harmonisieren. **Annotate** funktioniert dort als **2D**-Pixelraum-Benutzer-ROIs; diese füllen keine Analytics-Organvolumen-Diagramme.
+
 ## Planare Harmonisierung (XR und US)
 
 CR/DX, Ultraschall und Mammographie nutzen einen **separaten** Harmonize-Pfad von CT/MR: kein TotalSegmentator, keine Dicken-/Kontrast-Buckets. Die Playbook-Tabelle verwendet weiterhin **Nachweis** (was gemessen wurde) und **Quelle** (woher es kam).
@@ -93,6 +107,7 @@ CR/DX, Ultraschall und Mammographie nutzen einen **separaten** Harmonize-Pfad vo
 - CT: SeriesDescription wirkt konsistent für dieses Kopf-CT; Datensatz **Harmonisiert** aktualisiert sich; nach Hirn-Ja zeichnen Latch-Overlays auf dem mittleren Schnitt.
 - CXR: Playbook-**Quelle** nennt **Xp-Bodypart** / **CXp-Projection-Rotation** (oder DICOM) mit lesbarem Konfidenz-Nachweis.
 - US: Playbook-Zeilen zitieren **DICOM metadata** / **RadLex Playbook**; vorgeschlagener Name passt zu Ultraschall-Anatomie/Modus.
+- Nach CT/MR-Harmonisieren füllen sich die Dashboard-[Analytics](../../07-view/index.md#analytics)-**Volumes**-Histogramme für Organe in der Kohorte (leere Diagramme → mehr Serien harmonisieren oder **Refresh**).
 
 ## Wenn es fehlschlägt
 
@@ -102,4 +117,5 @@ CR/DX, Ultraschall und Mammographie nutzen einen **separaten** Harmonize-Pfad vo
 
 ## Nächste Schritte
 
-Weiter mit [8.3 Gesichter unscharf machen](../04-blur-faces/index.md) auf derselben Serie `CT_Head_With_Contrast` (Gaussian).
+1. Segmente prüfen oder malen (**3D** auf CT/MR): [Ansicht → Annotation](../../07-view/index.md#annotation). Getrennt CT/MR-Organvolumen-Diagramme aus Harmonize-Anatomie-Masken: [Analytics](../../07-view/index.md#analytics).
+2. Weiter mit [8.3 Gesichter unscharf machen](../04-blur-faces/index.md) auf derselben Serie `CT_Head_With_Contrast` (Gaussian).

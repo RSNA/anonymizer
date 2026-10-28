@@ -4,6 +4,8 @@ Use this when chatting with an LLM client connected to the RSNA Anonymizer MCP s
 
 You do **not** need to know every setting before creating a project. Give the assistant a project name and only the settings that matter to you. The MCP server combines those choices with the Anonymizer defaults, shows you the complete configuration, and creates nothing until you confirm it.
 
+The same plain-language guidance is what the assistant should return when you ask how to use the Anonymizer (via the `anonymizer_usage` tool).
+
 ## Quick start: just ask for help
 
 In the chat, you can ask:
@@ -33,11 +35,10 @@ Start with a name and any important choices:
 Create a new project named DemoCXR. Use defaults for everything else.
 ```
 
-Retain-options example:
+Retain-options example (plain language; the assistant maps this to the project’s de-identification options):
 
 ```text
-Create a project named RetainDemo with confidentiality_options [113100, 113107, 113108, 113111]
-and modalities CT and MR.
+Create a Retain-options project named RetainDemo using CT and MR.
 ```
 
 The assistant will prepare the configuration and reply with a review summary. It should identify:
@@ -51,7 +52,7 @@ The assistant will prepare the configuration and reply with a review summary. It
 You can then either change something:
 
 ```text
-Add US and change the language to fr. Show me the revised configuration.
+Add US and show me the revised configuration.
 ```
 
 or confirm the exact revision shown:
@@ -66,34 +67,46 @@ Only then is the project created and opened. Do not ask to open the same project
 
 You only need to mention the ones you care about:
 
-- `project_name` — required;
-- `confidentiality_options` — DICOM CID 7050 code values (default `[113100]`; clinical preset `[113100, 113107, 113108, 113111]`);
-- `modalities` — for example `["CT", "MR", "US"]`;
-- `language_code` — chosen once at creation, like the desktop welcome-screen language selector; it cannot be changed afterwards;
-- `site_id` and `uid_root` — normally generated/defaulted;
-- `storage_dir` — normally the default project store;
-- local `scp` (`ip`, `port`, `aet`);
-- `network_timeouts`.
+- project name — required;
+- de-identification options — **Basic** (default) or **Retain** (keeps more clinical context; same idea as the desktop New Project options);
+- modalities — for example CT, MR, and US;
+- language — chosen once at creation, like the desktop welcome-screen language selector; it cannot be changed afterwards;
+- site ID and UID root — normally generated or defaulted;
+- storage folder — normally the default project store;
+- local receive address (IP, port, AE title) for this workstation;
+- network timeouts.
 
 The review summary shows the effective value of every create setting, including defaults.
+
+## List or open an existing project
+
+```text
+What projects do I already have?
+```
+
+```text
+Open the project named DemoCXR.
+```
+
+Opening a project does **not** import DICOM. Import is a separate step after a project is open.
 
 ## Configure a project later
 
 After a project is created or opened, you can change mutable settings at any time:
 
 ```text
-Change the open project settings: modalities ["CT", "MR", "US"].
+Change the modalities to CT, MR and US.
 ```
 
 Mutable settings are:
 
-- `modalities`
-- `transfer_syntaxes`
-- local `scp`
-- `network_timeouts`
-- `confidentiality_options`
+- modalities
+- transfer syntaxes (encodings accepted on receive/import)
+- local receive address (IP, port, AE title)
+- network timeouts
+- de-identification options (changing them rebuilds the project’s anonymizer script from the defaults plus those options — custom script edits are lost; confirm first)
 
-`project_name`, `storage_dir`, `site_id`, `uid_root`, and `language_code` are fixed after creation. The language is chosen once when the project is created (like the desktop welcome screen) and is not part of the project settings that can be edited later.
+Project name, storage folder, site ID, UID root, and language are fixed after creation.
 
 Ask for the current configuration whenever you are unsure:
 
@@ -121,23 +134,47 @@ dicomweb true, http_port 8042, http_path /dicom-web.
 
 If you do not specify DIMSE versus DICOMweb, the assistant should ask before configuring the remote.
 
-## Import a DICOM file
+After the QUERY remote is configured you can ask to **find** studies and **import** selected studies from PACS. Give study identifiers from the find results — do not invent UIDs.
 
-Once a project is open, give a **real absolute file path**:
+## Import DICOM from this computer
+
+Once a project is open, give a **real absolute path**:
 
 ```text
 Import the DICOM file at this absolute path: /Users/me/studies/chest.dcm
 ```
 
-There is no local-versus-PACS plan to choose before importing. Do not use `project_open` to import a file; that only opens/switches projects.
+```text
+Import the DICOM directory at this absolute path: /Users/me/studies/batch_folder
+```
+
+Folder import can take a while. The assistant should say the work has started and wait until it finishes before reporting counts. Do not use “open project” to import a file.
 
 ## List what is in the project
 
 ```text
-List the series inventory for the open project (list_inventory).
+List what studies and series are in the project.
 ```
 
 Use inventory for “what series/patients are in the project?” For settings, ask to show the current project settings instead.
+
+## Preview and process
+
+With inventory available (or indices you already know):
+
+```text
+Show me a preview of patient 1, series 1.
+```
+
+```text
+Remove burnt-in text from all series.
+```
+
+```text
+Harmonize study and series descriptions for everything in the project.
+```
+
+Burnt-in text removal and Harmonize can run for minutes. The assistant should report that work has started and only summarize results when the job completes. Face blur is available in the desktop app and headless AI batch JSON — it is **not** an MCP chat tool.
 
 ## Good prompts
 
@@ -145,14 +182,23 @@ Use inventory for “what series/patients are in the project?” For settings, a
 |---|---|
 | Learn the workflow | “How do I create a new project and change its settings later? Do not create anything yet.” |
 | Create with defaults | “Create a new project named DemoCXR. Use defaults for everything else.” |
-| Create with choices | “Create a project with Retain options named RetainDemo with CT and MR.” |
-| Revise before creation | “Add US and change the language to fr. Show me the revised configuration.” |
+| Create with Retain options | “Create a Retain-options project named RetainDemo using CT and MR.” |
+| Revise before creation | “Add US and show me the revised configuration.” |
 | Confirm creation | “Yes, create it exactly as shown.” |
 | See defaults | “Show me the project defaults and ranges.” |
+| List projects | “What projects do I already have?” |
+| Open a project | “Open the project named DemoCXR.” |
 | See current settings | “Show my current project settings.” |
 | Change settings | “Change the modalities to CT, MR and US.” |
+| Import a file | “Import the DICOM file at this absolute path: /Users/me/studies/chest.dcm” |
+| Import a folder | “Import the DICOM directory at this absolute path: /Users/me/studies/batch_folder” |
+| Inventory | “List what studies and series are in the project.” |
+| Preview | “Show me a preview of patient 1, series 1.” |
+| Remove burnt-in text | “Remove burnt-in text from all series.” |
+| Harmonize names | “Harmonize study and series descriptions for everything in the project.” |
 
 ## Related
 
 - Server tool how-to (for the model): package asset `anonymizer/mcp/assets/instructions.md`
+- Clinician wording source used by `anonymizer_usage`: package asset `anonymizer/mcp/assets/setup_help.json`
 - Connect client / start server: [Run headless](index.md)

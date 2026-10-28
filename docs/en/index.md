@@ -18,7 +18,7 @@ Use the top tabs: **Setup** (chapters 1–5), **Use** (6–9), **Headless** (10)
 
 6. [Search](06-search/index.md) — import from folder or PACS (Dashboard **Search**)
 7. [View](07-view/index.md) — Dataset, projections, and Series View (Dashboard **View**)
-8. [Process](08-process/index.md) — Remove Pixel PHI, Harmonize, Face blur, batch
+8. [Process](08-process/index.md) — Embedded PHI (pixel / text), Harmonize, Face blur, batch
 9. [Send](09-send/index.md) — send anonymized studies (Dashboard **Send**)
 
 **Headless**

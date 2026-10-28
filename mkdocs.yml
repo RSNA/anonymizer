@@ -59,10 +59,11 @@ plugins:
             3. AI Features: 3. KI-Funktionen
             4. Words we use: 4. Begriffe
             5. Create a project: 5. Projekt anlegen
+            Anonymizer script (advanced): Anonymizer-Skript (erweitert)
             6. Search: 6. Suchen
             7. View: 7. Ansicht
             8. Process: 8. Verarbeiten
-            8.1 Pixel PHI: 8.1 Pixel-PHI
+            8.1 Embedded PHI: 8.1 Embedded PHI
             8.2 Harmonize: 8.2 Harmonisieren
             8.3 Blur faces: 8.3 Gesichter unscharf
             8.4 Batch: 8.4 Stapel
@@ -85,10 +86,11 @@ plugins:
             3. AI Features: 3. Funciones de IA
             4. Words we use: 4. Palabras que usamos
             5. Create a project: 5. Crear un proyecto
+            Anonymizer script (advanced): Script del anonimizador (avanzado)
             6. Search: 6. Buscar
             7. View: 7. Vista
             8. Process: 8. Procesar
-            8.1 Pixel PHI: 8.1 PHI en píxeles
+            8.1 Embedded PHI: 8.1 Embedded PHI
             8.2 Harmonize: 8.2 Armonizar
             8.3 Blur faces: 8.3 Desenfocar caras
             8.4 Batch: 8.4 Lote
@@ -111,10 +113,11 @@ plugins:
             3. AI Features: 3. Fonctions IA
             4. Words we use: 4. Mots que nous utilisons
             5. Create a project: 5. Créer un projet
+            Anonymizer script (advanced): Script d’anonymisation (avancé)
             6. Search: 6. Rechercher
             7. View: 7. Vue
             8. Process: 8. Traiter
-            8.1 Pixel PHI: 8.1 PHI pixel
+            8.1 Embedded PHI: 8.1 Embedded PHI
             8.2 Harmonize: 8.2 Harmoniser
             8.3 Blur faces: 8.3 Flouter les visages
             8.4 Batch: 8.4 Lot
@@ -154,6 +157,14 @@ exclude_docs: |
   **/tutorials/**
   **/shots/.gitkeep
 
+# Built (and linkable) but omitted from the nav tree — silences MkDocs "not in nav" INFO.
+# Paths are relative to docs/ (folder i18n keeps locale prefixes in the warning list).
+not_in_nav: |
+  /dev/backlog.md
+  /dev/overview-video-vo-script.md
+  /**/screenshots-style-guide.md
+  /en/10-headless/mcp-user-instructions.md
+
 nav:
   - Home: index.md
   - Setup:
@@ -167,7 +178,7 @@ nav:
       - 7. View: 07-view/index.md
       - 8. Process:
           - 08-process/index.md
-          - 8.1 Pixel PHI: 08-process/02-remove-burned-in-text/index.md
+          - 8.1 Embedded PHI: 08-process/02-remove-burned-in-text/index.md
           - 8.2 Harmonize: 08-process/03-harmonize-names/index.md
           - 8.3 Blur faces: 08-process/04-blur-faces/index.md
           - 8.4 Batch: 08-process/05-run-on-many-studies/index.md
@@ -175,6 +186,7 @@ nav:
   - Headless: 10-headless/index.md
   - Reference:
       - De-identification protocol: deidentification-protocol.md
+      - Anonymizer script (advanced): 05-create-project/anonymizer-script.md
       - DICOM Conformance Statement: dicom-conformance-statement.md
       - Troubleshooting: troubleshooting.md
       - License: license.md

@@ -4,8 +4,9 @@ On some **head CT or MR** exams, facial features could allow recognition even af
 
 ## Demo series
 
-**`CT_Head_With_Contrast`** — same series as [8.2 Harmonize names](../03-harmonize-names/index.md)  
-(`tests/controller/assets/test_dcm_files/CT_Head_With_Contrast`).
+**`CT_Head_With_Contrast`** — same series as [8.2 Harmonize names](../03-harmonize-names/index.md).  
+Path in the repository: `tests/controller/assets/test_dcm_files/CT_Head_With_Contrast`  
+([GitHub](https://github.com/RSNA/anonymizer/tree/dev/tests/controller/assets/test_dcm_files/CT_Head_With_Contrast); [how to get them](../../06-search/index.md#demo-studies-from-the-repository)).
 
 Prefer Harmonize first so anatomy hints improve eligibility, then open face blur on this series.
 

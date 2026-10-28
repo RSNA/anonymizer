@@ -9,7 +9,7 @@ Pour les auteurs qui mettent à jour ce manuel.
 - **PHI :** fixtures de test uniquement — jamais de vraies données patient
 - **Stockage :** les captures vivent sous chaque flux numéroté comme `shots/macos/*.png` et `shots/windows/*.png`
 - **Catalogue :** [`docs/screenshots-manifest.yaml`](../screenshots-manifest.yaml) liste chaque élément UX et chaque capture
-- **Échelle / résolution :** la capture stocke les **points UI logiques** (Retina 2× → 1 px PNG ≈ 1 pt app), puis `normalize_for_docs` force chaque PNG à **`DOCS_SHOT_MAX_WIDTH`** (960) : les fenêtres larges sont réduites, les dialogues étroits sont letterboxés (pas d’upscale UI). Même largeur de fichier ⇒ même échelle MkDocs ⇒ texte UI le plus petit cohérent entre les pages.
+- **Échelle / résolution :** la capture stocke les **points UI logiques** (Retina 2× → 1 px PNG ≈ 1 pt app), puis `normalize_for_docs` force chaque PNG à **`DOCS_SHOT_MAX_WIDTH`** (1200) : les fenêtres larges sont réduites, les dialogues étroits sont letterboxés (pas d’upscale UI). Même largeur de fichier ⇒ même échelle MkDocs ⇒ texte UI le plus petit cohérent entre les pages.
 - **Pas d’ombres :** les captures macOS utilisent `screencapture -o` (omettre l’ombre de fenêtre) ; la frange douce résiduelle est retirée avant enregistrement. Ne pas livrer de captures avec drop shadows.
 - **Coins :** macOS utilise la capture par ID de fenêtre (`screencapture -l`) pour que les PNG gardent coins arrondis et alpha ; Windows utilise PrintWindow / BitBlt
 

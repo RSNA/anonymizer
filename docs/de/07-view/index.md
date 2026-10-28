@@ -6,7 +6,7 @@ Dashboard-**Ansicht** öffnet den **Datensatz** — die Liste von allem in Ihrem
 
 ## Ziel
 
-Sehen, was Sie importiert haben, KI-Statusspalten prüfen, Projektionen für eine Studie öffnen, eine Serie zur Prüfung oder für [Verarbeiten](../08-process/index.md)-Werkzeuge öffnen, **Analytics** auf dem Dashboard prüfen und bei Bedarf eine **Patientensuche**-CSV exportieren.
+Sehen, was Sie importiert haben, KI-Statusspalten prüfen, Projektionen für eine Studie öffnen, eine Serie zur Prüfung oder für [Verarbeiten](../08-process/index.md)-Werkzeuge öffnen, **2D-/3D-Segmente** in der Serienansicht latchen oder malen ([Annotation](#annotation)), CT/MR-**Organvolumen-Verteilungen** aus Harmonisieren auf dem Dashboard prüfen ([Analytics](#analytics)) und bei Bedarf eine **Patientensuche**-CSV exportieren.
 
 ## Demo-Studien
 
@@ -15,7 +15,7 @@ Nach dem Import aus `tests/controller/assets/test_dcm_files` (siehe [Suchen](../
 | Fixture | Rolle im Handbuch |
 | --- | --- |
 | **`davidson_cxr`** | Hier in der Serienansicht öffnen; eingebrannter Text in [Pixel-PHI entfernen](../08-process/02-remove-burned-in-text/index.md) |
-| **`CT_Head_With_Contrast`** | [Harmonisieren](../08-process/03-harmonize-names/index.md) und [Gesichtsunschärfe](../08-process/04-blur-faces/index.md) |
+| **`CT_Head_With_Contrast`** | [Harmonisieren](../08-process/03-harmonize-names/index.md) (dann Latch / Annotate; [Analytics](#analytics) für Organvolumina); [Gesichtsunschärfe](../08-process/04-blur-faces/index.md) |
 | **`us_rgb_single_frame`** | Ultraschall Einzelbild; eingebrannte Overlays in [Pixel-PHI entfernen](../08-process/02-remove-burned-in-text/index.md) (Exclude-Area-Demos) |
 
 ## Datensatz öffnen
@@ -46,7 +46,9 @@ Sobald mindestens eine Studie im Projekt ist, erscheint auf dem Dashboard die Sc
 
 ![Dashboard Analytics aufgeklappt](shots/macos/Dashboard_Analytics.png)
 
-Analytics dient der **Prüfung innerhalb dieses Projekts**. Es ändert weder Pixel noch das, was Sie senden. Nach Harmonisieren auf CT/MR (Masken unter dem Serien-Cache) mit **Volumes** Organe und mit **Show** demografische Kacheln wählen — eine volle Tafel kann Geschlecht, Alter, Modalität, Ethnizität, KI-Abdeckung und viele Organvolumen-Histogramme enthalten. Leere Volumendiagramme bedeuten meist, dass Harmonisieren für diese Serien noch keine Anatomie-Masken erzeugt hat.
+Analytics dient der **Prüfung innerhalb dieses Projekts**. Es ändert weder Pixel noch das, was Sie senden. **Organvolumen**-Histogramme stammen aus [Harmonisieren](../08-process/03-harmonize-names/index.md)-Anatomie-Masken auf **CT/MR** (TotalSegmentator unter dem Serien-Cache) — nicht aus Benutzer-ROIs in Annotate und nicht von planar XR/US/MG. Mit **Volumes** Organe und mit **Show** demografische Kacheln wählen. Leere Volumendiagramme bedeuten meist, dass Harmonisieren für diese Serien noch keine Anatomie-Masken erzeugt hat.
+
+Segmente **erstellen oder bearbeiten** (TotalSegmentator-Chips latchen, **New Segment**, Brush / Erase — **2D** auf planaren Frames oder **3D** auf CT/MR) geschieht unter [Annotation](#annotation). Diese Labels dienen Prüfung und Export (NIfTI / DICOM-SEG), nicht dem Füllen der Analytics-Volumendiagramme.
 
 ## Rechtsklick im Datensatz (am wichtigsten)
 
@@ -147,19 +149,44 @@ Hover-Tooltips erklären, was ein Klick oder eine Symbolleistenaktion tut (einsc
 
 Mit einer **einzelnen** ausgewählten Studie oder Serie fügt **Select Similar** andere Zeilen hinzu, die bereits dieselben Serienbeschreibungen (Studien) bzw. denselben Serienbeschreibungstext (Serien) teilen. Dann Rechtsklick auf die Auswahl, um eine Beschreibung für alle ausgewählten Zeilen zu setzen.
 
-## Serienansicht — was Sie tun können
+## Serienansicht — was Sie tun können {#series-view-what-you-can-do}
 
-Die Serienansicht ist der Ort, an dem Sie Pixel betrachten und serienweise Werkzeuge ausführen (Modelle müssen bereit sein — siehe [KI-Funktionen einrichten](../03-ai-features-setup/index.md)):
+Die Serienansicht ist der Ort, an dem Sie Pixel betrachten und serienweise Werkzeuge ausführen (Modelle müssen bereit sein — siehe [KI-Funktionen einrichten](../03-ai-features-setup/index.md)). Für eine echte Kohorte hier Harmonize, Gesichtsunschärfe-Modus, Whitelists und PHI-Erkennung **prüfen**, bevor Sie [KI-Stapel](../08-process/05-run-on-many-studies/index.md) starten — siehe [Standort-Workflow](../08-process/index.md#recommended-site-workflow).
 
 - Frames scrollen; Histogramm und Symbolleisten nach Bedarf nutzen
 - **Eingebrannten Text erkennen / entfernen** (OCR) und Whitelist bearbeiten → [Pixel-PHI entfernen](../08-process/02-remove-burned-in-text/index.md)
 - **Beschreibung harmonisieren** → [Namen harmonisieren](../08-process/03-harmonize-names/index.md)
 - **Gesichtsunschärfe** (wenn geeignet) → [Gesichter unscharf machen](../08-process/04-blur-faces/index.md)
-- **Segmentation-Latch**-Overlays aus zwischengespeicherten Anatomie-Masken (nach Harmonisieren)
+- **Segmentation** — Anatomie-Overlays nach Harmonisieren latchen, oder **Annotate**, um Benutzersegmente zu erstellen / zu malen — siehe [Annotation](#annotation)
 - Manuelle Schwärzungsrechtecke
 - Analyse-Cache leeren (schreibt für sich allein keine DICOM-Pixel um)
 
-In der Serienansicht können Mehrfachbild-Serien auch **Slice-/Min-/Mean-/Max**-Projektionsmodi im Viewer zeigen (gleiche Idee wie der Mehrfachbild-Streifen oben, aber für interaktives Scrollen).
+In der Serienansicht können Mehrfachbild-Serien auch **Slice-/Min-/Mean-/Max**-Projektionsmodi im Viewer zeigen (gleiche Idee wie der Mehrfachbild-Streifen oben, aber für interaktives Scrollen). Nach Harmonisieren: Segmente (**2D**/**3D**) unter [Annotation](#annotation); CT/MR-Organvolumina aus Harmonize-Anatomie-Masken: [Analytics](#analytics).
+
+### Annotation {#annotation}
+
+Segmente, die Sie latchen oder malen, sind **2D oder 3D je nach Modalität**:
+
+| Modalität | Form | Raster |
+| --- | --- | --- |
+| **CT / MR** | **3D**-Labels auf einem Voxelvolumen | Harmonize- / TotalSegmentator-Cache, oder beim Annotieren / Import |
+| **CR / DX (XR), US, MG** | **2D**-ROIs (Frame / Pixelraum) | Aus Serienansicht-Frames — ohne TotalSegmentator |
+
+Milliliter-Organvolumina in Dashboard-[Analytics](#analytics) kommen aus Harmonize-Anatomie-Masken auf CT/MR, **nicht** aus diesen Benutzer-ROIs. Planare 2D-Annotationen erscheinen nicht in Analytics-Volumendiagrammen.
+
+Das Panel **Segmentation** zeigt TotalSegmentator-Struktur-Chips (nach Harmonisieren auf CT/MR) und **Benutzersegmente**, die Sie anlegen oder importieren.
+
+| Modus | Zweck |
+| --- | --- |
+| **View** | Overlays prüfen. Chips **mehrfach auswählen** (Latch). Linksziehen zeichnet Schwärzungsrechtecke, kein Paint. |
+| **Annotate** | Labels bearbeiten. Nur das **gewählte Paint-Ziel** wird gezeichnet. Brush / Erase / Größe / Undo. Linksziehen malt. |
+
+1. Serie öffnen (CT/MR nach Harmonisieren, oder CR/DX/US/MG mit Anzeigeframes).
+2. **Annotate** wählen.
+3. Paint-Ziel wählen (Chip oder **1–9**); optional **New Segment** oder **Import…** (NIfTI/NRRD).
+4. **Brush** / **Erase**, Größe mit Rad oder **− / +**, dann Linksziehen.
+
+Benutzersegmente bleiben im Serien-Cache. Beim [Senden](../09-send/index.md#export-segments-as-dicom-seg) optional **Export segments as DICOM-SEG** aktivieren.
 
 ## Weitere Datensatz-Aktionen
 
@@ -169,7 +196,7 @@ In der Serienansicht können Mehrfachbild-Serien auch **Slice-/Min-/Mean-/Max**-
 
 ## Patientensuche-CSV erstellen
 
-Nutzen Sie den Datensatz, um eine Tabelle zu exportieren, die PHI-Kennungen auf anonymisierte IDs (und Serien-KI-Status) abbildet. Das ist getrennt von der optionalen [CTP-Patienten-Nachschlagetabelle](../05-create-project/index.md#patient-lookup-table) beim Import.
+Nutzen Sie den Datensatz, um eine Tabelle zu exportieren, die PHI-Kennungen auf anonymisierte IDs (und Serien-KI-Status) abbildet. Das ist getrennt von der optionalen [CTP-Patienten-Nachschlagetabelle](../05-create-project/anonymizer-script.md#patient-lookup-table) beim Import.
 
 ### Wann verwenden
 
@@ -214,6 +241,8 @@ Nutzen Sie den Datensatz, um eine Tabelle zu exportieren, die PHI-Kennungen auf 
 - `davidson_cxr` lädt und scrollt in der Serienansicht.
 - KI-Spalten aktualisieren sich nach Verarbeiten-Werkzeugen.
 - **Patientensuche erstellen** schreibt eine CSV unter `private/phi_export/` mit den erwarteten Spalten.
+- Dashboard **Analytics** zeigt Organvolumen-**Verteilungen** nach Harmonisieren auf CT/MR — siehe [Analytics](#analytics).
+- Nach Harmonisieren: **View** latcht Overlays; **Annotate** malt ein Segment — siehe [Annotation](#annotation).
 
 ## Wenn es fehlschlägt
 
@@ -225,4 +254,4 @@ Nutzen Sie den Datensatz, um eine Tabelle zu exportieren, die PHI-Kennungen auf 
 
 ## Nächste Schritte
 
-Weiter mit [Verarbeiten](../08-process/index.md) — Pixel-PHI entfernen, Harmonisieren, Gesichtsunschärfe und Stapel. Nach der Prüfung [Senden](../09-send/index.md) anonymisierter Patienten.
+Weiter mit [Verarbeiten](../08-process/index.md) — Pixel-PHI entfernen, Harmonisieren, Gesichtsunschärfe und Stapel. Nach Harmonisieren auf CT/MR hierher zurück zum Latch / Annotate ([Annotation](#annotation)) und getrennt zu Organvolumen-Diagrammen aus diesen Harmonize-Masken ([Analytics](#analytics)). Nach der Prüfung [Senden](../09-send/index.md) anonymisierter Patienten (optional [Segmente als DICOM-SEG exportieren](../09-send/index.md#export-segments-as-dicom-seg)).

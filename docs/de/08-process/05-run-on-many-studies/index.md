@@ -21,7 +21,7 @@ Eine Kohorte für eingebrannten Text, Harmonisieren und/oder Gesichtsunschärfe 
 
 1. Die Demo-Serien oben (und weitere benötigte Studien) importieren.
 2. [KI-Funktionen einrichten](../../03-ai-features-setup/index.md) für jedes auszuführende Werkzeug abschließen.
-3. Optional 8.1–8.3 einmal durchgehen, damit Sie die erwarteten Ergebnisse kennen.
+3. Bevorzugen Sie den [Standort-Workflow](../index.md#recommended-site-workflow): Harmonize / Beschreibungszuordnungen, Gesichtsunschärfe-Modus, Modalitäts-Whitelists, Metadaten-PHI und Bericht-NER an Stichproben in der Serienansicht **prüfen**, bevor Sie den ganzen Datensatz stapeln.
 
 ## Stapel starten
 

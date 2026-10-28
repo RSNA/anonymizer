@@ -98,8 +98,9 @@ Les règles `@always()…` peuvent aussi **créer** des éléments non séquence
 
 Préréglages et UI : [Créer un projet — Options de dé-identification](05-create-project/index.md#2-de-identification-options). Significations : [Protocole de désidentification](deidentification-protocol.md).
 
-!!! note "Pourquoi Clean Graphics n’est pas exécuté"
-    L’option DICOM **Clean Graphics** vise les graphiques incrustés **non textuels** dans les pixels (logos, règles, marques décoratives) au-delà des groupes courbe/overlay habituels. Sous le Basic Profile, ce produit **supprime déjà les groupes courbe et overlay** à l’import. Les graphiques incrustés non textuels restants sont rares dans les archives de recherche clinique modernes (la plupart du PHI pixel résiduel est du **texte**, traité par Clean Pixel Data / Embedded PHI). Un détecteur/nettoyeur séparé pour ce cas legacy n’a pas été priorisé ; sélectionner Clean Graphics n’enregistre que l’intention du projet et **n’exécute ni ne tamponne** aucune tâche de traitement.
+### Pourquoi Clean Graphics n’est pas exécuté {#why-clean-graphics-is-not-executed}
+
+L’option DICOM **Clean Graphics** vise les graphiques incrustés **non textuels** dans les pixels (logos, règles, marques décoratives) au-delà des groupes courbe/overlay habituels. Sous le Basic Profile, ce produit **supprime déjà les groupes courbe et overlay** à l’import. Les graphiques incrustés non textuels restants sont rares dans les archives de recherche clinique modernes (la plupart du PHI pixel résiduel est du **texte**, traité par Clean Pixel Data / Embedded PHI). Un détecteur/nettoyeur séparé pour ce cas legacy n’a pas été priorisé ; sélectionner Clean Graphics n’enregistre que l’intention du projet et **n’exécute ni ne tamponne** aucune tâche de traitement.
 
 ### Restrictions supplémentaires
 
@@ -110,4 +111,4 @@ Préréglages et UI : [Créer un projet — Options de dé-identification](05-cr
 - Les scores **MIDI-B** sont des éléments de preuve pour la revue d’en-tête, pas un substitut à la détermination institutionnelle ([protocole](deidentification-protocol.md#hipaa-safe-harbor-and-midi-b)).
 
 !!! note "Pour la revue de conformité"
-    Faites revoir cette déclaration avec les [options de dé-identification](05-create-project/index.md#2-de-identification-options), le script compilé et toute [modification personnalisée du script](05-create-project/index.md#4-custom-script-edits). Ce manuel est une documentation opérationnelle et normative, pas un avis juridique.
+    Faites revoir cette déclaration avec les [options de dé-identification](05-create-project/index.md#2-de-identification-options), le script compilé et toute [modification personnalisée du script](05-create-project/anonymizer-script.md#4-custom-script-edits). Ce manuel est une documentation opérationnelle et normative, pas un avis juridique.

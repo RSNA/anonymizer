@@ -18,7 +18,7 @@ Use las puntuaciones MIDI-B y este protocolo como **evidencia para la revisión*
 ## Qué se elimina o se sustituye
 
 - El nombre y el ID del paciente pasan a valores anonimizados del ámbito del proyecto (ID del Sitio + número secuencial de paciente). La misma persona conserva el mismo ID anonimizado en los estudios del proyecto.
-- Los UIDs se sustituyen por valores deterministas derivados para el proyecto para que los enlaces entre imágenes se mantengan coherentes. Estos hashes son **sin secreto** (enlace estable en el proyecto, no seudonimización con clave) — ver la sección en inglés [Deterministic replacements](/anonymizer/deidentification-protocol/#deterministic-replacements-uids-dates-accessions).
+- Los UIDs se sustituyen por valores deterministas derivados para el proyecto para que los enlaces entre imágenes se mantengan coherentes. Estos hashes son **sin secreto** (enlace estable en el proyecto, no seudonimización con clave) — ver [Sustituciones deterministas](#deterministic-replacements-uids-dates-accessions).
 - Se eliminan muchas etiquetas de flujo clínico y privadas.
 - El archivo registra que se eliminó la identidad del paciente y nombra el RSNA DICOM Anonymizer como método.
 
@@ -36,7 +36,17 @@ Ejemplos de contexto clínico retenido (según script / opciones de perfil):
 
 ## Sustituciones deterministas (UIDs, fechas, accesiones) {#deterministic-replacements-uids-dates-accessions}
 
-Los UIDs, desplazamientos de fecha y hashes de accession son **sin secreto** y mantienen enlaces estables en el proyecto. Tabla detallada: sección en inglés [Deterministic replacements](/anonymizer/deidentification-protocol/#deterministic-replacements-uids-dates-accessions).
+Estas transformaciones son **intencionales** y **sin secreto**. Su función es el **enlace estable dentro de un proyecto** (y una fila coincidente en las tablas PHI/UID del proyecto), no la desvinculación con clave frente a quien ya conoce un valor original candidato.
+
+| Valor | Cómo se deriva | Qué significa |
+| --- | --- | --- |
+| **UIDs DICOM** | Prefijo del proyecto (`uid_root` + id de sitio) + MD5 truncado del UID original | Mismo original → mismo UID anónimo. Quien pueda **adivinar** un UID original puede calcular el reemplazo y comparar. No se puede **invertir** de forma útil un UID anónimo al original desconocido solo desde el archivo anonimizado. |
+| **Fechas (`@hashdate`)** | Desfase en días desde el MD5 del ID de paciente (mód. ~10 años) | Mismo paciente → mismo desfase; los intervalos entre estudios de ese paciente siguen siendo significativos. |
+| **Número de accession** | SHA-256 de un **mezclador de proyecto** (`site_id` / `uid_root`) más la accession original | Proyectos distintos producen hashes distintos para la misma accession (útil). El mezclador **no** es una clave secreta: el id de sitio y la raíz UID aparecen en los UID anonimizados publicados, así que quien tenga datos publicados puede reconstruirlo y verificar accessions adivinadas. |
+
+**No se afirma:** resistencia criptográfica a la verificación en línea cuando el atacante ya tiene un UID, ID de paciente o accession originales plausibles. Eso es esperable en construcciones públicas y deterministas y es habitual entre desidentificadores DICOM abiertos.
+
+**Sí se afirma:** los originales no se almacenan en el DICOM publicado; el mapa autoritativo vive en la base de datos privada del proyecto — manténgala fuera de los paquetes de exportación/envío.
 
 ## Opciones de píxeles y cara en el perfil DICOM {#pixel-and-face-options-in-the-dicom-profile}
 
@@ -50,4 +60,4 @@ Las opciones clásicas del perfil “clean pixel data” y “clean recognizable
 Se eliminan los grupos de curva/superposición. Si se aceptan objetos Structured Report lo controlan los ajustes de clase de almacenamiento del proyecto.
 
 !!! note "Para revisión de cumplimiento"
-    Pida a su responsable de privacidad que revise las [opciones de desidentificación](05-create-project/index.md#2-de-identification-options) y cualquier [edición personalizada del script](05-create-project/index.md#4-custom-script-edits), además de las herramientas de IA para su institución. Véase también la [Declaración de conformidad DICOM](dicom-conformance-statement.md) y [HIPAA Safe Harbor y MIDI-B](#hipaa-safe-harbor-and-midi-b). Este manual es orientación operativa, no asesoramiento legal.
+    Pida a su responsable de privacidad que revise las [opciones de desidentificación](05-create-project/index.md#2-de-identification-options) y cualquier [edición personalizada del script](05-create-project/anonymizer-script.md#4-custom-script-edits), además de las herramientas de IA para su institución. Véase también la [Declaración de conformidad DICOM](dicom-conformance-statement.md) y [HIPAA Safe Harbor y MIDI-B](#hipaa-safe-harbor-and-midi-b). Este manual es orientación operativa, no asesoramiento legal.

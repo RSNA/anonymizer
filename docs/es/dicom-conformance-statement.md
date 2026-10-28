@@ -98,8 +98,9 @@ Las reglas `@always()…` también pueden **crear** elementos no secuencia ausen
 
 Presets y UI: [Crear un proyecto — Opciones de desidentificación](05-create-project/index.md#2-de-identification-options). Significados: [Protocolo de desidentificación](deidentification-protocol.md).
 
-!!! note "Por qué Clean Graphics no se ejecuta"
-    La opción DICOM **Clean Graphics** apunta a gráficos quemados **no textuales** en píxeles (logos, reglas, marcas decorativas) más allá de los grupos curve/overlay habituales. Bajo el Basic Profile, este producto ya **elimina los grupos curve y overlay** en el import. Los gráficos quemados no textuales restantes son poco frecuentes en archivos de investigación clínica modernos (la mayor parte del PHI residual en píxeles es **texto**, cubierto por Clean Pixel Data / Embedded PHI). No se ha priorizado un detector/limpiador aparte para ese caso legado; seleccionar Clean Graphics solo registra la intención del proyecto y **no** ejecuta ni sella una tarea de procesamiento.
+### Por qué Clean Graphics no se ejecuta {#why-clean-graphics-is-not-executed}
+
+La opción DICOM **Clean Graphics** apunta a gráficos quemados **no textuales** en píxeles (logos, reglas, marcas decorativas) más allá de los grupos curve/overlay habituales. Bajo el Basic Profile, este producto ya **elimina los grupos curve y overlay** en el import. Los gráficos quemados no textuales restantes son poco frecuentes en archivos de investigación clínica modernos (la mayor parte del PHI residual en píxeles es **texto**, cubierto por Clean Pixel Data / Embedded PHI). No se ha priorizado un detector/limpiador aparte para ese caso legado; seleccionar Clean Graphics solo registra la intención del proyecto y **no** ejecuta ni sella una tarea de procesamiento.
 
 ### Restricciones adicionales
 
@@ -110,4 +111,4 @@ Presets y UI: [Crear un proyecto — Opciones de desidentificación](05-create-p
 - Las puntuaciones **MIDI-B** son evidencia para revisión de cabeceras, no un sustituto de la determinación institucional ([protocolo](deidentification-protocol.md#hipaa-safe-harbor-and-midi-b)).
 
 !!! note "Para revisión de cumplimiento"
-    Pida a su responsable de privacidad que revise esta declaración junto con las [opciones de desidentificación](05-create-project/index.md#2-de-identification-options), el script compilado y cualquier [edición personalizada del script](05-create-project/index.md#4-custom-script-edits). Este manual es documentación operativa y normativa, no asesoramiento legal.
+    Pida a su responsable de privacidad que revise esta declaración junto con las [opciones de desidentificación](05-create-project/index.md#2-de-identification-options), el script compilado y cualquier [edición personalizada del script](05-create-project/anonymizer-script.md#4-custom-script-edits). Este manual es documentación operativa y normativa, no asesoramiento legal.

@@ -4,7 +4,7 @@
 
 Bring DICOM studies into your project so they are de-identified and listed under **View → Dataset**. You can:
 
-1. **Import from this computer** — files or a folder via the **File** menu.
+1. **Import from this computer** — files or a folder via the **File** menu, or drag and drop onto **Dashboard** / **Dataset**.
 2. **Search a remote imaging system** — PACS / VNA / Orthanc via Dashboard **Search**.
 
 Configure the [Query Server, modalities, storage classes, and network timeouts](../05-create-project/index.md) before you rely on remote Search.
@@ -20,6 +20,8 @@ With a project open, use:
 - **File → Import Files** — pick one or more files (default filter is often `.dcm`; you can change it in the file dialog).
 - **File → Import Directory** — every file under that folder and its subfolders is attempted, not only `.dcm`.
 
+You can also **drag and drop** files or folders onto the **Dashboard** or **Dataset** view; the same import rules apply.
+
 ![File menu — Import Files / Import Directory](shots/macos/ImportFiles_Menu.png)
 
 Already-imported instances (same SOP Instance UID already in this project) are **skipped**, not quarantined.
@@ -30,7 +32,7 @@ After **Import Directory**, the OS folder dialog opens. Navigate to your study t
 
 ![Choose folder for Import Directory](shots/macos/ImportDirectory_Chooser.png)
 
-Navigate to `tests/controller/assets/test_dcm_files` (or a study folder under it such as `davidson_cxr` or `CT_Head_With_Contrast`).
+Pick any study folder on your computer. Screenshots in this manual use named demos from the source repository — see [Demo studies from the repository](#demo-studies-from-the-repository).
 
 ### 3. What must be true for a file to import
 
@@ -42,13 +44,24 @@ A file is accepted only if all of these hold:
 4. Protected identity (PHI) can be captured successfully.
 5. It has not already been imported into this project.
 
-If a [patient lookup table](../05-create-project/index.md#patient-lookup-table) is required, the PHI Patient ID must also match an entry—or the file is quarantined as **Lookup_Miss**.
+If a [patient lookup table](../05-create-project/anonymizer-script.md#patient-lookup-table) is required, the PHI Patient ID must also match an entry—or the file is quarantined as **Lookup_Miss**.
+
+### Demo studies from the repository {#demo-studies-from-the-repository}
+
+Named examples in this manual (`davidson_cxr`, `CT_Head_With_Contrast`, `us_rgb_single_frame`, `demo_report_pdf`, and so on) and the help screenshots come from the **source repository**, not from a `pip` / `uv pip` install of the app.
+
+- Repository: [https://github.com/RSNA/anonymizer](https://github.com/RSNA/anonymizer)
+- Full path in a clone: `tests/controller/assets/test_dcm_files/`
+- Browse that folder on GitHub: [tests/controller/assets/test_dcm_files](https://github.com/RSNA/anonymizer/tree/dev/tests/controller/assets/test_dcm_files)
+
+Clone or download the repository if you want those exact folders. With an installed app only, import your own DICOM (or use remote Search); the screenshots still show what the UI looks like.
 
 ### 4. Import `davidson_cxr` (single study demo)
 
-Demo chest X-ray used later in [View](../07-view/index.md) and [Remove Pixel PHI](../08-process/02-remove-burned-in-text/index.md).
+Demo chest X-ray used later in [View](../07-view/index.md) and [Embedded PHI — Pixel](../08-process/02-remove-burned-in-text/index.md#pixel).
 
-Path: `tests/controller/assets/test_dcm_files/davidson_cxr`
+Path in the repository: `tests/controller/assets/test_dcm_files/davidson_cxr`  
+([browse on GitHub](https://github.com/RSNA/anonymizer/tree/dev/tests/controller/assets/test_dcm_files/davidson_cxr))
 
 1. Choose **File → Import Directory**.
 2. Select the `davidson_cxr` folder and click **Choose**.

@@ -100,8 +100,9 @@ Skript-`@always()…` kann fehlende Nicht-Sequenz-Elemente mit festem Literal **
 
 Presets und UI: [Projekt anlegen — De-Identifikationsoptionen](05-create-project/index.md#2-de-identification-options). Bedeutungen: [De-Identifikationsprotokoll](deidentification-protocol.md).
 
-!!! note "Warum Clean Graphics nicht ausgeführt wird"
-    Die DICOM-Option **Clean Graphics** zielt auf **nicht-textuelle** eingebrannte Grafiken in Pixeln (Logos, Lineale, Dekoration) jenseits gewöhnlicher Curve-/Overlay-Gruppen. Unter dem Basic Profile entfernt dieses Produkt Curve- und Overlay-Gruppen bereits beim Import. Verbleibende nicht-textuelle eingebrannte Grafiken sind in modernen klinischen Forschungsarchiven unüblich (die meiste verbleibende Pixel-PHI ist **Text**, behandelt durch Clean Pixel Data / Embedded PHI). Ein eigener Detektor/Scrubber für diesen Legacy-Randfall wurde nicht priorisiert; die Auswahl von Clean Graphics speichert nur die Projektabsicht und startet **keinen** Verarbeitungs-Task und stempelt **nicht**.
+### Warum Clean Graphics nicht ausgeführt wird {#why-clean-graphics-is-not-executed}
+
+Die DICOM-Option **Clean Graphics** zielt auf **nicht-textuelle** eingebrannte Grafiken in Pixeln (Logos, Lineale, Dekoration) jenseits gewöhnlicher Curve-/Overlay-Gruppen. Unter dem Basic Profile entfernt dieses Produkt Curve- und Overlay-Gruppen bereits beim Import. Verbleibende nicht-textuelle eingebrannte Grafiken sind in modernen klinischen Forschungsarchiven unüblich (die meiste verbleibende Pixel-PHI ist **Text**, behandelt durch Clean Pixel Data / Embedded PHI). Ein eigener Detektor/Scrubber für diesen Legacy-Randfall wurde nicht priorisiert; die Auswahl von Clean Graphics speichert nur die Projektabsicht und startet **keinen** Verarbeitungs-Task und stempelt **nicht**.
 
 ### Zusätzliche Einschränkungen
 
@@ -112,4 +113,4 @@ Presets und UI: [Projekt anlegen — De-Identifikationsoptionen](05-create-proje
 - **MIDI-B**-Scores sind Nachweis für Header-Prüfung, kein Ersatz für die institutionelle Feststellung ([Protokoll](deidentification-protocol.md#hipaa-safe-harbor-and-midi-b)).
 
 !!! note "Für Compliance-Prüfung"
-    Lassen Sie Ihren Datenschutzbeauftragten diese Erklärung zusammen mit den [De-Identifikationsoptionen](05-create-project/index.md#2-de-identification-options), dem kompilierten Skript und etwaigen [benutzerdefinierten Skriptbearbeitungen](05-create-project/index.md#4-custom-script-edits) prüfen. Dieses Handbuch ist betriebliche und Normen-Dokumentation, keine Rechtsberatung.
+    Lassen Sie Ihren Datenschutzbeauftragten diese Erklärung zusammen mit den [De-Identifikationsoptionen](05-create-project/index.md#2-de-identification-options), dem kompilierten Skript und etwaigen [benutzerdefinierten Skriptbearbeitungen](05-create-project/anonymizer-script.md#4-custom-script-edits) prüfen. Dieses Handbuch ist betriebliche und Normen-Dokumentation, keine Rechtsberatung.

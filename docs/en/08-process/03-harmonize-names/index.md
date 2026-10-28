@@ -4,11 +4,13 @@ Research datasets often use inconsistent **Series Description** text. **Harmoniz
 
 ## Demo series
 
-| Fixture | Path under `tests/controller/assets/test_dcm_files/` | What it shows |
+Repository folder: `tests/controller/assets/test_dcm_files/` ([GitHub](https://github.com/RSNA/anonymizer/tree/dev/tests/controller/assets/test_dcm_files); [how to get them](../../06-search/index.md#demo-studies-from-the-repository)).
+
+| Fixture | Path in repository | What it shows |
 | --- | --- | --- |
-| **`CT_Head_With_Contrast`** | `CT_Head_With_Contrast` | CT path: TotalSegmentator anatomy / contrast, brain-structures prompt, overlays |
-| **`davidson_cxr`** | `davidson_cxr` | XR planar path: optional **Xp-Bodypart** + **CXp-Projection-Rotation** |
-| **`us_rgb_single_frame`** | `us_rgb_single_frame` | US planar path: DICOM metadata only (no TotalSegmentator) |
+| **`CT_Head_With_Contrast`** | `tests/controller/assets/test_dcm_files/CT_Head_With_Contrast` | CT path: TotalSegmentator anatomy / contrast, brain-structures prompt, overlays |
+| **`davidson_cxr`** | `tests/controller/assets/test_dcm_files/davidson_cxr` | XR planar path: optional **Xp-Bodypart** + **CXp-Projection-Rotation** |
+| **`us_rgb_single_frame`** | `tests/controller/assets/test_dcm_files/us_rgb_single_frame` | US planar path: DICOM metadata only (no TotalSegmentator) |
 
 Import a series, open it in **Series View**, then run Harmonize. Reuse **`CT_Head_With_Contrast`** in [8.3 Blur faces](../04-blur-faces/index.md).
 
@@ -54,6 +56,20 @@ After you Accept a Harmonize run that included brain structures (**Yes** on the 
 
 ![Series View with all brain segments on the middle slice](shots/macos/Process_Harmonize_SegmentedSeries.png)
 
+#### After overlays appear
+
+Anatomy masks from Harmonize are ready for review and export. Next in Series View / Dashboard:
+
+| Goal | Where |
+| --- | --- |
+| Latch TotalSegmentator chips (multi-select outlines) | [View → Annotation](../../07-view/index.md#annotation) — stay in **View** mode |
+| Create or paint a user ROI (**New Segment**, Brush / Erase) — **3D** on CT/MR | Same page — switch to **Annotate** |
+| Import research NIfTI / NRRD masks | [Annotation → Import Segments](../../07-view/index.md#annotation) |
+| Cohort **organ-volume** charts from Harmonize anatomy masks (CT/MR only) | Dashboard [Analytics](../../07-view/index.md#analytics) — **Volumes** / **Show** / **Refresh** (not from painted user ROIs) |
+| Send masks with the study | [Export segments as DICOM-SEG](../../09-send/index.md#export-segments-as-dicom-seg) |
+
+Planar XR/US/MG do not get TotalSegmentator chips from Harmonize. **Annotate** still works there as **2D** pixel-space user ROIs; those do not feed Analytics organ-volume charts.
+
 ## Planar Harmonize (XR and US)
 
 CR/DX, ultrasound, and mammography use a **separate** Harmonize path from CT/MR: no TotalSegmentator, no thickness/contrast buckets. The Playbook table still uses **Evidence** (what was measured) and **Source** (where it came from).
@@ -93,6 +109,7 @@ CR/DX, ultrasound, and mammography use a **separate** Harmonize path from CT/MR:
 - CT: SeriesDescription looks consistent for this head CT; Dataset **Harmonized** updates; after brain Yes, latch overlays draw on the middle slice.
 - CXR: Playbook **Source** names **Xp-Bodypart** / **CXp-Projection-Rotation** (or DICOM) with readable confidence evidence.
 - US: Playbook rows cite **DICOM metadata** / **RadLex Playbook**; suggested name matches ultrasound anatomy/mode.
+- After CT/MR Harmonize, Dashboard [Analytics](../../07-view/index.md#analytics) **Volumes** histograms fill for organs in the cohort (empty charts → Harmonize more series or **Refresh**).
 
 ## If it fails
 
@@ -102,4 +119,5 @@ CR/DX, ultrasound, and mammography use a **separate** Harmonize path from CT/MR:
 
 ## Next steps
 
-Continue with [8.3 Blur faces](../04-blur-faces/index.md) on the **same** `CT_Head_With_Contrast` series (Gaussian).
+1. Review or paint segments (**3D** on CT/MR): [View → Annotation](../../07-view/index.md#annotation). Separately, check CT/MR organ-volume charts from Harmonize anatomy masks: [Analytics](../../07-view/index.md#analytics).
+2. Continue with [8.3 Blur faces](../04-blur-faces/index.md) on the **same** `CT_Head_With_Contrast` series (Gaussian).

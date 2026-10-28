@@ -19,23 +19,23 @@ Fermez le projet (ou lancez l’application) pour revenir à Bienvenue si vous d
 !!! note "Après le téléchargement de tous les modèles"
     Chaque ligne affiche **Installé** (avec un court détail, p. ex. la résolution) et un bouton **Supprimer** à la place de **Télécharger**. Les lignes Harmonize CT/MR conservent un menu de résolution ; les résolutions supplémentaires déjà présentes apparaissent comme « Également installé : … ». La capture ci-dessus montre cet état entièrement installé.
 
-## Ce que vous configurez (V19)
+## Modèles dans cette boîte de dialogue
 
-| Élément | Nécessaire pour la démo |
-| --- | --- |
-| **Supprimer le texte incrusté** (OCR) | Chapitre 8.1 — `davidson_cxr` |
-| **Harmoniser** pack CT + résolution (1.5 / 3 / 6 mm) | Chapitre 8.2 — `CT_Head_With_Contrast` |
-| **Harmoniser** région anatomique XR (optionnel) | Anatomie pixel pour CR/DX lorsque les tags DICOM de région anatomique manquent ou sont incorrects |
-| **Harmoniser** vue thorax XR (optionnel) | Projection pixel AP/PA/Lat (+ QC de rotation) pour CR/DX thoraciques |
-| **Dé-identification faciale** + licence académique `aca_…` | Chapitre 8.3 — `CT_Head_With_Contrast` |
-| **Structures cérébrales** (pack sous licence, optionnel) | Chapitre 8.2 — invite Harmonize structures cérébrales |
+Chaque ligne est un **téléchargement pour ce poste**. Il n’y a **aucune case projet on/off** — installez ici ; les outils correspondants se déverrouillent plus tard dans [Vue](../07-view/index.md) et [Traiter](../08-process/index.md) (y compris [exécuter sur plusieurs études](../08-process/05-run-on-many-studies/index.md)).
 
-Il n’y a **aucune case à cocher projet on/off**. Si les modèles sont installés et prêts, les outils apparaissent dans Vue des séries et dans le traitement par lots.
+| Fonction | Ce qu’elle débloque ensuite | Télécharger ? |
+| --- | --- | --- |
+| **Embedded PHI** (OCR + NER anglais, un pack) | Nettoyage du texte incrusté, revue de texte de rapport et Métadonnées **Détecter PHI** | Oui, si vous nettoyez pixels, comptes rendus ou texte de tags |
+| **Harmoniser** CT/MR + résolution (1.5 / 3 / 6 mm) | Masques d’organes TotalSegmentator pour CT/MR — noms de série standardisés et volumes d’organes à revoir dans [Analytics du Tableau de bord](../07-view/index.md#analytics) | Oui, si vous Harmonisez CT/MR ou utilisez Analytics de volumes — choisissez une résolution |
+| **Harmoniser** région anatomique XR | Aide pixel supplémentaire pour CR/DX quand les tags manquent ou sont faux | Oui, si vous Harmonisez la radiographie générale |
+| **Harmoniser** vue thorax XR | AP/PA/Lat pixel (+ contrôle de rotation) pour CR/DX thoraciques | Oui, si vous Harmonisez la radiographie générale (thorax) |
+| **Dé-identification faciale** | Flou facial sur CT/MR tête éligibles | Oui, si vous curatez des CT/MR tête |
+| **Structures cérébrales** | Masques supplémentaires de structures cérébrales sur CT/MR tête (avec Harmonize) — revoir l’anatomie et les distributions de volume des structures d’intérêt dans [Analytics du Tableau de bord](../07-view/index.md#analytics) | Oui, si vous curatez des CT/MR tête et utilisez Analytics de volumes d’organes — licence |
 
 Harmonize XR fonctionne sans les packs région anatomique XR ou vue thorax (tags DICOM / mots-clés uniquement). Une fois installés, les séries CR/DX peuvent utiliser :
 
-- Classifieur de région anatomique EfficientNet-B4 ([Xp-Bodypart-Mislabel-Checker](https://huggingface.co/spaces/MedicalAILabo/Xp-Bodypart-Mislabel-Checker) ; Mitsuyama et al., *European Radiology* 2025), fusionné avec l’anatomie DICOM.
-- Classifieur de projection/rotation thorax uniquement ([CXp-Projection-Rotation-Mislabel-Checker](https://huggingface.co/spaces/MedicalAILabo/CXp-Projection-Rotation-Mislabel-Checker)) pour affiner AP/PA/Lat ; la rotation apparaît dans le tableau d’analyse Harmonize et n’est pas écrite dans SeriesDescription.
+- Classifieur de région anatomique EfficientNet-B4 ([Xp-Bodypart-Mislabel-Checker](https://huggingface.co/spaces/MedicalAILabo/Xp-Bodypart-Mislabel-Checker) ; [Mitsuyama et al., *European Radiology* 2025](https://doi.org/10.1007/s00330-025-12053-7)), fusionné avec l’anatomie DICOM.
+- Classifieur de projection/rotation thorax uniquement ([CXp-Projection-Rotation-Mislabel-Checker](https://huggingface.co/spaces/MedicalAILabo/CXp-Projection-Rotation-Mislabel-Checker) ; même article de [Mitsuyama et al.](https://doi.org/10.1007/s00330-025-12053-7)) pour affiner AP/PA/Lat ; la rotation apparaît dans le tableau d’analyse Harmonize et n’est pas écrite dans SeriesDescription.
 
 La mammographie et l’échographie n’utilisent pas ces modèles.
 
@@ -45,7 +45,7 @@ La mammographie et l’échographie n’utilisent pas ces modèles.
 2. Téléchargez **Supprimer le texte incrusté**, **Harmoniser** (CT) et **Dé-identification faciale**.
 3. Saisissez ou validez la licence académique lorsque demandé (visage / structures cérébrales).
 4. Choisissez la résolution Harmonize CT ; téléchargez si le pack manque.
-5. Optionnellement, téléchargez **Structures cérébrales** pour la démo Harmonize CT, et **région anatomique XR** / **vue thorax XR** pour la démo Harmonize CXR du chapitre 8.2.
+5. Optionnellement, téléchargez **Structures cérébrales** et/ou **région anatomique XR** / **vue thorax XR** si vous avez besoin de ces extras.
 6. Fermez la boîte de dialogue. Les préférences restent sur ce poste de travail.
 
 !!! tip "Internet uniquement pour le téléchargement"
@@ -58,7 +58,7 @@ Utilisez **Supprimer** sur la carte d’un outil pour effacer les fichiers tél�
 ## Ce qui indique que tout va bien
 
 - Le statut indique prêt pour OCR, Harmonize CT et Face.
-- Vous pouvez ouvrir les outils de Vue des séries sur les séries de démo dans les chapitres [Traiter](../08-process/index.md) 8.1–8.3.
+- Après l’import, vous pouvez exécuter les outils [Traiter](../08-process/index.md) correspondants sur les séries de démo (chapitres 8.1–8.3).
 
 ## En cas d’échec
 
@@ -69,4 +69,4 @@ Utilisez **Supprimer** sur la carte d’un outil pour effacer les fichiers tél�
 ## Prochaines étapes
 
 1. [Mots que nous utilisons](../04-words-we-use/index.md) et [Créer un projet](../05-create-project/index.md), ou
-2. Passez aux outils [Traiter](../08-process/index.md) une fois les études importées — commencez par [8.1 Supprimer le PHI pixel](../08-process/02-remove-burned-in-text/index.md)
+2. Passez aux outils [Traiter](../08-process/index.md) une fois les études importées — commencez par [8.1 Embedded PHI](../08-process/02-remove-burned-in-text/index.md)

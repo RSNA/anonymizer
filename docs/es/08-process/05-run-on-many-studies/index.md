@@ -21,7 +21,7 @@ Procesar una cohorte para texto quemado, Harmonize y/o desenfoque facial con pro
 
 1. Importe las series de demo anteriores (y cualquier otro estudio que necesite).
 2. Termine [Configuración de Funciones de IA](../../03-ai-features-setup/index.md) para cada herramienta que va a ejecutar.
-3. Opcionalmente recorra 8.1–8.3 una vez para conocer los resultados esperados.
+3. Prefiera el [flujo del centro](../index.md#recommended-site-workflow): valide Harmonize / asignaciones de descripción, modo de desenfoque facial, listas blancas por modalidad, Detectar PHI en Metadatos y NER de informes en series de muestra en Vista de Series **antes** de lotear todo el Conjunto de datos.
 
 ## Iniciar un lote
 

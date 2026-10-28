@@ -4,7 +4,7 @@
 
 DICOM-Studien in Ihr Projekt bringen, sodass sie de-identifiziert und unter **Ansicht → Datensatz** gelistet sind. Sie können:
 
-1. **Von diesem Computer importieren** — Dateien oder einen Ordner über das Menü **Datei**.
+1. **Von diesem Computer importieren** — Dateien oder einen Ordner über das Menü **Datei**, oder per Drag & Drop auf **Dashboard** / **Datensatz**.
 2. **Ein entferntes Bildgebungssystem durchsuchen** — PACS / VNA / Orthanc über Dashboard-**Suchen**.
 
 Konfigurieren Sie [Query Server, Modalitäten, Speicherklassen und Netzwerk-Zeitüberschreitungen](../05-create-project/index.md), bevor Sie sich auf entfernte Suche verlassen.
@@ -19,6 +19,8 @@ Mit geöffnetem Projekt:
 
 - **Datei → Dateien importieren** — eine oder mehrere Dateien wählen (Standardfilter oft `.dcm`; im Dateidialog änderbar).
 - **Datei → Verzeichnis importieren** — jede Datei unter diesem Ordner und seinen Unterordnern wird versucht, nicht nur `.dcm`.
+
+Sie können Dateien oder Ordner auch per **Drag & Drop** auf das **Dashboard** oder die **Datensatz**-Ansicht ziehen; es gelten dieselben Importregeln.
 
 ![Datei-Menü — Dateien importieren / Verzeichnis importieren](shots/macos/ImportFiles_Menu.png)
 
@@ -42,7 +44,7 @@ Eine Datei wird nur akzeptiert, wenn alles zutrifft:
 4. Geschützte Identität (PHI) kann erfolgreich erfasst werden.
 5. Sie wurde noch nicht in dieses Projekt importiert.
 
-Wenn eine [Patienten-Nachschlagetabelle](../05-create-project/index.md#patient-lookup-table) erforderlich ist, muss die PHI-Patienten-ID auch einem Eintrag entsprechen — sonst landet die Datei in Quarantäne als **Lookup_Miss**.
+Wenn eine [Patienten-Nachschlagetabelle](../05-create-project/anonymizer-script.md#patient-lookup-table) erforderlich ist, muss die PHI-Patienten-ID auch einem Eintrag entsprechen — sonst landet die Datei in Quarantäne als **Lookup_Miss**.
 
 ### 4. `davidson_cxr` importieren (Einzelstudien-Demo)
 
