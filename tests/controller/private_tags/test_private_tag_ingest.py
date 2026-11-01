@@ -7,7 +7,7 @@ from anonymizer.controller.anonymizer import AnonymizerController
 from anonymizer.controller.dates import apply_day_delta, resolve_date_delta
 from anonymizer.controller.private_tags import PrivateTagAction
 from anonymizer.controller.project import ProjectController
-from anonymizer.model.project import RETAIN_OPTIONS
+from anonymizer.view.settings.deidentification_options_dialog import RETAIN_OPTIONS
 from anonymizer.utils.dicom import DeidMethodCode
 from tests.controller.dicom.support.test_files import ct_small_filename
 from tests.controller.dicom.support.test_nodes import LocalSCU

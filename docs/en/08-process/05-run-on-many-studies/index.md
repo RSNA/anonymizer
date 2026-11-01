@@ -39,7 +39,7 @@ Process a cohort for burned-in text, Harmonize, and/or face blur with progress a
 
 ## Order of work
 
-For each series, selected tools run in a stable order (pixel PHI → Harmonize → face blur) so memory use stays predictable.
+For each series, selected tools run in a stable order (Embedded PHI → Harmonize → face blur) so memory use stays predictable. Embedded PHI runs Pixel (OCR), Metadata (NER → Clean Descriptors), and Reports (NER → Clean Structured Content) when that feature is selected. Headless `AiBatchConfig.json` mirrors the same feature sections — see [Run headless](../../10-headless/index.md).
 
 ## During the run
 

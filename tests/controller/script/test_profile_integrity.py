@@ -23,7 +23,7 @@ from anonymizer.controller.script.retain_option_tags import (
     patient_age_tag,
     tags_in_script,
 )
-from anonymizer.model.project import BASIC_OPTIONS, RETAIN_OPTIONS
+from anonymizer.view.settings.deidentification_options_dialog import BASIC_OPTIONS, RETAIN_OPTIONS
 from anonymizer.utils.dicom import DeidMethodCode
 
 _DEFAULT = (
@@ -163,6 +163,7 @@ def test_retain_preset_public_delta_includes_patient_chars() -> None:
         DeidMethodCode.FULL_DATES,
         DeidMethodCode.MODIFIED_DATES,
         DeidMethodCode.RETAIN_UIDS,
+        DeidMethodCode.TCIA_RESEARCH,
     ],
 )
 def test_infer_round_trip_option(option: DeidMethodCode) -> None:

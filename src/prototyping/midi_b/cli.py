@@ -3,6 +3,7 @@
 import argparse
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -22,6 +23,35 @@ from prototyping.pseudo_phi_deid.pipeline.run import RunConfig
 
 logger = logging.getLogger("midi_b")
 
+# Same install root the GUI chdirs into so relative assets/ai/... paths resolve.
+_ANONYMIZER_INSTALL_DIR = Path(__file__).resolve().parents[2] / "anonymizer"
+
+
+def _ensure_anonymizer_cwd() -> None:
+    """Match product main: OpenMed / OCR weights live under install_dir/assets."""
+    install = _ANONYMIZER_INSTALL_DIR.resolve()
+    if Path.cwd().resolve() != install:
+        os.chdir(install)
+        logger.info("cwd → %s (Embedded PHI assets)", install)
+
+
+def _log_ner_status_once(*, use_openmed: bool) -> None:
+    """One-line OpenMed readiness before a long run (no per-instance spam)."""
+    if not use_openmed:
+        return
+    from anonymizer.controller.ai.embedded_phi.ner.cache import (
+        MODEL_DIR,
+        probe_ner_models,
+    )
+
+    status, detail = probe_ner_models()
+    logger.info(
+        "OpenMed NER %s (%s) cache=%s",
+        status.value,
+        detail,
+        Path(MODEL_DIR).resolve(),
+    )
+
 
 def _setup(verbose: bool) -> None:
     logging.basicConfig(
@@ -29,15 +59,25 @@ def _setup(verbose: bool) -> None:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     if not verbose:
+        # Progress stays on midi_b.*; quiet per-instance product / HF noise.
         for name in (
             "anonymizer",
-            "anonymizer.controller.anonymizer",
-            "anonymizer.model.anonymizer",
-            "anonymizer.controller.ai.embedded_phi.ner.engine",
+            "anonymizer.controller",
+            "anonymizer.model",
+            "prototyping.pseudo_phi_deid",
+            "prototyping.pseudo_phi_deid.pipeline.metadata_ner",
+            "transformers",
+            "huggingface_hub",
+            "torch",
+            "urllib3",
+            "filelock",
             "pydicom",
         ):
             logging.getLogger(name).setLevel(logging.WARNING)
         logging.getLogger("pydicom").setLevel(logging.ERROR)
+        logging.getLogger("anonymizer.controller.ai.embedded_phi.ner.engine").setLevel(
+            logging.ERROR
+        )
 
 
 def _parse_patients(raw: str | None) -> list[str] | None:
@@ -79,6 +119,7 @@ def _resolve_run_out(args: argparse.Namespace) -> Path:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
+    _ensure_anonymizer_cwd()
     synthetic, answer_db, _ = split_paths(args.split)
     if args.synthetic_root:
         synthetic = Path(args.synthetic_root)
@@ -100,6 +141,17 @@ def cmd_run(args: argparse.Namespace) -> int:
         args.mode,
         script_path=Path(args.script) if args.script else None,
     )
+    _log_ner_status_once(use_openmed=bool(config.use_openmed))
+    if config.use_openmed:
+        from anonymizer.controller.ai.embedded_phi.ner.cache import ner_ready
+
+        if not ner_ready():
+            logger.error(
+                "OpenMed weights not ready under %s — download via AI Features "
+                "or run from the anonymizer install tree",
+                (_ANONYMIZER_INSTALL_DIR / "assets/ai/embedded_phi/model").resolve(),
+            )
+            return 1
     result = run_instances(instances, out, config)
     logger.info(
         "candidates=%s uids=%s patids=%s n=%d",

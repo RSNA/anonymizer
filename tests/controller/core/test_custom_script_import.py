@@ -16,7 +16,8 @@ from anonymizer.controller.script.document import (
     validate_document,
     write_script_rules,
 )
-from anonymizer.model.project import BASIC_OPTIONS, RETAIN_OPTIONS, ProjectModel
+from anonymizer.model.project import ProjectModel
+from anonymizer.view.settings.deidentification_options_dialog import BASIC_OPTIONS, RETAIN_OPTIONS
 from anonymizer.utils.dicom import DeidMethodCode
 from anonymizer.controller.script.options import infer_options_from_script
 

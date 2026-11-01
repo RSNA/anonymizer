@@ -5,10 +5,11 @@ Use headless mode on a **lab or server** when you do not need the desktop window
 ## Goal
 
 - Keep receiving DICOM into an existing project, and/or
+- Import a DICOM folder once, then exit, and/or
 - Run AI batch once on that project, then exit, and/or
 - Expose the **MCP** tool interface so an LLM client can drive projects, import, inventory, and imaging tools.
 
-## Receive and AI batch
+## Receive, folder import, and AI batch
 
 ### 1. Receive only (DICOM listener)
 
@@ -18,40 +19,80 @@ rsna-anonymizer -c path/to/ProjectModel.json
 
 The app loads the project and listens for incoming images using the project’s local server settings.
 
-### 2. AI batch once, then exit
+### 2. Import a DICOM folder once, then exit
+
+```bash
+rsna-anonymizer -c path/to/ProjectModel.json --import-dir /path/to/dicoms
+```
+
+Applies the project’s de-identification options, imports the folder (same ingest path as MCP **import_directory**), then exits. Optional mapping export for MIDI-style scoring:
+
+```bash
+rsna-anonymizer -c path/to/ProjectModel.json \
+  --import-dir /path/to/dicoms \
+  --export-mappings /path/to/mappings_out
+```
+
+Writes `uid_mapping.csv`, `patid_mapping.csv`, and `manifest.json` (includes the anonymized `images_dir`).
+
+### 3. AI batch once, then exit
 
 ```bash
 rsna-anonymizer -c path/to/ProjectModel.json --ai-batch path/to/AiBatchConfig.json --ai-batch-run
 ```
 
-Both `-c` / `--config` and `--ai-batch` are required with `--ai-batch-run`. Do **not** combine `-c` with `--mcp` (mutually exclusive).
+Both `-c` / `--config` and `--ai-batch` are required with `--ai-batch-run`. You can add `--export-mappings` after a successful batch. Do **not** combine `-c` with `--mcp` (mutually exclusive). **Import** and **AI batch** are separate one-shot phases (run import first, then AI batch).
+
+### MIDI-B evaluation
+
+The standalone harness `python -m eval.midi_b` runs those two phases as subprocesses, then the official CBIIT validator (see `src/eval/midi_b/README.md` in the repository).
 
 ## What each file is for
 
 | File | Purpose |
 | --- | --- |
 | **ProjectModel.json** | Site, project name, storage path, DICOM nodes, modalities, timeouts—the project definition. |
-| **AiBatchConfig.json** | Which AI tools to run, blur/OCR modes, study selection (`all` or a list), optional CT/MR resolution overrides. |
+| **AiBatchConfig.json** | Which AI Features to run (Embedded PHI / Harmonize / Face Blur), study selection (`all` or a list), optional CT/MR resolution overrides. |
 
 Example AI batch config (downloadable: [`AiBatchConfig.example.json`](AiBatchConfig.example.json)):
 
 ```json
 {
-  "algorithms": ["harmonize", "face_blur", "remove_pixel_phi"],
-  "blur_mode": "gaussian",
-  "pixel_phi_removal_mode": "blackout",
-  "ocr_remove_mode": "non_whitelisted",
-  "ocr_use_exclude_areas": false,
-  "include_brain_structures": false,
-  "prefer_description_mappings": true,
-  "ct_segmentation_mode": "3mm",
-  "mr_segmentation_mode": "3mm",
+  "features": {
+    "embedded_phi": {
+      "enabled": true,
+      "pixel": {
+        "enabled": true,
+        "removal_method": "blackout",
+        "remove_scope": "phi_only",
+        "use_exclude_areas": false
+      },
+      "metadata": { "enabled": true, "replace_mode": "blank" },
+      "reports": { "enabled": true, "replace_mode": "blank" }
+    },
+    "harmonize": {
+      "enabled": true,
+      "include_brain_structures": false,
+      "prefer_description_mappings": true
+    },
+    "face_blur": { "enabled": true, "blur_mode": "gaussian" }
+  },
   "studies": "all",
-  "skip_already_processed": true
+  "skip_already_processed": true,
+  "ct_segmentation_mode": "3mm",
+  "mr_segmentation_mode": "3mm"
 }
 ```
 
-OCR whitelists and exclude areas remain under the project `whitelists/` directory (same as the GUI). Set `ocr_use_exclude_areas` to true to apply saved `whitelists/{modality}.exclude.json` rectangles. `prefer_description_mappings` skips re-running anatomy AI when a saved description mapping already covers the original text (same idea as Prefer description mappings in the GUI batch dialog). `use_modality_whitelist` is still accepted and maps true to `non_whitelisted`, false to `all_text`.
+| GUI | JSON | Engine | De-id stamp |
+| --- | --- | --- | --- |
+| Embedded PHI → Pixel | `features.embedded_phi.pixel` | OCR (optional NER filter on boxes) | Clean Pixel Data |
+| Embedded PHI → Metadata | `features.embedded_phi.metadata` | NER on tag values | Clean Descriptors |
+| Embedded PHI → Reports | `features.embedded_phi.reports` | NER on SR/PDF text | Clean Structured Content |
+| Harmonize | `features.harmonize` | Harmonize | — |
+| Face Blur | `features.face_blur` | Face Blur | Clean Recognizable Visual Features |
+
+Pixel **Remove Scope** is `pixel.remove_scope` (`non_whitelisted` / `phi_only` / `all_text`). OCR whitelists and exclude areas remain under the project `whitelists/` directory (same as the GUI). Set `pixel.use_exclude_areas` to true to apply saved `whitelists/{modality}.exclude.json` rectangles. Harmonize `prefer_description_mappings` skips re-running anatomy AI when a saved description mapping already covers the original text.
 
 ## MCP server
 
@@ -175,7 +216,7 @@ Advertised tools (catalog order):
 | Inventory | `list_inventory` |
 | Process / preview | `remove_pixel_phi`, `harmonize_studies`, `export_series_preview` |
 
-There is **no** MCP tool for face blur; use the desktop app or headless `--ai-batch` with `"face_blur"` in `algorithms`. AWS Cognito for cloud Send stays desktop-only.
+There is **no** MCP tool for face blur; use the desktop app or headless `--ai-batch` with `features.face_blur.enabled`. AWS Cognito for cloud Send stays desktop-only.
 
 Full argument tables are generated into initialize instructions from the package catalog (`anonymizer/mcp/api/catalog.py`). Clinician wording for “how do I…?” comes from `anonymizer/mcp/assets/setup_help.json` via `anonymizer_usage`.
 

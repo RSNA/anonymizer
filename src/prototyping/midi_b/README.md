@@ -4,6 +4,19 @@ Same header pipeline as PseudoPHI (anonymizer script → TCIA private KB → Ope
 residual cleanup), scored with the official
 [CBIIT MIDI_validation_script](https://github.com/CBIIT/MIDI_validation_script).
 
+**Product options for validate:** Retain preset + Retain TCIA Research
+(`MIDI_B_OPTIONS` in [`options.py`](options.py)). **Retain Device Identity stays
+off** (serial / station removed); TCIA Research `@safe()`s manufacturer / model /
+software. The harness compiles those codes with the product `compile_script` path
+only — no post-compile keep exceptions.
+
+**TCIA Research operands:** built from this Validation answer key into
+`anonymizer/controller/script/tcia_research_operands.json`. Regenerate with:
+
+```bash
+uv run --group midi-b python -m prototyping.midi_b.build_tcia_research_operands
+```
+
 **Data + run artifacts (external volume):** `/Volumes/MBOD.DX.LIFE/TCIA/MIDI-B`
 
 | Path | Role |

@@ -12,6 +12,8 @@ def _kwargs(**overrides):
         config=None,
         ai_batch=None,
         ai_batch_run=False,
+        import_dir=None,
+        export_mappings=None,
         mcp=None,
         logs_dir=None,
     )

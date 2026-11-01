@@ -4,24 +4,31 @@ import json
 
 from pydicom import Dataset
 
-from anonymizer.model.project import AT_INGEST, BASIC_OPTIONS, NOT_EXECUTED, RETAIN_OPTIONS
-from anonymizer.utils.dicom import DeidMethodCode, deid_method_meaning, record_deid_method_codes
+from anonymizer.utils.dicom import (
+    AT_INGEST,
+    NOT_EXECUTED,
+    DeidMethodCode,
+    deid_method_meaning,
+    record_deid_method_codes,
+)
+from anonymizer.view.settings.deidentification_options_dialog import BASIC_OPTIONS, RETAIN_OPTIONS
 
 
 def test_every_member_is_int_with_meaning() -> None:
-    """Each CID 7050 member is an int code with an English meaning."""
-    assert len(DeidMethodCode) == 13
+    """Each DeidMethodCode member is an int code with an English meaning."""
+    assert len(DeidMethodCode) == 14
     for code in DeidMethodCode:
         assert type(code.value) is int
         assert deid_method_meaning(code)
 
 
 def test_meaning_matches_cid_7050() -> None:
-    """Spot-check exact CID 7050 code meanings."""
+    """Spot-check exact CID 7050 code meanings and the TCIA house meaning."""
     assert deid_method_meaning(DeidMethodCode.BASIC) == "Basic Application Confidentiality Profile"
     assert deid_method_meaning(DeidMethodCode.SAFE_PRIVATE) == "Retain Safe Private Option"
     assert deid_method_meaning(DeidMethodCode.INSTITUTION_IDENTITY) == "Retain Institution Identity Option"
     assert deid_method_meaning(DeidMethodCode.RETAIN_UIDS) == "Retain UIDs Option"
+    assert deid_method_meaning(DeidMethodCode.TCIA_RESEARCH) == "Retain TCIA Research Attributes"
 
 
 def test_presets_and_ingest_split() -> None:
@@ -29,6 +36,7 @@ def test_presets_and_ingest_split() -> None:
     assert sorted(int(code) for code in BASIC_OPTIONS) == [113100]
     assert sorted(int(code) for code in RETAIN_OPTIONS) == [113100, 113107, 113108, 113111]
     assert DeidMethodCode.BASIC in AT_INGEST
+    assert DeidMethodCode.TCIA_RESEARCH in AT_INGEST
     assert DeidMethodCode.CLEAN_PIXEL_DATA not in AT_INGEST
     assert sorted(int(code) for code in NOT_EXECUTED) == [113103]
     assert not (AT_INGEST & NOT_EXECUTED)
@@ -53,3 +61,17 @@ def test_record_creates_sequence_and_skips_duplicates() -> None:
     assert [str(item.CodeValue) for item in items] == ["113100", "113111", "113101"]
     assert all(str(item.CodingSchemeDesignator) == "DCM" for item in items)
     assert str(items[1].CodeMeaning) == "Retain Safe Private Option"
+
+
+def test_record_tcia_research_uses_house_coding_scheme() -> None:
+    """TCIA Research stamps with 99RSNA, not DCM."""
+    ds = Dataset()
+    present = record_deid_method_codes(
+        ds, [DeidMethodCode.BASIC, DeidMethodCode.TCIA_RESEARCH]
+    )
+    assert present == (113100, 990054)
+    items = ds.DeidentificationMethodCodeSequence
+    assert str(items[0].CodingSchemeDesignator) == "DCM"
+    assert str(items[1].CodeValue) == "990054"
+    assert str(items[1].CodingSchemeDesignator) == "99RSNA"
+    assert str(items[1].CodeMeaning) == "Retain TCIA Research Attributes"

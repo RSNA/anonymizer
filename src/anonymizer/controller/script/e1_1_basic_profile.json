@@ -1,0 +1,2491 @@
+{
+  "source": "DICOM PS3.15 Table E.1-1",
+  "edition_note": "Basic Profile column from innolitics/dicom-standard confidentiality_profile_attributes.json (aligned with project 2025e dict assets)",
+  "n_attributes": 621,
+  "attributes": {
+    "00001000": {
+      "name": "Affected SOP Instance UID",
+      "basic": "X"
+    },
+    "00001001": {
+      "name": "Requested SOP Instance UID",
+      "basic": "U"
+    },
+    "00020003": {
+      "name": "Media Storage SOP Instance UID",
+      "basic": "U"
+    },
+    "00041511": {
+      "name": "Referenced SOP Instance UID in File",
+      "basic": "U"
+    },
+    "00080012": {
+      "name": "Instance Creation Date",
+      "basic": "X/D"
+    },
+    "00080013": {
+      "name": "Instance Creation Time",
+      "basic": "X/Z/D"
+    },
+    "00080014": {
+      "name": "Instance Creator UID",
+      "basic": "U"
+    },
+    "00080015": {
+      "name": "Instance Coercion DateTime",
+      "basic": "X"
+    },
+    "00080017": {
+      "name": "Acquisition UID",
+      "basic": "U"
+    },
+    "00080018": {
+      "name": "SOP Instance UID",
+      "basic": "U"
+    },
+    "00080019": {
+      "name": "Pyramid UID",
+      "basic": "U"
+    },
+    "00080020": {
+      "name": "Study Date",
+      "basic": "Z"
+    },
+    "00080021": {
+      "name": "Series Date",
+      "basic": "X/D"
+    },
+    "00080022": {
+      "name": "Acquisition Date",
+      "basic": "X/Z"
+    },
+    "00080023": {
+      "name": "Content Date",
+      "basic": "Z/D"
+    },
+    "00080024": {
+      "name": "Overlay Date",
+      "basic": "X"
+    },
+    "00080025": {
+      "name": "Curve Date",
+      "basic": "X"
+    },
+    "0008002A": {
+      "name": "Acquisition DateTime",
+      "basic": "X/Z/D"
+    },
+    "00080030": {
+      "name": "Study Time",
+      "basic": "Z"
+    },
+    "00080031": {
+      "name": "Series Time",
+      "basic": "X/D"
+    },
+    "00080032": {
+      "name": "Acquisition Time",
+      "basic": "X/Z"
+    },
+    "00080033": {
+      "name": "Content Time",
+      "basic": "Z/D"
+    },
+    "00080034": {
+      "name": "Overlay Time",
+      "basic": "X"
+    },
+    "00080035": {
+      "name": "Curve Time",
+      "basic": "X"
+    },
+    "00080050": {
+      "name": "Accession Number",
+      "basic": "Z"
+    },
+    "00080054": {
+      "name": "Retrieve AE Title",
+      "basic": "X"
+    },
+    "00080055": {
+      "name": "Station AE Title",
+      "basic": "X"
+    },
+    "00080058": {
+      "name": "Failed SOP Instance UID List",
+      "basic": "U"
+    },
+    "00080080": {
+      "name": "Institution Name",
+      "basic": "X/Z/D"
+    },
+    "00080081": {
+      "name": "Institution Address",
+      "basic": "X"
+    },
+    "00080082": {
+      "name": "Institution Code Sequence",
+      "basic": "X/Z/D"
+    },
+    "00080090": {
+      "name": "Referring Physician's Name",
+      "basic": "Z"
+    },
+    "00080092": {
+      "name": "Referring Physician's Address",
+      "basic": "X"
+    },
+    "00080094": {
+      "name": "Referring Physician's Telephone Numbers",
+      "basic": "X"
+    },
+    "00080096": {
+      "name": "Referring Physician Identification Sequence",
+      "basic": "X"
+    },
+    "0008009C": {
+      "name": "Consulting Physician's Name",
+      "basic": "Z"
+    },
+    "0008009D": {
+      "name": "Consulting Physician Identification Sequence",
+      "basic": "X"
+    },
+    "00080106": {
+      "name": "Context Group Version",
+      "basic": "D"
+    },
+    "00080107": {
+      "name": "Context Group Local Version",
+      "basic": "D"
+    },
+    "00080201": {
+      "name": "Timezone Offset From UTC",
+      "basic": "X"
+    },
+    "00081000": {
+      "name": "Network ID",
+      "basic": "X"
+    },
+    "00081010": {
+      "name": "Station Name",
+      "basic": "X/Z/D"
+    },
+    "00081030": {
+      "name": "Study Description",
+      "basic": "X"
+    },
+    "0008103E": {
+      "name": "Series Description",
+      "basic": "X"
+    },
+    "00081040": {
+      "name": "Institutional Department Name",
+      "basic": "X"
+    },
+    "00081041": {
+      "name": "Institutional Department Type Code Sequence",
+      "basic": "X"
+    },
+    "00081048": {
+      "name": "Physician(s) of Record",
+      "basic": "X"
+    },
+    "00081049": {
+      "name": "Physician(s) of Record Identification Sequence",
+      "basic": "X"
+    },
+    "00081050": {
+      "name": "Performing Physician's Name",
+      "basic": "X"
+    },
+    "00081052": {
+      "name": "Performing Physician Identification Sequence",
+      "basic": "X"
+    },
+    "00081060": {
+      "name": "Name of Physician(s) Reading Study",
+      "basic": "X"
+    },
+    "00081062": {
+      "name": "Physician(s) Reading Study Identification Sequence",
+      "basic": "X"
+    },
+    "00081070": {
+      "name": "Operators' Name",
+      "basic": "X/Z/D"
+    },
+    "00081072": {
+      "name": "Operator Identification Sequence",
+      "basic": "X/D"
+    },
+    "00081080": {
+      "name": "Admitting Diagnoses Description",
+      "basic": "X"
+    },
+    "00081084": {
+      "name": "Admitting Diagnoses Code Sequence",
+      "basic": "X"
+    },
+    "00081088": {
+      "name": "Pyramid Description",
+      "basic": "X"
+    },
+    "00081110": {
+      "name": "Referenced Study Sequence",
+      "basic": "X/Z"
+    },
+    "00081111": {
+      "name": "Referenced Performed Procedure Step Sequence",
+      "basic": "X/Z/D"
+    },
+    "00081120": {
+      "name": "Referenced Patient Sequence",
+      "basic": "X"
+    },
+    "00081140": {
+      "name": "Referenced Image Sequence",
+      "basic": "X/Z/U*"
+    },
+    "00081155": {
+      "name": "Referenced SOP Instance UID",
+      "basic": "U"
+    },
+    "00081195": {
+      "name": "Transaction UID",
+      "basic": "U"
+    },
+    "00082111": {
+      "name": "Derivation Description",
+      "basic": "X"
+    },
+    "00082112": {
+      "name": "Source Image Sequence",
+      "basic": "X/Z/U*"
+    },
+    "00083010": {
+      "name": "Irradiation Event UID",
+      "basic": "U"
+    },
+    "00084000": {
+      "name": "Identifying Comments",
+      "basic": "X"
+    },
+    "00100010": {
+      "name": "Patient's Name",
+      "basic": "Z"
+    },
+    "00100020": {
+      "name": "Patient ID",
+      "basic": "Z/D"
+    },
+    "00100021": {
+      "name": "Issuer of Patient ID",
+      "basic": "X"
+    },
+    "00100030": {
+      "name": "Patient's Birth Date",
+      "basic": "Z"
+    },
+    "00100032": {
+      "name": "Patient's Birth Time",
+      "basic": "X"
+    },
+    "00100040": {
+      "name": "Patient's Sex",
+      "basic": "Z"
+    },
+    "00100050": {
+      "name": "Patient's Insurance Plan Code Sequence",
+      "basic": "X"
+    },
+    "00100101": {
+      "name": "Patient's Primary Language Code Sequence",
+      "basic": "X"
+    },
+    "00100102": {
+      "name": "Patient's Primary Language Modifier Code Sequence",
+      "basic": "X"
+    },
+    "00101000": {
+      "name": "Other Patient IDs",
+      "basic": "X"
+    },
+    "00101001": {
+      "name": "Other Patient Names",
+      "basic": "X"
+    },
+    "00101002": {
+      "name": "Other Patient IDs Sequence",
+      "basic": "X"
+    },
+    "00101005": {
+      "name": "Patient's Birth Name",
+      "basic": "X"
+    },
+    "00101010": {
+      "name": "Patient's Age",
+      "basic": "X"
+    },
+    "00101020": {
+      "name": "Patient's Size",
+      "basic": "X"
+    },
+    "00101030": {
+      "name": "Patient's Weight",
+      "basic": "X"
+    },
+    "00101040": {
+      "name": "Patient's Address",
+      "basic": "X"
+    },
+    "00101050": {
+      "name": "Insurance Plan Identification",
+      "basic": "X"
+    },
+    "00101060": {
+      "name": "Patient's Mother's Birth Name",
+      "basic": "X"
+    },
+    "00101080": {
+      "name": "Military Rank",
+      "basic": "X"
+    },
+    "00101081": {
+      "name": "Branch of Service",
+      "basic": "X"
+    },
+    "00101090": {
+      "name": "Medical Record Locator",
+      "basic": "X"
+    },
+    "00101100": {
+      "name": "Referenced Patient Photo Sequence",
+      "basic": "X"
+    },
+    "00102000": {
+      "name": "Medical Alerts",
+      "basic": "X"
+    },
+    "00102110": {
+      "name": "Allergies",
+      "basic": "X"
+    },
+    "00102150": {
+      "name": "Country of Residence",
+      "basic": "X"
+    },
+    "00102152": {
+      "name": "Region of Residence",
+      "basic": "X"
+    },
+    "00102154": {
+      "name": "Patient's Telephone Numbers",
+      "basic": "X"
+    },
+    "00102155": {
+      "name": "Patient's Telecom Information",
+      "basic": "X"
+    },
+    "00102160": {
+      "name": "Ethnic Group",
+      "basic": "X"
+    },
+    "00102180": {
+      "name": "Occupation",
+      "basic": "X"
+    },
+    "001021A0": {
+      "name": "Smoking Status",
+      "basic": "X"
+    },
+    "001021B0": {
+      "name": "Additional Patient History",
+      "basic": "X"
+    },
+    "001021C0": {
+      "name": "Pregnancy Status",
+      "basic": "X"
+    },
+    "001021D0": {
+      "name": "Last Menstrual Date",
+      "basic": "X"
+    },
+    "001021F0": {
+      "name": "Patient's Religious Preference",
+      "basic": "X"
+    },
+    "00102203": {
+      "name": "Patient's Sex Neutered",
+      "basic": "X/Z"
+    },
+    "00102297": {
+      "name": "Responsible Person",
+      "basic": "X"
+    },
+    "00102299": {
+      "name": "Responsible Organization",
+      "basic": "X"
+    },
+    "00104000": {
+      "name": "Patient Comments",
+      "basic": "X"
+    },
+    "00120010": {
+      "name": "Clinical Trial Sponsor Name",
+      "basic": "D"
+    },
+    "00120020": {
+      "name": "Clinical Trial Protocol ID",
+      "basic": "D"
+    },
+    "00120021": {
+      "name": "Clinical Trial Protocol Name",
+      "basic": "Z"
+    },
+    "00120022": {
+      "name": "Issuer of Clinical Trial Protocol ID",
+      "basic": "X"
+    },
+    "00120023": {
+      "name": "Other Clinical Trial Protocol IDs Sequence",
+      "basic": "X"
+    },
+    "00120030": {
+      "name": "Clinical Trial Site ID",
+      "basic": "Z"
+    },
+    "00120031": {
+      "name": "Clinical Trial Site Name",
+      "basic": "Z"
+    },
+    "00120032": {
+      "name": "Issuer of Clinical Trial Site ID",
+      "basic": "X"
+    },
+    "00120040": {
+      "name": "Clinical Trial Subject ID",
+      "basic": "D"
+    },
+    "00120041": {
+      "name": "Issuer of Clinical Trial Subject ID",
+      "basic": "X"
+    },
+    "00120042": {
+      "name": "Clinical Trial Subject Reading ID",
+      "basic": "D"
+    },
+    "00120043": {
+      "name": "Issuer of Clinical Trial Subject Reading ID",
+      "basic": "X"
+    },
+    "00120050": {
+      "name": "Clinical Trial Time Point ID",
+      "basic": "Z"
+    },
+    "00120051": {
+      "name": "Clinical Trial Time Point Description",
+      "basic": "X"
+    },
+    "00120055": {
+      "name": "Issuer of Clinical Trial Time Point ID",
+      "basic": "X"
+    },
+    "00120060": {
+      "name": "Clinical Trial Coordinating Center Name",
+      "basic": "Z"
+    },
+    "00120071": {
+      "name": "Clinical Trial Series ID",
+      "basic": "X"
+    },
+    "00120072": {
+      "name": "Clinical Trial Series Description",
+      "basic": "X"
+    },
+    "00120073": {
+      "name": "Issuer of Clinical Trial Series ID",
+      "basic": "X"
+    },
+    "00120081": {
+      "name": "Clinical Trial Protocol Ethics Committee Name",
+      "basic": "D"
+    },
+    "00120082": {
+      "name": "Clinical Trial Protocol Ethics Committee Approval Number",
+      "basic": "X"
+    },
+    "00120086": {
+      "name": "Ethics Committee Approval Effectiveness Start Date",
+      "basic": "X"
+    },
+    "00120087": {
+      "name": "Ethics Committee Approval Effectiveness End Date",
+      "basic": "X"
+    },
+    "0014407C": {
+      "name": "Calibration Time",
+      "basic": "X"
+    },
+    "0014407E": {
+      "name": "Calibration Date",
+      "basic": "X"
+    },
+    "0016002B": {
+      "name": "Maker Note",
+      "basic": "X"
+    },
+    "0016004B": {
+      "name": "Device Setting Description",
+      "basic": "X"
+    },
+    "0016004D": {
+      "name": "Camera Owner Name",
+      "basic": "X"
+    },
+    "0016004E": {
+      "name": "Lens Specification",
+      "basic": "X"
+    },
+    "0016004F": {
+      "name": "Lens Make",
+      "basic": "X"
+    },
+    "00160050": {
+      "name": "Lens Model",
+      "basic": "X"
+    },
+    "00160051": {
+      "name": "Lens Serial Number",
+      "basic": "X"
+    },
+    "00160070": {
+      "name": "GPS Version ID",
+      "basic": "X"
+    },
+    "00160071": {
+      "name": "GPS Latitude Ref",
+      "basic": "X"
+    },
+    "00160072": {
+      "name": "GPS Latitude",
+      "basic": "X"
+    },
+    "00160073": {
+      "name": "GPS Longitude Ref",
+      "basic": "X"
+    },
+    "00160074": {
+      "name": "GPS Longitude",
+      "basic": "X"
+    },
+    "00160075": {
+      "name": "GPS Altitude Ref",
+      "basic": "X"
+    },
+    "00160076": {
+      "name": "GPS Altitude",
+      "basic": "X"
+    },
+    "00160077": {
+      "name": "GPS Time Stamp",
+      "basic": "X"
+    },
+    "00160078": {
+      "name": "GPS Satellites",
+      "basic": "X"
+    },
+    "00160079": {
+      "name": "GPS Status",
+      "basic": "X"
+    },
+    "0016007A": {
+      "name": "GPS Measure Mode",
+      "basic": "X"
+    },
+    "0016007B": {
+      "name": "GPS DOP",
+      "basic": "X"
+    },
+    "0016007C": {
+      "name": "GPS Speed Ref",
+      "basic": "X"
+    },
+    "0016007D": {
+      "name": "GPS Speed",
+      "basic": "X"
+    },
+    "0016007E": {
+      "name": "GPS Track Ref",
+      "basic": "X"
+    },
+    "0016007F": {
+      "name": "GPS Track",
+      "basic": "X"
+    },
+    "00160080": {
+      "name": "GPS Img Direction Ref",
+      "basic": "X"
+    },
+    "00160081": {
+      "name": "GPS Img Direction",
+      "basic": "X"
+    },
+    "00160082": {
+      "name": "GPS Map Datum",
+      "basic": "X"
+    },
+    "00160083": {
+      "name": "GPS Dest Latitude Ref",
+      "basic": "X"
+    },
+    "00160084": {
+      "name": "GPS Dest Latitude",
+      "basic": "X"
+    },
+    "00160085": {
+      "name": "GPS Dest Longitude Ref",
+      "basic": "X"
+    },
+    "00160086": {
+      "name": "GPS Dest Longitude",
+      "basic": "X"
+    },
+    "00160087": {
+      "name": "GPS Dest Bearing Ref",
+      "basic": "X"
+    },
+    "00160088": {
+      "name": "GPS Dest Bearing",
+      "basic": "X"
+    },
+    "00160089": {
+      "name": "GPS Dest Distance Ref",
+      "basic": "X"
+    },
+    "0016008A": {
+      "name": "GPS Dest Distance",
+      "basic": "X"
+    },
+    "0016008B": {
+      "name": "GPS Processing Method",
+      "basic": "X"
+    },
+    "0016008C": {
+      "name": "GPS Area Information",
+      "basic": "X"
+    },
+    "0016008D": {
+      "name": "GPS Date Stamp",
+      "basic": "X"
+    },
+    "0016008E": {
+      "name": "GPS Differential",
+      "basic": "X"
+    },
+    "00180010": {
+      "name": "Contrast/Bolus Agent",
+      "basic": "Z/D"
+    },
+    "00180027": {
+      "name": "Intervention Drug Stop Time",
+      "basic": "X"
+    },
+    "00180035": {
+      "name": "Intervention Drug Start Time",
+      "basic": "X"
+    },
+    "00181000": {
+      "name": "Device Serial Number",
+      "basic": "X/Z/D"
+    },
+    "00181002": {
+      "name": "Device UID",
+      "basic": "U"
+    },
+    "00181004": {
+      "name": "Plate ID",
+      "basic": "X"
+    },
+    "00181005": {
+      "name": "Generator ID",
+      "basic": "X"
+    },
+    "00181007": {
+      "name": "Cassette ID",
+      "basic": "X"
+    },
+    "00181008": {
+      "name": "Gantry ID",
+      "basic": "X"
+    },
+    "00181009": {
+      "name": "Unique Device Identifier",
+      "basic": "X"
+    },
+    "0018100A": {
+      "name": "UDI Sequence",
+      "basic": "X"
+    },
+    "0018100B": {
+      "name": "Manufacturer's Device Class UID",
+      "basic": "U"
+    },
+    "00181012": {
+      "name": "Date of Secondary Capture",
+      "basic": "X"
+    },
+    "00181014": {
+      "name": "Time of Secondary Capture",
+      "basic": "X"
+    },
+    "00181030": {
+      "name": "Protocol Name",
+      "basic": "X/D"
+    },
+    "00181042": {
+      "name": "Contrast/Bolus Start Time",
+      "basic": "X"
+    },
+    "00181043": {
+      "name": "Contrast/Bolus Stop Time",
+      "basic": "X"
+    },
+    "00181072": {
+      "name": "Radiopharmaceutical Start Time",
+      "basic": "X"
+    },
+    "00181073": {
+      "name": "Radiopharmaceutical Stop Time",
+      "basic": "X"
+    },
+    "00181078": {
+      "name": "Radiopharmaceutical Start DateTime",
+      "basic": "X"
+    },
+    "00181079": {
+      "name": "Radiopharmaceutical Stop DateTime",
+      "basic": "X"
+    },
+    "001811BB": {
+      "name": "Acquisition Field Of View Label",
+      "basic": "D"
+    },
+    "00181200": {
+      "name": "Date of Last Calibration",
+      "basic": "X"
+    },
+    "00181201": {
+      "name": "Time of Last Calibration",
+      "basic": "X"
+    },
+    "00181202": {
+      "name": "DateTime of Last Calibration",
+      "basic": "X"
+    },
+    "00181203": {
+      "name": "Calibration DateTime",
+      "basic": "Z"
+    },
+    "00181204": {
+      "name": "Date of Manufacture",
+      "basic": "X"
+    },
+    "00181205": {
+      "name": "Date of Installation",
+      "basic": "X"
+    },
+    "00181400": {
+      "name": "Acquisition Device Processing Description",
+      "basic": "X/D"
+    },
+    "00182042": {
+      "name": "Target UID",
+      "basic": "U"
+    },
+    "00184000": {
+      "name": "Acquisition Comments",
+      "basic": "X"
+    },
+    "00185011": {
+      "name": "Transducer Identification Sequence",
+      "basic": "X"
+    },
+    "0018700A": {
+      "name": "Detector ID",
+      "basic": "X/D"
+    },
+    "0018700C": {
+      "name": "Date of Last Detector Calibration",
+      "basic": "X/D"
+    },
+    "0018700E": {
+      "name": "Time of Last Detector Calibration",
+      "basic": "X/D"
+    },
+    "00189074": {
+      "name": "Frame Acquisition DateTime",
+      "basic": "D"
+    },
+    "00189151": {
+      "name": "Frame Reference DateTime",
+      "basic": "D"
+    },
+    "00189185": {
+      "name": "Respiratory Motion Compensation Technique Description",
+      "basic": "X"
+    },
+    "00189367": {
+      "name": "X-Ray Source ID",
+      "basic": "D"
+    },
+    "00189369": {
+      "name": "Source Start DateTime",
+      "basic": "D"
+    },
+    "0018936A": {
+      "name": "Source End DateTime",
+      "basic": "D"
+    },
+    "00189371": {
+      "name": "X-Ray Detector ID",
+      "basic": "D"
+    },
+    "00189373": {
+      "name": "X-Ray Detector Label",
+      "basic": "X"
+    },
+    "0018937B": {
+      "name": "Multi-energy Acquisition Description",
+      "basic": "X"
+    },
+    "0018937F": {
+      "name": "Decomposition Description",
+      "basic": "X"
+    },
+    "00189424": {
+      "name": "Acquisition Protocol Description",
+      "basic": "X"
+    },
+    "00189516": {
+      "name": "Start Acquisition DateTime",
+      "basic": "X/D"
+    },
+    "00189517": {
+      "name": "End Acquisition DateTime",
+      "basic": "X/D"
+    },
+    "00189623": {
+      "name": "Functional Sync Pulse",
+      "basic": "D"
+    },
+    "00189701": {
+      "name": "Decay Correction DateTime",
+      "basic": "D"
+    },
+    "00189804": {
+      "name": "Exclusion Start DateTime",
+      "basic": "D"
+    },
+    "00189919": {
+      "name": "Instruction Performed DateTime",
+      "basic": "Z/D"
+    },
+    "00189937": {
+      "name": "Requested Series Description",
+      "basic": "X"
+    },
+    "0018A002": {
+      "name": "Contribution DateTime",
+      "basic": "X"
+    },
+    "0018A003": {
+      "name": "Contribution Description",
+      "basic": "X"
+    },
+    "0020000D": {
+      "name": "Study Instance UID",
+      "basic": "U"
+    },
+    "0020000E": {
+      "name": "Series Instance UID",
+      "basic": "U"
+    },
+    "00200010": {
+      "name": "Study ID",
+      "basic": "Z"
+    },
+    "00200027": {
+      "name": "Pyramid Label",
+      "basic": "X"
+    },
+    "00200052": {
+      "name": "Frame of Reference UID",
+      "basic": "U"
+    },
+    "00200200": {
+      "name": "Synchronization Frame of Reference UID",
+      "basic": "U"
+    },
+    "00203401": {
+      "name": "Modifying Device ID",
+      "basic": "X"
+    },
+    "00203403": {
+      "name": "Modified Image Date",
+      "basic": "X"
+    },
+    "00203405": {
+      "name": "Modified Image Time",
+      "basic": "X"
+    },
+    "00203406": {
+      "name": "Modified Image Description",
+      "basic": "X"
+    },
+    "00204000": {
+      "name": "Image Comments",
+      "basic": "X"
+    },
+    "00209158": {
+      "name": "Frame Comments",
+      "basic": "X"
+    },
+    "00209161": {
+      "name": "Concatenation UID",
+      "basic": "U"
+    },
+    "00209164": {
+      "name": "Dimension Organization UID",
+      "basic": "U"
+    },
+    "00281199": {
+      "name": "Palette Color Lookup Table UID",
+      "basic": "U"
+    },
+    "00281214": {
+      "name": "Large Palette Color Lookup Table UID",
+      "basic": "U"
+    },
+    "00284000": {
+      "name": "Image Presentation Comments",
+      "basic": "X"
+    },
+    "00320012": {
+      "name": "Study ID Issuer",
+      "basic": "X"
+    },
+    "00320032": {
+      "name": "Study Verified Date",
+      "basic": "X"
+    },
+    "00320033": {
+      "name": "Study Verified Time",
+      "basic": "X"
+    },
+    "00320034": {
+      "name": "Study Read Date",
+      "basic": "X"
+    },
+    "00320035": {
+      "name": "Study Read Time",
+      "basic": "X"
+    },
+    "00321000": {
+      "name": "Scheduled Study Start Date",
+      "basic": "X"
+    },
+    "00321001": {
+      "name": "Scheduled Study Start Time",
+      "basic": "X"
+    },
+    "00321010": {
+      "name": "Scheduled Study Stop Date",
+      "basic": "X"
+    },
+    "00321011": {
+      "name": "Scheduled Study Stop Time",
+      "basic": "X"
+    },
+    "00321020": {
+      "name": "Scheduled Study Location",
+      "basic": "X"
+    },
+    "00321021": {
+      "name": "Scheduled Study Location AE Title",
+      "basic": "X"
+    },
+    "00321030": {
+      "name": "Reason for Study",
+      "basic": "X"
+    },
+    "00321032": {
+      "name": "Requesting Physician",
+      "basic": "X"
+    },
+    "00321033": {
+      "name": "Requesting Service",
+      "basic": "X"
+    },
+    "00321040": {
+      "name": "Study Arrival Date",
+      "basic": "X"
+    },
+    "00321041": {
+      "name": "Study Arrival Time",
+      "basic": "X"
+    },
+    "00321050": {
+      "name": "Study Completion Date",
+      "basic": "X"
+    },
+    "00321051": {
+      "name": "Study Completion Time",
+      "basic": "X"
+    },
+    "00321060": {
+      "name": "Requested Procedure Description",
+      "basic": "X/Z"
+    },
+    "00321066": {
+      "name": "Reason for Visit",
+      "basic": "X"
+    },
+    "00321067": {
+      "name": "Reason for Visit Code Sequence",
+      "basic": "X"
+    },
+    "00321070": {
+      "name": "Requested Contrast Agent",
+      "basic": "X"
+    },
+    "00324000": {
+      "name": "Study Comments",
+      "basic": "X"
+    },
+    "00340001": {
+      "name": "Flow Identifier Sequence",
+      "basic": "D"
+    },
+    "00340002": {
+      "name": "Flow Identifier",
+      "basic": "D"
+    },
+    "00340005": {
+      "name": "Source Identifier",
+      "basic": "D"
+    },
+    "00340007": {
+      "name": "Frame Origin Timestamp",
+      "basic": "D"
+    },
+    "00380004": {
+      "name": "Referenced Patient Alias Sequence",
+      "basic": "X"
+    },
+    "00380010": {
+      "name": "Admission ID",
+      "basic": "X"
+    },
+    "00380011": {
+      "name": "Issuer of Admission ID",
+      "basic": "X"
+    },
+    "00380014": {
+      "name": "Issuer of Admission ID Sequence",
+      "basic": "X"
+    },
+    "0038001A": {
+      "name": "Scheduled Admission Date",
+      "basic": "X"
+    },
+    "0038001B": {
+      "name": "Scheduled Admission Time",
+      "basic": "X"
+    },
+    "0038001C": {
+      "name": "Scheduled Discharge Date",
+      "basic": "X"
+    },
+    "0038001D": {
+      "name": "Scheduled Discharge Time",
+      "basic": "X"
+    },
+    "0038001E": {
+      "name": "Scheduled Patient Institution Residence",
+      "basic": "X"
+    },
+    "00380020": {
+      "name": "Admitting Date",
+      "basic": "X"
+    },
+    "00380021": {
+      "name": "Admitting Time",
+      "basic": "X"
+    },
+    "00380030": {
+      "name": "Discharge Date",
+      "basic": "X"
+    },
+    "00380032": {
+      "name": "Discharge Time",
+      "basic": "X"
+    },
+    "00380040": {
+      "name": "Discharge Diagnosis Description",
+      "basic": "X"
+    },
+    "00380050": {
+      "name": "Special Needs",
+      "basic": "X"
+    },
+    "00380060": {
+      "name": "Service Episode ID",
+      "basic": "X"
+    },
+    "00380061": {
+      "name": "Issuer of Service Episode ID",
+      "basic": "X"
+    },
+    "00380062": {
+      "name": "Service Episode Description",
+      "basic": "X"
+    },
+    "00380064": {
+      "name": "Issuer of Service Episode ID Sequence",
+      "basic": "X"
+    },
+    "00380300": {
+      "name": "Current Patient Location",
+      "basic": "X"
+    },
+    "00380400": {
+      "name": "Patient's Institution Residence",
+      "basic": "X"
+    },
+    "00380500": {
+      "name": "Patient State",
+      "basic": "X"
+    },
+    "00384000": {
+      "name": "Visit Comments",
+      "basic": "X"
+    },
+    "003A0310": {
+      "name": "Multiplex Group UID",
+      "basic": "U"
+    },
+    "003A0314": {
+      "name": "Impedance Measurement DateTime",
+      "basic": "D"
+    },
+    "003A0329": {
+      "name": "Waveform Filter Description",
+      "basic": "X"
+    },
+    "003A032B": {
+      "name": "Filter Lookup Table Description",
+      "basic": "X"
+    },
+    "00400001": {
+      "name": "Scheduled Station AE Title",
+      "basic": "X"
+    },
+    "00400002": {
+      "name": "Scheduled Procedure Step Start Date",
+      "basic": "X"
+    },
+    "00400003": {
+      "name": "Scheduled Procedure Step Start Time",
+      "basic": "X"
+    },
+    "00400004": {
+      "name": "Scheduled Procedure Step End Date",
+      "basic": "X"
+    },
+    "00400005": {
+      "name": "Scheduled Procedure Step End Time",
+      "basic": "X"
+    },
+    "00400006": {
+      "name": "Scheduled Performing Physician's Name",
+      "basic": "X"
+    },
+    "00400007": {
+      "name": "Scheduled Procedure Step Description",
+      "basic": "X"
+    },
+    "00400009": {
+      "name": "Scheduled Procedure Step ID",
+      "basic": "X"
+    },
+    "0040000B": {
+      "name": "Scheduled Performing Physician Identification Sequence",
+      "basic": "X"
+    },
+    "00400010": {
+      "name": "Scheduled Station Name",
+      "basic": "X"
+    },
+    "00400011": {
+      "name": "Scheduled Procedure Step Location",
+      "basic": "X"
+    },
+    "00400012": {
+      "name": "Pre-Medication",
+      "basic": "X"
+    },
+    "00400241": {
+      "name": "Performed Station AE Title",
+      "basic": "X"
+    },
+    "00400242": {
+      "name": "Performed Station Name",
+      "basic": "X"
+    },
+    "00400243": {
+      "name": "Performed Location",
+      "basic": "X"
+    },
+    "00400244": {
+      "name": "Performed Procedure Step Start Date",
+      "basic": "X"
+    },
+    "00400245": {
+      "name": "Performed Procedure Step Start Time",
+      "basic": "X"
+    },
+    "00400250": {
+      "name": "Performed Procedure Step End Date",
+      "basic": "X"
+    },
+    "00400251": {
+      "name": "Performed Procedure Step End Time",
+      "basic": "X"
+    },
+    "00400253": {
+      "name": "Performed Procedure Step ID",
+      "basic": "X"
+    },
+    "00400254": {
+      "name": "Performed Procedure Step Description",
+      "basic": "X"
+    },
+    "00400275": {
+      "name": "Request Attributes Sequence",
+      "basic": "X"
+    },
+    "00400280": {
+      "name": "Comments on the Performed Procedure Step",
+      "basic": "X"
+    },
+    "00400310": {
+      "name": "Comments on Radiation Dose",
+      "basic": "X"
+    },
+    "0040050A": {
+      "name": "Specimen Accession Number",
+      "basic": "X"
+    },
+    "00400512": {
+      "name": "Container Identifier",
+      "basic": "D"
+    },
+    "00400513": {
+      "name": "Issuer of the Container Identifier Sequence",
+      "basic": "Z"
+    },
+    "0040051A": {
+      "name": "Container Description",
+      "basic": "X"
+    },
+    "00400551": {
+      "name": "Specimen Identifier",
+      "basic": "D"
+    },
+    "00400554": {
+      "name": "Specimen UID",
+      "basic": "U"
+    },
+    "00400555": {
+      "name": "Acquisition Context Sequence",
+      "basic": "X/Z"
+    },
+    "00400562": {
+      "name": "Issuer of the Specimen Identifier Sequence",
+      "basic": "Z"
+    },
+    "00400600": {
+      "name": "Specimen Short Description",
+      "basic": "X"
+    },
+    "00400602": {
+      "name": "Specimen Detailed Description",
+      "basic": "X"
+    },
+    "00400610": {
+      "name": "Specimen Preparation Sequence",
+      "basic": "Z"
+    },
+    "004006FA": {
+      "name": "Slide Identifier",
+      "basic": "X"
+    },
+    "00401001": {
+      "name": "Requested Procedure ID",
+      "basic": "X"
+    },
+    "00401002": {
+      "name": "Reason for the Requested Procedure",
+      "basic": "X"
+    },
+    "00401004": {
+      "name": "Patient Transport Arrangements",
+      "basic": "X"
+    },
+    "00401005": {
+      "name": "Requested Procedure Location",
+      "basic": "X"
+    },
+    "0040100A": {
+      "name": "Reason for Requested Procedure Code Sequence",
+      "basic": "X"
+    },
+    "00401010": {
+      "name": "Names of Intended Recipients of Results",
+      "basic": "X"
+    },
+    "00401011": {
+      "name": "Intended Recipients of Results Identification Sequence",
+      "basic": "X"
+    },
+    "00401101": {
+      "name": "Person Identification Code Sequence",
+      "basic": "D"
+    },
+    "00401102": {
+      "name": "Person's Address",
+      "basic": "X"
+    },
+    "00401103": {
+      "name": "Person's Telephone Numbers",
+      "basic": "X"
+    },
+    "00401104": {
+      "name": "Person's Telecom Information",
+      "basic": "X"
+    },
+    "00401400": {
+      "name": "Requested Procedure Comments",
+      "basic": "X"
+    },
+    "00402001": {
+      "name": "Reason for the Imaging Service Request",
+      "basic": "X"
+    },
+    "00402004": {
+      "name": "Issue Date of Imaging Service Request",
+      "basic": "X"
+    },
+    "00402005": {
+      "name": "Issue Time of Imaging Service Request",
+      "basic": "X"
+    },
+    "00402008": {
+      "name": "Order Entered By",
+      "basic": "X"
+    },
+    "00402009": {
+      "name": "Order Enterer's Location",
+      "basic": "X"
+    },
+    "00402010": {
+      "name": "Order Callback Phone Number",
+      "basic": "X"
+    },
+    "00402011": {
+      "name": "Order Callback Telecom Information",
+      "basic": "X"
+    },
+    "00402016": {
+      "name": "Placer Order Number / Imaging Service Request",
+      "basic": "Z"
+    },
+    "00402017": {
+      "name": "Filler Order Number / Imaging Service Request",
+      "basic": "Z"
+    },
+    "00402400": {
+      "name": "Imaging Service Request Comments",
+      "basic": "X"
+    },
+    "00403001": {
+      "name": "Confidentiality Constraint on Patient Data Description",
+      "basic": "X"
+    },
+    "00404005": {
+      "name": "Scheduled Procedure Step Start DateTime",
+      "basic": "X"
+    },
+    "00404008": {
+      "name": "Scheduled Procedure Step Expiration DateTime",
+      "basic": "X"
+    },
+    "00404010": {
+      "name": "Scheduled Procedure Step Modification DateTime",
+      "basic": "X"
+    },
+    "00404011": {
+      "name": "Expected Completion DateTime",
+      "basic": "X"
+    },
+    "00404023": {
+      "name": "Referenced General Purpose Scheduled Procedure Step Transaction UID",
+      "basic": "U"
+    },
+    "00404025": {
+      "name": "Scheduled Station Name Code Sequence",
+      "basic": "X"
+    },
+    "00404027": {
+      "name": "Scheduled Station Geographic Location Code Sequence",
+      "basic": "X"
+    },
+    "00404028": {
+      "name": "Performed Station Name Code Sequence",
+      "basic": "X"
+    },
+    "00404030": {
+      "name": "Performed Station Geographic Location Code Sequence",
+      "basic": "X"
+    },
+    "00404034": {
+      "name": "Scheduled Human Performers Sequence",
+      "basic": "X"
+    },
+    "00404035": {
+      "name": "Actual Human Performers Sequence",
+      "basic": "X"
+    },
+    "00404036": {
+      "name": "Human Performer's Organization",
+      "basic": "X"
+    },
+    "00404037": {
+      "name": "Human Performer's Name",
+      "basic": "X"
+    },
+    "00404050": {
+      "name": "Performed Procedure Step Start DateTime",
+      "basic": "X"
+    },
+    "00404051": {
+      "name": "Performed Procedure Step End DateTime",
+      "basic": "X"
+    },
+    "00404052": {
+      "name": "Procedure Step Cancellation DateTime",
+      "basic": "X"
+    },
+    "0040A023": {
+      "name": "Findings Group Recording Date (Trial)",
+      "basic": "X"
+    },
+    "0040A024": {
+      "name": "Findings Group Recording Time (Trial)",
+      "basic": "X"
+    },
+    "0040A027": {
+      "name": "Verifying Organization",
+      "basic": "D"
+    },
+    "0040A030": {
+      "name": "Verification DateTime",
+      "basic": "D"
+    },
+    "0040A032": {
+      "name": "Observation DateTime",
+      "basic": "X/D"
+    },
+    "0040A033": {
+      "name": "Observation Start DateTime",
+      "basic": "X"
+    },
+    "0040A073": {
+      "name": "Verifying Observer Sequence",
+      "basic": "D"
+    },
+    "0040A075": {
+      "name": "Verifying Observer Name",
+      "basic": "D"
+    },
+    "0040A078": {
+      "name": "Author Observer Sequence",
+      "basic": "X"
+    },
+    "0040A07A": {
+      "name": "Participant Sequence",
+      "basic": "X"
+    },
+    "0040A07C": {
+      "name": "Custodial Organization Sequence",
+      "basic": "X"
+    },
+    "0040A082": {
+      "name": "Participation DateTime",
+      "basic": "Z"
+    },
+    "0040A088": {
+      "name": "Verifying Observer Identification Code Sequence",
+      "basic": "Z"
+    },
+    "0040A110": {
+      "name": "Date of Document or Verbal Transaction (Trial)",
+      "basic": "X"
+    },
+    "0040A112": {
+      "name": "Time of Document Creation or Verbal Transaction (Trial)",
+      "basic": "X"
+    },
+    "0040A120": {
+      "name": "DateTime",
+      "basic": "D"
+    },
+    "0040A121": {
+      "name": "Date",
+      "basic": "D"
+    },
+    "0040A122": {
+      "name": "Time",
+      "basic": "D"
+    },
+    "0040A123": {
+      "name": "Person Name",
+      "basic": "D"
+    },
+    "0040A124": {
+      "name": "UID",
+      "basic": "U"
+    },
+    "0040A13A": {
+      "name": "Referenced DateTime",
+      "basic": "D"
+    },
+    "0040A171": {
+      "name": "Observation UID",
+      "basic": "U"
+    },
+    "0040A172": {
+      "name": "Referenced Observation UID (Trial)",
+      "basic": "U"
+    },
+    "0040A192": {
+      "name": "Observation Date (Trial)",
+      "basic": "X"
+    },
+    "0040A193": {
+      "name": "Observation Time (Trial)",
+      "basic": "X"
+    },
+    "0040A307": {
+      "name": "Current Observer (Trial)",
+      "basic": "X"
+    },
+    "0040A352": {
+      "name": "Verbal Source (Trial)",
+      "basic": "X"
+    },
+    "0040A353": {
+      "name": "Address (Trial)",
+      "basic": "X"
+    },
+    "0040A354": {
+      "name": "Telephone Number (Trial)",
+      "basic": "X"
+    },
+    "0040A358": {
+      "name": "Verbal Source Identifier Code Sequence (Trial)",
+      "basic": "X"
+    },
+    "0040A402": {
+      "name": "Observation Subject UID (Trial)",
+      "basic": "U"
+    },
+    "0040A730": {
+      "name": "Content Sequence",
+      "basic": "D"
+    },
+    "0040DB06": {
+      "name": "Template Version",
+      "basic": "X"
+    },
+    "0040DB07": {
+      "name": "Template Local Version",
+      "basic": "X"
+    },
+    "0040DB0C": {
+      "name": "Template Extension Organization UID",
+      "basic": "U"
+    },
+    "0040DB0D": {
+      "name": "Template Extension Creator UID",
+      "basic": "U"
+    },
+    "0040E004": {
+      "name": "HL7 Document Effective Time",
+      "basic": "X"
+    },
+    "00420011": {
+      "name": "Encapsulated Document",
+      "basic": "D"
+    },
+    "00440004": {
+      "name": "Approval Status DateTime",
+      "basic": "X"
+    },
+    "0044000B": {
+      "name": "Product Expiration DateTime",
+      "basic": "X"
+    },
+    "00440010": {
+      "name": "Substance Administration DateTime",
+      "basic": "X"
+    },
+    "00440104": {
+      "name": "Assertion DateTime",
+      "basic": "D"
+    },
+    "00440105": {
+      "name": "Assertion Expiration DateTime",
+      "basic": "X"
+    },
+    "0050001B": {
+      "name": "Container Component ID",
+      "basic": "X"
+    },
+    "00500020": {
+      "name": "Device Description",
+      "basic": "X"
+    },
+    "00500021": {
+      "name": "Long Device Description",
+      "basic": "X"
+    },
+    "00620021": {
+      "name": "Tracking UID",
+      "basic": "U"
+    },
+    "00640003": {
+      "name": "Source Frame of Reference UID",
+      "basic": "U"
+    },
+    "00686226": {
+      "name": "Effective DateTime",
+      "basic": "D"
+    },
+    "00686270": {
+      "name": "Information Issue DateTime",
+      "basic": "D"
+    },
+    "006A0003": {
+      "name": "Annotation Group UID",
+      "basic": "D"
+    },
+    "006A0005": {
+      "name": "Annotation Group Label",
+      "basic": "D"
+    },
+    "006A0006": {
+      "name": "Annotation Group Description",
+      "basic": "X"
+    },
+    "00700001": {
+      "name": "Graphic Annotation Sequence",
+      "basic": "D"
+    },
+    "00700082": {
+      "name": "Presentation Creation Date",
+      "basic": "X"
+    },
+    "00700083": {
+      "name": "Presentation Creation Time",
+      "basic": "X"
+    },
+    "00700084": {
+      "name": "Content Creator's Name",
+      "basic": "Z/D"
+    },
+    "00700086": {
+      "name": "Content Creator's Identification Code Sequence",
+      "basic": "X"
+    },
+    "0070031A": {
+      "name": "Fiducial UID",
+      "basic": "U"
+    },
+    "00701101": {
+      "name": "Presentation Display Collection UID",
+      "basic": "U"
+    },
+    "00701102": {
+      "name": "Presentation Sequence Collection UID",
+      "basic": "U"
+    },
+    "0072000A": {
+      "name": "Hanging Protocol Creation DateTime",
+      "basic": "D"
+    },
+    "0072005E": {
+      "name": "Selector AE Value",
+      "basic": "D"
+    },
+    "0072005F": {
+      "name": "Selector AS Value",
+      "basic": "D"
+    },
+    "00720061": {
+      "name": "Selector DA Value",
+      "basic": "D"
+    },
+    "00720063": {
+      "name": "Selector DT Value",
+      "basic": "D"
+    },
+    "00720065": {
+      "name": "Selector OB Value",
+      "basic": "D"
+    },
+    "00720066": {
+      "name": "Selector LO Value",
+      "basic": "D"
+    },
+    "00720068": {
+      "name": "Selector LT Value",
+      "basic": "D"
+    },
+    "0072006A": {
+      "name": "Selector PN Value",
+      "basic": "D"
+    },
+    "0072006B": {
+      "name": "Selector TM Value",
+      "basic": "D"
+    },
+    "0072006C": {
+      "name": "Selector SH Value",
+      "basic": "D"
+    },
+    "0072006D": {
+      "name": "Selector UN Value",
+      "basic": "D"
+    },
+    "0072006E": {
+      "name": "Selector ST Value",
+      "basic": "D"
+    },
+    "00720070": {
+      "name": "Selector UT Value",
+      "basic": "D"
+    },
+    "00720071": {
+      "name": "Selector UR Value",
+      "basic": "D"
+    },
+    "00741234": {
+      "name": "Receiving AE",
+      "basic": "X"
+    },
+    "00741236": {
+      "name": "Requesting AE",
+      "basic": "X"
+    },
+    "00880140": {
+      "name": "Storage Media File-set UID",
+      "basic": "U"
+    },
+    "00880200": {
+      "name": "Icon Image Sequence\n\n(see Note 11)",
+      "basic": "X"
+    },
+    "00880904": {
+      "name": "Topic Title",
+      "basic": "X"
+    },
+    "00880906": {
+      "name": "Topic Subject",
+      "basic": "X"
+    },
+    "00880910": {
+      "name": "Topic Author",
+      "basic": "X"
+    },
+    "00880912": {
+      "name": "Topic Keywords",
+      "basic": "X"
+    },
+    "01000420": {
+      "name": "SOP Authorization DateTime",
+      "basic": "X"
+    },
+    "04000100": {
+      "name": "Digital Signature UID",
+      "basic": "U"
+    },
+    "04000105": {
+      "name": "Digital Signature DateTime",
+      "basic": "D"
+    },
+    "04000115": {
+      "name": "Certificate of Signer",
+      "basic": "D"
+    },
+    "04000310": {
+      "name": "Certified Timestamp",
+      "basic": "X"
+    },
+    "04000402": {
+      "name": "Referenced Digital Signature Sequence",
+      "basic": "X"
+    },
+    "04000403": {
+      "name": "Referenced SOP Instance MAC Sequence",
+      "basic": "X"
+    },
+    "04000404": {
+      "name": "MAC",
+      "basic": "X"
+    },
+    "04000550": {
+      "name": "Modified Attributes Sequence",
+      "basic": "X"
+    },
+    "04000551": {
+      "name": "Nonconforming Modified Attributes Sequence",
+      "basic": "X"
+    },
+    "04000552": {
+      "name": "Nonconforming Data Element Value",
+      "basic": "X"
+    },
+    "04000561": {
+      "name": "Original Attributes Sequence",
+      "basic": "X"
+    },
+    "04000562": {
+      "name": "Attribute Modification DateTime",
+      "basic": "D"
+    },
+    "04000563": {
+      "name": "Modifying System",
+      "basic": "D"
+    },
+    "04000564": {
+      "name": "Source of Previous Values",
+      "basic": "Z"
+    },
+    "04000565": {
+      "name": "Reason for the Attribute Modification",
+      "basic": "D"
+    },
+    "04000600": {
+      "name": "Instance Origin Status",
+      "basic": "X"
+    },
+    "20300020": {
+      "name": "Text String",
+      "basic": "X"
+    },
+    "21000040": {
+      "name": "Creation Date",
+      "basic": "X"
+    },
+    "21000050": {
+      "name": "Creation Time",
+      "basic": "X"
+    },
+    "21000070": {
+      "name": "Originator",
+      "basic": "X"
+    },
+    "21000140": {
+      "name": "Destination AE",
+      "basic": "D"
+    },
+    "22000002": {
+      "name": "Label Text",
+      "basic": "X/Z"
+    },
+    "22000005": {
+      "name": "Barcode Value",
+      "basic": "X/Z"
+    },
+    "30020121": {
+      "name": "Position Acquisition Template Name",
+      "basic": "X"
+    },
+    "30020123": {
+      "name": "Position Acquisition Template Description",
+      "basic": "X"
+    },
+    "30060002": {
+      "name": "Structure Set Label",
+      "basic": "D"
+    },
+    "30060004": {
+      "name": "Structure Set Name",
+      "basic": "X"
+    },
+    "30060006": {
+      "name": "Structure Set Description",
+      "basic": "X"
+    },
+    "30060008": {
+      "name": "Structure Set Date",
+      "basic": "Z"
+    },
+    "30060009": {
+      "name": "Structure Set Time",
+      "basic": "Z"
+    },
+    "30060024": {
+      "name": "Referenced Frame of Reference UID",
+      "basic": "U"
+    },
+    "30060026": {
+      "name": "ROI Name",
+      "basic": "Z"
+    },
+    "30060028": {
+      "name": "ROI Description",
+      "basic": "X"
+    },
+    "3006002D": {
+      "name": "ROI DateTime",
+      "basic": "X"
+    },
+    "3006002E": {
+      "name": "ROI Observation DateTime",
+      "basic": "X"
+    },
+    "30060038": {
+      "name": "ROI Generation Description",
+      "basic": "X"
+    },
+    "3006004D": {
+      "name": "ROI Creator Sequence",
+      "basic": "X"
+    },
+    "3006004E": {
+      "name": "ROI Interpreter Sequence",
+      "basic": "X"
+    },
+    "30060085": {
+      "name": "ROI Observation Label",
+      "basic": "X"
+    },
+    "30060088": {
+      "name": "ROI Observation Description",
+      "basic": "X"
+    },
+    "300600A6": {
+      "name": "ROI Interpreter",
+      "basic": "Z"
+    },
+    "300600C2": {
+      "name": "Related Frame of Reference UID",
+      "basic": "U"
+    },
+    "30080024": {
+      "name": "Treatment Control Point Date",
+      "basic": "D"
+    },
+    "30080025": {
+      "name": "Treatment Control Point Time",
+      "basic": "D"
+    },
+    "30080054": {
+      "name": "First Treatment Date",
+      "basic": "X/D"
+    },
+    "30080056": {
+      "name": "Most Recent Treatment Date",
+      "basic": "X/D"
+    },
+    "30080105": {
+      "name": "Source Serial Number",
+      "basic": "X/Z"
+    },
+    "30080162": {
+      "name": "Safe Position Exit Date",
+      "basic": "D"
+    },
+    "30080164": {
+      "name": "Safe Position Exit Time",
+      "basic": "D"
+    },
+    "30080166": {
+      "name": "Safe Position Return Date",
+      "basic": "D"
+    },
+    "30080168": {
+      "name": "Safe Position Return Time",
+      "basic": "D"
+    },
+    "30080250": {
+      "name": "Treatment Date",
+      "basic": "X/D"
+    },
+    "30080251": {
+      "name": "Treatment Time",
+      "basic": "X/D"
+    },
+    "300A0002": {
+      "name": "RT Plan Label",
+      "basic": "D"
+    },
+    "300A0003": {
+      "name": "RT Plan Name",
+      "basic": "X"
+    },
+    "300A0004": {
+      "name": "RT Plan Description",
+      "basic": "X"
+    },
+    "300A0006": {
+      "name": "RT Plan Date",
+      "basic": "X/D"
+    },
+    "300A0007": {
+      "name": "RT Plan Time",
+      "basic": "X/D"
+    },
+    "300A000B": {
+      "name": "Treatment Sites",
+      "basic": "X"
+    },
+    "300A000E": {
+      "name": "Prescription Description",
+      "basic": "X"
+    },
+    "300A0013": {
+      "name": "Dose Reference UID",
+      "basic": "U"
+    },
+    "300A0016": {
+      "name": "Dose Reference Description",
+      "basic": "X"
+    },
+    "300A0072": {
+      "name": "Fraction Group Description",
+      "basic": "X"
+    },
+    "300A0083": {
+      "name": "Referenced Dose Reference UID",
+      "basic": "U"
+    },
+    "300A00B2": {
+      "name": "Treatment Machine Name",
+      "basic": "X/Z"
+    },
+    "300A00C3": {
+      "name": "Beam Description",
+      "basic": "X"
+    },
+    "300A00DD": {
+      "name": "Bolus Description",
+      "basic": "X"
+    },
+    "300A0196": {
+      "name": "Fixation Device Description",
+      "basic": "X"
+    },
+    "300A01A6": {
+      "name": "Shielding Device Description",
+      "basic": "X"
+    },
+    "300A01B2": {
+      "name": "Setup Technique Description",
+      "basic": "X"
+    },
+    "300A0216": {
+      "name": "Source Manufacturer",
+      "basic": "X"
+    },
+    "300A022C": {
+      "name": "Source Strength Reference Date",
+      "basic": "D"
+    },
+    "300A022E": {
+      "name": "Source Strength Reference Time",
+      "basic": "D"
+    },
+    "300A02EB": {
+      "name": "Compensator Description",
+      "basic": "X"
+    },
+    "300A0608": {
+      "name": "Treatment Position Group Label",
+      "basic": "D"
+    },
+    "300A0609": {
+      "name": "Treatment Position Group UID",
+      "basic": "U"
+    },
+    "300A0611": {
+      "name": "RT Accessory Holder Slot ID",
+      "basic": "Z"
+    },
+    "300A0615": {
+      "name": "RT Accessory Device Slot ID",
+      "basic": "Z"
+    },
+    "300A0619": {
+      "name": "Radiation Dose Identification Label",
+      "basic": "D"
+    },
+    "300A0623": {
+      "name": "Radiation Dose In-Vivo Measurement Label",
+      "basic": "D"
+    },
+    "300A062A": {
+      "name": "RT Tolerance Set Label",
+      "basic": "D"
+    },
+    "300A0650": {
+      "name": "Patient Setup UID",
+      "basic": "U"
+    },
+    "300A0676": {
+      "name": "Equipment Frame of Reference Description",
+      "basic": "X"
+    },
+    "300A067C": {
+      "name": "Radiation Generation Mode Label",
+      "basic": "D"
+    },
+    "300A067D": {
+      "name": "Radiation Generation Mode Description",
+      "basic": "Z"
+    },
+    "300A0700": {
+      "name": "Treatment Session UID",
+      "basic": "U"
+    },
+    "300A0734": {
+      "name": "Treatment Tolerance Violation Description",
+      "basic": "D"
+    },
+    "300A0736": {
+      "name": "Treatment Tolerance Violation DateTime",
+      "basic": "D"
+    },
+    "300A073A": {
+      "name": "Recorded RT Control Point DateTime",
+      "basic": "D"
+    },
+    "300A0741": {
+      "name": "Interlock DateTime",
+      "basic": "D"
+    },
+    "300A0742": {
+      "name": "Interlock Description",
+      "basic": "D"
+    },
+    "300A0760": {
+      "name": "Override DateTime",
+      "basic": "D"
+    },
+    "300A0783": {
+      "name": "Interlock Origin Description",
+      "basic": "D"
+    },
+    "300A0785": {
+      "name": "Referenced Treatment Position Group UID",
+      "basic": "U"
+    },
+    "300A078E": {
+      "name": "Patient Treatment Preparation Procedure Parameter Description",
+      "basic": "X"
+    },
+    "300A0792": {
+      "name": "Patient Treatment Preparation Method Description",
+      "basic": "X"
+    },
+    "300A0794": {
+      "name": "Patient Setup Photo Description",
+      "basic": "X"
+    },
+    "300A079A": {
+      "name": "Displacement Reference Label",
+      "basic": "X"
+    },
+    "300C0113": {
+      "name": "Reason for Omission Description",
+      "basic": "X"
+    },
+    "300C0127": {
+      "name": "Beam Hold Transition DateTime",
+      "basic": "D"
+    },
+    "300E0004": {
+      "name": "Review Date",
+      "basic": "Z"
+    },
+    "300E0005": {
+      "name": "Review Time",
+      "basic": "Z"
+    },
+    "300E0008": {
+      "name": "Reviewer Name",
+      "basic": "X/Z"
+    },
+    "30100006": {
+      "name": "Conceptual Volume UID",
+      "basic": "U"
+    },
+    "3010000B": {
+      "name": "Referenced Conceptual Volume UID",
+      "basic": "U"
+    },
+    "3010000F": {
+      "name": "Conceptual Volume Combination Description",
+      "basic": "Z"
+    },
+    "30100013": {
+      "name": "Constituent Conceptual Volume UID",
+      "basic": "U"
+    },
+    "30100015": {
+      "name": "Source Conceptual Volume UID",
+      "basic": "U"
+    },
+    "30100017": {
+      "name": "Conceptual Volume Description",
+      "basic": "Z"
+    },
+    "3010001B": {
+      "name": "Device Alternate Identifier",
+      "basic": "Z"
+    },
+    "3010002D": {
+      "name": "Device Label",
+      "basic": "D"
+    },
+    "30100031": {
+      "name": "Referenced Fiducials UID",
+      "basic": "U"
+    },
+    "30100033": {
+      "name": "User Content Label",
+      "basic": "D"
+    },
+    "30100034": {
+      "name": "User Content Long Label",
+      "basic": "D"
+    },
+    "30100035": {
+      "name": "Entity Label",
+      "basic": "D"
+    },
+    "30100036": {
+      "name": "Entity Name",
+      "basic": "X"
+    },
+    "30100037": {
+      "name": "Entity Description",
+      "basic": "X"
+    },
+    "30100038": {
+      "name": "Entity Long Label",
+      "basic": "D"
+    },
+    "3010003B": {
+      "name": "RT Treatment Phase UID",
+      "basic": "U"
+    },
+    "30100043": {
+      "name": "Manufacturer's Device Identifier",
+      "basic": "Z"
+    },
+    "3010004C": {
+      "name": "Intended Phase Start Date",
+      "basic": "X/D"
+    },
+    "3010004D": {
+      "name": "Intended Phase End Date",
+      "basic": "X/D"
+    },
+    "30100054": {
+      "name": "RT Prescription Label",
+      "basic": "D"
+    },
+    "30100056": {
+      "name": "RT Treatment Approach Label",
+      "basic": "X/D"
+    },
+    "3010005A": {
+      "name": "RT Physician Intent Narrative",
+      "basic": "Z"
+    },
+    "3010005C": {
+      "name": "Reason for Superseding",
+      "basic": "Z"
+    },
+    "30100061": {
+      "name": "Prior Treatment Dose Description",
+      "basic": "X"
+    },
+    "3010006E": {
+      "name": "Dosimetric Objective UID",
+      "basic": "U"
+    },
+    "3010006F": {
+      "name": "Referenced Dosimetric Objective UID",
+      "basic": "U"
+    },
+    "30100077": {
+      "name": "Treatment Site",
+      "basic": "X/D"
+    },
+    "3010007A": {
+      "name": "Treatment Technique Notes",
+      "basic": "Z"
+    },
+    "3010007B": {
+      "name": "Prescription Notes",
+      "basic": "Z"
+    },
+    "3010007F": {
+      "name": "Fractionation Notes",
+      "basic": "Z"
+    },
+    "30100081": {
+      "name": "Prescription Notes Sequence",
+      "basic": "Z"
+    },
+    "30100085": {
+      "name": "Intended Fraction Start Time",
+      "basic": "X"
+    },
+    "40000010": {
+      "name": "Arbitrary",
+      "basic": "X"
+    },
+    "40004000": {
+      "name": "Text Comments",
+      "basic": "X"
+    },
+    "40080040": {
+      "name": "Results ID",
+      "basic": "X"
+    },
+    "40080042": {
+      "name": "Results ID Issuer",
+      "basic": "X"
+    },
+    "40080100": {
+      "name": "Interpretation Recorded Date",
+      "basic": "X"
+    },
+    "40080101": {
+      "name": "Interpretation Recorded Time",
+      "basic": "X"
+    },
+    "40080102": {
+      "name": "Interpretation Recorder",
+      "basic": "X"
+    },
+    "40080108": {
+      "name": "Interpretation Transcription Date",
+      "basic": "X"
+    },
+    "40080109": {
+      "name": "Interpretation Transcription Time",
+      "basic": "X"
+    },
+    "4008010A": {
+      "name": "Interpretation Transcriber",
+      "basic": "X"
+    },
+    "4008010B": {
+      "name": "Interpretation Text",
+      "basic": "X"
+    },
+    "4008010C": {
+      "name": "Interpretation Author",
+      "basic": "X"
+    },
+    "40080111": {
+      "name": "Interpretation Approver Sequence",
+      "basic": "X"
+    },
+    "40080112": {
+      "name": "Interpretation Approval Date",
+      "basic": "X"
+    },
+    "40080113": {
+      "name": "Interpretation Approval Time",
+      "basic": "X"
+    },
+    "40080114": {
+      "name": "Physician Approving Interpretation",
+      "basic": "X"
+    },
+    "40080115": {
+      "name": "Interpretation Diagnosis Description",
+      "basic": "X"
+    },
+    "40080118": {
+      "name": "Results Distribution List Sequence",
+      "basic": "X"
+    },
+    "40080119": {
+      "name": "Distribution Name",
+      "basic": "X"
+    },
+    "4008011A": {
+      "name": "Distribution Address",
+      "basic": "X"
+    },
+    "40080200": {
+      "name": "Interpretation ID",
+      "basic": "X"
+    },
+    "40080202": {
+      "name": "Interpretation ID Issuer",
+      "basic": "X"
+    },
+    "40080300": {
+      "name": "Impressions",
+      "basic": "X"
+    },
+    "40084000": {
+      "name": "Results Comments",
+      "basic": "X"
+    },
+    "50XXXXXX": {
+      "name": "Curve Data",
+      "basic": "X"
+    },
+    "60XX3000": {
+      "name": "Overlay Data",
+      "basic": "X"
+    },
+    "60XX4000": {
+      "name": "Overlay Comments",
+      "basic": "X"
+    },
+    "FFFAFFFA": {
+      "name": "Digital Signatures Sequence",
+      "basic": "X"
+    },
+    "FFFCFFFC": {
+      "name": "Data Set Trailing Padding",
+      "basic": "X"
+    },
+    "GGGGEEEE-WHERE-GGGG-IS-ODD": {
+      "name": "Private Attributes",
+      "basic": "X"
+    }
+  }
+}

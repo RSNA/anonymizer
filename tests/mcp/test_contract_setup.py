@@ -16,7 +16,8 @@ from anonymizer.mcp.api.schemas import (
 from anonymizer.mcp.instructions import load_behavior_instructions, load_server_instructions
 from anonymizer.mcp.ops import project_settings_defaults
 from anonymizer.mcp.session import SESSION
-from anonymizer.model.project import RETAIN_OPTIONS, ProjectModel
+from anonymizer.model.project import ProjectModel
+from anonymizer.view.settings.deidentification_options_dialog import RETAIN_OPTIONS
 from anonymizer.utils.translate import set_language_code
 from tests.mcp.project_create import confirm_create
 

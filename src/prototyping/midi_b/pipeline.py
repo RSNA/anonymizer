@@ -12,6 +12,7 @@ import pydicom
 
 from prototyping.midi_b.inventory import MidiInstance
 from prototyping.midi_b.mappings import write_patid_mapping, write_uid_mapping
+from prototyping.midi_b.options import MIDI_B_OPTIONS
 from prototyping.pseudo_phi_deid.pipeline.script_session import AnonymizerSession, operation_resolver
 from prototyping.pseudo_phi_deid.pipeline.metadata_ner import scrub_dataset
 from prototyping.pseudo_phi_deid.pipeline.ner_residual_cleanup import (
@@ -57,7 +58,10 @@ def run_instances(
     session: AnonymizerSession | None = None
     try:
         if config.use_script:
-            session = AnonymizerSession(config.script_path)
+            session = AnonymizerSession(
+                config.script_path,
+                confidentiality_options=MIDI_B_OPTIONS,
+            )
             session.__enter__()
 
         total = len(instances)

@@ -14,7 +14,8 @@ from anonymizer.controller.private_tags import (
 from anonymizer.controller.private_tags.tcia_kb_data import PRIVATE_KB
 from anonymizer.controller.script.paths import packaged_default_script_path
 from anonymizer.model.anonymizer import AnonymizerModel
-from anonymizer.model.project import RETAIN_OPTIONS, ProjectModel
+from anonymizer.model.project import ProjectModel
+from anonymizer.view.settings.deidentification_options_dialog import RETAIN_OPTIONS
 from tests.controller.private_tags.support_private_ds import (
     KbSample,
     apply_private_specs,

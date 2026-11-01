@@ -1,17 +1,34 @@
 {
-  "algorithms": [
-    "harmonize",
-    "face_blur",
-    "remove_pixel_phi"
-  ],
-  "blur_mode": "gaussian",
-  "pixel_phi_removal_mode": "blackout",
-  "ocr_remove_mode": "non_whitelisted",
-  "ocr_use_exclude_areas": false,
-  "include_brain_structures": false,
-  "prefer_description_mappings": true,
-  "ct_segmentation_mode": "3mm",
-  "mr_segmentation_mode": "3mm",
+  "features": {
+    "embedded_phi": {
+      "enabled": true,
+      "pixel": {
+        "enabled": true,
+        "removal_method": "blackout",
+        "remove_scope": "phi_only",
+        "use_exclude_areas": false
+      },
+      "metadata": {
+        "enabled": true,
+        "replace_mode": "blank"
+      },
+      "reports": {
+        "enabled": true,
+        "replace_mode": "blank"
+      }
+    },
+    "harmonize": {
+      "enabled": true,
+      "include_brain_structures": false,
+      "prefer_description_mappings": true
+    },
+    "face_blur": {
+      "enabled": true,
+      "blur_mode": "gaussian"
+    }
+  },
   "studies": "all",
-  "skip_already_processed": true
+  "skip_already_processed": true,
+  "ct_segmentation_mode": "3mm",
+  "mr_segmentation_mode": "3mm"
 }

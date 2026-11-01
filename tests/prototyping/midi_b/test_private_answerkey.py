@@ -11,7 +11,7 @@ from pydicom import dcmread
 from pydicom.data import get_testdata_file
 
 from anonymizer.controller.project import ProjectController
-from anonymizer.model.project import BASIC_OPTIONS
+from anonymizer.view.settings.deidentification_options_dialog import BASIC_OPTIONS
 from anonymizer.utils.dicom import DeidMethodCode
 from prototyping.midi_b.paths import DEFAULT_ANSWER_KEY_VALIDATION
 from tests.controller.dicom.support.test_files import ct_small_filename

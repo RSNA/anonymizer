@@ -45,8 +45,8 @@ from anonymizer.controller.script.operands import (
     is_remove_operation,
 )
 from anonymizer.model.anonymizer import AnonymizerModel
-from anonymizer.model.project import AT_INGEST, DICOMNode, ProjectModel
-from anonymizer.utils.dicom import DeidMethodCode, record_deid_method_codes
+from anonymizer.model.project import DICOMNode, ProjectModel
+from anonymizer.utils.dicom import AT_INGEST, DeidMethodCode, record_deid_method_codes
 from anonymizer.utils.storage.dicom_tree import DICOM_FILE_SUFFIX
 from anonymizer.utils.translate import _
 

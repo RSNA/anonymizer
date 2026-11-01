@@ -594,7 +594,7 @@ def test_hashdate_is_per_patient_deterministic(controller: ProjectController) ->
 
 def test_anonymize_records_selected_option_codes(controller: ProjectController) -> None:
     """(0012,0064) records exactly the selected AT_INGEST options."""
-    from anonymizer.model.project import RETAIN_OPTIONS
+    from anonymizer.view.settings.deidentification_options_dialog import RETAIN_OPTIONS
 
     ds = dcmread(get_testdata_file(ct_small_filename))
     ds.PatientID = "CODES-PT"

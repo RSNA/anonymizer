@@ -11,7 +11,8 @@ from anonymizer.controller.project import ProjectController
 from anonymizer.controller.script.compile import compile_script, script_operations_by_tag
 from anonymizer.controller.script.operands import is_remove_operation
 from anonymizer.controller.script.retain_option_tags import patient_age_tag
-from anonymizer.model.project import BASIC_OPTIONS, ProjectModel
+from anonymizer.model.project import ProjectModel
+from anonymizer.view.settings.deidentification_options_dialog import BASIC_OPTIONS
 from anonymizer.utils.dicom import DeidMethodCode
 from tests.controller.dicom.support.test_files import ct_small_filename
 from tests.controller.dicom.support.test_nodes import LocalSCU

@@ -102,7 +102,7 @@ The project keeps each file in the transfer syntax it already has. **Transcoding
 
 ## 5. De-identification options {#2-de-identification-options}
 
-Open **De-identification Options**. These are the DICOM confidentiality choices from [PS 3.15 Appendix E](https://dicom.nema.org/medical/dicom/current/output/chtml/part15/chapter_E.html) (Basic Profile, Modified Dates, Retain Safe Private, and related options), shown under their standard names.
+Open **De-identification Options**. These are the DICOM confidentiality choices from [PS 3.15 Appendix E](https://dicom.nema.org/medical/dicom/current/output/chtml/part15/chapter_E.html) (Basic Profile, Modified Dates, Retain Safe Private, and related options), shown under their standard names, plus **Retain TCIA Research Attributes** (abbreviation **TCIA**) for TCIA archive submission metadata beyond Appendix E.
 
 ![De-identification Options](shots/macos/DeidentificationOptions.png)
 
@@ -113,7 +113,7 @@ Open **De-identification Options**. These are the DICOM confidentiality choices 
 | **Basic** | Basic Profile only |
 | **Retain** | Basic Profile + Modified Dates + Patient Characteristics + Retain Safe Private |
 
-Presets only fill the checkboxes. The project stores the **selected option codes**, not the preset name.
+Presets only fill the checkboxes. The project stores the **selected option codes**, not the preset name. For a TCIA / MIDI-B style stack, start from **Retain**, then also select **Retain TCIA Research**. Leave **Retain Device Identity** off (TCIA no longer claims that option; MIDI-B expects Device Serial / Station Name removed).
 
 ### How options build the anonymizer script
 

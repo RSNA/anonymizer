@@ -2,7 +2,7 @@
 
 from PIL import Image
 
-from docs_help.platform.common import normalize_for_docs
+from docs_help.platform.common import DOCS_SHOT_MAX_WIDTH, normalize_for_docs
 from docs_help.platform.windows import _hwnd_from_winfo_id, crop_box_for_visible_frame
 
 
@@ -41,10 +41,10 @@ def test_normalize_for_docs_letterbox_rgb_is_white() -> None:
     """Shared normalize: RGB stays RGB with white side pads (macOS path)."""
     src = Image.new("RGB", (400, 120), (200, 200, 200))
     out = normalize_for_docs(src)
-    assert out.size == (960, 120)
+    assert out.size == (DOCS_SHOT_MAX_WIDTH, 120)
     assert out.mode == "RGB"
     assert out.getpixel((0, 0)) == (255, 255, 255)
-    x = (960 - 400) // 2
+    x = (DOCS_SHOT_MAX_WIDTH - 400) // 2
     assert out.getpixel((x, 60)) == (200, 200, 200)
 
 
@@ -52,22 +52,22 @@ def test_normalize_for_docs_letterbox_rgba_is_transparent() -> None:
     """Shared normalize: RGBA letterbox matches macOS screencapture."""
     src = Image.new("RGBA", (400, 120), (200, 200, 200, 255))
     out = normalize_for_docs(src)
-    assert out.size == (960, 120)
+    assert out.size == (DOCS_SHOT_MAX_WIDTH, 120)
     assert out.mode == "RGBA"
     assert out.getpixel((0, 0))[3] == 0
-    x = (960 - 400) // 2
+    x = (DOCS_SHOT_MAX_WIDTH - 400) // 2
     assert out.getpixel((x, 60))[:3] == (200, 200, 200)
     assert out.getpixel((x, 60))[3] == 255
 
 
-def test_normalize_for_docs_rgb_and_rgba_share_960_canvas() -> None:
+def test_normalize_for_docs_rgb_and_rgba_share_docs_canvas() -> None:
     rgb = Image.new("RGB", (730, 992), (200, 200, 200))
     rgba = Image.new("RGBA", (730, 992), (200, 200, 200, 255))
     out_rgb = normalize_for_docs(rgb)
     out_rgba = normalize_for_docs(rgba)
-    assert out_rgb.size == (960, 992)
-    assert out_rgba.size == (960, 992)
-    x = (960 - 730) // 2
+    assert out_rgb.size == (DOCS_SHOT_MAX_WIDTH, 992)
+    assert out_rgba.size == (DOCS_SHOT_MAX_WIDTH, 992)
+    x = (DOCS_SHOT_MAX_WIDTH - 730) // 2
     assert out_rgb.getpixel((x, 40)) == (200, 200, 200)
     assert out_rgba.getpixel((x, 40))[:3] == (200, 200, 200)
 
@@ -75,4 +75,5 @@ def test_normalize_for_docs_rgb_and_rgba_share_960_canvas() -> None:
 def test_normalize_for_docs_downscales_wide_shots() -> None:
     src = Image.new("RGB", (1920, 400), (180, 180, 180))
     out = normalize_for_docs(src)
-    assert out.size == (960, 200)
+    expected_h = max(1, int(round(400 * (DOCS_SHOT_MAX_WIDTH / 1920.0))))
+    assert out.size == (DOCS_SHOT_MAX_WIDTH, expected_h)

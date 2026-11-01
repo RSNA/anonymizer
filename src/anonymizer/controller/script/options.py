@@ -32,6 +32,7 @@ from anonymizer.controller.script.compile import (
     INSTITUTION_IDENTITY_TAGS,
     KEEP_DEVICE_TAGS,
     PATIENT_CHARACTERISTICS_TAGS,
+    TCIA_RESEARCH_OPERANDS,
     normalize_script_operation,
 )
 from anonymizer.controller.script.date_rules import STUDY_DATE_TAG
@@ -126,6 +127,16 @@ def infer_options_from_script(document: ScriptDocument) -> frozenset[DeidMethodC
         is_remove_operation(base_ops.get(t, "")) for t in char_tags
     ):
         options.add(DeidMethodCode.PATIENT_CHARACTERISTICS)
+
+    tcia_hits = [
+        tag
+        for tag, expected in TCIA_RESEARCH_OPERANDS.items()
+        if tag in ops
+        and ops[tag] == normalize_script_operation(expected)
+        and normalize_script_operation(base_ops.get(tag, "")) != ops[tag]
+    ]
+    if len(tcia_hits) >= 3:
+        options.add(DeidMethodCode.TCIA_RESEARCH)
 
     if ops and not any("@uid" in op for op in ops.values()):
         options.add(DeidMethodCode.RETAIN_UIDS)

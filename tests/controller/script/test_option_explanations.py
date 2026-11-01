@@ -18,7 +18,7 @@ from anonymizer.controller.script.option_explanations import (
     script_is_custom,
     script_status_line,
 )
-from anonymizer.model.project import BASIC_OPTIONS, RETAIN_OPTIONS
+from anonymizer.view.settings.deidentification_options_dialog import BASIC_OPTIONS, RETAIN_OPTIONS
 from anonymizer.utils.dicom import DeidMethodCode
 
 _DEFAULT = (

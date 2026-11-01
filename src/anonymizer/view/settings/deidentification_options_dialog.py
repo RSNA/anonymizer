@@ -16,7 +16,6 @@ from anonymizer.controller.script.option_explanations import (
     apply_date_option_exclusivity,
     deid_option_explanation,
 )
-from anonymizer.model.project import BASIC_OPTIONS, RETAIN_OPTIONS
 from anonymizer.utils.dicom import (
     DICOM_CONFIDENTIALITY_PROFILE_URL,
     DeidMethodCode,
@@ -31,6 +30,18 @@ from anonymizer.view.common.tooltip import bind_hover_tooltip
 from anonymizer.view.common.ux_fields import button_width_for_label
 
 logger = logging.getLogger(__name__)
+
+# Preset checkbox sets for the Basic / Retain buttons. They store nothing;
+# the project persists only the selected DeidMethodCode values.
+BASIC_OPTIONS: frozenset[DeidMethodCode] = frozenset({DeidMethodCode.BASIC})
+RETAIN_OPTIONS: frozenset[DeidMethodCode] = frozenset(
+    {
+        DeidMethodCode.BASIC,
+        DeidMethodCode.MODIFIED_DATES,
+        DeidMethodCode.PATIENT_CHARACTERISTICS,
+        DeidMethodCode.SAFE_PRIVATE,
+    }
+)
 
 _PAD = 12
 _HELP_WRAP = 380

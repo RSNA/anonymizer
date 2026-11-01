@@ -18,35 +18,6 @@ from anonymizer.utils.modalities import DEFAULT_PROJECT_MODALITIES, Modality, ge
 from anonymizer.utils.translate import _
 from anonymizer.utils.version import get_version
 
-# De-identification options executed during anonymize. Every other
-# DeidMethodCode runs in a later task, except NOT_EXECUTED.
-AT_INGEST: frozenset[DeidMethodCode] = frozenset(
-    {
-        DeidMethodCode.BASIC,
-        DeidMethodCode.FULL_DATES,
-        DeidMethodCode.MODIFIED_DATES,
-        DeidMethodCode.PATIENT_CHARACTERISTICS,
-        DeidMethodCode.DEVICE_IDENTITY,
-        DeidMethodCode.RETAIN_UIDS,
-        DeidMethodCode.SAFE_PRIVATE,
-        DeidMethodCode.INSTITUTION_IDENTITY,
-    }
-)
-
-# Selected codes that no task executes yet.
-NOT_EXECUTED: frozenset[DeidMethodCode] = frozenset({DeidMethodCode.CLEAN_GRAPHICS})
-
-# Preset option sets that fill the creation checkbox set. They store nothing.
-BASIC_OPTIONS: frozenset[DeidMethodCode] = frozenset({DeidMethodCode.BASIC})
-RETAIN_OPTIONS: frozenset[DeidMethodCode] = frozenset(
-    {
-        DeidMethodCode.BASIC,
-        DeidMethodCode.MODIFIED_DATES,
-        DeidMethodCode.PATIENT_CHARACTERISTICS,
-        DeidMethodCode.SAFE_PRIVATE,
-    }
-)
-
 
 # Controller Custom Error classes:
 class DICOMRuntimeError(Exception):
@@ -243,7 +214,7 @@ class ProjectModel:
     anonymizer_script_path: Path = field(default_factory=default_anonymizer_script_path, metadata=path_field)
 
     confidentiality_options: frozenset[DeidMethodCode] = field(
-        default_factory=lambda: BASIC_OPTIONS,
+        default_factory=lambda: frozenset({DeidMethodCode.BASIC}),
         metadata=config(
             encoder=lambda codes: sorted(int(code) for code in codes),
             decoder=lambda values: frozenset(DeidMethodCode(int(code)) for code in values),

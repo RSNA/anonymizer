@@ -12,7 +12,7 @@ from anonymizer.controller.ai.embedded_phi.metadata.extract import apply_text_at
 from anonymizer.controller.ai.embedded_phi.ner.engine import Entity
 from anonymizer.controller.ai.embedded_phi.report.process_report_text import remove_phi
 from anonymizer.controller.project import ProjectController
-from anonymizer.model.project import BASIC_OPTIONS
+from anonymizer.view.settings.deidentification_options_dialog import BASIC_OPTIONS
 from anonymizer.utils.dicom import DeidMethodCode, record_deid_method_codes
 from tests.controller.dicom.support.test_nodes import LocalSCU
 from tests.controller.script.support_iod_fixtures import (

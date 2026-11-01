@@ -29,6 +29,9 @@ is_remove_operation(operation) -> bool
 is_retain_value_operation(operation) -> bool
     True when the operation leaves the value in place (@keep or @safe).
 
+is_safe_operation(operation) -> bool
+    True when the operation is @safe() (retain and exclude from NER).
+
 format_operand(operand_id, ...) -> str
     Build stored operation text for an operand id.
 
@@ -344,7 +347,20 @@ def is_retain_value_operation(operation: str | None) -> bool:
     op = str(operation or "").strip()
     if not op or op == "@keep":
         return True
-    return "@safe" in op
+    return is_safe_operation(op)
+
+
+def is_safe_operation(operation: str | None) -> bool:
+    """
+    True when the operation is @safe() (retain value; exclude from NER).
+
+    Args:
+        operation: Script operation text.
+
+    Returns:
+        True when @safe appears in the operation text.
+    """
+    return "@safe" in str(operation or "")
 
 
 def format_operand(

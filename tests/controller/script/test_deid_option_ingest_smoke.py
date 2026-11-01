@@ -7,8 +7,8 @@ import pytest
 
 from anonymizer.controller.project import ProjectController
 from anonymizer.controller.script.document import load_script_rules, write_script_rules
-from anonymizer.model.project import AT_INGEST, BASIC_OPTIONS, NOT_EXECUTED, RETAIN_OPTIONS
-from anonymizer.utils.dicom import DeidMethodCode
+from anonymizer.utils.dicom import AT_INGEST, NOT_EXECUTED, DeidMethodCode
+from anonymizer.view.settings.deidentification_options_dialog import BASIC_OPTIONS, RETAIN_OPTIONS
 from tests.controller.dicom.support.test_files import ct_small_filename
 from tests.controller.dicom.support.test_nodes import LocalSCU
 from tests.controller.private_tags.support_private_ds import (

@@ -103,8 +103,7 @@ from anonymizer.controller.ai.tseg.readiness import (
     totalsegmentator_available,
     xgboost_available,
 )
-from anonymizer.model.project import AT_INGEST
-from anonymizer.utils.dicom import DeidMethodCode
+from anonymizer.utils.dicom import AT_INGEST, DeidMethodCode
 from anonymizer.utils.modalities import (
     ContentClass,
     Modality,

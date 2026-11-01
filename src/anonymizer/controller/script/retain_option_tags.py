@@ -2,7 +2,9 @@
 
 Loads the committed E.1-1 extract and merges product device-identity extras
 (Manufacturer / model / software) that recent DICOM editions dropped from
-Table E.1-1 but that this product still treats as Retain Device Identity.
+Table E.1-1. Those extras stay under Retain Device Identity and are also
+always on the Retain TCIA Research keep list (@safe) so TCIA / MIDI-B stacks
+can leave Retain Device Identity off (serial / station stay removed).
 
 Public API
 ----------
@@ -17,7 +19,11 @@ load_e1_1_retain_catalog() -> dict[str, tuple[RetainTagEntry, ...]]
     All catalog families from the committed JSON.
 
 device_identity_tags() -> tuple[str, ...]
-    Tags overlayed to @keep when Retain Device Identity is selected.
+    Tags set to @safe() when Retain Device Identity is selected.
+
+product_device_identity_extra_tags() -> tuple[str, ...]
+    Manufacturer / model / software tags Basic removes; TCIA Research always
+    @safe()s these whether or not Retain Device Identity is selected.
 
 institution_identity_tags() -> tuple[str, ...]
     Tags overlayed to @keep when Retain Institution Identity is selected.
@@ -118,6 +124,16 @@ def _tags_for_family(family: RetainFamily) -> tuple[str, ...]:
 def device_identity_tags() -> tuple[str, ...]:
     """Device-identity tags for compile overlay (E.1-1 + product extras)."""
     return _tags_for_family("device")
+
+
+def product_device_identity_extra_tags() -> tuple[str, ...]:
+    """
+    Manufacturer / model / software tags owned as product Device Identity extras.
+
+    Retain TCIA Research always applies @safe() to these so they stay present
+    when Retain Device Identity is off (MIDI-B / current TCIA practice).
+    """
+    return tuple(tag for tag, _name, _basic, _option in _PRODUCT_DEVICE_IDENTITY_EXTRAS)
 
 
 def institution_identity_tags() -> tuple[str, ...]:

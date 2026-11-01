@@ -186,9 +186,11 @@ def shot_logging_levels(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
 
 def shot_deidentification_options(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     """New Project Settings → De-identification Options with Basic preset + RHS help."""
-    from anonymizer.model.project import BASIC_OPTIONS
     from anonymizer.utils.dicom import DeidMethodCode
-    from anonymizer.view.settings.deidentification_options_dialog import DeidentificationOptionsDialog
+    from anonymizer.view.settings.deidentification_options_dialog import (
+        BASIC_OPTIONS,
+        DeidentificationOptionsDialog,
+    )
 
     settings = _open_settings(ctx, new_model=True)
     dlg: Any = None
@@ -220,8 +222,8 @@ def shot_deidentification_options(ctx: CaptureContext, shot: ShotSpec) -> ShotRe
 
 def shot_anonymizer_script_editor(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     """Retain-options script editor: option chrome, packaged rules, full toolbar."""
-    from anonymizer.model.project import RETAIN_OPTIONS
     from anonymizer.view.settings.anonymizer_script_dialog import AnonymizerScriptDialog
+    from anonymizer.view.settings.deidentification_options_dialog import RETAIN_OPTIONS
 
     _ensure_project(ctx)
     controller = ctx.app.controller

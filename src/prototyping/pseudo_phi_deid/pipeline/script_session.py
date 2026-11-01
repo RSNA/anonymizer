@@ -15,8 +15,9 @@ from anonymizer.controller.anonymizer import AnonymizerController
 from anonymizer.controller.private_tags import private_tag_operation
 from anonymizer.controller.script.compile import compile_script
 from anonymizer.controller.script.document import write_script_rules
-from anonymizer.model.project import RETAIN_OPTIONS, DICOMNode, ProjectModel
+from anonymizer.model.project import DICOMNode, ProjectModel
 from anonymizer.utils.dicom import DeidMethodCode
+from anonymizer.view.settings.deidentification_options_dialog import RETAIN_OPTIONS
 from prototyping.pseudo_phi_deid.paths import PACKAGED_DEFAULT_SCRIPT, SCRIPTS_DIR
 
 logger = logging.getLogger(__name__)
@@ -24,20 +25,10 @@ logger = logging.getLogger(__name__)
 OperationForTag = Callable[[str, Dataset, DataElement], str]
 _PACKAGED_DEFAULT = "default-anonymizer.script"
 
-# Prototyping / MIDI-B: Retain preset plus Device Identity (Manufacturer, model, …).
+# PseudoPHI default: Retain preset plus Device Identity.
 PROTOTYPING_OPTIONS: frozenset[DeidMethodCode] = RETAIN_OPTIONS | {
     DeidMethodCode.DEVICE_IDENTITY,
 }
-
-# MIDI-B Synthetic Validation answer key retains these under TCIA-REV even though
-# Basic Profile empties/removes them. Applied only after compile_script overlays.
-# PatientAge: product Retain Patient Characteristics keeps band-rounding; MIDI
-# answer key expects the exact source age string.
-_MIDI_RESEARCH_KEEP_TAGS: tuple[tuple[str, str], ...] = (
-    ("00080090", "ReferringPhysicianName"),
-    ("00100030", "PatientBirthDate"),
-    ("00101010", "PatientAge"),
-)
 
 
 def resolve_script_path(script: str | Path | None = None) -> Path:
@@ -50,26 +41,36 @@ def resolve_script_path(script: str | Path | None = None) -> Path:
     return Path(script)
 
 
-def make_anonymizer(storage_dir: Path, script_path: Path | None = None) -> AnonymizerController:
+def make_anonymizer(
+    storage_dir: Path,
+    script_path: Path | None = None,
+    *,
+    confidentiality_options: frozenset[DeidMethodCode] | None = None,
+) -> AnonymizerController:
     """
-    Build an AnonymizerController with compiled prototyping de-id options.
+    Build an AnonymizerController with compiled de-identification options.
 
-    Compiles PROTOTYPING_OPTIONS onto the base script (same path as product
-    apply_confidentiality_options), then keeps Referring Physician Name and
-    Patient Birth Date for MIDI-B answer-key alignment.
+    Compiles confidentiality_options onto the base script (same path as product
+    apply_confidentiality_options). Defaults to PROTOTYPING_OPTIONS for PseudoPHI.
+
+    Args:
+        storage_dir: Temp project storage root.
+        script_path: Optional base .script path; otherwise experiment or packaged default.
+        confidentiality_options: Product option codes to compile; default PROTOTYPING_OPTIONS.
     """
+    options = (
+        frozenset(DeidMethodCode(code) for code in confidentiality_options)
+        if confidentiality_options is not None
+        else PROTOTYPING_OPTIONS
+    )
     base = resolve_script_path(script_path)
     storage_dir.mkdir(parents=True, exist_ok=True)
     compiled_path = storage_dir / "99-anonymizer.script"
-    document = compile_script(PROTOTYPING_OPTIONS, base)
-    for tag, _name in _MIDI_RESEARCH_KEEP_TAGS:
-        rule = document.get_rule(tag)
-        if rule is not None:
-            rule.operation = "@keep"
+    document = compile_script(options, base)
     write_script_rules(compiled_path, document)
     logger.info(
         f"prototyping script compiled options="
-        f"{sorted(int(c) for c in PROTOTYPING_OPTIONS)} → {compiled_path}"
+        f"{sorted(int(c) for c in options)} → {compiled_path}"
     )
 
     model = ProjectModel(
@@ -80,7 +81,7 @@ def make_anonymizer(storage_dir: Path, script_path: Path | None = None) -> Anony
         scu=DICOMNode("127.0.0.1", 0, "MIDIB", True),
         scp=DICOMNode("127.0.0.1", 11121, "MIDIB", True),
         anonymizer_script_path=compiled_path,
-        confidentiality_options=PROTOTYPING_OPTIONS,
+        confidentiality_options=options,
     )
     model.private_dir().mkdir(parents=True, exist_ok=True)
     model.images_dir().mkdir(parents=True, exist_ok=True)
@@ -133,14 +134,24 @@ def ensure_experiment_script_copy(*, force: bool = False) -> Path:
 class AnonymizerSession:
     """Context manager owning temp storage + anonymizer workers."""
 
-    def __init__(self, script_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        script_path: Path | None = None,
+        *,
+        confidentiality_options: frozenset[DeidMethodCode] | None = None,
+    ) -> None:
         self.script_path = script_path
+        self.confidentiality_options = confidentiality_options
         self._tmp: tempfile.TemporaryDirectory[str] | None = None
         self.anon: AnonymizerController | None = None
 
     def __enter__(self) -> Self:
         self._tmp = tempfile.TemporaryDirectory(prefix="pseudo_phi_anon_")
-        self.anon = make_anonymizer(Path(self._tmp.name), self.script_path)
+        self.anon = make_anonymizer(
+            Path(self._tmp.name),
+            self.script_path,
+            confidentiality_options=self.confidentiality_options,
+        )
         return self
 
     def __exit__(self, *exc: object) -> None:

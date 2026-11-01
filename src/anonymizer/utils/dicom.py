@@ -51,7 +51,13 @@ DICOM_CONFIDENTIALITY_PROFILE_URL
     DICOM PS 3.15 Appendix E (confidentiality profile and options).
 
 DeidMethodCode
-    DCM code value from PS3.16 CID 7050 (De-identification Method).
+    PS3.16 CID 7050 de-identification method codes, plus RSNA house extensions.
+
+AT_INGEST
+    Codes executed on the import anonymize walk (stampable in (0012,0064)).
+
+NOT_EXECUTED
+    Selected CID 7050 codes with no runner yet (Clean Graphics).
 
 deid_method_meaning(code: DeidMethodCode) -> str
     English CID 7050 code meaning for code.
@@ -108,7 +114,7 @@ DICOM_CONFIDENTIALITY_PROFILE_URL = "https://dicom.nema.org/medical/dicom/curren
 
 
 class DeidMethodCode(IntEnum):
-    """DCM code value from PS3.16 CID 7050 (De-identification Method)."""
+    """De-identification method codes (CID 7050 plus RSNA house extensions)."""
 
     BASIC = 113100
     CLEAN_PIXEL_DATA = 113101
@@ -123,6 +129,28 @@ class DeidMethodCode(IntEnum):
     RETAIN_UIDS = 113110
     SAFE_PRIVATE = 113111
     INSTITUTION_IDENTITY = 113112
+    # RSNA house code — not CID 7050; stamped with CodingSchemeDesignator 99RSNA.
+    TCIA_RESEARCH = 990054
+
+
+# De-identification options executed during anonymize. Every other
+# DeidMethodCode runs in a later task, except NOT_EXECUTED.
+AT_INGEST: frozenset[DeidMethodCode] = frozenset(
+    {
+        DeidMethodCode.BASIC,
+        DeidMethodCode.FULL_DATES,
+        DeidMethodCode.MODIFIED_DATES,
+        DeidMethodCode.PATIENT_CHARACTERISTICS,
+        DeidMethodCode.DEVICE_IDENTITY,
+        DeidMethodCode.RETAIN_UIDS,
+        DeidMethodCode.SAFE_PRIVATE,
+        DeidMethodCode.INSTITUTION_IDENTITY,
+        DeidMethodCode.TCIA_RESEARCH,
+    }
+)
+
+# Selected codes that no task executes yet.
+NOT_EXECUTED: frozenset[DeidMethodCode] = frozenset({DeidMethodCode.CLEAN_GRAPHICS})
 
 
 def _mark_for_translation(text: str) -> str:
@@ -158,6 +186,7 @@ _MEANING: dict[DeidMethodCode, str] = {
     DeidMethodCode.RETAIN_UIDS: _mark_for_translation("Retain UIDs Option"),
     DeidMethodCode.SAFE_PRIVATE: _mark_for_translation("Retain Safe Private Option"),
     DeidMethodCode.INSTITUTION_IDENTITY: _mark_for_translation("Retain Institution Identity Option"),
+    DeidMethodCode.TCIA_RESEARCH: _mark_for_translation("Retain TCIA Research Attributes"),
 }
 
 
@@ -185,9 +214,10 @@ def record_deid_method_codes(ds: Dataset, codes: Iterable[DeidMethodCode]) -> tu
     """
     Record executed de-identification options in ds.
 
-    Appends one DCM item per code to DeidentificationMethodCodeSequence
+    Appends one item per code to DeidentificationMethodCodeSequence
     (0012,0064), skipping codes already present. Creates the sequence
-    when absent.
+    when absent. CID 7050 members use CodingSchemeDesignator DCM; RSNA
+    house codes use 99RSNA.
 
     Args:
         ds: Dataset to mutate.
@@ -211,7 +241,9 @@ def record_deid_method_codes(ds: Dataset, codes: Iterable[DeidMethodCode]) -> tu
             continue
         item = Dataset()
         item.CodeValue = str(int(member))
-        item.CodingSchemeDesignator = "DCM"
+        item.CodingSchemeDesignator = (
+            "99RSNA" if member is DeidMethodCode.TCIA_RESEARCH else "DCM"
+        )
         item.CodeMeaning = deid_method_meaning(member)
         sequence.append(item)
         present.append(int(member))

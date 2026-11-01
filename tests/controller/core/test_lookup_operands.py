@@ -8,7 +8,7 @@ from pydicom.data import get_testdata_file
 
 from anonymizer.controller.anonymizer import QuarantineDirectories
 from anonymizer.controller.ctp_lookup import commit_ctp_lookup, preview_ctp_lookup
-from anonymizer.model.project import RETAIN_OPTIONS
+from anonymizer.view.settings.deidentification_options_dialog import RETAIN_OPTIONS
 from tests.controller.dicom.support.test_files import ct_small_filename
 from tests.controller.dicom.support.test_nodes import LocalSCU
 

@@ -27,7 +27,7 @@ from anonymizer.controller.script.operands import (
 )
 from anonymizer.controller.script.options import confidentiality_options_changed
 from anonymizer.controller.script.paths import packaged_default_script_path
-from anonymizer.model.project import BASIC_OPTIONS, RETAIN_OPTIONS
+from anonymizer.view.settings.deidentification_options_dialog import BASIC_OPTIONS, RETAIN_OPTIONS
 from anonymizer.utils.dicom_dictionary import (
     dicom_applicable_standard_text,
     dicom_standard_version,

@@ -10,7 +10,8 @@ from anonymizer.controller.ai.embedded_phi.ner.synthetic_phi import generate_syn
 from anonymizer.controller.private_tags import private_tag_operation
 from anonymizer.controller.script.paths import packaged_default_script_path
 from anonymizer.model.anonymizer import AnonymizerModel
-from anonymizer.model.project import BASIC_OPTIONS, RETAIN_OPTIONS, ProjectModel
+from anonymizer.model.project import ProjectModel
+from anonymizer.view.settings.deidentification_options_dialog import BASIC_OPTIONS, RETAIN_OPTIONS
 
 _DEFAULT = packaged_default_script_path()
 

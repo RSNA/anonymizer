@@ -71,6 +71,7 @@ _STATUS_ORDER: tuple[DeidMethodCode, ...] = (
     DeidMethodCode.INSTITUTION_IDENTITY,
     DeidMethodCode.RETAIN_UIDS,
     DeidMethodCode.SAFE_PRIVATE,
+    DeidMethodCode.TCIA_RESEARCH,
     DeidMethodCode.CLEAN_PIXEL_DATA,
     DeidMethodCode.CLEAN_VISUAL_FEATURES,
     DeidMethodCode.CLEAN_GRAPHICS,
@@ -87,6 +88,7 @@ _ABBREVIATIONS: dict[DeidMethodCode, str] = {
     DeidMethodCode.INSTITUTION_IDENTITY: "Institution",
     DeidMethodCode.RETAIN_UIDS: "UIDs",
     DeidMethodCode.SAFE_PRIVATE: "Safe Private",
+    DeidMethodCode.TCIA_RESEARCH: "TCIA",
     DeidMethodCode.CLEAN_PIXEL_DATA: "Clean Pixels",
     DeidMethodCode.CLEAN_VISUAL_FEATURES: "Face",
     DeidMethodCode.CLEAN_GRAPHICS: "Graphics",
@@ -247,10 +249,11 @@ _COPY: dict[DeidMethodCode, tuple[str, str, str]] = {
         "Requires face-blur models and a suitable head series.",
     ),
     DeidMethodCode.CLEAN_GRAPHICS: (
-        "Reserved for cleaning non-text burned-in graphics (logos, rulers, "
-        "decorative marks). Curve and overlay groups are already removed at "
+        "Reserved for cleaning non-text burned-in graphics: logos, rulers, and "
+        "decorative marks. Curve and overlay groups are already removed at "
         "import. Remaining non-text burned-in graphics are uncommon in modern "
-        "research archives; most residual pixel PHI is text (Clean Pixel Data).",
+        "research archives; most residual pixel PHI is text covered by Clean "
+        "Pixel Data.",
         "Selectable for project records, but no processing task executes this "
         "option — legacy/uncommon edge case, not implemented.",
         "Selecting it only records intent; it is not stamped as executed.",
@@ -314,6 +317,21 @@ _COPY: dict[DeidMethodCode, tuple[str, str, str]] = {
         "name, and related clinical-trial site identity attributes.",
         "During import.",
         "",
+    ),
+    DeidMethodCode.TCIA_RESEARCH: (
+        "At import, keep research attributes listed for TCIA-style archive "
+        "submission when Basic would still remove, empty, or age-band them — "
+        "for example nuclear medicine acquisition coding, Patient Age kept "
+        "exactly instead of a five-year band, plus manufacturer, model name, "
+        "software versions, and clinical trial sponsor name marked safe so "
+        "Embedded PHI does not blank them — excluding tags the MIDI answer "
+        "key marks for whole-value text removal or date shifting. Other "
+        "selected retain options are left unchanged. PHI inside kept text is "
+        "removed later by Embedded PHI.",
+        "During import.",
+        "For MIDI-B / current TCIA scoring leave Retain Device Identity off; "
+        "this option keeps manufacturer/model/software without keeping serial "
+        "or station name.",
     ),
 }
 

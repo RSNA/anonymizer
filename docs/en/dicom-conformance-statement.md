@@ -24,7 +24,7 @@ Under the **Basic Profile** at import (default packaged script, unless a retain 
 
 - **All private tags** (unless **Retain Safe Private** is selected — then each private element is resolved from the TCIA private-tag knowledge base; unknown slots are removed).
 - **Curve and overlay groups**.
-- Attributes Table E.1-1 marks for removal or blanking under Basic that the project script implements with `@remove()`, `@empty()`, or equivalent (birth date, physician names, institution identity, device identity, patient characteristics, and many clinical workflow identifiers).
+- Attributes Table E.1-1 marks under Basic, applied by the packaged default script as: **X** → `@remove()`, **Z**/**D** → `@empty()` (or product remaps such as `@ptid` / `@acc` / `@hashdate` where Z/D allows a dummy), **U** → `@uid`. Mixtures prefer X, then Z, then D, then U. Free-text descriptors kept for Clean Descriptors / Embedded PHI stay `@keep` until that step (see `assets/scripts/README.md`).
 - **Encrypted Attributes** sequence and related encryption tags (`Encrypted Attributes Sequence`, `Encrypted Content`, `Encrypted Content Transfer Syntax UID`, and related Group 0400 signature / encryption elements) — **removed**, not populated.
 - Digital signature UIDs and related signature elements — **removed**.
 

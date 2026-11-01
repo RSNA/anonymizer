@@ -12,8 +12,8 @@ import pytest
 
 from anonymizer.controller.ai.feature_availability import deid_option_ready
 from anonymizer.controller.project import ProjectController
-from anonymizer.model.project import AT_INGEST, BASIC_OPTIONS, NOT_EXECUTED
-from anonymizer.utils.dicom import DeidMethodCode, record_deid_method_codes
+from anonymizer.utils.dicom import AT_INGEST, NOT_EXECUTED, DeidMethodCode, record_deid_method_codes
+from anonymizer.view.settings.deidentification_options_dialog import BASIC_OPTIONS
 from tests.controller.dicom.support.test_files import ct_small_filename
 from tests.controller.dicom.support.test_nodes import LocalSCU
 

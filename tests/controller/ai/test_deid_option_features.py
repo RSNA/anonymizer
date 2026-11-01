@@ -8,8 +8,7 @@ from anonymizer.controller.ai.feature_ids import (
     AiFeatureId,
     ai_feature_for_deid_option,
 )
-from anonymizer.model.project import AT_INGEST
-from anonymizer.utils.dicom import DeidMethodCode
+from anonymizer.utils.dicom import AT_INGEST, DeidMethodCode
 
 
 def test_cleaning_options_map_to_features() -> None:
