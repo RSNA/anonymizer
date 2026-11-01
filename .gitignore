@@ -48,6 +48,7 @@ src/dist/
 *.anonymizer_state.json
 *.db
 ProjectModel.json
+!src/eval/midi_b/assets/ProjectModel.json
 
 # --- OS / editors ---
 .DS_Store

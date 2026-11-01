@@ -1,25 +1,47 @@
 """JSON configuration for headless AI batch processing.
 
+Mirrors the GUI AI Batch dialog: features.embedded_phi (pixel / metadata /
+reports), features.harmonize, features.face_blur. OCR knobs live under pixel
+only; NER replace modes live under metadata and reports.
+
 Public API
 ----------
 AiBatchConfigError
     Invalid AI batch configuration or prerequisites.
 
 AiBatchStudyRef
-    AiBatchStudyRef type.
+    One study selection for headless studies lists.
+
+EmbeddedPhiPixelOptions
+    Pixel OCR knobs (removal_method, remove_scope, use_exclude_areas).
+
+EmbeddedPhiTextOptions
+    Metadata or Reports NER knobs (enabled, replace_mode).
+
+EmbeddedPhiFeatureOptions
+    Embedded PHI feature (pixel / metadata / reports).
+
+HarmonizeFeatureOptions
+    Harmonize feature knobs.
+
+FaceBlurFeatureOptions
+    Face Blur feature knobs.
 
 AiBatchConfig
-    AiBatchConfig type.
+    Headless AI batch configuration (nested features).
 
-validate_ai_batch_config_gates(config: AiBatchConfig) -> None
-    Validate ai batch config gates.
+validate_ai_batch_config_gates(config) -> None
+    Fail fast when selected features lack installed models.
 
-enumerate_studies_from_images_dir(images_dir: Path) -> list[tuple[str, str]]
-    Enumerate studies from images dir.
+enumerate_studies_from_images_dir(images_dir) -> list[tuple[str, str]]
+    Walk public/ for (patient_id, study_uid) pairs.
 
-resolve_ai_batch_studies(config: AiBatchConfig, *, images_dir: Path, anon_model: AnonymizerModel) -> list[tuple[str, str]]
-    Resolve ai batch studies.
+resolve_ai_batch_studies(config, *, images_dir, anon_model) -> list[tuple[str, str]]
+    Resolve studies from config ("all" or explicit refs).
 """
+
+from __future__ import annotations
+
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -28,7 +50,10 @@ from typing import Any, Literal, Self
 
 from anonymizer.controller.ai.batch_process import AiBatchAlgorithm, AiBatchProcessOptions
 from anonymizer.controller.ai.blur_face import FaceBlurMode
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import PixelPhiRemovalMode
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
+    PixelPhiRemovalMode,
+    normalize_pixel_phi_removal_mode,
+)
 from anonymizer.controller.ai.feature_availability import (
     brain_structures_allowed,
     embedded_phi_allowed,
@@ -41,22 +66,11 @@ from anonymizer.controller.ai.tseg.config import (
     set_ct_segmentation_mode,
     set_mr_segmentation_mode,
 )
-from anonymizer.controller.jobs.runner import (
-    OcrRemoveMode,
-    normalize_ocr_remove_mode,
-    ocr_remove_mode_from_legacy_whitelist,
-)
+from anonymizer.controller.jobs.runner import OcrRemoveMode, normalize_ocr_remove_mode
 from anonymizer.controller.phi.phi_io import build_phi_index
 from anonymizer.model.anonymizer import AnonymizerModel
 
-_ALGORITHM_ALIASES: dict[str, AiBatchAlgorithm] = {
-    "remove_pixel_phi": AiBatchAlgorithm.REMOVE_PIXEL_PHI,
-    "removepixelphi": AiBatchAlgorithm.REMOVE_PIXEL_PHI,
-    "pixel_phi": AiBatchAlgorithm.REMOVE_PIXEL_PHI,
-    "harmonize": AiBatchAlgorithm.HARMONIZE,
-    "face_blur": AiBatchAlgorithm.FACE_BLUR,
-    "faceblur": AiBatchAlgorithm.FACE_BLUR,
-}
+ReplaceMode = Literal["blank", "synth"]
 
 
 class AiBatchConfigError(ValueError):
@@ -70,14 +84,45 @@ class AiBatchStudyRef:
 
 
 @dataclass(frozen=True)
-class AiBatchConfig:
-    algorithms: tuple[AiBatchAlgorithm, ...]
-    blur_mode: FaceBlurMode = FaceBlurMode.GAUSSIAN
-    pixel_phi_removal_mode: PixelPhiRemovalMode = PixelPhiRemovalMode.BLACKOUT
-    ocr_remove_mode: OcrRemoveMode = OcrRemoveMode.NON_WHITELISTED
-    ocr_use_exclude_areas: bool = False
+class EmbeddedPhiPixelOptions:
+    enabled: bool = True
+    removal_method: PixelPhiRemovalMode = PixelPhiRemovalMode.BLACKOUT
+    remove_scope: OcrRemoveMode = OcrRemoveMode.NON_WHITELISTED
+    use_exclude_areas: bool = False
+
+
+@dataclass(frozen=True)
+class EmbeddedPhiTextOptions:
+    enabled: bool = True
+    replace_mode: ReplaceMode = "blank"
+
+
+@dataclass(frozen=True)
+class EmbeddedPhiFeatureOptions:
+    enabled: bool = False
+    pixel: EmbeddedPhiPixelOptions = field(default_factory=EmbeddedPhiPixelOptions)
+    metadata: EmbeddedPhiTextOptions = field(default_factory=EmbeddedPhiTextOptions)
+    reports: EmbeddedPhiTextOptions = field(default_factory=EmbeddedPhiTextOptions)
+
+
+@dataclass(frozen=True)
+class HarmonizeFeatureOptions:
+    enabled: bool = False
     include_brain_structures: bool = False
     prefer_description_mappings: bool = True
+
+
+@dataclass(frozen=True)
+class FaceBlurFeatureOptions:
+    enabled: bool = False
+    blur_mode: FaceBlurMode = FaceBlurMode.GAUSSIAN
+
+
+@dataclass(frozen=True)
+class AiBatchConfig:
+    embedded_phi: EmbeddedPhiFeatureOptions = field(default_factory=EmbeddedPhiFeatureOptions)
+    harmonize: HarmonizeFeatureOptions = field(default_factory=HarmonizeFeatureOptions)
+    face_blur: FaceBlurFeatureOptions = field(default_factory=FaceBlurFeatureOptions)
     series_description_overrides: Mapping[str, str] = field(default_factory=dict)
     study_loinc_overrides: Mapping[str, str] = field(default_factory=dict)
     ct_segmentation_mode: str | None = None
@@ -85,17 +130,34 @@ class AiBatchConfig:
     studies: Literal["all"] | tuple[AiBatchStudyRef, ...] = "all"
     skip_already_processed: bool = True
 
+    @property
+    def algorithms(self) -> tuple[AiBatchAlgorithm, ...]:
+        """Selected algorithms in canonical GUI order."""
+        selected: list[AiBatchAlgorithm] = []
+        if self.embedded_phi.enabled:
+            selected.append(AiBatchAlgorithm.REMOVE_PIXEL_PHI)
+        if self.harmonize.enabled:
+            selected.append(AiBatchAlgorithm.HARMONIZE)
+        if self.face_blur.enabled:
+            selected.append(AiBatchAlgorithm.FACE_BLUR)
+        return tuple(selected)
+
     def to_options(self) -> AiBatchProcessOptions:
         return AiBatchProcessOptions(
             algorithms=self.algorithms,
-            blur_mode=self.blur_mode,
-            pixel_phi_removal_mode=self.pixel_phi_removal_mode,
-            ocr_remove_mode=self.ocr_remove_mode,
-            ocr_use_exclude_areas=self.ocr_use_exclude_areas,
-            include_brain_structures=self.include_brain_structures,
-            prefer_description_mappings=self.prefer_description_mappings,
+            blur_mode=self.face_blur.blur_mode,
+            pixel_phi_removal_mode=self.embedded_phi.pixel.removal_method,
+            ocr_remove_mode=self.embedded_phi.pixel.remove_scope,
+            ocr_use_exclude_areas=self.embedded_phi.pixel.use_exclude_areas,
+            include_brain_structures=self.harmonize.include_brain_structures,
+            prefer_description_mappings=self.harmonize.prefer_description_mappings,
             series_description_overrides=dict(self.series_description_overrides),
             study_loinc_overrides=dict(self.study_loinc_overrides),
+            embedded_phi_pixel_enabled=self.embedded_phi.pixel.enabled,
+            embedded_phi_metadata_enabled=self.embedded_phi.metadata.enabled,
+            embedded_phi_reports_enabled=self.embedded_phi.reports.enabled,
+            metadata_replace_mode=self.embedded_phi.metadata.replace_mode,
+            reports_replace_mode=self.embedded_phi.reports.replace_mode,
         )
 
     def apply_segmentation_modes(self) -> None:
@@ -114,13 +176,34 @@ class AiBatchConfig:
                 for ref in self.studies
             ]
         payload: dict[str, Any] = {
-            "algorithms": [algorithm.value for algorithm in self.algorithms],
-            "blur_mode": self.blur_mode.value,
-            "pixel_phi_removal_mode": self.pixel_phi_removal_mode.value,
-            "ocr_remove_mode": self.ocr_remove_mode.value,
-            "ocr_use_exclude_areas": self.ocr_use_exclude_areas,
-            "include_brain_structures": self.include_brain_structures,
-            "prefer_description_mappings": self.prefer_description_mappings,
+            "features": {
+                "embedded_phi": {
+                    "enabled": self.embedded_phi.enabled,
+                    "pixel": {
+                        "enabled": self.embedded_phi.pixel.enabled,
+                        "removal_method": self.embedded_phi.pixel.removal_method.value,
+                        "remove_scope": self.embedded_phi.pixel.remove_scope.value,
+                        "use_exclude_areas": self.embedded_phi.pixel.use_exclude_areas,
+                    },
+                    "metadata": {
+                        "enabled": self.embedded_phi.metadata.enabled,
+                        "replace_mode": self.embedded_phi.metadata.replace_mode,
+                    },
+                    "reports": {
+                        "enabled": self.embedded_phi.reports.enabled,
+                        "replace_mode": self.embedded_phi.reports.replace_mode,
+                    },
+                },
+                "harmonize": {
+                    "enabled": self.harmonize.enabled,
+                    "include_brain_structures": self.harmonize.include_brain_structures,
+                    "prefer_description_mappings": self.harmonize.prefer_description_mappings,
+                },
+                "face_blur": {
+                    "enabled": self.face_blur.enabled,
+                    "blur_mode": self.face_blur.blur_mode.value,
+                },
+            },
             "studies": studies,
             "skip_already_processed": self.skip_already_processed,
         }
@@ -138,38 +221,27 @@ class AiBatchConfig:
         if not isinstance(data, dict):
             raise AiBatchConfigError("AI batch config must be a JSON object")
 
-        algorithms = _parse_algorithms(data.get("algorithms"))
-        blur_mode = _parse_blur_mode(data.get("blur_mode", FaceBlurMode.GAUSSIAN.value))
-        pixel_phi_removal_mode = _parse_pixel_phi_removal_mode(
-            data.get("pixel_phi_removal_mode", PixelPhiRemovalMode.BLACKOUT.value)
-        )
-        ocr_remove_mode = _parse_ocr_remove_mode(data)
-        ocr_use_exclude_areas = _parse_ocr_use_exclude_areas(data)
-        include_brain_structures = _parse_bool(
-            data.get("include_brain_structures", False),
-            field="include_brain_structures",
-        )
-        prefer_description_mappings = _parse_bool(
-            data.get("prefer_description_mappings", True),
-            field="prefer_description_mappings",
-        )
-        ct_segmentation_mode = _optional_str(data.get(CT_SEGMENTATION_MODE_KEY))
-        mr_segmentation_mode = _optional_str(data.get(MR_SEGMENTATION_MODE_KEY))
+        features_raw = data.get("features")
+        if not isinstance(features_raw, dict):
+            raise AiBatchConfigError("features must be an object")
+
         studies = _parse_studies(data.get("studies", "all"))
-        skip_already_processed = _parse_bool(data.get("skip_already_processed", True), field="skip_already_processed")
+        skip_already_processed = _parse_bool(
+            data.get("skip_already_processed", True), field="skip_already_processed"
+        )
         if not skip_already_processed:
             raise AiBatchConfigError("skip_already_processed: false is not supported")
 
+        embedded_phi, harmonize, face_blur = _parse_features(features_raw)
+        if not (embedded_phi.enabled or harmonize.enabled or face_blur.enabled):
+            raise AiBatchConfigError("at least one feature must be enabled")
+
         return cls(
-            algorithms=algorithms,
-            blur_mode=blur_mode,
-            pixel_phi_removal_mode=pixel_phi_removal_mode,
-            ocr_remove_mode=ocr_remove_mode,
-            ocr_use_exclude_areas=ocr_use_exclude_areas,
-            include_brain_structures=include_brain_structures,
-            prefer_description_mappings=prefer_description_mappings,
-            ct_segmentation_mode=ct_segmentation_mode,
-            mr_segmentation_mode=mr_segmentation_mode,
+            embedded_phi=embedded_phi,
+            harmonize=harmonize,
+            face_blur=face_blur,
+            ct_segmentation_mode=_optional_str(data.get(CT_SEGMENTATION_MODE_KEY)),
+            mr_segmentation_mode=_optional_str(data.get(MR_SEGMENTATION_MODE_KEY)),
             studies=studies,
             skip_already_processed=skip_already_processed,
         )
@@ -191,19 +263,88 @@ class AiBatchConfig:
         return cls.from_json(text)
 
 
-def _parse_algorithms(value: object) -> tuple[AiBatchAlgorithm, ...]:
-    if not isinstance(value, list) or not value:
-        raise AiBatchConfigError("algorithms must be a non-empty list")
-    algorithms: list[AiBatchAlgorithm] = []
-    for item in value:
-        key = str(item).strip().lower().replace("-", "_").replace(" ", "_")
-        if key not in _ALGORITHM_ALIASES:
-            allowed = ", ".join(sorted(_ALGORITHM_ALIASES))
-            raise AiBatchConfigError(f"Unknown algorithm {item!r}; expected one of: {allowed}")
-        algorithm = _ALGORITHM_ALIASES[key]
-        if algorithm not in algorithms:
-            algorithms.append(algorithm)
-    return tuple(algorithms)
+def _parse_features(
+    features: dict[str, Any],
+) -> tuple[EmbeddedPhiFeatureOptions, HarmonizeFeatureOptions, FaceBlurFeatureOptions]:
+    ep_raw = features.get("embedded_phi")
+    if ep_raw is None:
+        embedded_phi = EmbeddedPhiFeatureOptions()
+    elif not isinstance(ep_raw, dict):
+        raise AiBatchConfigError("features.embedded_phi must be an object")
+    else:
+        embedded_phi = _parse_embedded_phi(ep_raw)
+
+    hz_raw = features.get("harmonize")
+    if hz_raw is None:
+        harmonize = HarmonizeFeatureOptions()
+    elif not isinstance(hz_raw, dict):
+        raise AiBatchConfigError("features.harmonize must be an object")
+    else:
+        harmonize = HarmonizeFeatureOptions(
+            enabled=_parse_bool(hz_raw.get("enabled", False), field="features.harmonize.enabled"),
+            include_brain_structures=_parse_bool(
+                hz_raw.get("include_brain_structures", False),
+                field="features.harmonize.include_brain_structures",
+            ),
+            prefer_description_mappings=_parse_bool(
+                hz_raw.get("prefer_description_mappings", True),
+                field="features.harmonize.prefer_description_mappings",
+            ),
+        )
+
+    fb_raw = features.get("face_blur")
+    if fb_raw is None:
+        face_blur = FaceBlurFeatureOptions()
+    elif not isinstance(fb_raw, dict):
+        raise AiBatchConfigError("features.face_blur must be an object")
+    else:
+        face_blur = FaceBlurFeatureOptions(
+            enabled=_parse_bool(fb_raw.get("enabled", False), field="features.face_blur.enabled"),
+            blur_mode=_parse_blur_mode(fb_raw.get("blur_mode", FaceBlurMode.GAUSSIAN.value)),
+        )
+    return embedded_phi, harmonize, face_blur
+
+
+def _parse_embedded_phi(raw: dict[str, Any]) -> EmbeddedPhiFeatureOptions:
+    enabled = _parse_bool(raw.get("enabled", False), field="features.embedded_phi.enabled")
+    pixel_raw = raw.get("pixel")
+    if pixel_raw is None:
+        pixel = EmbeddedPhiPixelOptions()
+    elif not isinstance(pixel_raw, dict):
+        raise AiBatchConfigError("features.embedded_phi.pixel must be an object")
+    else:
+        pixel = EmbeddedPhiPixelOptions(
+            enabled=_parse_bool(pixel_raw.get("enabled", True), field="features.embedded_phi.pixel.enabled"),
+            removal_method=_parse_removal_method(
+                pixel_raw.get("removal_method", PixelPhiRemovalMode.BLACKOUT.value)
+            ),
+            remove_scope=_parse_remove_scope(
+                pixel_raw.get("remove_scope", OcrRemoveMode.NON_WHITELISTED.value)
+            ),
+            use_exclude_areas=_parse_bool(
+                pixel_raw.get("use_exclude_areas", False),
+                field="features.embedded_phi.pixel.use_exclude_areas",
+            ),
+        )
+    metadata = _parse_text_options(raw.get("metadata"), path="features.embedded_phi.metadata")
+    reports = _parse_text_options(raw.get("reports"), path="features.embedded_phi.reports")
+    return EmbeddedPhiFeatureOptions(
+        enabled=enabled,
+        pixel=pixel,
+        metadata=metadata,
+        reports=reports,
+    )
+
+
+def _parse_text_options(raw: object, *, path: str) -> EmbeddedPhiTextOptions:
+    if raw is None:
+        return EmbeddedPhiTextOptions()
+    if not isinstance(raw, dict):
+        raise AiBatchConfigError(f"{path} must be an object")
+    return EmbeddedPhiTextOptions(
+        enabled=_parse_bool(raw.get("enabled", True), field=f"{path}.enabled"),
+        replace_mode=_parse_replace_mode(raw.get("replace_mode", "blank"), field=f"{path}.replace_mode"),
+    )
 
 
 def _parse_blur_mode(value: object) -> FaceBlurMode:
@@ -215,35 +356,25 @@ def _parse_blur_mode(value: object) -> FaceBlurMode:
         raise AiBatchConfigError(f"Unknown blur_mode {value!r}; expected one of: {allowed}") from exc
 
 
-def _parse_pixel_phi_removal_mode(value: object) -> PixelPhiRemovalMode:
-    text = str(value or "").strip().lower()
+def _parse_removal_method(value: object) -> PixelPhiRemovalMode:
     try:
-        return PixelPhiRemovalMode(text)
-    except ValueError as exc:
+        return normalize_pixel_phi_removal_mode(value)
+    except Exception as exc:
         allowed = ", ".join(mode.value for mode in PixelPhiRemovalMode)
         raise AiBatchConfigError(
-            f"Unknown pixel_phi_removal_mode {value!r}; expected one of: {allowed}"
+            f"Unknown removal_method {value!r}; expected one of: {allowed}"
         ) from exc
 
 
-def _parse_ocr_remove_mode(data: dict[str, Any]) -> OcrRemoveMode:
-    if "ocr_remove_mode" in data and data.get("ocr_remove_mode") not in (None, ""):
-        return normalize_ocr_remove_mode(data.get("ocr_remove_mode"))
-    if "use_modality_whitelist" in data:
-        use_whitelist = _parse_bool(data.get("use_modality_whitelist"), field="use_modality_whitelist")
-        return ocr_remove_mode_from_legacy_whitelist(use_modality_whitelist=use_whitelist)
-    return OcrRemoveMode.NON_WHITELISTED
+def _parse_remove_scope(value: object) -> OcrRemoveMode:
+    return normalize_ocr_remove_mode(value)
 
 
-def _parse_ocr_use_exclude_areas(data: dict[str, Any]) -> bool:
-    if "ocr_use_exclude_areas" in data:
-        return _parse_bool(data.get("ocr_use_exclude_areas"), field="ocr_use_exclude_areas")
-    zones = data.get("ocr_exclude_zones")
-    if isinstance(zones, dict):
-        return any(isinstance(names, list) and names for names in zones.values())
-    if isinstance(zones, list):
-        return bool(zones)
-    return False
+def _parse_replace_mode(value: object, *, field: str) -> ReplaceMode:
+    text = str(value or "blank").strip().lower()
+    if text in ("blank", "synth"):
+        return text  # type: ignore[return-value]
+    raise AiBatchConfigError(f"{field} must be 'blank' or 'synth'")
 
 
 def _parse_bool(value: object, *, field: str) -> bool:
@@ -280,12 +411,12 @@ def validate_ai_batch_config_gates(config: AiBatchConfig) -> None:
     errors: list[str] = []
     for algorithm in config.algorithms:
         if algorithm is AiBatchAlgorithm.REMOVE_PIXEL_PHI and not embedded_phi_allowed():
-            errors.append("remove_pixel_phi: Embedded PHI models are not installed")
+            errors.append("embedded_phi: Embedded PHI models are not installed")
         elif algorithm is AiBatchAlgorithm.HARMONIZE and not harmonize_allowed():
             errors.append("harmonize: TotalSegmentator anatomy models are not installed")
         elif algorithm is AiBatchAlgorithm.FACE_BLUR and not face_blur_allowed():
             errors.append("face_blur: face models or license are not available")
-    if config.include_brain_structures and not brain_structures_allowed():
+    if config.harmonize.include_brain_structures and not brain_structures_allowed():
         errors.append("include_brain_structures: brain structures models or license are not available")
     if errors:
         raise AiBatchConfigError("; ".join(errors))

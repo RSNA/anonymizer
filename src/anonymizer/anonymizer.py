@@ -41,6 +41,10 @@ from anonymizer.controller.ai.tseg.readiness import log_runtime_status
 from anonymizer.controller.analytics.prefs import apply_analytics_preferences, merge_analytics_into_state
 from anonymizer.controller.ctp_lookup import commit_ctp_lookup
 from anonymizer.controller.headless import create_headless_controller, load_model
+from anonymizer.controller.headless_io import (
+    run_headless_export_mappings,
+    run_headless_import,
+)
 from anonymizer.controller.project import ProjectController
 from anonymizer.mcp.server import MCP_HTTP_PATH, run_MCP
 from anonymizer.model.project import DICOMRuntimeError, ProjectModel
@@ -1654,6 +1658,7 @@ def run_HEADLESS_AI_BATCH(project_model_path: Path, ai_batch_path: Path) -> int:
     return 0
 
 
+
 def run_HEADLESS(project_model_path: Path):
     if not project_model_path.exists():
         logger.error(_("Project Model file not found") + f": {project_model_path}")
@@ -1724,6 +1729,21 @@ def run_HEADLESS(project_model_path: Path):
     help=_("Run AI batch once using --ai-batch, then exit (requires -c; not with --mcp)."),
 )
 @click.option(
+    "--import-dir",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True, readable=True, path_type=Path),
+    default=None,
+    help=_("Import a DICOM folder once using -c ProjectModel.json, then exit (not with --mcp)."),
+)
+@click.option(
+    "--export-mappings",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+    default=None,
+    help=_(
+        "Write uid_mapping.csv, patid_mapping.csv, and manifest.json to this directory "
+        "(with --import-dir after import, or alone with -c)."
+    ),
+)
+@click.option(
     "--mcp",
     type=str,
     is_flag=False,
@@ -1739,6 +1759,8 @@ def main(
     config: Path | None = None,
     ai_batch: Path | None = None,
     ai_batch_run: bool = False,
+    import_dir: Path | None = None,
+    export_mappings: Path | None = None,
     mcp: str | None = None,
 ):
     install_dir = os.path.dirname(os.path.realpath(__file__))
@@ -1795,6 +1817,8 @@ def main(
         config=config,
         ai_batch=ai_batch,
         ai_batch_run=ai_batch_run,
+        import_dir=import_dir,
+        export_mappings=export_mappings,
         mcp=mcp,
         logs_dir=logs_dir,
     )
@@ -1819,6 +1843,8 @@ def dispatch_runtime(
     config: Path | None,
     ai_batch: Path | None,
     ai_batch_run: bool,
+    import_dir: Path | None,
+    export_mappings: Path | None,
     mcp: str | None,
     logs_dir: Path | None,
 ) -> None:
@@ -1835,11 +1861,44 @@ def dispatch_runtime(
         logger.error("--ai-batch-run cannot be combined with --mcp")
         sys.exit(2)
 
+    if import_dir is not None and mcp is not None:
+        logger.error("--import-dir cannot be combined with --mcp")
+        sys.exit(2)
+
+    if import_dir is not None and ai_batch_run:
+        logger.error("--import-dir and --ai-batch-run are separate one-shot phases")
+        sys.exit(2)
+
+    if import_dir is not None:
+        if config is None:
+            logger.error("--import-dir requires -c/--config")
+            sys.exit(2)
+        sys.exit(
+            run_headless_import(
+                config,
+                import_dir,
+                export_mappings_dir=export_mappings,
+            )
+        )
+
+    if export_mappings is not None and not ai_batch_run:
+        if config is None:
+            logger.error("--export-mappings requires -c/--config")
+            sys.exit(2)
+        sys.exit(run_headless_export_mappings(config, export_mappings))
+
     if ai_batch_run:
         if config is None or ai_batch is None:
             logger.error("--ai-batch-run requires both -c/--config and --ai-batch")
             sys.exit(2)
-        sys.exit(run_HEADLESS_AI_BATCH(config, ai_batch))
+        code = run_HEADLESS_AI_BATCH(config, ai_batch)
+        # Always refresh mappings after batch (including partial failure) so
+        # AI-issued report SR UIDs are present for MIDI scoring.
+        if export_mappings is not None:
+            map_code = run_headless_export_mappings(config, export_mappings)
+            if code == 0:
+                code = map_code
+        sys.exit(code)
 
     if mcp is not None:
 

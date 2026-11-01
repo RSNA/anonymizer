@@ -16,7 +16,7 @@ Burnt-in pixel OCR (`pixel/`) and free-text NER (`ner/`) for post-ingest de-iden
 | [`metadata/series_index.py`](metadata/series_index.py) | Per-SOP rows + interned unique free-text index for series load / Detect |
 | [`controller/private_tags/`](../../private_tags/) | TCIA Private KB (`lookup_private_tag`, `private_tag_operation`) |
 
-**PseudoPHI header path (no pixels / no regex):** (1) Default anonymizer script with SAFE_PRIVATE / Retain options walk → (2–5) extract / prepare NER / bulk detect / scrub.
+**Clean Descriptors metadata path:** extract → frozen NER compile (`metadata/ner_compile.py`: each tag as `Tag Name: alnumvalue.` joined by newlines + offset map; do not change when fine-tuning) → one OpenMed call → remap → post-NER whitelist/date/expand → IS/DS numeric gate → remove + stamp.
 
 IOD JSON is vendored at [`assets/dicom_standard/2025e/json/`](../../../assets/dicom_standard/2025e/json/) (~**2.4 MiB** total; see [`SOURCE.md`](../../../assets/dicom_standard/SOURCE.md)).
 

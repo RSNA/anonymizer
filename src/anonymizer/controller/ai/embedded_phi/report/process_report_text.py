@@ -26,11 +26,14 @@ entities_from_study_phi(text: str, ds: Dataset, phi_header: object | None) -> li
 merge_phi_entities(meta: Sequence[Entity], ner: Sequence[Entity]) -> tuple[list[Entity], int]
     Metadata spans win; keep NER spans that do not overlap them.
 
-remove_phi(text: str, entities: Sequence[Entity], *, synthetic: bool=False) -> str
+remove_phi(text: str, entities: Sequence[Entity], *, synthetic: bool=False, log: bool=True) -> str
     Replace PHI spans in text (no Dataset I/O).
 
 write_report_text(ds: Dataset, text: str) -> Dataset
     Persist cleansed report unicode for ML/labelling and de-identify ds.
+
+apply_project_uids_to_sr(sr: Dataset, *, allocate_uid: Callable[[str], str], source_key: str) -> None
+    Stamp Series/SOP UIDs via allocate_uid so MIDI mapping export includes them.
 
 render_pdf_pages(data: bytes, *, scale: float=1.5) -> list[Image.Image]
     Rasterize PDF bytes for Report View graphic preview.
@@ -48,7 +51,7 @@ import datetime as _dt
 import io
 import logging
 import re
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 
 from PIL import Image
 from pydicom import Dataset
@@ -411,6 +414,7 @@ def remove_phi(
     entities: Sequence[Entity],
     *,
     synthetic: bool = False,
+    log: bool = True,
 ) -> str:
     """
     Replace PHI spans in text (no Dataset I/O).
@@ -422,6 +426,7 @@ def remove_phi(
         text: Report unicode from detect_phi.
         entities: Spans with offsets into text (metadata + NER, merged).
         synthetic: If False, blank NER spans; if True, synthetic NER replacements.
+        log: When False, skip per-field INFO traces (Clean Descriptors consolidates).
 
     Returns:
         Cleaned unicode string.
@@ -429,22 +434,24 @@ def remove_phi(
     mode = "synth" if synthetic else "blank"
     meta_n = sum(1 for e in entities if e.replacement is not None)
     ner_n = len(entities) - meta_n
-    logger.info(
-        "report: remove start synthetic=%s entities=%d "
-        "(metadata→anon_dicom=%d ner=%d)",
-        synthetic,
-        len(entities),
-        meta_n,
-        ner_n,
-    )
-    cleaned, _used = replace_entities(text, entities, mode=mode)
-    logger.info(
-        "report: remove done synthetic=%s entities=%d chars %d→%d",
-        synthetic,
-        len(entities),
-        len(text),
-        len(cleaned),
-    )
+    if log:
+        logger.info(
+            "report: remove start synthetic=%s entities=%d "
+            "(metadata→anon_dicom=%d ner=%d)",
+            synthetic,
+            len(entities),
+            meta_n,
+            ner_n,
+        )
+    cleaned, _used = replace_entities(text, entities, mode=mode, log=log)
+    if log:
+        logger.info(
+            "report: remove done synthetic=%s entities=%d chars %d→%d",
+            synthetic,
+            len(entities),
+            len(text),
+            len(cleaned),
+        )
     return cleaned
 
 
@@ -482,6 +489,31 @@ def write_report_text(ds: Dataset, text: str) -> Dataset:
     sr = build_basic_text_sr(ds, lines, series_description="De-identified Report")
     logger.info(f"report: write kind={kind} ml_lines={len(lines)}")
     return sr
+
+
+def apply_project_uids_to_sr(
+    sr: Dataset,
+    *,
+    allocate_uid: Callable[[str], str],
+    source_key: str,
+) -> None:
+    """Stamp Series/SOP UIDs via allocate_uid so MIDI mapping export includes them.
+
+    Replaces pydicom generate_uid() values (often a site prefix outside the
+    project UID root) with deterministic project-mapped anon UIDs.
+
+    Args:
+        sr: Unsaved Basic Text SR from build_basic_text_sr / write_report_text.
+        allocate_uid: phi_key → anon_uid (typically AnonymizerModel.get_or_create_anon_uid).
+        source_key: Stable key derived from the source series/SOP (not PHI text).
+    """
+    key = str(source_key or "").strip() or "unknown"
+    series_uid = allocate_uid(f"ai-report-series:{key}")
+    sop_uid = allocate_uid(f"ai-report-sop:{key}")
+    sr.SeriesInstanceUID = series_uid
+    sr.SOPInstanceUID = sop_uid
+    if getattr(sr, "file_meta", None) is not None:
+        sr.file_meta.MediaStorageSOPInstanceUID = sop_uid
 
 
 def render_pdf_pages(data: bytes, *, scale: float = 1.5) -> list[Image.Image]:

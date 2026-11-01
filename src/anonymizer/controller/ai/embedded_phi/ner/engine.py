@@ -29,8 +29,14 @@ detect_entities(text: str, *, locale: str='en_US') -> list[Entity]
 detect_entities_in_segments(segments: Sequence[str], *, locale: str='en_US', max_chars: int=_DEFAULT_SEGMENT_MAX_CHARS, scan_fn: Callable[[str], list[Entity]] | None=None) -> list[list[Entity]]
     Run a text PHI scanner on **chunks of whole fields**.
 
-replace_entities(text: str, entities: Sequence[Entity] | None=None, *, mode: ReplaceMode='blank', locale: str='en_US', project_id: str='default', anon_ptid: str='ANON0000') -> tuple[str, list[Entity]]
+replace_entities(text: str, entities: Sequence[Entity] | None=None, *, mode: ReplaceMode='blank', locale: str='en_US', project_id: str='default', anon_ptid: str='ANON0000', log: bool=True) -> tuple[str, list[Entity]]
     Replace PHI spans in text right-to-left.
+
+format_tagged_entities(text: str, entities: Sequence[Entity]) -> str
+    Wrap entity spans as <LABEL>…</LABEL> for Clean Descriptors / NER logs.
+
+expand_entities_for_remove(text: str, entities: Sequence[Entity]) -> list[Entity]
+    Widen FIRST_NAME/LAST_NAME/ID spans for PN carets and leading "for ".
 
 detect_locale_supported(locale: str) -> bool
     Return whether locale has a supported OpenMed detect pack.
@@ -78,6 +84,11 @@ REPLACE_MODE_VALUES: tuple[ReplaceMode, ...] = ("blank", "synth")
 SEGMENT_SEP = "\n\x1e\n"
 # Stay under ClinicalE5 ~512-token window with headroom for WordPieces.
 _DEFAULT_SEGMENT_MAX_CHARS = 1600
+
+# Blank-mode span expansion: PN carets next to names; leading "for " before name/ID.
+_NAME_LABELS = frozenset({"FIRST_NAME", "LAST_NAME"})
+_NAME_OR_ID_LABELS = frozenset({"FIRST_NAME", "LAST_NAME", "ID"})
+_FOR_BEFORE_RE = re.compile(r"(?<![A-Za-z0-9])for\s+$", re.IGNORECASE)
 
 # Map OpenMed / HF entity_group strings onto product labels (model decides; no regex).
 _TO_SCORED: dict[str, str] = {
@@ -391,6 +402,7 @@ def replace_entities(
     locale: str = "en_US",
     project_id: str = "default",
     anon_ptid: str = "ANON0000",
+    log: bool = True,
 ) -> tuple[str, list[Entity]]:
     """
     Replace PHI spans in text right-to-left.
@@ -400,6 +412,11 @@ def replace_entities(
     string. Remaining spans: blank clears; synth uses
     generate_synthetic_phi and offline pools.
 
+    Blank mode expands FIRST_NAME/LAST_NAME spans to absorb adjacent PN
+    carets (^), and expands FIRST_NAME/LAST_NAME/ID spans to absorb a
+    leading "for " so description prepositions are not left behind.
+    Protocol carets (e.g. Abdomen^24ACRIN) are left unchanged.
+
     Args:
         text: Source unicode containing PHI spans.
         entities: Spans to replace; None triggers detect first.
@@ -407,6 +424,7 @@ def replace_entities(
         locale: Locale for detect (if needed) and synthetic pools.
         project_id: Seed namespace for synthetic values.
         anon_ptid: Anonymized patient id seed for synthetic values.
+        log: When False, skip INFO replace-result traces (batch consolidates).
 
     Returns:
         (new_text, entities_used).
@@ -423,7 +441,8 @@ def replace_entities(
     used = list(entities) if entities is not None else detect_entities(body, locale=locale)
     if not used:
         logger.debug("ner: replace skip — no entities to replace")
-        logger.info("ner: replace result\n%s", _trace(body))
+        if log:
+            logger.info("ner: replace result\n%s", _trace(body))
         return body, []
 
     meta_n = sum(1 for e in used if e.replacement is not None)
@@ -437,20 +456,23 @@ def replace_entities(
         pformat(_entities_for_log(used, body), sort_dicts=False),
     )
     ordinals: dict[str, int] = {}
-    replacements: list[tuple[Entity, str]] = []
+    # Non-blank writes keep explicit (start, end, repl); blank ranges merge first.
+    splice: list[tuple[int, int, str]] = []
+    blank_ranges: list[tuple[int, int]] = []
     for ent in sorted(used, key=lambda e: (e.start, e.end)):
         ord_i = ordinals.get(ent.label, 0)
         ordinals[ent.label] = ord_i + 1
         # Metadata PHI (DICOM keyword label): always write anonymized tag value.
         if ent.replacement is not None:
-            replacements.append((ent, str(ent.replacement)))
+            splice.append((ent.start, ent.end, str(ent.replacement)))
             continue
         if mode == "blank":
-            replacements.append((ent, ""))
+            blank_ranges.append(_expand_blank_range(body, ent))
             continue
-        replacements.append(
+        splice.append(
             (
-                ent,
+                ent.start,
+                ent.end,
                 generate_synthetic_phi(
                     ent.label,
                     project_id=project_id,
@@ -461,9 +483,11 @@ def replace_entities(
                 ),
             )
         )
+    for start, end in _merge_ranges(blank_ranges):
+        splice.append((start, end, ""))
     out = body
-    for ent, repl in sorted(replacements, key=lambda x: x[0].start, reverse=True):
-        out = out[: ent.start] + repl + out[ent.end :]
+    for start, end, repl in sorted(splice, key=lambda x: x[0], reverse=True):
+        out = out[:start] + repl + out[end:]
     if mode == "blank":
         out = re.sub(r"[ \t]{2,}", " ", out)
         out = re.sub(r" ?\n ?", "\n", out).strip(" \t")
@@ -474,8 +498,61 @@ def replace_entities(
         len(body),
         len(out),
     )
-    logger.info("ner: replace result\n%s", _trace(out))
+    if log:
+        logger.info("ner: replace result\n%s", _trace(out))
     return out, used
+
+
+def format_tagged_entities(text: str, entities: Sequence[Entity]) -> str:
+    """Wrap entity spans as <LABEL>…</LABEL> for Clean Descriptors / NER logs.
+
+    Args:
+        text: Source unicode.
+        entities: Spans with offsets into text.
+
+    Returns:
+        Tagged unicode (same as ner step 4/4).
+    """
+    return _format_entities_xml(text, entities)
+
+
+def expand_entities_for_remove(
+    text: str,
+    entities: Sequence[Entity],
+) -> list[Entity]:
+    """
+    Widen FIRST_NAME/LAST_NAME/ID spans for PN carets and leading "for ".
+
+    Post-NER Clean Descriptors step: expand on original Content before
+    remove so tagged logs and blanking agree. Protocol carets that are not
+    next to a name label stay unchanged.
+
+    Args:
+        text: Original Content string.
+        entities: Spans with offsets into text.
+
+    Returns:
+        New entity list with widened start/end where applicable.
+    """
+    body = str(text or "")
+    out: list[Entity] = []
+    for ent in entities:
+        start, end = _expand_blank_range(body, ent)
+        if start == ent.start and end == ent.end:
+            out.append(ent)
+            continue
+        out.append(
+            Entity(
+                label=ent.label,
+                start=start,
+                end=end,
+                score=ent.score,
+                raw_label=ent.raw_label,
+                replacement=ent.replacement,
+            )
+        )
+    out.sort(key=lambda e: (e.start, e.end))
+    return out
 
 
 def detect_locale_supported(locale: str) -> bool:
@@ -494,6 +571,59 @@ def detect_locale_supported(locale: str) -> bool:
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+
+def _expand_blank_range(body: str, ent: Entity) -> tuple[int, int]:
+    """
+    Widen a blank span for PN carets and leading "for " before name/ID.
+
+    Args:
+        body: Full source string (original offsets).
+        ent: Entity being blanked.
+
+    Returns:
+        Inclusive-exclusive (start, end) into body.
+    """
+    start = max(0, int(ent.start))
+    end = min(len(body), int(ent.end))
+    if start > end:
+        return start, start
+    label = str(ent.label or "")
+    if label in _NAME_LABELS:
+        while start > 0 and body[start - 1] == "^":
+            start -= 1
+        while end < len(body) and body[end] == "^":
+            end += 1
+    if label in _NAME_OR_ID_LABELS:
+        match = _FOR_BEFORE_RE.search(body[:start])
+        if match is not None and match.end() == start:
+            start = match.start()
+    return start, end
+
+
+def _merge_ranges(ranges: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
+    """
+    Merge overlapping or touching blank ranges (original-string coordinates).
+
+    Args:
+        ranges: (start, end) pairs.
+
+    Returns:
+        Sorted non-overlapping ranges.
+    """
+    if not ranges:
+        return []
+    ordered = sorted((int(s), int(e)) for s, e in ranges if int(e) > int(s))
+    if not ordered:
+        return []
+    merged: list[tuple[int, int]] = [ordered[0]]
+    for start, end in ordered[1:]:
+        prev_start, prev_end = merged[-1]
+        if start <= prev_end:
+            merged[-1] = (prev_start, max(prev_end, end))
+        else:
+            merged.append((start, end))
+    return merged
 
 
 def _trace(text: str) -> str:

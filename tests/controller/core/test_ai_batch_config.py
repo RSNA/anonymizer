@@ -8,15 +8,19 @@ import pytest
 
 from anonymizer.anonymizer import run_HEADLESS_AI_BATCH
 from anonymizer.controller.ai.batch_config import (
-    AiBatchAlgorithm,
     AiBatchConfig,
     AiBatchConfigError,
     AiBatchStudyRef,
+    EmbeddedPhiFeatureOptions,
+    EmbeddedPhiPixelOptions,
+    EmbeddedPhiTextOptions,
+    FaceBlurFeatureOptions,
+    HarmonizeFeatureOptions,
     enumerate_studies_from_images_dir,
     resolve_ai_batch_studies,
     validate_ai_batch_config_gates,
 )
-from anonymizer.controller.ai.batch_process import AiBatchProcessOptions, AiBatchSummary
+from anonymizer.controller.ai.batch_process import AiBatchAlgorithm, AiBatchProcessOptions, AiBatchSummary
 from anonymizer.controller.ai.blur_face import FaceBlurMode
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import PixelPhiRemovalMode
 from anonymizer.controller.jobs.runner import OcrRemoveMode
@@ -26,16 +30,26 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 def test_round_trip_json_to_options() -> None:
     config = AiBatchConfig(
-        algorithms=(
-            AiBatchAlgorithm.HARMONIZE,
-            AiBatchAlgorithm.FACE_BLUR,
-            AiBatchAlgorithm.REMOVE_PIXEL_PHI,
+        embedded_phi=EmbeddedPhiFeatureOptions(
+            enabled=True,
+            pixel=EmbeddedPhiPixelOptions(
+                enabled=True,
+                removal_method=PixelPhiRemovalMode.INPAINT,
+                remove_scope=OcrRemoveMode.ALL_TEXT,
+                use_exclude_areas=True,
+            ),
+            metadata=EmbeddedPhiTextOptions(enabled=True, replace_mode="blank"),
+            reports=EmbeddedPhiTextOptions(enabled=True, replace_mode="synth"),
         ),
-        blur_mode=FaceBlurMode.MEDIAN,
-        pixel_phi_removal_mode=PixelPhiRemovalMode.INPAINT,
-        ocr_remove_mode=OcrRemoveMode.ALL_TEXT,
-        ocr_use_exclude_areas=True,
-        include_brain_structures=True,
+        harmonize=HarmonizeFeatureOptions(
+            enabled=True,
+            include_brain_structures=True,
+            prefer_description_mappings=True,
+        ),
+        face_blur=FaceBlurFeatureOptions(
+            enabled=True,
+            blur_mode=FaceBlurMode.MEDIAN,
+        ),
         ct_segmentation_mode="1.5mm",
         mr_segmentation_mode="6mm",
         studies=(AiBatchStudyRef(patient_id="pt1", study_uid="study1"),),
@@ -44,6 +58,10 @@ def test_round_trip_json_to_options() -> None:
     restored = AiBatchConfig.from_json(config.to_json())
 
     assert restored == config
+    emitted = json.loads(config.to_json())
+    assert "algorithms" not in emitted
+    assert "ocr_remove_mode" not in emitted
+    assert emitted["features"]["embedded_phi"]["pixel"]["remove_scope"] == "all_text"
     assert restored.to_options() == AiBatchProcessOptions(
         algorithms=restored.algorithms,
         blur_mode=FaceBlurMode.MEDIAN,
@@ -52,6 +70,11 @@ def test_round_trip_json_to_options() -> None:
         ocr_use_exclude_areas=True,
         include_brain_structures=True,
         prefer_description_mappings=True,
+        embedded_phi_pixel_enabled=True,
+        embedded_phi_metadata_enabled=True,
+        embedded_phi_reports_enabled=True,
+        metadata_replace_mode="blank",
+        reports_replace_mode="synth",
     )
 
 
@@ -64,50 +87,45 @@ def test_from_dict_parses_plan_example() -> None:
     config = AiBatchConfig.from_dict(data)
 
     assert config.algorithms == (
+        AiBatchAlgorithm.REMOVE_PIXEL_PHI,
         AiBatchAlgorithm.HARMONIZE,
         AiBatchAlgorithm.FACE_BLUR,
-        AiBatchAlgorithm.REMOVE_PIXEL_PHI,
     )
     assert config.studies == "all"
     assert config.ct_segmentation_mode == "3mm"
-    assert config.ocr_remove_mode is OcrRemoveMode.NON_WHITELISTED
+    assert config.embedded_phi.pixel.remove_scope is OcrRemoveMode.PHI_ONLY
+    assert config.embedded_phi.metadata.enabled is True
+    assert config.embedded_phi.reports.enabled is True
 
 
-def test_from_dict_migrates_use_modality_whitelist_false() -> None:
-    config = AiBatchConfig.from_dict(
-        {
-            "algorithms": ["remove_pixel_phi"],
-            "use_modality_whitelist": False,
-        }
-    )
-    assert config.ocr_remove_mode is OcrRemoveMode.ALL_TEXT
+def test_missing_features_raises() -> None:
+    with pytest.raises(AiBatchConfigError, match="features must be an object"):
+        AiBatchConfig.from_dict({"studies": "all"})
 
 
-def test_from_dict_migrates_ocr_exclude_zones_to_enable_flag() -> None:
-    config = AiBatchConfig.from_dict(
-        {
-            "algorithms": ["remove_pixel_phi"],
-            "ocr_exclude_zones": {"US": ["measurement panel"]},
-        }
-    )
-    assert config.ocr_use_exclude_areas is True
+def test_flat_algorithms_rejected() -> None:
+    with pytest.raises(AiBatchConfigError, match="features must be an object"):
+        AiBatchConfig.from_dict({"algorithms": ["harmonize"], "studies": "all"})
 
 
-def test_empty_algorithms_raises() -> None:
-    with pytest.raises(AiBatchConfigError, match="non-empty"):
-        AiBatchConfig.from_dict({"algorithms": []})
-
-
-def test_unknown_algorithm_raises() -> None:
-    with pytest.raises(AiBatchConfigError, match="Unknown algorithm"):
-        AiBatchConfig.from_dict({"algorithms": ["not_real"]})
+def test_no_features_enabled_raises() -> None:
+    with pytest.raises(AiBatchConfigError, match="at least one feature"):
+        AiBatchConfig.from_dict(
+            {
+                "features": {
+                    "embedded_phi": {"enabled": False},
+                    "harmonize": {"enabled": False},
+                    "face_blur": {"enabled": False},
+                }
+            }
+        )
 
 
 def test_skip_already_processed_false_raises() -> None:
     with pytest.raises(AiBatchConfigError, match="skip_already_processed"):
         AiBatchConfig.from_dict(
             {
-                "algorithms": ["harmonize"],
+                "features": {"harmonize": {"enabled": True}},
                 "skip_already_processed": False,
             }
         )
@@ -115,7 +133,7 @@ def test_skip_already_processed_false_raises() -> None:
 
 def test_apply_segmentation_modes() -> None:
     config = AiBatchConfig(
-        algorithms=(AiBatchAlgorithm.HARMONIZE,),
+        harmonize=HarmonizeFeatureOptions(enabled=True),
         ct_segmentation_mode="6mm",
         mr_segmentation_mode="1.5mm",
     )
@@ -131,7 +149,7 @@ def test_apply_segmentation_modes() -> None:
 
 
 def test_validate_gates_fail_fast() -> None:
-    config = AiBatchConfig(algorithms=(AiBatchAlgorithm.HARMONIZE,))
+    config = AiBatchConfig(harmonize=HarmonizeFeatureOptions(enabled=True))
 
     with (
         patch("anonymizer.controller.ai.batch_config.harmonize_allowed", return_value=False),
@@ -141,7 +159,7 @@ def test_validate_gates_fail_fast() -> None:
 
 
 def test_resolve_studies_all_from_phi_index() -> None:
-    config = AiBatchConfig(algorithms=(AiBatchAlgorithm.HARMONIZE,))
+    config = AiBatchConfig(harmonize=HarmonizeFeatureOptions(enabled=True))
     anon_model = MagicMock()
     record = MagicMock(anon_patient_id="pt1", anon_study_uid="study1")
 
@@ -159,7 +177,7 @@ def test_resolve_studies_explicit_path(tmp_path: Path) -> None:
     study_dir = tmp_path / "pt1" / "study1" / "series1"
     study_dir.mkdir(parents=True)
     config = AiBatchConfig(
-        algorithms=(AiBatchAlgorithm.HARMONIZE,),
+        harmonize=HarmonizeFeatureOptions(enabled=True),
         studies=(AiBatchStudyRef(patient_id="pt1", study_uid="study1"),),
     )
 
@@ -188,7 +206,12 @@ def test_run_headless_ai_batch_invokes_controller(tmp_path: Path) -> None:
     batch_path = tmp_path / "AiBatchConfig.json"
     project_path.write_text("{}", encoding="utf-8")
     batch_path.write_text(
-        json.dumps({"algorithms": ["harmonize"], "studies": "all"}),
+        json.dumps(
+            {
+                "features": {"harmonize": {"enabled": True}},
+                "studies": "all",
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -212,7 +235,7 @@ def test_run_headless_ai_batch_invokes_controller(tmp_path: Path) -> None:
 
     assert exit_code == 0
     controller.ai_batch_process.assert_called_once()
-    args, kwargs = controller.ai_batch_process.call_args
+    args, _kwargs = controller.ai_batch_process.call_args
     assert args[0] == [("pt1", "study1")]
     assert args[1].algorithms == (AiBatchAlgorithm.HARMONIZE,)
     controller.shutdown.assert_called_once()

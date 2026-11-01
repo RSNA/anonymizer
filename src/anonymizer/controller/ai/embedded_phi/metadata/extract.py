@@ -1,12 +1,46 @@
 """Extract free-text and date PHI carriers from DICOM metadata (SOP-agnostic).
 
+Omits Private Creator elements (tag.is_private_creator). Integer String (IS)
+and Decimal String (DS) are included in Clean Descriptors NER input so
+embedded dates and PHI in those values can be detected.
+
 Public API
 ----------
 TEXT_VRS
-    Text vrs.
+    Free-text descriptor VRs (LO, LT, ST, SH, UT, UC, UR, PN).
+
+NUMERIC_STRING_VRS
+    Integer / decimal string VRs (IS, DS) included in NER input.
+
+NER_INPUT_VRS
+    TEXT_VRS | NUMERIC_STRING_VRS — cells eligible for Clean Descriptors NER.
 
 DATE_VRS
-    Date vrs.
+    Date VRs (DA, DT) — assessment only; not Clean Descriptors NER.
+
+INTEGER_AND_CODE_STRING_VRS
+    IS, DS, CS — metadata extract carriers (CS digit-only; IS/DS full text).
+
+DIGITS_ONLY_VRS
+    CS only — Content reduced with digits_only.
+
+DICOM_VR_CODES
+    Two-letter DICOM Value Representation codes (PS3.5); always allowed
+    in Clean Descriptors post-NER whitelist drop (e.g. Rescale Type "US").
+
+digits_only(text: str) -> str
+    Digit characters only; used for CS extract Content.
+
+is_pure_numeric_string_value(value: object) -> bool
+    True when value is only float/int-parsable numeric component(s).
+    One shared gate for IS and DS (integer and float formats).
+
+is_pure_decimal_string_value(value: object) -> bool
+    Alias of is_pure_numeric_string_value (DS/IS share one gate).
+
+omit_pure_numeric_from_descriptor_ner(vr: str, value: object) -> bool
+    True when value is pure numeric IS/DS (logging / callers); NER still
+    includes IS/DS so embedded PHI in impure values is not the only path.
 
 SKIP_TEXT_KEYWORDS
     Skip text keywords.
@@ -46,10 +80,12 @@ import re
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 
+from pydicom import config as pydicom_config
 from pydicom.dataelem import DataElement
 from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence as DicomSequence
 from pydicom.tag import BaseTag, Tag
+from pydicom.valuerep import VR
 
 from anonymizer.controller.dates import is_date_delta_operation
 from anonymizer.controller.private_tags import (
@@ -62,7 +98,124 @@ from anonymizer.utils.dicom_dictionary import display_tag_vr, format_dicom_tag
 logger = logging.getLogger(__name__)
 
 TEXT_VRS = frozenset({"LO", "LT", "ST", "SH", "UT", "UC", "UR", "PN"})
+NUMERIC_STRING_VRS = frozenset({"IS", "DS"})
+NER_INPUT_VRS = TEXT_VRS | NUMERIC_STRING_VRS
 DATE_VRS = frozenset({"DA", "DT"})
+INTEGER_AND_CODE_STRING_VRS = frozenset({"IS", "DS", "CS"})
+# CS code strings stay digit-only for assessment; IS/DS keep full text for NER.
+DIGITS_ONLY_VRS = frozenset({"CS"})
+# PS3.5 two-letter VR codes (pydicom SSOT). Post-NER allow: untag spans that
+# are only a VR code (e.g. Rescale Type value "US") so OpenMed false hits drop.
+DICOM_VR_CODES = frozenset(
+    name for name in (member.name for member in VR) if len(name) == 2 and name.isalpha()
+)
+
+# Legal characters in one IS/DS numeric component (DICOM + whitespace).
+_NUMERIC_COMPONENT_CHARS = frozenset("0123456789+-eE. \t")
+
+
+def digits_only(text: str) -> str:
+    """Keep digit characters only.
+
+    Used for CS extract Content. IS/DS keep original text for NER.
+
+    Args:
+        text: Raw cell or tag string.
+
+    Returns:
+        Concatenation of characters where str.isdigit is true.
+    """
+    return "".join(filter(str.isdigit, str(text or "")))
+
+
+def is_pure_numeric_string_value(value: object) -> bool:
+    """
+    True when value is only legal numeric component(s) (int or float tokens).
+
+    Shared gate for IS and DS. Any letter outside e/E, other junk, or a
+    non-numeric component fails so hidden text still reaches NER.
+
+    Args:
+        value: Raw pydicom element value, sequence of components, or text.
+
+    Returns:
+        True when every component parses with float and uses only numeric chars.
+    """
+    components = _numeric_components(value)
+    if not components:
+        return False
+    return all(_is_pure_numeric_component(part) for part in components)
+
+
+def is_pure_decimal_string_value(value: object) -> bool:
+    """Alias of is_pure_numeric_string_value (one gate for IS and DS)."""
+    return is_pure_numeric_string_value(value)
+
+
+def omit_pure_numeric_from_descriptor_ner(vr: str, value: object) -> bool:
+    """
+    True when an IS/DS value is pure numeric (no embedded letters/junk).
+
+    Kept for logging and callers that distinguish pure geometry/counts from
+    impure strings. Clean Descriptors NER input includes all IS/DS via
+    NER_INPUT_VRS; embedded dates/PHI in impure values are detected there.
+
+    Args:
+        vr: DICOM VR.
+        value: Raw element value or text.
+
+    Returns:
+        True when VR is IS/DS and value is only float/int-parsable component(s).
+    """
+    code = str(vr or "").upper()
+    if code not in NUMERIC_STRING_VRS:
+        return False
+    return is_pure_numeric_string_value(value)
+
+
+def _numeric_components(value: object) -> list[str] | None:
+    """Split an IS/DS value into stripped component strings."""
+    if value is None:
+        return None
+    if isinstance(value, (bytes, bytearray)):
+        text = _as_str(value)
+        return [text] if text else None
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        parts = [str(item).strip() for item in value]
+        parts = [part for part in parts if part]
+        return parts or None
+    text = _as_str(value)
+    if not text:
+        return None
+    # str(MultiValue) / list repr from callers that only have text.
+    if text.startswith("[") and text.endswith("]"):
+        inner = text[1:-1].strip()
+        if not inner:
+            return None
+        return [part.strip() for part in inner.split(",") if part.strip()]
+    # DICOM multi-value separator.
+    if "\\" in text:
+        parts = [part.strip() for part in text.split("\\") if part.strip()]
+        return parts or None
+    return [text]
+
+
+def _is_pure_numeric_component(text: str) -> bool:
+    """True when one IS/DS component is float-safe with no non-numeric junk."""
+    s = str(text or "").strip()
+    if not s:
+        return False
+    if any(ch not in _NUMERIC_COMPONENT_CHARS for ch in s):
+        return False
+    if any(ch.isalpha() and ch not in "eE" for ch in s):
+        return False
+    try:
+        float(s)
+    except ValueError:
+        return False
+    return True
+
+
 # Code-set plumbing — not free-text PHI carriers inside Concept Name sequences.
 # Public: the metadata NER pre-filter skips these same keywords (single source).
 SKIP_TEXT_KEYWORDS = frozenset(
@@ -224,16 +377,37 @@ def extract_metadata_phi_rows(
 
 
 def apply_text_at_path(ds: Dataset, tag_path: str, new_text: str) -> None:
-    """Set the leaf string at tag_path (e.g. ContentSequence[0].TextValue)."""
+    """Set the leaf string at tag_path (e.g. ContentSequence[0].TextValue).
+
+    IS/DS use raw `_value` assignment so blanked Content that is no longer a
+    legal numeric string can still be written after Clean Descriptors.
+    """
     parent, name = _resolve_leaf_parent(ds, tag_path)
     tag = _tag_from_path_name(name)
     if tag is not None:
-        parent[tag].value = new_text
+        _set_element_text(parent[tag], new_text)
         return
     if name in parent:
-        parent[name].value = new_text
+        _set_element_text(parent[name], new_text)
         return
     setattr(parent, name, new_text)
+
+
+def _set_element_text(elem: DataElement, new_text: str) -> None:
+    """Write string Content onto a DataElement (raw for IS/DS)."""
+    vr = str(elem.VR or "").upper()
+    if vr in NUMERIC_STRING_VRS:
+        elem._value = new_text
+        return
+    previous = pydicom_config.settings.writing_validation_mode
+    pydicom_config.settings.writing_validation_mode = pydicom_config.IGNORE
+    try:
+        elem.value = new_text
+    except (ValueError, TypeError, OverflowError):
+        elem._value = new_text
+    finally:
+        pydicom_config.settings.writing_validation_mode = previous
+
 
 
 def scrub_span_in_row(
@@ -303,9 +477,22 @@ def _leaf_row(
     root_ds: Dataset,
 ) -> MetadataPhiRow | None:
     vr = str(elem.VR or "")
-    if vr not in TEXT_VRS and vr not in DATE_VRS:
+    if (
+        vr not in TEXT_VRS
+        and vr not in DATE_VRS
+        and vr not in INTEGER_AND_CODE_STRING_VRS
+    ):
+        return None
+    # Private Creator strings name the private block (vendor/registry IDs).
+    # Omit from Clean Descriptors / Metadata NER so vendor tokens (e.g. MITRA)
+    # are not blanked as false FIRST_NAME; real PHI stays in private data
+    # elements, which are still extracted.
+    if bool(getattr(elem.tag, "is_private_creator", False)):
         return None
     text = _as_str(elem.value)
+    # CS: digit Content only. IS/DS keep original text for NER (embedded PHI).
+    if vr in DIGITS_ONLY_VRS:
+        text = digits_only(text)
     if not text:
         return None
     tag_hex = f"{int(elem.tag):08X}"

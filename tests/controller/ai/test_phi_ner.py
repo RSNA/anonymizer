@@ -190,6 +190,54 @@ def test_detect_entities_in_segments_chunks_on_field_breaks() -> None:
     assert seen == [big, "B"]
 
 
+def test_replace_blank_preserves_protocol_caret() -> None:
+    """Blank ID must not turn Abdomen^24ACRIN into Abdomen 24ACRIN."""
+    text = "Abdomen^24ACRIN_Colo (Adult)"
+    # Abdomen^ = 0:8, 24ACRIN = 8:15
+    ents = [Entity("ID", 8, 15, 1.0, "ID")]
+    blank, _ = replace_entities(text, ents, mode="blank", locale="en_US")
+    assert "^" in blank
+    assert blank.startswith("Abdomen^")
+    assert "24ACRIN" not in blank
+
+
+def test_replace_blank_strips_pn_caret_next_to_name() -> None:
+    """PN separators adjacent to blanked names are removed; no global ^ wipe."""
+    text = "DOE^JOHN"
+    ents = [
+        Entity("LAST_NAME", 0, 3, 1.0, "last_name"),
+        Entity("FIRST_NAME", 4, 8, 1.0, "first_name"),
+    ]
+    blank, _ = replace_entities(text, ents, mode="blank", locale="en_US")
+    assert "^" not in blank
+    assert "DOE" not in blank and "JOHN" not in blank
+
+
+def test_replace_blank_removes_for_before_name_or_id() -> None:
+    """Leading 'for ' before blanked name/ID is removed; other 'for' kept."""
+    text = "MRI BREAST BILAT CAD WWO for Amy Swanson"
+    ents = [
+        Entity("FIRST_NAME", text.index("Amy"), text.index("Amy") + 3, 1.0, "first_name"),
+        Entity("LAST_NAME", text.index("Swanson"), text.index("Swanson") + 7, 1.0, "last_name"),
+    ]
+    blank, _ = replace_entities(text, ents, mode="blank", locale="en_US")
+    assert blank == "MRI BREAST BILAT CAD WWO"
+    assert "for" not in blank
+    assert "BILAT" in blank
+
+    id_text = "series for 689-96-0899 done"
+    id_ents = [Entity("ID", id_text.index("689"), id_text.index("689") + 11, 1.0, "ID")]
+    id_blank, _ = replace_entities(id_text, id_ents, mode="blank", locale="en_US")
+    assert id_blank == "series done"
+
+    # DATE blank must not strip a clinical 'for'
+    clinical = "scan for metastasis on 20190524"
+    date_ents = [Entity("DATE", clinical.index("20190524"), clinical.index("20190524") + 8, 1.0, "DATE")]
+    clinical_blank, _ = replace_entities(clinical, date_ents, mode="blank", locale="en_US")
+    assert "for" in clinical_blank
+    assert "metastasis" in clinical_blank
+
+
 def test_replace_blank_and_synth_stable() -> None:
     text = "Phone: (215) 555-0198"
     ents = [Entity("PHONE", 7, 21, 1.0, "PHONE")]

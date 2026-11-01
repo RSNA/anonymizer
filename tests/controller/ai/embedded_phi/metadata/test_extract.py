@@ -12,6 +12,8 @@ from anonymizer.controller.ai.embedded_phi.metadata.extract import (
     apply_text_at_path,
     extract_metadata_phi_rows,
     is_anonymizer_field,
+    is_pure_decimal_string_value,
+    omit_pure_numeric_from_descriptor_ner,
     scrub_span_in_row,
 )
 from anonymizer.controller.private_tags import PrivateTagAction, lookup_private_tag
@@ -279,3 +281,65 @@ def test_is_anonymizer_field_stamps_and_private_group() -> None:
     assert is_anonymizer_field(tag="0013,0001")
     assert is_anonymizer_field(tag_path="PatientIdentityRemoved")
     assert not is_anonymizer_field(tag="0008,1030", tag_path="StudyDescription")
+
+
+def test_is_pure_decimal_string_value_gate() -> None:
+    """Pure numeric components pass; letters or junk fail so PHI can still reach NER."""
+    assert is_pure_decimal_string_value([62.900002, -113.599998, 101.0])
+    assert is_pure_decimal_string_value([310, 310])
+    assert is_pure_decimal_string_value("1730.30")
+    assert is_pure_decimal_string_value("1.2e3")
+    assert is_pure_decimal_string_value("[164., -113., 101.0]")
+    assert is_pure_decimal_string_value("310\\310")
+    assert not is_pure_decimal_string_value("62.9 Michelle")
+    assert not is_pure_decimal_string_value("Patient12")
+    assert not is_pure_decimal_string_value("")
+
+
+def test_omit_pure_numeric_from_descriptor_ner_is_vs_ds() -> None:
+    """Helper still classifies pure vs impure IS/DS (logging); CS is never pure-IS/DS."""
+    assert omit_pure_numeric_from_descriptor_ner("DS", [62.9, -113.5, 101.0])
+    assert omit_pure_numeric_from_descriptor_ner("DS", "1730.30")
+    assert omit_pure_numeric_from_descriptor_ner("IS", [310, 310])
+    assert omit_pure_numeric_from_descriptor_ner("IS", "350\\421")
+    assert omit_pure_numeric_from_descriptor_ner("IS", "20101203")
+    assert omit_pure_numeric_from_descriptor_ner("IS", "2")
+    assert omit_pure_numeric_from_descriptor_ner("IS", "360000")
+    assert not omit_pure_numeric_from_descriptor_ner("DS", "62.9 Michelle")
+    assert not omit_pure_numeric_from_descriptor_ner("CS", "US")
+
+
+def test_extract_includes_is_and_ds_including_pure() -> None:
+    """IS/DS (including pure) are extracted for Clean Descriptors NER input."""
+    from pydicom.dataelem import DataElement
+
+    ds = _sc_dataset()
+    ds.ActualFrameDuration = "360000"
+    ds.SeriesNumber = "20101203"
+    slope = DataElement(tag_for_keyword("RescaleSlope"), "DS", "0.0")
+    slope._value = "62.9 Michelle"
+    ds.add(slope)
+
+    rows = extract_metadata_phi_rows(ds)
+    by_path = {r.tag_path: r.text for r in rows}
+    assert by_path.get("ActualFrameDuration") == "360000"
+    assert by_path.get("SeriesNumber") == "20101203"
+    assert by_path.get("RescaleSlope") == "62.9 Michelle"
+
+
+def test_extract_omits_private_creator_keeps_private_data_text() -> None:
+    """Private Creator LO skipped; private data LO in the same block still extracted."""
+    from pydicom.dataelem import DataElement
+
+    ds = _sc_dataset()
+    ds.add(DataElement(0x00310010, "LO", "MITRA LINKED ATTRIBUTES 1.0"))
+    ds.add(DataElement(0x00311010, "LO", "PHI-private-Douglas"))
+
+    assert ds[0x00310010].tag.is_private_creator
+    assert not ds[0x00311010].tag.is_private_creator
+
+    rows = extract_metadata_phi_rows(ds)
+    texts = {r.text for r in rows}
+    assert "MITRA LINKED ATTRIBUTES 1.0" not in texts
+    assert all(r.tag_hex != "00310010" for r in rows)
+    assert any("PHI-private-Douglas" in t for t in texts)

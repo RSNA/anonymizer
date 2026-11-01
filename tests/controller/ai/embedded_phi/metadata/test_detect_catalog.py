@@ -25,37 +25,53 @@ def _rows_with_expect_labels() -> list[dict]:
     ]
 
 
+def _alnum_needle(needle: str) -> str:
+    """Match frozen NER compile: printable Content (controls dropped)."""
+    out: list[str] = []
+    for ch in str(needle or ""):
+        if ch.isspace():
+            out.append(" ")
+        elif ch.isprintable():
+            out.append(ch)
+    return "".join(out)
+
+
 def _fake_entities_for_text(ner_text: str, labels: list[str], needles: list[str]) -> list[Entity]:
     """Place one span per label on successive needles found in ner_text."""
     ents: list[Entity] = []
     search_from = 0
     for label, needle in zip(labels, needles, strict=False):
-        idx = ner_text.find(needle, search_from)
+        key = _alnum_needle(needle)
+        if not key:
+            continue
+        idx = ner_text.find(key, search_from)
         if idx < 0:
-            idx = ner_text.find(needle)
+            idx = ner_text.find(key)
         if idx < 0:
             continue
         ents.append(
             Entity(
                 label=label,
                 start=idx,
-                end=idx + len(needle),
+                end=idx + len(key),
                 score=0.99,
                 raw_label=label.lower(),
             )
         )
-        search_from = idx + len(needle)
+        search_from = idx + len(key)
     # If fewer needles than labels, still emit remaining labels on first needle.
     while len(ents) < len(labels) and needles:
-        needle = needles[min(len(ents), len(needles) - 1)]
-        idx = ner_text.find(needle)
+        key = _alnum_needle(needles[min(len(ents), len(needles) - 1)])
+        if not key:
+            break
+        idx = ner_text.find(key)
         if idx < 0:
             break
         ents.append(
             Entity(
                 label=labels[len(ents)],
                 start=idx,
-                end=idx + len(needle),
+                end=idx + len(key),
                 score=0.9,
                 raw_label=labels[len(ents)].lower(),
             )
@@ -135,10 +151,17 @@ def test_combo_public_and_private_in_one_detect() -> None:
             ("EMAIL", "jane.doe@hospital.org"),
             ("PHONE", "(404) 555-0162"),
         ):
-            idx = text.find(needle)
+            key = _alnum_needle(needle)
+            idx = text.find(key)
             if idx >= 0:
                 ents.append(
-                    Entity(label=label, start=idx, end=idx + len(needle), score=0.99, raw_label=label.lower())
+                    Entity(
+                        label=label,
+                        start=idx,
+                        end=idx + len(key),
+                        score=0.99,
+                        raw_label=label.lower(),
+                    )
                 )
         return ents
 

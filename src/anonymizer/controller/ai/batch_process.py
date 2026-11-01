@@ -202,6 +202,7 @@ from anonymizer.controller.ai.blur_face import (
     preview_face_blur,
 )
 from anonymizer.controller.ai.embedded_phi.classify_series import SeriesKind, classify_series
+from anonymizer.controller.ai.embedded_phi.metadata.scrub import scrub_file_descriptors
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     OcrWhitelistMatchSettings,
     PixelPhiRemovalMode,
@@ -215,7 +216,12 @@ from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
     remove_pixel_phi,
 )
 from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_project_exclude_rects
-from anonymizer.controller.ai.embedded_phi.report.process_report_text import detect_phi, remove_phi, write_report_text
+from anonymizer.controller.ai.embedded_phi.report.process_report_text import (
+    apply_project_uids_to_sr,
+    detect_phi,
+    remove_phi,
+    write_report_text,
+)
 from anonymizer.controller.ai.harmonize import (
     HarmonizeProgress,
     auto_apply_best_study_descriptions,
@@ -286,6 +292,12 @@ class AiBatchProcessOptions:
     prefer_description_mappings: bool = True
     series_description_overrides: Mapping[str, str] = field(default_factory=dict)
     study_loinc_overrides: Mapping[str, str] = field(default_factory=dict)
+    # Embedded PHI sub-paths (Pixel OCR / Metadata NER / Reports NER).
+    embedded_phi_pixel_enabled: bool = True
+    embedded_phi_metadata_enabled: bool = True
+    embedded_phi_reports_enabled: bool = True
+    metadata_replace_mode: str = "blank"
+    reports_replace_mode: str = "blank"
 
 
 def whitelist_for_batch_ocr(
@@ -1147,6 +1159,7 @@ def _apply_report_text_phi_series(
     anon_model: AnonymizerModel,
     on_log_detail: Callable[[str], None] | None = None,
     synthetic: bool = False,
+    mark_scanned: bool = True,
 ) -> AiBatchOutcome:
     """
     De-identify native SR / Encapsulated PDF series via process_report_text.
@@ -1156,6 +1169,7 @@ def _apply_report_text_phi_series(
         anon_model: Anonymizer model for embedded_phi flags.
         on_log_detail: Optional per-instance log callback.
         synthetic: If True, synthetic replacements; else blank.
+        mark_scanned: When False, caller stamps series_embedded_phi_scanned.
 
     Returns:
         Batch outcome for the series.
@@ -1201,6 +1215,12 @@ def _apply_report_text_phi_series(
             removed_texts = [text[e.start : e.end] for e in entities if text[e.start : e.end].strip()]
             cleaned = remove_phi(text, entities, synthetic=synthetic)
             sr = write_report_text(ds, cleaned)
+            source_key = str(getattr(ds, "SOPInstanceUID", "") or dcm_path.name)
+            apply_project_uids_to_sr(
+                sr,
+                allocate_uid=anon_model.get_or_create_anon_uid,
+                source_key=source_key,
+            )
             record_deid_method_codes(ds, {DeidMethodCode.CLEAN_STRUCTURED_CONTENT})
             record_deid_method_codes(sr, {DeidMethodCode.CLEAN_STRUCTURED_CONTENT})
             ds.save_as(dcm_path, enforce_file_format=True)
@@ -1221,7 +1241,8 @@ def _apply_report_text_phi_series(
                 str(exc),
             )
 
-    anon_model.set_series_embedded_phi_scanned(series_uid, scanned=True)
+    if mark_scanned:
+        anon_model.set_series_embedded_phi_scanned(series_uid, scanned=True)
     if modified_count == 0:
         return AiBatchOutcome(
             series_path,
@@ -1237,6 +1258,36 @@ def _apply_report_text_phi_series(
     )
 
 
+def _scrub_series_descriptors(
+    series_path: Path,
+    *,
+    dcm_paths: Sequence[Path],
+    replace_mode: str = "blank",
+    project_dir: Path | None = None,
+    on_log_detail: Callable[[str], None] | None = None,
+) -> tuple[int, list[str]]:
+    """Run Clean Descriptors on each instance; return (modified_count, removed texts)."""
+    mode = "synth" if str(replace_mode).strip().lower() == "synth" else "blank"
+    modified_count = 0
+    all_removed: list[str] = []
+    for dcm_path in dcm_paths:
+        try:
+            changed, removed = scrub_file_descriptors(
+                dcm_path,
+                replace_mode=mode,  # type: ignore[arg-type]
+                project_dir=project_dir,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Clean Descriptors failed for %s: %s", dcm_path, exc)
+            raise
+        if changed:
+            modified_count += 1
+            all_removed.extend(removed)
+            if on_log_detail is not None and removed:
+                on_log_detail(f"{dcm_path.name}: " + ", ".join(removed[:8]))
+    return modified_count, all_removed
+
+
 def _apply_remove_pixel_phi_series(
     series_path: Path,
     *,
@@ -1248,6 +1299,11 @@ def _apply_remove_pixel_phi_series(
     ocr_remove_mode: OcrRemoveMode | None = None,
     use_modality_whitelist: bool | None = None,
     ocr_use_exclude_areas: bool = False,
+    pixel_enabled: bool = True,
+    metadata_enabled: bool = True,
+    reports_enabled: bool = True,
+    metadata_replace_mode: str = "blank",
+    reports_replace_mode: str = "blank",
 ) -> AiBatchOutcome:
     try:
         ds = _load_series_dataset(series_path)
@@ -1258,11 +1314,64 @@ def _apply_remove_pixel_phi_series(
     series_modality = str(ds.get("Modality", "") or "")
     kind = classify_series(series_path, modality=series_modality or None)
     if kind in {SeriesKind.NATIVE_SR, SeriesKind.NATIVE_PDF}:
-        return _apply_report_text_phi_series(
+        if anon_model.series_embedded_phi_scanned(series_uid):
+            return AiBatchOutcome(
+                series_path,
+                AiBatchAlgorithm.REMOVE_PIXEL_PHI,
+                "skipped",
+                _("Pixel PHI already scanned"),
+            )
+        if not reports_enabled and not metadata_enabled:
+            anon_model.set_series_embedded_phi_scanned(series_uid, scanned=True)
+            return AiBatchOutcome(
+                series_path,
+                AiBatchAlgorithm.REMOVE_PIXEL_PHI,
+                "complete",
+                _("Reports and Metadata disabled"),
+            )
+        report_modified = 0
+        meta_modified = 0
+        if reports_enabled:
+            report_outcome = _apply_report_text_phi_series(
+                series_path,
+                anon_model=anon_model,
+                on_log_detail=on_log_detail,
+                synthetic=str(reports_replace_mode).strip().lower() == "synth",
+                mark_scanned=False,
+            )
+            if report_outcome.status == "failed":
+                return report_outcome
+            if report_outcome.status == "ok":
+                report_modified = 1
+        if metadata_enabled:
+            try:
+                meta_modified, _meta_removed = _scrub_series_descriptors(
+                    series_path,
+                    dcm_paths=sorted(get_dcm_files(series_path)),
+                    replace_mode=metadata_replace_mode,
+                    project_dir=project_dir,
+                    on_log_detail=on_log_detail,
+                )
+            except Exception as exc:  # noqa: BLE001
+                return AiBatchOutcome(
+                    series_path,
+                    AiBatchAlgorithm.REMOVE_PIXEL_PHI,
+                    "failed",
+                    str(exc),
+                )
+        anon_model.set_series_embedded_phi_scanned(series_uid, scanned=True)
+        if report_modified or meta_modified:
+            return AiBatchOutcome(
+                series_path,
+                AiBatchAlgorithm.REMOVE_PIXEL_PHI,
+                "ok",
+                _("Embedded PHI removed"),
+            )
+        return AiBatchOutcome(
             series_path,
-            anon_model=anon_model,
-            on_log_detail=on_log_detail,
-            synthetic=False,
+            AiBatchAlgorithm.REMOVE_PIXEL_PHI,
+            "complete",
+            _("No report PHI detected"),
         )
 
     if anon_model.series_embedded_phi_scanned(series_uid):
@@ -1287,6 +1396,15 @@ def _apply_remove_pixel_phi_series(
             _("No DICOM files found"),
         )
 
+    if not pixel_enabled and not metadata_enabled:
+        anon_model.set_series_embedded_phi_scanned(series_uid, scanned=True)
+        return AiBatchOutcome(
+            series_path,
+            AiBatchAlgorithm.REMOVE_PIXEL_PHI,
+            "complete",
+            _("Pixel and Metadata disabled"),
+        )
+
     modified_count = 0
     unchanged_count = 0
     all_removed_texts: list[str] = []
@@ -1295,89 +1413,111 @@ def _apply_remove_pixel_phi_series(
     ocr_remove_mode = ocr_remove_mode or ocr_remove_mode_from_legacy_whitelist(
         use_modality_whitelist=True if use_modality_whitelist is None else use_modality_whitelist
     )
-    ocr_whitelist = whitelist_arg_for_ocr_remove_mode(ocr_remove_mode)
-    apply_phi_ner = apply_phi_ner_filter_for_ocr_remove_mode(ocr_remove_mode)
-    whitelist_match = load_modality_whitelist_match_settings(project_dir, series_modality or None)
-    if ocr_use_exclude_areas:
-        saved_rects = (
-            load_project_exclude_rects(project_dir, series_modality) if project_dir and series_modality else []
-        )
-        exclude_detail = format_exclude_areas_modality_detail(series_modality or "?", saved_rects)
-        logger.info("AI batch exclude areas for %s: %s", series_path, exclude_detail)
-        if on_log_detail is not None:
-            on_log_detail(exclude_detail)
-    for instance_index, dcm_path in enumerate(dcm_paths, start=1):
-        try:
-            modified, texts, pixels_changed = remove_pixel_phi(
-                dcm_path,
-                ocr_reader,
-                removal_mode=removal_mode,
-                project_dir=project_dir,
-                modality=series_modality or None,
-                whitelist=ocr_whitelist,
-                whitelist_match_settings=whitelist_match,
-                apply_phi_ner_filter=apply_phi_ner,
-                use_exclude_areas=ocr_use_exclude_areas,
+    if pixel_enabled:
+        ocr_whitelist = whitelist_arg_for_ocr_remove_mode(ocr_remove_mode)
+        apply_phi_ner = apply_phi_ner_filter_for_ocr_remove_mode(ocr_remove_mode)
+        whitelist_match = load_modality_whitelist_match_settings(project_dir, series_modality or None)
+        if ocr_use_exclude_areas:
+            saved_rects = (
+                load_project_exclude_rects(project_dir, series_modality) if project_dir and series_modality else []
             )
-        except Exception as exc:
-            logger.error("Remove Pixel PHI failed for %s: %s", dcm_path, exc)
+            exclude_detail = format_exclude_areas_modality_detail(series_modality or "?", saved_rects)
+            logger.info("AI batch exclude areas for %s: %s", series_path, exclude_detail)
+            if on_log_detail is not None:
+                on_log_detail(exclude_detail)
+        for instance_index, dcm_path in enumerate(dcm_paths, start=1):
+            try:
+                modified, texts, pixels_changed = remove_pixel_phi(
+                    dcm_path,
+                    ocr_reader,
+                    removal_mode=removal_mode,
+                    project_dir=project_dir,
+                    modality=series_modality or None,
+                    whitelist=ocr_whitelist,
+                    whitelist_match_settings=whitelist_match,
+                    apply_phi_ner_filter=apply_phi_ner,
+                    use_exclude_areas=ocr_use_exclude_areas,
+                )
+            except Exception as exc:
+                logger.error("Remove Pixel PHI failed for %s: %s", dcm_path, exc)
+                return AiBatchOutcome(
+                    series_path,
+                    AiBatchAlgorithm.REMOVE_PIXEL_PHI,
+                    "failed",
+                    str(exc),
+                )
+            if modified and pixels_changed > 0:
+                apply_instance_embedded_phi_for_dcm(anon_model, dcm_path, texts)
+                all_removed_texts.extend(texts)
+                modified_count += 1
+                total_pixels_changed += pixels_changed
+                if on_log_detail is not None and texts:
+                    on_log_detail(
+                        format_remove_pixel_phi_instance_detail(
+                            instance_index=instance_index,
+                            instance_total=instance_total,
+                            modified=True,
+                            texts=texts,
+                            removal_mode=removal_mode,
+                            pixels_changed=pixels_changed,
+                            ocr_remove_mode=ocr_remove_mode,
+                        )
+                    )
+            elif texts:
+                all_removed_texts.extend(texts)
+                if on_log_detail is not None:
+                    on_log_detail(
+                        format_remove_pixel_phi_instance_detail(
+                            instance_index=instance_index,
+                            instance_total=instance_total,
+                            modified=False,
+                            texts=texts,
+                            removal_mode=removal_mode,
+                            ocr_remove_mode=ocr_remove_mode,
+                        )
+                    )
+            else:
+                unchanged_count += 1
+                if on_log_detail is not None and texts:
+                    on_log_detail(
+                        format_remove_pixel_phi_instance_detail(
+                            instance_index=instance_index,
+                            instance_total=instance_total,
+                            modified=False,
+                            texts=texts,
+                            removal_mode=removal_mode,
+                            ocr_remove_mode=ocr_remove_mode,
+                        )
+                    )
+
+        if on_log_detail is not None and unchanged_count > 0 and modified_count > 0:
+            on_log_detail(
+                f"{unchanged_count}/{instance_total} " + _("instances") + ": " + _("no burnt-in text detected")
+            )
+
+    meta_modified = 0
+    if metadata_enabled:
+        try:
+            meta_modified, meta_removed = _scrub_series_descriptors(
+                series_path,
+                dcm_paths=dcm_paths,
+                replace_mode=metadata_replace_mode,
+                project_dir=project_dir,
+                on_log_detail=on_log_detail,
+            )
+            all_removed_texts.extend(meta_removed)
+        except Exception as exc:  # noqa: BLE001
             return AiBatchOutcome(
                 series_path,
                 AiBatchAlgorithm.REMOVE_PIXEL_PHI,
                 "failed",
                 str(exc),
             )
-        if modified and pixels_changed > 0:
-            apply_instance_embedded_phi_for_dcm(anon_model, dcm_path, texts)
-            all_removed_texts.extend(texts)
-            modified_count += 1
-            total_pixels_changed += pixels_changed
-            if on_log_detail is not None and texts:
-                on_log_detail(
-                    format_remove_pixel_phi_instance_detail(
-                        instance_index=instance_index,
-                        instance_total=instance_total,
-                        modified=True,
-                        texts=texts,
-                        removal_mode=removal_mode,
-                        pixels_changed=pixels_changed,
-                        ocr_remove_mode=ocr_remove_mode,
-                    )
-                )
-        elif texts:
-            all_removed_texts.extend(texts)
-            if on_log_detail is not None:
-                on_log_detail(
-                    format_remove_pixel_phi_instance_detail(
-                        instance_index=instance_index,
-                        instance_total=instance_total,
-                        modified=False,
-                        texts=texts,
-                        removal_mode=removal_mode,
-                        ocr_remove_mode=ocr_remove_mode,
-                    )
-                )
-        else:
-            unchanged_count += 1
-            if on_log_detail is not None and texts:
-                on_log_detail(
-                    format_remove_pixel_phi_instance_detail(
-                        instance_index=instance_index,
-                        instance_total=instance_total,
-                        modified=False,
-                        texts=texts,
-                        removal_mode=removal_mode,
-                        ocr_remove_mode=ocr_remove_mode,
-                    )
-                )
-
-    if on_log_detail is not None and unchanged_count > 0 and modified_count > 0:
-        on_log_detail(f"{unchanged_count}/{instance_total} " + _("instances") + ": " + _("no burnt-in text detected"))
 
     anon_model.set_series_embedded_phi_scanned(series_uid, scanned=True)
 
-    if modified_count == 0:
-        message = _("No burnt-in text detected")
+    if modified_count == 0 and meta_modified == 0:
+        message = _("No burnt-in text detected") if pixel_enabled else _("No Embedded PHI detected")
         if instance_total > 1:
             message += f" ({instance_total} " + _("instances scanned") + ")"
         return AiBatchOutcome(
@@ -1386,18 +1526,25 @@ def _apply_remove_pixel_phi_series(
             "complete",
             message,
         )
+    if modified_count > 0:
+        return AiBatchOutcome(
+            series_path,
+            AiBatchAlgorithm.REMOVE_PIXEL_PHI,
+            "ok",
+            format_remove_pixel_phi_series_message(
+                modified_count=modified_count,
+                total=instance_total,
+                texts_removed=all_removed_texts,
+                pixels_changed=total_pixels_changed,
+                removal_mode=removal_mode,
+                ocr_remove_mode=ocr_remove_mode,
+            ),
+        )
     return AiBatchOutcome(
         series_path,
         AiBatchAlgorithm.REMOVE_PIXEL_PHI,
         "ok",
-        format_remove_pixel_phi_series_message(
-            modified_count=modified_count,
-            total=instance_total,
-            texts_removed=all_removed_texts,
-            pixels_changed=total_pixels_changed,
-            removal_mode=removal_mode,
-            ocr_remove_mode=ocr_remove_mode,
-        ),
+        _("Clean Descriptors") + f" ({meta_modified})",
     )
 
 
@@ -2066,6 +2213,11 @@ def ai_batch_process(
                         project_dir=project_dir,
                         ocr_remove_mode=options.ocr_remove_mode,
                         ocr_use_exclude_areas=options.ocr_use_exclude_areas,
+                        pixel_enabled=options.embedded_phi_pixel_enabled,
+                        metadata_enabled=options.embedded_phi_metadata_enabled,
+                        reports_enabled=options.embedded_phi_reports_enabled,
+                        metadata_replace_mode=options.metadata_replace_mode,
+                        reports_replace_mode=options.reports_replace_mode,
                     )
                 elif algorithm is AiBatchAlgorithm.HARMONIZE:
 

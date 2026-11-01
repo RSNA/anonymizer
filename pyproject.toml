@@ -65,7 +65,7 @@ mcp = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/anonymizer"]
+packages = ["src/anonymizer", "src/eval"]
 
 [[tool.uv.index]]
 name = "pytorch-cpu"

@@ -1,0 +1,29 @@
+{
+  "features": {
+    "embedded_phi": {
+      "enabled": true,
+      "pixel": {
+        "enabled": true,
+        "removal_method": "blackout",
+        "remove_scope": "phi_only",
+        "use_exclude_areas": false
+      },
+      "metadata": {
+        "enabled": true,
+        "replace_mode": "blank"
+      },
+      "reports": {
+        "enabled": true,
+        "replace_mode": "blank"
+      }
+    },
+    "harmonize": {
+      "enabled": false
+    },
+    "face_blur": {
+      "enabled": false
+    }
+  },
+  "studies": "all",
+  "skip_already_processed": true
+}
