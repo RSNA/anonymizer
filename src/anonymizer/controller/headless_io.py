@@ -145,7 +145,25 @@ def run_headless_import(
 
     try:
         controller.apply_confidentiality_options()
-        result = import_directory(controller, str(import_dir))
+
+        def _progress(completed: float, total: float, message: str) -> None:
+            # Heartbeat so long imports on slow volumes are not mistaken for hangs.
+            logger.info(
+                "import progress %s/%s %s",
+                int(completed),
+                int(total),
+                message,
+            )
+            print(
+                f"import progress {int(completed)}/{int(total)} {message}",
+                flush=True,
+            )
+
+        result = import_directory(
+            controller,
+            str(import_dir),
+            progress=_progress,
+        )
         logger.info(
             "import finished source=%s seen=%s succeeded=%s skipped=%s failed=%s",
             result.get("source"),

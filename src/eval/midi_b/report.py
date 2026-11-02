@@ -41,16 +41,10 @@ def resolve_validation_results_db(run_dir: Path) -> Path:
         if path.is_file() and path.stat().st_size > 0:
             return path
     if official.is_dir():
-        found = sorted(
-            p
-            for p in official.rglob("validation_results.db")
-            if p.is_file() and p.stat().st_size > 0
-        )
+        found = sorted(p for p in official.rglob("validation_results.db") if p.is_file() and p.stat().st_size > 0)
         if found:
             return found[0]
-    raise FileNotFoundError(
-        f"missing/empty validation_results.db under {official}"
-    )
+    raise FileNotFoundError(f"missing/empty validation_results.db under {official}")
 
 
 def resolve_scoring_report_xlsx(run_dir: Path) -> Path | None:
@@ -74,9 +68,7 @@ def resolve_scoring_report_xlsx(run_dir: Path) -> Path | None:
             return path
     if official.is_dir():
         found = sorted(
-            p
-            for p in official.rglob("scoring_report_instance.xlsx")
-            if p.is_file() and p.stat().st_size > 0
+            p for p in official.rglob("scoring_report_instance.xlsx") if p.is_file() and p.stat().st_size > 0
         )
         if found:
             return found[0]
@@ -141,9 +133,7 @@ def write_score_report(
     db = resolve_validation_results_db(run_dir)
     scoring_xlsx = resolve_scoring_report_xlsx(run_dir)
     if scoring_xlsx is None:
-        raise FileNotFoundError(
-            f"missing scoring_report_instance.xlsx under {run_dir / 'official_score'}"
-        )
+        raise FileNotFoundError(f"missing scoring_report_instance.xlsx under {run_dir / 'official_score'}")
     official_score = read_official_score(scoring_xlsx)
 
     con = sqlite3.connect(str(db))
@@ -182,7 +172,10 @@ def write_score_report(
                 "|---|---|---:|",
             ]
             for tag_ds, tag_name, fails in rows:
-                lines.append(f"| `{tag_ds}` | {tag_name} | {fails} |")
+                # Backtick Name too: MIDI wraps names as <Protocol Name>, which
+                # Markdown treats as HTML and renders blank without escaping.
+                name = str(tag_name or "").strip() or "(none)"
+                lines.append(f"| `{tag_ds}` | `{name}` | {fails} |")
             action_details.append("\n".join(lines))
     finally:
         con.close()
@@ -193,8 +186,7 @@ def write_score_report(
         "",
         f"**Final score: {official_score}**",
         "",
-        "Official MIDI validation `Score` (Pass / Total) from "
-        f"`{scoring_xlsx.name}` Scoring sheet.",
+        f"Official MIDI validation `Score` (Pass / Total) from `{scoring_xlsx.name}` Scoring sheet.",
         "",
         "## By action",
         "",
@@ -210,13 +202,8 @@ def write_score_report(
         sum_tot += int(tot or 0)
     # Fail % = fails in this action / all checks (a fail anywhere is a fail).
     for action, p, f, tot in by_action:
-        parts.append(
-            f"| `{action}` | {p} | {f} | {tot} | {_pct(f, sum_tot)} |"
-        )
-    parts.append(
-        f"| **Total** | **{sum_pass}** | **{sum_fail}** | **{sum_tot}** | "
-        f"**{_pct(sum_fail, sum_tot)}** |"
-    )
+        parts.append(f"| `{action}` | {p} | {f} | {tot} | {_pct(f, sum_tot)} |")
+    parts.append(f"| **Total** | **{sum_pass}** | **{sum_fail}** | **{sum_tot}** | **{_pct(sum_fail, sum_tot)}** |")
     if action_details:
         parts.extend(["", "## Top failing tags by action", ""])
         parts.append("\n\n".join(action_details))

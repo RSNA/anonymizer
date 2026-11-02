@@ -1,26 +1,29 @@
-"""Unit tests: Clean Descriptors detect (frozen compile → OpenMed → post-NER)."""
+"""Unit tests: Clean Descriptors detect (compile → OpenMed → post-NER)."""
 
 from unittest.mock import patch
 
 from pydicom.dataset import Dataset
 
 from anonymizer.controller.ai.embedded_phi.metadata.detect import (
+    DEFAULT_NER_DETECT_OPTIONS,
+    NerDetectOptions,
     detect_phi_in_texts,
     entity_count_by_label,
 )
+from anonymizer.controller.ai.embedded_phi.metadata.ner_compile import NerCompileOptions
 from anonymizer.controller.ai.embedded_phi.ner.engine import Entity
 from anonymizer.controller.ai.embedded_phi.ner.radiology_filters import MetadataNerItem
 
 
-def test_detect_frozen_compile_one_openmed_call() -> None:
+def test_detect_compile_one_openmed_call() -> None:
     """Step 2 keeps printable Content; step 3 is one call; remap restores offsets."""
     ds = Dataset()
     ds.PatientID = "ANON-1"
 
     def _fake_detect(text: str, *, locale: str = "en_US") -> list[Entity]:
         del locale
-        # Frozen compile: Tag Name: value. lines; punctuation kept; anon not masked.
-        assert "Series Description: John Doe." in text
+        # Default compile: Tag Name: value, joined by spaces; anon not masked.
+        assert "Series Description: John Doe," in text
         assert "1.2.840" not in text  # UI skipped at collect
         assert "G4EGU8PGUYWPI" not in text  # @safe never reaches NER
         assert "ANON-1" in text  # post-NER anon drop only
@@ -136,6 +139,67 @@ def test_detect_always_allows_dicom_vr_code_spans() -> None:
     assert out["Jane"][0].label == "FIRST_NAME"
 
 
+def test_detect_drops_pure_numeric_whole_cell_false_id() -> None:
+    """Whole-cell pure numbers tagged as ID must not empty retain cells (GEMS 0)."""
+    ds = Dataset()
+
+    def _fake_detect(text: str, *, locale: str = "en_US") -> list[Entity]:
+        del locale
+        out: list[Entity] = []
+        for needle in ("0", "8371727310"):
+            if needle in text:
+                i = text.index(needle)
+                out.append(Entity(label="ID", start=i, end=i + len(needle)))
+        return out
+
+    items = [
+        MetadataNerItem(text="0", field_name="PET ir_num_iterations", vr="IS"),
+        MetadataNerItem(
+            text="Ordered for 8371727310 by PH",
+            field_name="Protocol Name",
+            vr="LO",
+        ),
+    ]
+    with patch(
+        "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
+        side_effect=_fake_detect,
+    ):
+        out = detect_phi_in_texts(ds=ds, items=items, whitelist=[])
+    assert "0" not in out
+    body = "Ordered for 8371727310 by PH"
+    assert body in out
+    frags = [body[e.start : e.end] for e in out[body]]
+    # expand_entities_for_remove may widen to include leading "for ".
+    assert any("8371727310" in frag for frag in frags)
+
+
+def test_detect_accepts_legacy_newline_period_compile() -> None:
+    """Format experiments can still request the historical newline+period layout."""
+    ds = Dataset()
+    seen: list[str] = []
+
+    def _fake_detect(text: str, *, locale: str = "en_US") -> list[Entity]:
+        del locale
+        seen.append(text)
+        return []
+
+    items = [
+        MetadataNerItem(text="A", field_name="Series Description", vr="LO"),
+        MetadataNerItem(text="B", field_name="Protocol Name", vr="LO"),
+    ]
+    legacy = NerDetectOptions(
+        compile=NerCompileOptions(line_sep="\n", value_terminator="."),
+        chunk_chars=DEFAULT_NER_DETECT_OPTIONS.chunk_chars,
+        chunk_overlap=0,
+    )
+    with patch(
+        "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
+        side_effect=_fake_detect,
+    ):
+        detect_phi_in_texts(ds=ds, items=items, whitelist=[], detect_options=legacy)
+    assert seen and seen[0] == "Series Description: A.\nProtocol Name: B."
+
+
 def test_detect_loads_modality_whitelist_when_whitelist_not_passed() -> None:
     """Modality code selects the effective whitelist (pixel SSOT loader)."""
     ds = Dataset()
@@ -164,9 +228,7 @@ def test_detect_loads_modality_whitelist_when_whitelist_not_passed() -> None:
     mock_load.assert_called_once_with(None, "US")
     # Jane still reached the model (post-NER drop).
     assert seen and "Jane" in seen[0]
-    assert "Jane Doe" not in out or all(
-        "Jane Doe"[e.start : e.end] != "Jane" for e in out.get("Jane Doe", ())
-    )
+    assert "Jane Doe" not in out or all("Jane Doe"[e.start : e.end] != "Jane" for e in out.get("Jane Doe", ()))
 
 
 def test_detect_keeps_non_whitelist_openmed_spans() -> None:
@@ -189,9 +251,7 @@ def test_detect_keeps_non_whitelist_openmed_spans() -> None:
         side_effect=_fake_detect,
     ):
         out = detect_phi_in_texts(ds=ds, items=items, whitelist=[])
-    frags = [
-        "MAMMO screening for Jane Doe"[e.start : e.end] for e in out["MAMMO screening for Jane Doe"]
-    ]
+    frags = ["MAMMO screening for Jane Doe"[e.start : e.end] for e in out["MAMMO screening for Jane Doe"]]
     assert frags == ["MAMMO"]
 
 
@@ -213,6 +273,38 @@ def test_detect_merges_compact_date_when_ner_misses() -> None:
     assert frags == ["20101203"]
     assert out[body][0].label == "DATE"
     assert out[body][0].raw_label == "compact_da"
+
+
+def test_detect_pattern_fills_id_site_when_ner_misses() -> None:
+    """Post-NER: long ID + at/by site claimed when OpenMed returns nothing."""
+    ds = Dataset()
+    body = "2D/FGRE LOC at JCH for 8371727310"
+
+    items = [
+        MetadataNerItem(text=body, field_name="Series Description", vr="LO"),
+    ]
+    with patch(
+        "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
+        return_value=[],
+    ):
+        out = detect_phi_in_texts(ds=ds, items=items, whitelist=[])
+    frags = {body[e.start : e.end] for e in out[body]}
+    assert "JCH" in frags
+    assert "8371727310" in frags
+
+
+def test_detect_pattern_fills_dr_name_when_ner_misses() -> None:
+    ds = Dataset()
+    body = "Ordered for 867-96-5220 by Dr. Brennan"
+    items = [MetadataNerItem(text=body, field_name="Protocol Name", vr="LO")]
+    with patch(
+        "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
+        return_value=[],
+    ):
+        out = detect_phi_in_texts(ds=ds, items=items, whitelist=[])
+    frags = {body[e.start : e.end] for e in out[body]}
+    assert "Dr. Brennan" in frags
+    assert "867-96-5220" in frags
 
 
 def test_detect_includes_pure_series_number_is_for_date_fill() -> None:
@@ -284,9 +376,7 @@ def test_detect_empty_cells_returns_empty() -> None:
 def test_detect_explicit_empty_whitelist_skips_modality_load() -> None:
     ds = Dataset()
     with (
-        patch(
-            "anonymizer.controller.ai.embedded_phi.metadata.detect.load_modality_whitelist"
-        ) as mock_load,
+        patch("anonymizer.controller.ai.embedded_phi.metadata.detect.load_modality_whitelist") as mock_load,
         patch(
             "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
             return_value=[],

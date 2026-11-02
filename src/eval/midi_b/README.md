@@ -18,13 +18,29 @@ uv run --group midi-b python -m eval.midi_b validate \
 # Full validation
 uv run --group midi-b python -m eval.midi_b validate --slug full
 
-# Test split (no public answer key scoring)
+# Full test (uses Synthetic Test answer key on the TCIA volume)
 uv run --group midi-b python -m eval.midi_b test --slug full
+
+# Score an already-imported test/validation run (no re-import / AI batch)
+uv run --group midi-b python -m eval.midi_b test \
+  --run-dir /path/to/existing_run \
+  --skip-import --skip-ai-batch
 
 # Rebuild SCORECARD for an existing run
 uv run --group midi-b python -m eval.midi_b score \
   /Volumes/MBOD.DX.LIFE/TCIA/MIDI-B/harness-runs/<run_dir>
+
+# Re-run AI batch + score on an already-imported project (Clean Descriptors iteration)
+uv run --group midi-b python -m eval.midi_b validate \
+  --run-dir /path/to/existing_run \
+  --skip-import \
+  --answer-key /path/to/answer_key.db
 ```
+
+For metadata NER experiments, import once into a stable `--run-dir`, then use `--skip-import`
+so only AI batch + official score repeat. Prefer a local `--harness-root` for the project
+SQLite DB when the DICOM volume is external — long imports on external disks have been
+killed mid-run with no traceback.
 
 Pregenerated project: `assets/ProjectModel.json` (Retain stack + TCIA Research;
 **Retain Device Identity off** — manufacturer/model/software come from TCIA Research

@@ -1,37 +1,33 @@
-"""Frozen Clean Descriptors NER input compile.
+"""Clean Descriptors NER input compile (metadata).
 
-DO NOT CHANGE THIS COMPILE STEP WHEN FINE-TUNING THE NER MODEL.
+Builds one NER string from eligible text/IS/DS cells so OpenMed sees
+clinical-report-style context, with a per-character offset map back to
+original Content.
 
-NER input compile is fixed forever for Clean Descriptors metadata:
-collect NER_INPUT_VRS cells (text VRs plus IS/DS numeric strings), one
-line per tag as:
-
-  Tag Name: value.
-
-Lines are joined with a single newline. The value after the colon is the
-tag Content with only characters illegal for the NER model removed
-(stdlib str.isprintable / str.isspace — drop control/non-printable;
-whitespace normalized to ASCII space). Punctuation, hyphens, carets, and
-letters stay. No whitelist mask, no caret rewrite, no anon substring
-blanking before the model.
-
-Each NER-input index maps back to (tag_path, original_offset) for value
-characters (prefix, trailing full stop, and newlines map to no Content
-offset) so OpenMed spans remap onto original Content.
+Compile layout is configurable (line separator, value terminator) so
+format experiments can compare without forking the remap path. Defaults
+match the historical layout: one ``Tag Name: value.`` line per tag,
+joined by newlines.
 
 Public API
 ----------
 NerCompileCell
-    One text cell eligible for the frozen NER concat.
+    One text cell eligible for the NER concat.
 
 NerOffset
     One NER-input character → owning tag Content offset (-1 if not value).
 
+NerCompileOptions
+    Line separator, value terminator, and whether to keep field-name wraps.
+
 CompiledNerInput
     ner_text, offset_map, and cells used to build them.
 
-compile_ner_input(cells) -> CompiledNerInput
-    Wrap each cell as Tag Name: value.; join with newlines; offset map.
+DEFAULT_NER_COMPILE_OPTIONS
+    Historical default: newline between tags, trailing full stop.
+
+compile_ner_input(cells, *, options=DEFAULT_NER_COMPILE_OPTIONS) -> CompiledNerInput
+    Wrap each cell; join; build offset map.
 
 remap_entities_via_offset_map(entities, compiled) -> dict[str, list[Entity]]
     Map OpenMed spans on ner_text onto original Content per cell text.
@@ -50,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class NerCompileCell:
-    """One text cell eligible for the frozen NER concat."""
+    """One text cell eligible for the NER concat."""
 
     text: str
     field_name: str
@@ -63,7 +59,8 @@ class NerCompileCell:
 class NerOffset:
     """One NER-input character → owning tag Content offset.
 
-    original_offset is -1 for Field Name prefix, trailing '.', and newlines.
+    original_offset is -1 for Field Name prefix, value terminator, and
+    between-tag separators.
     """
 
     tag_path: str
@@ -73,29 +70,53 @@ class NerOffset:
 
 
 @dataclass(frozen=True, slots=True)
+class NerCompileOptions:
+    """How eligible cells are joined into one OpenMed string.
+
+    Args:
+        line_sep: Inserted between tags (newline, space, comma+space, …).
+        value_terminator: Appended after each value (``.``, ``,``, or empty).
+        include_field_name: When True, emit ``Tag Name: value``; else value only.
+    """
+
+    line_sep: str = "\n"
+    value_terminator: str = "."
+    include_field_name: bool = True
+
+
+DEFAULT_NER_COMPILE_OPTIONS = NerCompileOptions()
+
+
+@dataclass(frozen=True, slots=True)
 class CompiledNerInput:
-    """Result of the frozen compile step."""
+    """Result of the compile step."""
 
     ner_text: str
     offset_map: tuple[NerOffset, ...]
     cells: tuple[NerCompileCell, ...]
+    options: NerCompileOptions = DEFAULT_NER_COMPILE_OPTIONS
 
 
-def compile_ner_input(cells: Sequence[NerCompileCell]) -> CompiledNerInput:
+def compile_ner_input(
+    cells: Sequence[NerCompileCell],
+    *,
+    options: NerCompileOptions = DEFAULT_NER_COMPILE_OPTIONS,
+) -> CompiledNerInput:
     """
-    Wrap each cell as Tag Name: value.; join with newlines; build offset map.
+    Wrap each cell; join with options.line_sep; build offset map.
 
-    FROZEN — do not drop field-name wraps or line separators; do not add
-    whitelist / caret / anon transforms. Fine-tuning must not change this.
     Value prep drops only non-printable / control characters (stdlib
     str.isprintable / str.isspace); whitespace becomes ASCII space.
+    No whitelist mask, no caret rewrite, no anon blanking before the model.
 
     Args:
         cells: Text cells in extract order (already filtered for @safe / stamps).
+        options: Layout for separators and terminators.
 
     Returns:
         Compiled NER string plus per-character offset map.
     """
+    opts = options
     ner_chars: list[str] = []
     offsets: list[NerOffset] = []
     kept_cells: list[NerCompileCell] = []
@@ -136,23 +157,25 @@ def compile_ner_input(cells: Sequence[NerCompileCell]) -> CompiledNerInput:
             value_offs.append(i)
         if not value_chars or not any(ch.isalnum() for ch in value_chars):
             continue
-        if ner_chars:
-            _emit(
-                "\n",
-                tag_path="",
-                original_offset=-1,
-                original_text="",
-                field_name="",
-            )
-        prefix = f"{name}: "
-        for ch in prefix:
-            _emit(
-                ch,
-                tag_path=cell.tag_path,
-                original_offset=-1,
-                original_text=original,
-                field_name=cell.field_name,
-            )
+        if ner_chars and opts.line_sep:
+            for ch in opts.line_sep:
+                _emit(
+                    ch,
+                    tag_path="",
+                    original_offset=-1,
+                    original_text="",
+                    field_name="",
+                )
+        if opts.include_field_name:
+            prefix = f"{name}: "
+            for ch in prefix:
+                _emit(
+                    ch,
+                    tag_path=cell.tag_path,
+                    original_offset=-1,
+                    original_text=original,
+                    field_name=cell.field_name,
+                )
         for orig_i, ch in zip(value_offs, value_chars, strict=True):
             _emit(
                 ch,
@@ -161,22 +184,24 @@ def compile_ner_input(cells: Sequence[NerCompileCell]) -> CompiledNerInput:
                 original_text=original,
                 field_name=cell.field_name,
             )
-        _emit(
-            ".",
-            tag_path=cell.tag_path,
-            original_offset=-1,
-            original_text=original,
-            field_name=cell.field_name,
-        )
+        for ch in opts.value_terminator:
+            _emit(
+                ch,
+                tag_path=cell.tag_path,
+                original_offset=-1,
+                original_text=original,
+                field_name=cell.field_name,
+            )
 
     ner_text = "".join(ner_chars)
     if len(offsets) != len(ner_text):
-        raise RuntimeError("frozen NER compile offset map length mismatch")
+        raise RuntimeError("NER compile offset map length mismatch")
 
     return CompiledNerInput(
         ner_text=ner_text,
         offset_map=tuple(offsets),
         cells=tuple(kept_cells),
+        options=opts,
     )
 
 
@@ -187,9 +212,9 @@ def remap_entities_via_offset_map(
     """
     Map OpenMed spans on ner_text onto original Content per cell text.
 
-    Characters in Field Name prefixes, trailing full stops, and newlines are
-    skipped. Spans that cover more than one tag's value are split at tag
-    boundaries.
+    Characters in Field Name prefixes, value terminators, and between-tag
+    separators are skipped. Spans that cover more than one tag's value are
+    split at tag boundaries.
 
     Args:
         entities: Spans with offsets into compiled.ner_text.
@@ -207,7 +232,6 @@ def remap_entities_via_offset_map(
             continue
         i = start
         while i < end:
-            # Skip Field Name prefix, trailing '.', and newlines only.
             while i < end and compiled.offset_map[i].original_offset < 0:
                 i += 1
             if i >= end:
@@ -218,7 +242,7 @@ def remap_entities_via_offset_map(
             while run_end < end:
                 off = compiled.offset_map[run_end]
                 if off.original_offset < 0:
-                    # Same-line punctuation stays in the run; newline ends it.
+                    # Same-tag terminator stays in the run; separators end it.
                     if off.tag_path == path and off.original_text == original:
                         run_end += 1
                         continue
@@ -227,9 +251,7 @@ def remap_entities_via_offset_map(
                     break
                 run_end += 1
             value_offs = [
-                compiled.offset_map[j]
-                for j in range(i, run_end)
-                if compiled.offset_map[j].original_offset >= 0
+                compiled.offset_map[j] for j in range(i, run_end) if compiled.offset_map[j].original_offset >= 0
             ]
             i = run_end
             if not value_offs:
@@ -261,7 +283,7 @@ def _ner_safe_char(ch: str) -> str | None:
     """Keep Content chars the NER model accepts; drop illegal controls.
 
     Uses stdlib only: printable text and whitespace. Whitespace becomes
-    ASCII space so compile stays one line per tag. Letters, digits,
+    ASCII space so each value stays one line. Letters, digits,
     punctuation, hyphens, and carets are kept.
 
     Args:

@@ -12,35 +12,26 @@ DEFAULT_MIDI_B_ROOT = Path("/Volumes/MBOD.DX.LIFE/TCIA/MIDI-B")
 DEFAULT_HARNESS_RUNS = DEFAULT_MIDI_B_ROOT / "harness-runs"
 
 DEFAULT_SYNTHETIC_VALIDATION = (
-    DEFAULT_MIDI_B_ROOT
-    / "Synthetic Validation"
-    / "manifest-1740445452889"
-    / "MIDI-B-Synthetic-Validation"
+    DEFAULT_MIDI_B_ROOT / "Synthetic Validation" / "manifest-1740445452889" / "MIDI-B-Synthetic-Validation"
 )
 DEFAULT_ANSWER_KEY_VALIDATION = (
-    DEFAULT_MIDI_B_ROOT
-    / "Synthetic Validation"
-    / "Answer Key"
-    / "MIDI-B-Answer-Key-Validation.db"
+    DEFAULT_MIDI_B_ROOT / "Synthetic Validation" / "Answer Key" / "MIDI-B-Answer-Key-Validation.db"
 )
 
-DEFAULT_SYNTHETIC_TEST = (
-    DEFAULT_MIDI_B_ROOT
-    / "Synthetic Test"
-    / "manifest-1740627604844"
-    / "MIDI-B-Synthetic-Test"
-)
+DEFAULT_SYNTHETIC_TEST = DEFAULT_MIDI_B_ROOT / "Synthetic Test" / "manifest-1740627604844" / "MIDI-B-Synthetic-Test"
+DEFAULT_ANSWER_KEY_TEST = DEFAULT_MIDI_B_ROOT / "Synthetic Test" / "Answer Key" / "MIDI-B-Answer-Key-Test.db"
 
 
 def split_paths(split: str) -> tuple[Path, Path | None]:
     """
-    Return synthetic DICOM root and optional answer-key DB for a split name.
+    Return synthetic DICOM root and answer-key DB for a split name.
 
     Args:
         split: validation or test (and common aliases).
 
     Returns:
-        (synthetic_root, answer_db or None for test).
+        (synthetic_root, answer_db). Both splits resolve a local answer-key path;
+        override with ``--answer-key`` when needed.
 
     Raises:
         ValueError: Unknown split name.
@@ -49,7 +40,7 @@ def split_paths(split: str) -> tuple[Path, Path | None]:
     if key in ("validation", "val", "synthetic_validation"):
         return DEFAULT_SYNTHETIC_VALIDATION, DEFAULT_ANSWER_KEY_VALIDATION
     if key in ("test", "synthetic_test"):
-        return DEFAULT_SYNTHETIC_TEST, None
+        return DEFAULT_SYNTHETIC_TEST, DEFAULT_ANSWER_KEY_TEST
     raise ValueError(f"unknown split {split!r}; use 'validation' or 'test'")
 
 

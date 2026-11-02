@@ -1,7 +1,8 @@
-"""Frozen Clean Descriptors NER compile contract (do not change in fine-tuning)."""
+"""Clean Descriptors NER compile contract (default + format options)."""
 
 from anonymizer.controller.ai.embedded_phi.metadata.ner_compile import (
     NerCompileCell,
+    NerCompileOptions,
     compile_ner_input,
     remap_entities_via_offset_map,
 )
@@ -26,10 +27,7 @@ def test_compile_keeps_punctuation_and_spaces() -> None:
         ),
     ]
     compiled = compile_ner_input(cells)
-    assert compiled.ner_text == (
-        "Image Comments: supine for 2522288856.\n"
-        "Study Description: 110-78-3749."
-    )
+    assert compiled.ner_text == ("Image Comments: supine for 2522288856.\nStudy Description: 110-78-3749.")
     assert "Image Comments: " in compiled.ner_text
     assert "\n" in compiled.ner_text
     assert compiled.ner_text.endswith(".")
@@ -70,6 +68,36 @@ def test_compile_drops_control_characters_only() -> None:
         ]
     )
     assert compiled.ner_text == "Image Comments: helloworld!."
+
+
+def test_compile_space_comma_layout() -> None:
+    """Product default experiment layout: space sep, comma terminator."""
+    cells = [
+        NerCompileCell(
+            text="supine for 2522288856",
+            field_name="Image Comments",
+            tag="(0020,4000)",
+            vr="LT",
+            tag_path="ImageComments",
+        ),
+        NerCompileCell(
+            text="110-78-3749",
+            field_name="Study Description",
+            tag="(0008,1030)",
+            vr="LO",
+            tag_path="StudyDescription",
+        ),
+    ]
+    compiled = compile_ner_input(
+        cells,
+        options=NerCompileOptions(line_sep=" ", value_terminator=","),
+    )
+    assert compiled.ner_text == ("Image Comments: supine for 2522288856, Study Description: 110-78-3749,")
+    start = compiled.ner_text.index("2522288856")
+    ents = [Entity(label="ID", start=start, end=start + 10)]
+    by_text = remap_entities_via_offset_map(ents, compiled)
+    body = "supine for 2522288856"
+    assert body[by_text[body][0].start : by_text[body][0].end] == "2522288856"
 
 
 def test_remap_span_on_hyphenated_id() -> None:

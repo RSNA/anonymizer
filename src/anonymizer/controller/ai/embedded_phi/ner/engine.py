@@ -36,11 +36,13 @@ format_tagged_entities(text: str, entities: Sequence[Entity]) -> str
     Wrap entity spans as <LABEL>…</LABEL> for Clean Descriptors / NER logs.
 
 expand_entities_for_remove(text: str, entities: Sequence[Entity]) -> list[Entity]
-    Widen FIRST_NAME/LAST_NAME/ID spans for PN carets and leading "for ".
+    Widen FIRST_NAME/LAST_NAME/ID spans for PN carets, leading "for ", and
+    leading "Dr." before names.
 
 detect_locale_supported(locale: str) -> bool
     Return whether locale has a supported OpenMed detect pack.
 """
+
 import logging
 import re
 from collections.abc import Callable, Sequence
@@ -85,10 +87,12 @@ SEGMENT_SEP = "\n\x1e\n"
 # Stay under ClinicalE5 ~512-token window with headroom for WordPieces.
 _DEFAULT_SEGMENT_MAX_CHARS = 1600
 
-# Blank-mode span expansion: PN carets next to names; leading "for " before name/ID.
+# Blank-mode span expansion: PN carets next to names; leading "for " before
+# name/ID; leading "Dr." / "Dr " before names so titles are not left behind.
 _NAME_LABELS = frozenset({"FIRST_NAME", "LAST_NAME"})
 _NAME_OR_ID_LABELS = frozenset({"FIRST_NAME", "LAST_NAME", "ID"})
 _FOR_BEFORE_RE = re.compile(r"(?<![A-Za-z0-9])for\s+$", re.IGNORECASE)
+_DR_BEFORE_RE = re.compile(r"(?<![A-Za-z0-9])Dr\.?\s+$", re.IGNORECASE)
 
 # Map OpenMed / HF entity_group strings onto product labels (model decides; no regex).
 _TO_SCORED: dict[str, str] = {
@@ -447,8 +451,7 @@ def replace_entities(
 
     meta_n = sum(1 for e in used if e.replacement is not None)
     logger.debug(
-        "ner: replace apply %d span(s) right-to-left mode=%s "
-        "(metadata_replacement=%d ner=%d)\n%s",
+        "ner: replace apply %d span(s) right-to-left mode=%s (metadata_replacement=%d ner=%d)\n%s",
         len(used),
         mode,
         meta_n,
@@ -521,7 +524,7 @@ def expand_entities_for_remove(
     entities: Sequence[Entity],
 ) -> list[Entity]:
     """
-    Widen FIRST_NAME/LAST_NAME/ID spans for PN carets and leading "for ".
+    Widen FIRST_NAME/LAST_NAME/ID spans for PN carets, "for ", and "Dr.".
 
     Post-NER Clean Descriptors step: expand on original Content before
     remove so tagged logs and blanking agree. Protocol carets that are not
@@ -575,7 +578,7 @@ def detect_locale_supported(locale: str) -> bool:
 
 def _expand_blank_range(body: str, ent: Entity) -> tuple[int, int]:
     """
-    Widen a blank span for PN carets and leading "for " before name/ID.
+    Widen a blank span for PN carets, leading "for ", and leading "Dr.".
 
     Args:
         body: Full source string (original offsets).
@@ -594,6 +597,9 @@ def _expand_blank_range(body: str, ent: Entity) -> tuple[int, int]:
             start -= 1
         while end < len(body) and body[end] == "^":
             end += 1
+        match = _DR_BEFORE_RE.search(body[:start])
+        if match is not None and match.end() == start:
+            start = match.start()
     if label in _NAME_OR_ID_LABELS:
         match = _FOR_BEFORE_RE.search(body[:start])
         if match is not None and match.end() == start:
@@ -646,9 +652,7 @@ def _score_for_log(score: float) -> float:
     return float(f"{float(score):.2g}")
 
 
-def _raw_ents_for_log(
-    raw_ents: Sequence[dict[str, Any]], source: str = ""
-) -> list[dict[str, Any]]:
+def _raw_ents_for_log(raw_ents: Sequence[dict[str, Any]], source: str = "") -> list[dict[str, Any]]:
     """
     Copy pipeline dicts for logging, adding the covered source text.
 
@@ -801,5 +805,3 @@ def _ensure_pipeline(locale: str):
         _PIPE = None
         _PIPE_MODEL_ID = None
     return _PIPE
-
-

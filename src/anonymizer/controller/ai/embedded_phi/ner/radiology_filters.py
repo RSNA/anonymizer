@@ -8,7 +8,8 @@ Still used:
 
 * **Report body** — mask_text_for_ner: same-length mask of anon surfaces,
   UIDs, dates/clock-times, whitelist terms (report path only).
-* **Post-NER** — date_time_pattern_entities, collect_anonymized_values,
+* **Post-NER** — date_time_pattern_entities,
+  descriptor_phi_pattern_entities, collect_anonymized_values,
   MetadataNerItem.
 * **Legacy prepare_metadata_ner_segments** — kept for unit tests / older
   callers; not the Clean Descriptors detect path.
@@ -52,6 +53,16 @@ remap_ner_entities_to_original(entities: Sequence[Entity], prepared: PreparedMet
 date_time_pattern_entities(text: str) -> list[Entity]
     DATE entities for compact DA / TM / colon clock times in text (OpenMed gap-fill).
 
+CLINICAL_KEEP_TERMS
+    Trial / anatomy tokens for post-NER whitelist and false-positive ID drop.
+
+descriptor_phi_pattern_entities(text: str) -> list[Entity]
+    ID / LOCATION / name gap-fill for long digits, SSN-like, at/by site
+    codes, multi-word at-site names, phone, and Dr. Name (post-NER only).
+
+drop_measurement_digit_id_entities(text: str, ents: Sequence[Entity]) -> list[Entity]
+    Drop false-positive ID spans (float fragments, short/trial digit codes).
+
 is_dicom_uid_text(text: str) -> bool
     True when text is (or is only) a DICOM UID.
 
@@ -64,6 +75,7 @@ wrap_field_for_ner(field_name: str, value: str) -> tuple[str, int, int]
 caret_to_space_for_ner(text: str) -> str
     Same-length PersonName caret (^) → space so NER sees prose, not PN syntax.
 """
+
 import logging
 import re
 from collections.abc import Iterable, Sequence, Set
@@ -78,6 +90,7 @@ from anonymizer.controller.ai.embedded_phi.metadata.extract import (
     SKIP_TEXT_KEYWORDS,
     TEXT_VRS,
     digits_only,
+    is_pure_numeric_string_value,
 )
 from anonymizer.controller.ai.embedded_phi.ner.engine import Entity
 from anonymizer.controller.ai.embedded_phi.term_similarity import similarity_term_match
@@ -137,16 +150,15 @@ _NON_PROSE_VR_CORE = frozenset(
     }
 )
 
-_UID_RE = re.compile(
-    r"\b(?:0|[1-9][0-9]*)(?:\.(?:0|[1-9][0-9]*)){3,}\b"
-)
+_UID_RE = re.compile(r"\b(?:0|[1-9][0-9]*)(?:\.(?:0|[1-9][0-9]*)){3,}\b")
 _COMPACT_DATE_RE = re.compile(r"\b(?:19|20)\d{6}\b")
 # Compact TM (HHMMSS[.frac]). Do not start after '.' — fractional digits of a
 # decimal measurement (e.g. 0.096000) are not DICOM times.
 _COMPACT_TIME_RE = re.compile(r"(?<!\.)\b\d{6}(?:\.\d{1,6})?\b")
-# Decimal measurements kept out of compact-TM DATE fill / time masks
-# (e.g. Attenuation Correction Method "0.096000 cm-1").
-_DECIMAL_FLOAT_RE = re.compile(r"\b\d+\.\d+\b")
+# Decimal measurements kept out of compact DATE/TM fill / time masks
+# (signed Slice Location, Attenuation Correction Method "0.096000 cm-1").
+# Occupy these *before* DA so fractional runs like 20077515 are not dates.
+_DECIMAL_FLOAT_RE = re.compile(r"(?<![\d])-?\d+\.\d+")
 # Colon clock times (HH:MM[:SS[.frac]] [AM/PM]) — masked before NER so a
 # model date_time span can only cover the date component we focus on.
 _COLON_TIME_RE = re.compile(
@@ -154,6 +166,79 @@ _COLON_TIME_RE = re.compile(
     r"(?:\s*[AaPp]\.?[Mm]\.?)?\b"
 )
 _WORD_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9'._/-]*")
+
+# Post-NER descriptor PHI gap-fill (MIDI under-remove: IDs / sites / Dr.).
+# Long digit runs only inside prose that also has letters — never on pure
+# numeric / decimal measurement cells (Slice Location, Frame Reference Time).
+# Also refuse digit runs that are the integer or fractional part of a float.
+_LONG_DIGIT_ID_RE = re.compile(r"(?<![\d.])\d{7,}(?!\.\d)")
+_SSN_LIKE_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
+# Require separators or parentheses so bare 7–10 digit IDs stay ID, not PHONE.
+_PHONE_RE = re.compile(
+    r"(?:\(\d{3}\)[-.\s]?\d{3}[-.\s]?\d{4}|\d{3}[-.\s]\d{3}[-.\s]\d{4})"
+    r"(?:\s*[xX]\d+)?"
+)
+# Site / operator initials after "at" / "by" (uppercase codes only; not "Dr.").
+_AT_BY_SITE_RE = re.compile(r"(?<![A-Za-z0-9])(?:[Aa][Tt]|[Bb][Yy])\s+([A-Z]{2,8})\b(?!\.)")
+# Multi-word site / facility after "at" / "to" (Title Case), e.g.
+# Harris Community Clinic, Palmer-Greene Memorial. Stop before "on <date>"
+# or end of cell so trailing clinical words stay.
+_AT_SITE_NAME_RE = re.compile(
+    r"(?<![A-Za-z0-9])(?:[Aa][Tt]|[Tt][Oo])\s+"
+    r"([A-Z][A-Za-z'’\-]+(?:\s+[A-Za-z][A-Za-z'’\-]*){1,6})"
+    r"(?=\s+on\b|\s*$|[.,;])"
+)
+_DR_NAME_RE = re.compile(r"(?<![A-Za-z0-9])Dr\.?\s+[A-Z][A-Za-z'’\-]+")
+_ORPHAN_DR_RE = re.compile(r"(?<![A-Za-z0-9])Dr\.?\s*$")
+# Clinical tokens that must not be claimed as site codes after at/by.
+_SITE_KEEP = frozenset(
+    {
+        "CT",
+        "MR",
+        "MRI",
+        "PET",
+        "PT",
+        "US",
+        "XR",
+        "DX",
+        "CR",
+        "NM",
+        "MG",
+        "XA",
+        "RF",
+        "SC",
+        "OT",
+        "HD",
+        "RT",
+        "SR",
+        "PR",
+        "KO",
+        "ECG",
+        "EEG",
+        "EMG",
+        "AU",
+        "BD",
+        "BI",
+        "DG",
+        "ES",
+        "GM",
+        "IO",
+        "LS",
+        "PX",
+        "ST",
+        "TG",
+        "XC",
+        "OP",
+        "SM",
+        "AP",
+        "PA",
+        "LAT",
+        "RL",
+        "LL",
+        "SI",
+        "DR",  # title fragment; Dr. Name handled separately
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -306,15 +391,20 @@ def mask_text_for_ner(
         for match in _UID_RE.finditer(body):
             _claim(match.start(), match.end(), "uid", match.group(0))
 
-    if mask_dates:
-        for match in _COMPACT_DATE_RE.finditer(body):
-            _claim(match.start(), match.end(), "date", match.group(0), detail="DA")
-
-    if mask_times:
-        # Decimal floats occupy ranges so compact TM cannot claim fractional digits.
+    if mask_dates or mask_times:
+        # Occupy decimals before DA/TM so float fractions are never masked.
         for match in _DECIMAL_FLOAT_RE.finditer(body):
             occupied.append((match.start(), match.end()))
 
+    if mask_dates:
+        for match in _COMPACT_DATE_RE.finditer(body):
+            token = match.group(0)
+            month, day = int(token[4:6]), int(token[6:8])
+            if month < 1 or month > 12 or day < 1 or day > 31:
+                continue
+            _claim(match.start(), match.end(), "date", token, detail="DA")
+
+    if mask_times:
         for match in _COMPACT_TIME_RE.finditer(body):
             # Avoid re-masking digits that are part of a longer UID already claimed.
             _claim(match.start(), match.end(), "time", match.group(0), detail="TM")
@@ -402,19 +492,13 @@ def prepare_metadata_ner_segments(
             log_context=f"{log_context}.cell",
         )
         if not any(ch.isalnum() for ch in masked.text):
-            reason = (
-                "whitelist"
-                if any(hit.reason == "whitelist" for hit in masked.hits)
-                else "masked_empty"
-            )
+            reason = "whitelist" if any(hit.reason == "whitelist" for hit in masked.hits) else "masked_empty"
             skips.append((item, FilterHit(reason, stripped, detail="no_text_after_mask")))
             continue
         # PersonName caret → space (same length) before wrap so OpenMed sees
         # "LOPEZ JOANN" not "LOPEZ^JOANN" (caret confuses Given → ID).
         ner_value = caret_to_space_for_ner(masked.text)
-        ner_text, value_start, value_end = _wrap_field_for_ner(
-            item.field_name, ner_value
-        )
+        ner_text, value_start, value_end = _wrap_field_for_ner(item.field_name, ner_value)
         prepared.append(
             PreparedMetadataSegment(
                 original_text=stripped,
@@ -501,12 +585,13 @@ def date_time_pattern_entities(text: str) -> list[Entity]:
             )
         )
 
-    for match in _COMPACT_DATE_RE.finditer(body):
-        _claim(match.start(), match.end(), raw_label="compact_da")
-    for match in _COLON_TIME_RE.finditer(body):
-        _claim(match.start(), match.end(), raw_label="colon_tm")
-    # Keep-list: decimal floats occupy ranges without emitting DATE, so compact
-    # TM cannot claim fractional digit runs (0.096000 → not DATE on 096000).
+    stripped = body.strip()
+    lead = len(body) - len(body.lstrip())
+    trail = lead + len(stripped)
+    whole_pure = bool(stripped) and is_pure_numeric_string_value(stripped)
+
+    # Keep-list first: decimal floats occupy ranges so compact DA/TM cannot
+    # claim fractional digit runs (-42.20077515 → not DATE on 20077515).
     for match in _DECIMAL_FLOAT_RE.finditer(body):
         start, end = match.start(), match.end()
         if start < 0 or end > len(body) or start >= end:
@@ -514,6 +599,15 @@ def date_time_pattern_entities(text: str) -> list[Entity]:
         if any(start < b and end > a for a, b in occupied):
             continue
         occupied.append((start, end))
+    for match in _COMPACT_DATE_RE.finditer(body):
+        token = match.group(0)
+        # Reject impossible MMDD (float fragments / random 8-digit runs).
+        month, day = int(token[4:6]), int(token[6:8])
+        if month < 1 or month > 12 or day < 1 or day > 31:
+            continue
+        _claim(match.start(), match.end(), raw_label="compact_da")
+    for match in _COLON_TIME_RE.finditer(body):
+        _claim(match.start(), match.end(), raw_label="colon_tm")
     for match in _COMPACT_TIME_RE.finditer(body):
         token = match.group(0).split(".", 1)[0]
         if len(token) < 6:
@@ -522,10 +616,198 @@ def date_time_pattern_entities(text: str) -> list[Entity]:
         # Skip durations / counts that are not a valid clock time (e.g. 360000).
         if hh > 23 or mm > 59 or ss > 59:
             continue
+        # Whole-cell pure numerics are frame durations / counts, not TM PHI.
+        if whole_pure and match.start() <= lead and match.end() >= trail:
+            continue
         _claim(match.start(), match.end(), raw_label="compact_tm")
 
     out.sort(key=lambda e: (e.start, e.end))
     return out
+
+
+def descriptor_phi_pattern_entities(text: str) -> list[Entity]:
+    """
+    ID / LOCATION / name entities OpenMed often misses in descriptor prose.
+
+    Post-NER gap-fill only (same contract as date_time_pattern_entities):
+    claim clear PHI shapes on original Content so scrub can blank them.
+    Callers merge after NER and after DATE fills; overlaps are skipped.
+
+    Claims (in order):
+    - SSN-like ``NNN-NN-NNNN`` → ID
+    - Phone → PHONE
+    - ``Dr. Surname`` → LAST_NAME; trailing orphan ``Dr.`` → LAST_NAME
+    - ``at|by SITE`` uppercase 2–8 letter codes → LOCATION (clinical keep-list
+      skipped so ``at CT`` is not wiped)
+    - ``at Title Case Site Name`` → LOCATION (facility phrases)
+    - Digit runs of length ≥7 inside letter-bearing prose → ID (never on
+      pure numeric / decimal measurement cells; never float fragments)
+
+    Args:
+        text: Original Content cell.
+
+    Returns:
+        Non-overlapping pattern entities (sorted by start).
+    """
+    body = str(text or "")
+    if not body:
+        return []
+
+    stripped = body.strip()
+    lead = len(body) - len(body.lstrip())
+    trail = lead + len(stripped)
+    whole_pure = bool(stripped) and is_pure_numeric_string_value(stripped)
+    has_letters = any(ch.isalpha() for ch in body)
+
+    occupied: list[tuple[int, int]] = []
+    out: list[Entity] = []
+
+    def _claim(
+        start: int,
+        end: int,
+        *,
+        label: str,
+        raw_label: str,
+    ) -> None:
+        if start < 0 or end > len(body) or start >= end:
+            return
+        if any(start < b and end > a for a, b in occupied):
+            return
+        occupied.append((start, end))
+        out.append(
+            Entity(
+                label=label,
+                start=start,
+                end=end,
+                score=1.0,
+                raw_label=raw_label,
+            )
+        )
+
+    for match in _SSN_LIKE_RE.finditer(body):
+        _claim(match.start(), match.end(), label="ID", raw_label="ssn_like")
+    for match in _PHONE_RE.finditer(body):
+        _claim(match.start(), match.end(), label="PHONE", raw_label="phone")
+    for match in _DR_NAME_RE.finditer(body):
+        _claim(match.start(), match.end(), label="LAST_NAME", raw_label="dr_name")
+    for match in _ORPHAN_DR_RE.finditer(body):
+        _claim(match.start(), match.end(), label="LAST_NAME", raw_label="orphan_dr")
+    for match in _AT_BY_SITE_RE.finditer(body):
+        site = match.group(1)
+        if site.upper() in _SITE_KEEP:
+            continue
+        _claim(
+            match.start(1),
+            match.end(1),
+            label="LOCATION",
+            raw_label="at_by_site",
+        )
+    for match in _AT_SITE_NAME_RE.finditer(body):
+        _claim(
+            match.start(1),
+            match.end(1),
+            label="LOCATION",
+            raw_label="at_site_name",
+        )
+    # Long digit IDs only in prose (letters present). Pure numeric / decimal
+    # measurement cells must stay for text_retained.
+    if has_letters and not whole_pure:
+        for match in _LONG_DIGIT_ID_RE.finditer(body):
+            if match.start() <= lead and match.end() >= trail:
+                continue
+            _claim(match.start(), match.end(), label="ID", raw_label="long_digit_id")
+
+    out.sort(key=lambda e: (e.start, e.end))
+    return out
+
+
+# Clinical trial / anatomy tokens kept for MIDI text_retained. Used as
+# post-NER whitelist extras and to drop OpenMed ID false positives whose
+# tokens are only these and/or short digits (e.g. ``ACCRIN 6668``).
+CLINICAL_KEEP_TERMS = (
+    "ACCRIN",
+    "ACRIN",
+    "LUNG",
+    "CA",
+    "BREAST",
+    "BREAS",
+    "BREASTUNI",
+    "PET",
+    "CT",
+    "MR",
+    "MRI",
+    "FL3D",
+    "T1",
+    "SAG",
+    "UNIT",
+    "UE",
+)
+_ID_CLINICAL_TOKENS = frozenset(t.upper() for t in CLINICAL_KEEP_TERMS)
+_ID_TOKEN_RE = re.compile(r"[A-Za-z]+|\d+")
+
+
+def drop_measurement_digit_id_entities(
+    text: str,
+    ents: Sequence[Entity],
+) -> list[Entity]:
+    """
+    Drop ID spans that are not patient-ID shaped.
+
+    Drops:
+    - Float fragments (integer or fractional part of a decimal)
+    - Letter-free numeric / measurement cells
+    - Short digit-only runs (length < 7)
+    - Spans whose tokens are only clinical keep terms and/or short digits
+      (e.g. OpenMed ``LUNG CA`` / ``ACCRIN 6668`` as ID)
+
+    Args:
+        text: Original Content cell.
+        ents: Entities after NER / pattern merge.
+
+    Returns:
+        Filtered entity list.
+    """
+    body = str(text or "")
+    if not body or not ents:
+        return list(ents)
+    has_letters = any(ch.isalpha() for ch in body)
+    kept: list[Entity] = []
+    for ent in ents:
+        label = str(ent.label or "")
+        span = body[ent.start : ent.end]
+        # Short digit-only LOCATION (OpenMed street_address on trial codes).
+        if label == "LOCATION" and span.isdigit() and len(span) < 7:
+            continue
+        # Anatomy tokens mis-tagged as names (BREASTUNI as FIRST_NAME).
+        if label in {"FIRST_NAME", "LAST_NAME", "NAME"} and span.upper().startswith("BREAST"):
+            continue
+        if label != "ID":
+            kept.append(ent)
+            continue
+        tokens = _ID_TOKEN_RE.findall(span)
+        # Trial / anatomy ID false positives (e.g. LUNG CA, ACCRIN 6668).
+        # Require at least one clinical letter token so hyphenated SSN-like
+        # IDs (404-99-3023 → digit tokens only) are not dropped.
+        if tokens and any(tok.isalpha() and tok.upper() in _ID_CLINICAL_TOKENS for tok in tokens):
+            if all((tok.upper() in _ID_CLINICAL_TOKENS) or (tok.isdigit() and len(tok) < 7) for tok in tokens):
+                continue
+        if not span.isdigit():
+            kept.append(ent)
+            continue
+        # Fractional digits after a decimal point (e.g. 53.2000007629).
+        if ent.start > 0 and body[ent.start - 1] == ".":
+            continue
+        # Integer part of a float (e.g. 1140000.0).
+        if ent.end < len(body) and body[ent.end] == "." and ent.end + 1 < len(body) and body[ent.end + 1].isdigit():
+            continue
+        # Letter-free numeric / measurement cell — keep all digit IDs out.
+        if not has_letters:
+            continue
+        # Short digit runs are trial / series codes, not long patient IDs.
+        if len(span) < 7:
+            continue
+        kept.append(ent)
+    return kept
 
 
 def is_dicom_uid_text(text: str) -> bool:

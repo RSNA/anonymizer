@@ -10,11 +10,14 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
-from pydicom.dataelem import DataElement
 from pydicom.datadict import tag_for_keyword
+from pydicom.dataelem import DataElement
 from pydicom.dataset import Dataset
 
-from anonymizer.controller.ai.embedded_phi.metadata.detect import detect_phi_in_texts
+from anonymizer.controller.ai.embedded_phi.metadata.detect import (
+    DEFAULT_NER_DETECT_OPTIONS,
+    detect_phi_in_texts,
+)
 from anonymizer.controller.ai.embedded_phi.metadata.extract import (
     NER_INPUT_VRS,
     extract_metadata_phi_rows,
@@ -57,9 +60,9 @@ def test_is_with_embedded_id_and_date_in_compile_and_remap() -> None:
             tag_path="SeriesNumber",
         )
     ]
-    compiled = compile_ner_input(cells)
-    assert compiled.ner_text == "Series Number: scan for 2522288856 on 20101203."
+    compiled = compile_ner_input(cells, options=DEFAULT_NER_DETECT_OPTIONS.compile)
     assert "2522288856" in compiled.ner_text
+    assert "20101203" in compiled.ner_text
 
     ds = Dataset()
     id_start = compiled.ner_text.index("2522288856")

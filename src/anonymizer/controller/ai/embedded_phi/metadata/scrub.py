@@ -86,6 +86,11 @@ def scrub_dataset_descriptors(
     for row in rows:
         if row.is_seq_text or row.is_date or row.is_anonymizer_field:
             continue
+        # Private elements are owned by the TCIA private-tag path (keep/remove /
+        # UID/date), not Clean Descriptors free-text NER. Scrubbing them blanks
+        # vendor numerics (e.g. GEMS PET "0") and fails MIDI text_retained.
+        if row.is_private:
+            continue
         if is_anon_identity_tag(tag_path=row.tag_path, tag=row.tag, field_name=row.name):
             continue
         text = str(row.text or "").strip()
@@ -152,9 +157,7 @@ def scrub_dataset_descriptors(
         # Identity tags are excluded above so Patient ID is never blanked when
         # it shares Content with a descriptor that was cleaned.
         if row.text not in cleaned_by_text:
-            removed.extend(
-                span for e in ents if (span := row.text[e.start : e.end].strip())
-            )
+            removed.extend(span for e in ents if (span := row.text[e.start : e.end].strip()))
             field = str(row.name or row.tag_path or "field").strip() or "field"
             tagged_lines.append(f"{field}: {format_tagged_entities(row.text, ents)}")
             cleaned = remove_phi(row.text, list(ents), synthetic=synthetic, log=False)
@@ -221,15 +224,12 @@ def _log_is_ds_numeric_path(ds: Dataset) -> None:
         if vr not in {"IS", "DS"}:
             continue
         name = str(getattr(elem, "keyword", None) or elem.tag)
-        if omit_pure_numeric_from_descriptor_ner(
-            vr, elem.value
-        ) or is_pure_numeric_string_value(elem.value):
+        if omit_pure_numeric_from_descriptor_ner(vr, elem.value) or is_pure_numeric_string_value(elem.value):
             pure_notes.append(f"{name}={_brief(elem.value)}")
         else:
             impure_notes.append(f"{name}={_brief(elem.value)}")
     logger.info(
-        "Clean Descriptors step 6/7 IS/DS numeric pure=%d impure=%d "
-        "(both in NER input VR list)%s%s",
+        "Clean Descriptors step 6/7 IS/DS numeric pure=%d impure=%d (both in NER input VR list)%s%s",
         len(pure_notes),
         len(impure_notes),
         f" pure=[{'; '.join(pure_notes[:8])}]" if pure_notes else "",

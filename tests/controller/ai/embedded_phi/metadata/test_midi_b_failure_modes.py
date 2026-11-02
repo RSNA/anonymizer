@@ -7,9 +7,10 @@ where the gap is the model, not the compile/remap/apply contract.
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 from pydicom.dataset import Dataset
-from unittest.mock import patch
 
 from anonymizer.controller.ai.embedded_phi.metadata.detect import detect_phi_in_texts
 from anonymizer.controller.ai.embedded_phi.metadata.extract import (
@@ -21,9 +22,9 @@ from anonymizer.controller.ai.embedded_phi.metadata.ner_compile import (
     compile_ner_input,
 )
 from anonymizer.controller.ai.embedded_phi.metadata.scrub import scrub_dataset_descriptors
+from anonymizer.controller.ai.embedded_phi.ner.cache import ner_ready
 from anonymizer.controller.ai.embedded_phi.ner.engine import Entity
 from anonymizer.controller.ai.embedded_phi.ner.radiology_filters import MetadataNerItem
-
 
 # --- Compile contract (must pass) -------------------------------------------
 
@@ -168,10 +169,8 @@ def test_midi_protocol_for_patient_id_eligible_after_compile() -> None:
     assert "2522288856" in span
 
 
-def test_midi_study_comments_doctor_name_blank_leaves_dr_call() -> None:
-    """When LAST_NAME is removed from 'Dr. Ramirez, call', caret/name expand
-    should not leave a dangling name — blank leaves 'Dr. , call' style gap.
-    """
+def test_midi_study_comments_doctor_name_blank_includes_title() -> None:
+    """Dr. + surname blank together so MIDI token checks do not see leftover 'dr'."""
     body = "Dr. Ramirez, call if questions"
     ds = Dataset()
     ds.StudyComments = body
@@ -191,10 +190,11 @@ def test_midi_study_comments_doctor_name_blank_leaves_dr_call() -> None:
         changed, removed = scrub_dataset_descriptors(ds, replace_mode="blank")
 
     assert changed is True
-    assert "Ramirez" in removed
+    assert any("Ramirez" in r for r in removed)
     assert "Ramirez" not in str(ds.StudyComments)
-    # Leading title/punctuation may remain; name must be gone.
-    assert "Dr." in str(ds.StudyComments) or "Dr" in str(ds.StudyComments)
+    # Title expands onto the name span (post-NER Dr. widen / pattern fill).
+    assert "Dr." not in str(ds.StudyComments)
+    assert "Dr" not in str(ds.StudyComments).split(",")[0]
 
 
 # --- Model-gap cases (may fail until fine-tuning) ---------------------------
@@ -207,7 +207,6 @@ def test_midi_study_comments_doctor_name_blank_leaves_dr_call() -> None:
 def test_midi_xfail_openmed_tags_id_after_supine_for() -> None:
     """Live model should tag 2522288856 in Image Comments (fine-tune if not)."""
     pytest.importorskip("transformers")
-    from anonymizer.controller.ai.embedded_phi.ner.cache import ner_ready
 
     if not ner_ready():
         pytest.skip("NER weights not installed")
@@ -227,7 +226,6 @@ def test_midi_xfail_openmed_tags_id_after_supine_for() -> None:
 )
 def test_midi_xfail_openmed_tags_hyphenated_study_description_id() -> None:
     pytest.importorskip("transformers")
-    from anonymizer.controller.ai.embedded_phi.ner.cache import ner_ready
 
     if not ner_ready():
         pytest.skip("NER weights not installed")

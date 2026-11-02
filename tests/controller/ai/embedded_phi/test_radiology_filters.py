@@ -9,6 +9,8 @@ from anonymizer.controller.ai.embedded_phi.ner.radiology_filters import (
     caret_to_space_for_ner,
     collect_anonymized_values,
     date_time_pattern_entities,
+    descriptor_phi_pattern_entities,
+    drop_measurement_digit_id_entities,
     is_compact_dicom_datetime,
     is_dicom_uid_text,
     mask_text_for_ner,
@@ -29,10 +31,7 @@ def test_collect_anonymized_values_from_dataset() -> None:
 
 
 def test_mask_text_for_ner_masks_anon_uid_date_whitelist() -> None:
-    body = (
-        "XR CHEST AP PORTABLE for Douglas Davidson "
-        "id 994250-000003 uid 1.2.840.10008.5.1.4.1.1.1 date 20190816"
-    )
+    body = "XR CHEST AP PORTABLE for Douglas Davidson id 994250-000003 uid 1.2.840.10008.5.1.4.1.1.1 date 20190816"
     result = mask_text_for_ner(
         body,
         whitelist=["PORTABLE", "AP"],
@@ -87,17 +86,102 @@ def test_date_time_pattern_entities_claims_compact_da_and_clock() -> None:
     assert all(e.label == "DATE" for e in ents)
 
 
+def test_descriptor_phi_pattern_entities_ids_sites_doctor() -> None:
+    """Post-NER gap-fill: long ID, SSN-like, at/by site, Dr. Name; keep at CT."""
+    body = "Ordered for 8371727310 by PH; PET at FGH; Dr. Brennan; SSN 310-50-9582; at CT"
+    ents = descriptor_phi_pattern_entities(body)
+    frags = {(e.raw_label, body[e.start : e.end]) for e in ents}
+    assert ("long_digit_id", "8371727310") in frags
+    assert ("at_by_site", "PH") in frags
+    assert ("at_by_site", "FGH") in frags
+    assert ("dr_name", "Dr. Brennan") in frags
+    assert ("ssn_like", "310-50-9582") in frags
+    assert not any(frag == "CT" for _, frag in frags)
+    # Bare digit runs are ID, not PHONE (PHONE requires separators).
+    assert not any(raw == "phone" for raw, _ in frags)
+
+
+def test_descriptor_phi_pattern_skips_whole_cell_pure_numeric() -> None:
+    """Frame-duration style whole-cell numbers are not claimed as long-digit IDs."""
+    assert descriptor_phi_pattern_entities("1800000") == []
+    assert descriptor_phi_pattern_entities("0") == []
+    assert descriptor_phi_pattern_entities("53.2000007629") == []
+    assert descriptor_phi_pattern_entities("1140000.0") == []
+    prose = "duration 1800000 ms"
+    ents = descriptor_phi_pattern_entities(prose)
+    assert [prose[e.start : e.end] for e in ents] == ["1800000"]
+
+
+def test_descriptor_phi_pattern_at_site_name() -> None:
+    """Multi-word Title Case facility after at/to is LOCATION."""
+    body = "LUNG CA ACCRIN 6668 at Harris Community Clinic"
+    ents = descriptor_phi_pattern_entities(body)
+    frags = {(e.raw_label, body[e.start : e.end]) for e in ents}
+    assert ("at_site_name", "Harris Community Clinic") in frags
+    admitted = "Admitted to Palmer-Greene Memorial on 20170803"
+    ents2 = descriptor_phi_pattern_entities(admitted)
+    frags2 = {(e.raw_label, admitted[e.start : e.end]) for e in ents2}
+    assert ("at_site_name", "Palmer-Greene Memorial") in frags2
+
+
+def test_drop_measurement_digit_id_entities_float_fragments() -> None:
+    """Digit-only ID spans inside floats / letter-free cells are dropped."""
+    body = "53.2000007629"
+    # Fractional run after the decimal point.
+    ents = [
+        Entity(label="ID", start=3, end=13, score=0.9, raw_label="ID"),
+    ]
+    assert drop_measurement_digit_id_entities(body, ents) == []
+
+    freq = "638749910.0"
+    ents = [
+        Entity(label="ID", start=0, end=9, score=0.9, raw_label="ID"),
+    ]
+    assert drop_measurement_digit_id_entities(freq, ents) == []
+
+    prose = "ordered for 8371727310 at PH"
+    ents = [
+        Entity(label="ID", start=12, end=22, score=0.9, raw_label="ID"),
+    ]
+    kept = drop_measurement_digit_id_entities(prose, ents)
+    assert len(kept) == 1 and kept[0].start == 12
+
+    # OpenMed trial / anatomy false positives.
+    hist = "LUNG CA ACCRIN 6668 at Harris Community Clinic"
+    ents = [
+        Entity(label="ID", start=0, end=7, score=0.3, raw_label="user_name"),
+        Entity(label="ID", start=8, end=19, score=0.4, raw_label="health_plan"),
+    ]
+    assert drop_measurement_digit_id_entities(hist, ents) == []
+
+    # Hyphenated SSN-like IDs must stay (digit tokens only — not clinical).
+    ssn_body = "Dynamic-3dfgre: PE1 for 404-99-3023"
+    ssn_ents = [
+        Entity(label="ID", start=24, end=35, score=1.0, raw_label="ssn_like"),
+    ]
+    kept_ssn = drop_measurement_digit_id_entities(ssn_body, ssn_ents)
+    assert len(kept_ssn) == 1 and ssn_body[kept_ssn[0].start : kept_ssn[0].end] == ("404-99-3023")
+
+
 def test_date_time_pattern_entities_keeps_decimal_measurement_fraction() -> None:
     """Fractional digits in 0.096000 / 0.000000 are not compact TM DATE."""
     measured = "measured,, 0.096000 cm-1,"
     none_val = "NONE, 0.000000 cm-1,"
     assert date_time_pattern_entities(measured) == []
     assert date_time_pattern_entities(none_val) == []
-    # Bare compact TM still claimed.
+    # Signed Slice Location fractions are not compact DA.
+    assert date_time_pattern_entities("-42.20077515") == []
+    assert date_time_pattern_entities("42.20077515") == []
+    # Whole-cell frame duration is not compact TM.
+    assert date_time_pattern_entities("180000") == []
+    # Impossible MMDD is not compact DA.
+    assert date_time_pattern_entities("20077515") == []
+    # Bare compact TM in prose still claimed.
     bare = date_time_pattern_entities("Acquisition 091530")
-    assert [(e.raw_label, "Acquisition 091530"[e.start : e.end]) for e in bare] == [
-        ("compact_tm", "091530")
-    ]
+    assert [(e.raw_label, "Acquisition 091530"[e.start : e.end]) for e in bare] == [("compact_tm", "091530")]
+    # Valid whole-cell DA still claimed (Series Number style PHI).
+    da = date_time_pattern_entities("20101203")
+    assert [(e.raw_label, "20101203"[e.start : e.end]) for e in da] == [("compact_da", "20101203")]
 
 
 def test_mask_text_for_ner_does_not_blank_decimal_fraction_as_time() -> None:
@@ -130,9 +214,7 @@ def test_prepare_metadata_leaves_embedded_date_uid_for_ner() -> None:
     series = by_field["Series Description"]
     assert "20101203" in series.ner_text[series.value_start : series.value_end]
     comments = by_field["Image Comments"]
-    assert "1.2.840.10008.5.1.4.1.1.1" in comments.ner_text[
-        comments.value_start : comments.value_end
-    ]
+    assert "1.2.840.10008.5.1.4.1.1.1" in comments.ner_text[comments.value_start : comments.value_end]
 
 
 def test_prepare_metadata_ner_segments_wraps_and_skips() -> None:
@@ -312,6 +394,7 @@ def test_predicates() -> None:
     assert is_compact_dicom_datetime("20190816")
     assert is_compact_dicom_datetime("085957.000")
     assert not is_compact_dicom_datetime("2020")
+
 
 def test_wrap_field_is_uniform() -> None:
     ner, start, end = wrap_field_for_ner("StudyDescription", "MAMMO for Jane Doe")

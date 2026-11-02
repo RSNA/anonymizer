@@ -63,6 +63,7 @@ Thumbs.db
 tests/controller/tmp/
 src/logs/
 src/certs/
+.midi_b_runs/
 
 # --- gettext / editor backups ---
 *~

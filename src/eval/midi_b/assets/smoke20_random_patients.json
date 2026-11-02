@@ -1,0 +1,31 @@
+{
+  "seed": 20261101,
+  "n": 20,
+  "patient_ids": [
+    "1233914996",
+    "1273299863",
+    "1373652568",
+    "1788000852",
+    "1901193853",
+    "201034069",
+    "2149950167",
+    "3018664561",
+    "3536064967",
+    "4274822170",
+    "4733274020",
+    "5454430957",
+    "584796839",
+    "6736708662",
+    "7732944454",
+    "8242053726",
+    "8617589698",
+    "9918044206",
+    "9951851216",
+    "9979084005"
+  ],
+  "source": "/Volumes/MBOD.DX.LIFE/TCIA/MIDI-B/Synthetic Validation/manifest-1740445452889/MIDI-B-Synthetic-Validation",
+  "fixed_import": "/Volumes/MBOD.DX.LIFE/TCIA/MIDI-B/harness-runs/_smoke20_fixed/import",
+  "fixed_answer_key": "/Volumes/MBOD.DX.LIFE/TCIA/MIDI-B/harness-runs/_smoke20_fixed/answer_key_filtered.db",
+  "note": "Import once into baseline_run_dir (local harness). Iterate with: validate --run-dir baseline_run_dir --skip-import --answer-key fixed_answer_key. Re-import when CD mutated public (skip-import alone cannot un-scrub).",
+  "baseline_run_dir": "/Users/michaelevans/CODE/anonymizer/.midi_b_runs/validation_20261101T120715Z_smoke20_v5b"
+}

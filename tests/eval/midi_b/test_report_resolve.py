@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from eval.midi_b.report import resolve_validation_results_db, write_score_report
@@ -14,16 +15,9 @@ def _tiny_db(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(str(path))
     try:
-        con.execute(
-            "CREATE TABLE validation_results (action TEXT, check_passed INTEGER, "
-            "tag_ds TEXT, tag_name TEXT)"
-        )
-        con.execute(
-            "INSERT INTO validation_results VALUES ('<uid_changed>', 1, '<(0008,0018)>', 'SOP')"
-        )
-        con.execute(
-            "INSERT INTO validation_results VALUES ('<uid_changed>', 0, '<(0008,0018)>', 'SOP')"
-        )
+        con.execute("CREATE TABLE validation_results (action TEXT, check_passed INTEGER, tag_ds TEXT, tag_name TEXT)")
+        con.execute("INSERT INTO validation_results VALUES ('<uid_changed>', 1, '<(0008,0018)>', '<SOP Instance UID>')")
+        con.execute("INSERT INTO validation_results VALUES ('<uid_changed>', 0, '<(0008,0018)>', '<SOP Instance UID>')")
         con.commit()
     finally:
         con.close()
@@ -31,8 +25,6 @@ def _tiny_db(path: Path) -> None:
 
 def _tiny_scoring_xlsx(path: Path, *, score: str = "50.00%") -> None:
     """Minimal Scoring sheet matching MIDI validation reports_helper output."""
-    import pandas as pd
-
     path.parent.mkdir(parents=True, exist_ok=True)
     df = pd.DataFrame(
         [
@@ -76,6 +68,8 @@ def test_write_score_report_from_run_named_folder(tmp_path: Path) -> None:
     assert "Mean check score" not in text
     assert "Binary pass rate" not in text
     assert "`<uid_changed>`" in text
+    # Name is backticked so <SOP Instance UID> is not eaten as HTML.
+    assert "| `<(0008,0018)>` | `<SOP Instance UID>` | 1 |" in text
     # Fail % is share of all checks (not per-action rate).
     assert "| `<uid_changed>` | 1 | 1 | 2 | 50.00% |" in text
     assert "| **Total** | **1** | **1** | **2** | **50.00%** |" in text

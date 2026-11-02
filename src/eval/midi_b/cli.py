@@ -12,6 +12,7 @@ from pathlib import Path
 
 from eval.midi_b.answer_filter import filter_answer_db
 from eval.midi_b.inventory import stage_import_subset
+from eval.midi_b.ner_presentation_probe import run_probe_from_discrepancy
 from eval.midi_b.paths import DEFAULT_HARNESS_RUNS, new_run_dir, split_paths
 from eval.midi_b.project_prep import prepare_project_dir
 from eval.midi_b.report import write_score_report
@@ -47,7 +48,9 @@ def _rsna_anonymizer_cmd() -> list[str]:
 
 def _run(cmd: list[str]) -> None:
     logger.info("exec: %s", " ".join(cmd))
-    subprocess.run(cmd, check=True)
+    completed = subprocess.run(cmd, check=False)
+    if completed.returncode != 0:
+        raise RuntimeError(f"command failed exit={completed.returncode}: {' '.join(cmd)}")
 
 
 def _resolve_images_dir(project_dir: Path, mappings_dir: Path) -> Path:
@@ -88,11 +91,7 @@ def _dump_batch_errors(project_dir: Path) -> list[str]:
             out.append(f"{path.name}: could not read ({exc})")
             continue
         for line in body.splitlines():
-            if (
-                "Failed:" in line
-                or " ERROR " in line
-                or "Clean Descriptors failed" in line
-            ):
+            if "Failed:" in line or " ERROR " in line or "Clean Descriptors failed" in line:
                 out.append(f"{path.name}: {line}")
     return out
 
@@ -128,6 +127,20 @@ def _run_split(args: argparse.Namespace, *, split: str) -> int:
         return 1
 
 
+def _resolve_run_dir(args: argparse.Namespace, *, split: str) -> Path:
+    """Allocate a new harness run dir, or reuse --run-dir when set."""
+    if getattr(args, "run_dir", None):
+        run_dir = Path(args.run_dir)
+        if not run_dir.is_dir():
+            raise FileNotFoundError(f"--run-dir not found: {run_dir}")
+        return run_dir
+    return new_run_dir(
+        split=split,
+        slug=args.slug,
+        root=Path(args.harness_root) if args.harness_root else DEFAULT_HARNESS_RUNS,
+    )
+
+
 def _run_split_body(args: argparse.Namespace, *, split: str) -> int:
     synthetic, answer_db = split_paths(split)
     if args.synthetic_root:
@@ -136,39 +149,57 @@ def _run_split_body(args: argparse.Namespace, *, split: str) -> int:
         answer_db = Path(args.answer_key)
 
     patients = _parse_patients(args.patients)
-    run_dir = new_run_dir(
-        split=split,
-        slug=args.slug,
-        root=Path(args.harness_root) if args.harness_root else DEFAULT_HARNESS_RUNS,
-    )
-    logger.info("run_dir=%s", run_dir)
+    skip_import = bool(getattr(args, "skip_import", False))
+    if skip_import and not getattr(args, "run_dir", None):
+        raise ValueError("--skip-import requires --run-dir pointing at an imported harness run")
+    run_dir = _resolve_run_dir(args, split=split)
+    logger.info("run_dir=%s skip_import=%s", run_dir, skip_import)
 
-    project_json, project_dir = prepare_project_dir(run_dir)
-    import_root = synthetic
-    if patients:
-        staged = run_dir / "import_subset"
-        import_root = stage_import_subset(
-            synthetic,
-            staged,
-            patient_ids=patients,
-        )
-
-    anon = _rsna_anonymizer_cmd()
     mappings_dir = run_dir / "mappings"
     mappings_dir.mkdir(parents=True, exist_ok=True)
+    anon = _rsna_anonymizer_cmd()
 
-    # Phase 1 — ingest
-    _run(
-        [
-            *anon,
-            "-c",
-            str(project_json),
-            "--import-dir",
-            str(import_root),
-            "--export-mappings",
-            str(mappings_dir),
-        ]
-    )
+    if skip_import:
+        project_json = run_dir / "project" / "ProjectModel.json"
+        project_dir = run_dir / "project"
+        if not project_json.is_file():
+            raise FileNotFoundError(f"--skip-import requires {project_json}; run a full validate once first")
+        images_probe = project_dir / "public"
+        if not images_probe.is_dir() or not any(images_probe.iterdir()):
+            raise FileNotFoundError(f"--skip-import requires anonymized images under {images_probe}")
+        uid_csv = mappings_dir / "uid_mapping.csv"
+        patid_csv = mappings_dir / "patid_mapping.csv"
+        if not uid_csv.is_file() or not patid_csv.is_file():
+            raise FileNotFoundError(f"--skip-import requires {uid_csv.name} and {patid_csv.name} under {mappings_dir}")
+        logger.info("skipping import; reusing project at %s", project_dir)
+        batch_cfg_path = run_dir / "AiBatchConfig.json"
+        if not batch_cfg_path.is_file():
+            src_batch = Path(__file__).resolve().parent / "assets" / "AiBatchConfig.json"
+            if src_batch.is_file():
+                shutil.copy2(src_batch, batch_cfg_path)
+    else:
+        project_json, project_dir = prepare_project_dir(run_dir)
+        import_root = synthetic
+        if patients:
+            staged = run_dir / "import_subset"
+            import_root = stage_import_subset(
+                synthetic,
+                staged,
+                patient_ids=patients,
+            )
+
+        # Phase 1 — ingest
+        _run(
+            [
+                *anon,
+                "-c",
+                str(project_json),
+                "--import-dir",
+                str(import_root),
+                "--export-mappings",
+                str(mappings_dir),
+            ]
+        )
 
     # Phase 2 — AI batch (optional skip). Series-level Failed:/ERROR lines are
     # always logged. Non-zero exit with those lines (partial series failure)
@@ -192,9 +223,7 @@ def _run_split_body(args: argparse.Namespace, *, split: str) -> int:
         for line in error_lines:
             logger.error("%s", line)
             print(line, file=sys.stderr)
-        if _abort_after_ai_batch(
-            batch_rc=batch_rc, series_error_lines=error_lines
-        ):
+        if _abort_after_ai_batch(batch_rc=batch_rc, series_error_lines=error_lines):
             raise RuntimeError(f"AI batch process failed (exit={batch_rc})")
         if batch_rc != 0 and error_lines:
             logger.warning(
@@ -210,20 +239,13 @@ def _run_split_body(args: argparse.Namespace, *, split: str) -> int:
     patid_csv = mappings_dir / "patid_mapping.csv"
 
     if answer_db is None:
-        logger.info("test split: no answer key; import + AI batch complete at %s", run_dir)
-        (run_dir / "config.json").write_text(
-            json.dumps(
-                {
-                    "split": split,
-                    "images_dir": str(images_dir),
-                    "mappings": str(mappings_dir),
-                },
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
+        raise ValueError(
+            f"no answer-key DB for split={split!r}; pass --answer-key or fix eval.midi_b.paths.split_paths"
         )
-        return 0
+    if not Path(answer_db).is_file():
+        raise FileNotFoundError(
+            f"answer-key DB not found: {answer_db} (split={split!r}); pass --answer-key if the path differs"
+        )
 
     score_answer = answer_db
     if patients:
@@ -231,6 +253,27 @@ def _run_split_body(args: argparse.Namespace, *, split: str) -> int:
         n = filter_answer_db(answer_db, filtered, patient_ids=patients)
         logger.info("filtered answer key rows=%d → %s", n, filtered)
         score_answer = filtered
+
+    if args.no_reports:
+        logger.info(
+            "skipping official MIDI score/scorecard (--no-reports); images=%s mappings=%s",
+            images_dir,
+            mappings_dir,
+        )
+        (run_dir / "config.json").write_text(
+            json.dumps(
+                {
+                    "split": split,
+                    "images_dir": str(images_dir),
+                    "mappings": str(mappings_dir),
+                    "answer_key": str(score_answer),
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return 0
 
     official_out = run_dir / "official_score"
     config_path = run_dir / "official_config.json"
@@ -245,7 +288,7 @@ def _run_split_body(args: argparse.Namespace, *, split: str) -> int:
         config_path=config_path,
         multiprocessing=bool(args.multiprocessing),
     )
-    run_validation(config_path, reports=not args.no_reports)
+    run_validation(config_path, reports=True)
     copy_score_summary(run_dir, official_out / "midi_b")
     scorecard = write_score_report(run_dir)
     print(f"wrote {scorecard}", file=sys.stderr)
@@ -265,6 +308,16 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--synthetic-root", default=None, help="Override synthetic DICOM root")
         sp.add_argument("--answer-key", default=None, help="Override answer-key DB (validation)")
         sp.add_argument("--harness-root", default=None, help="Override harness-runs parent")
+        sp.add_argument(
+            "--run-dir",
+            default=None,
+            help="Reuse an existing harness run directory (with --skip-import for AI-batch-only)",
+        )
+        sp.add_argument(
+            "--skip-import",
+            action="store_true",
+            help="Skip DICOM staging/import; reuse project/public + mappings in --run-dir",
+        )
         sp.add_argument("--skip-ai-batch", action="store_true")
         sp.add_argument("--multiprocessing", action="store_true")
         sp.add_argument("--no-reports", action="store_true")
@@ -273,14 +326,48 @@ def build_parser() -> argparse.ArgumentParser:
     add_run_flags(val)
     val.set_defaults(func=lambda a: _run_split(a, split="validation"))
 
-    test = sub.add_parser("test", help="Synthetic Test import (+ AI batch)")
+    test = sub.add_parser("test", help="Synthetic Test import + AI batch + official score")
     add_run_flags(test)
     test.set_defaults(func=lambda a: _run_split(a, split="test"))
 
     score = sub.add_parser("score", help="Rebuild SCORECARD.md for an existing run dir")
     score.add_argument("run_dir", type=str)
     score.set_defaults(func=cmd_score)
+
+    probe = sub.add_parser(
+        "ner-probe",
+        help="Chunk vs isolated OpenMed probe on text_removed discrepancy rows",
+    )
+    probe.add_argument(
+        "discrepancy_csv",
+        type=str,
+        help="Path to discrepancy_report_participant.csv",
+    )
+    probe.add_argument(
+        "--out-dir",
+        type=str,
+        default=None,
+        help="Report directory (default: sibling ner_presentation_probe/)",
+    )
+    probe.add_argument(
+        "--limit",
+        type=int,
+        default=200,
+        help="Max unique under-remove cases to probe (default 200)",
+    )
+    probe.set_defaults(func=cmd_ner_probe)
     return p
+
+
+def cmd_ner_probe(args: argparse.Namespace) -> int:
+    """Run OpenMed chunk-vs-isolated probe; write Markdown + JSON case list."""
+    disc = Path(args.discrepancy_csv)
+    if not disc.is_file():
+        raise SystemExit(f"discrepancy CSV not found: {disc}")
+    out = Path(args.out_dir) if args.out_dir else disc.parent / "ner_presentation_probe"
+    report = run_probe_from_discrepancy(disc, out, limit=int(args.limit))
+    print(f"wrote {report}", file=sys.stderr)
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
