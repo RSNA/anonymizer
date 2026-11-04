@@ -8,15 +8,15 @@ import pydicom
 from pydicom.data import get_testdata_file
 
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import ocr_image_for_frame
+from anonymizer.controller.ai.embedded_phi.pixel.remove_scope import OcrEditContext
 from anonymizer.controller.jobs.runner import (
     Algorithm,
-    OcrEditContext,
     RemovePixelPhiRunner,
     RunOptions,
     run_job,
 )
 from anonymizer.controller.jobs.work_state import WorkState
-from anonymizer.controller.series.series_overlay import OCRText
+from anonymizer.controller.series.series_overlay import OCRText, OcrEvidence
 from anonymizer.utils.dicom import get_wl_ww
 from anonymizer.utils.windowing import apply_windowing
 
@@ -45,7 +45,12 @@ def test_run_job_ocr_detect_uses_series_view_pixels_when_bound(
     ocr_pixels = np.zeros((1, ds.Rows, ds.Columns, 3), dtype=np.uint8)
     mock_enter.return_value = MagicMock(reader=MagicMock())
     mock_detect.return_value = [
-        OCRText(text="ABC", top_left=(0, 0), bottom_right=(10, 10), prob=0.9),
+        OCRText(
+            text="ABC",
+            top_left=(0, 0),
+            bottom_right=(10, 10),
+            ocr=OcrEvidence(prob=0.9),
+        ),
     ]
 
     ws = WorkState()
@@ -56,7 +61,6 @@ def test_run_job_ocr_detect_uses_series_view_pixels_when_bound(
 
     assert ws.done
     mock_detect.assert_called_once()
-    assert mock_detect.call_args.kwargs["apply_noise_filter"] is False
     mock_ocr_bgr.assert_not_called()
 
 
@@ -75,7 +79,12 @@ def test_run_job_ocr_detect_series(
     mock_enter.return_value = MagicMock(reader=MagicMock())
     mock_ocr_bgr.return_value = np.zeros((ds.Rows, ds.Columns, 3), dtype=np.uint8)
     mock_detect.return_value = [
-        OCRText(text="ABC", top_left=(0, 0), bottom_right=(10, 10), prob=0.9),
+        OCRText(
+            text="ABC",
+            top_left=(0, 0),
+            bottom_right=(10, 10),
+            ocr=OcrEvidence(prob=0.9),
+        ),
     ]
 
     ws = WorkState()
@@ -123,7 +132,12 @@ def test_runner_cleared_whitelist_does_not_load_modality_defaults(
     frames = np.zeros((1, ds.Rows, ds.Columns), dtype=np.float32)
     mock_ocr_bgr.return_value = np.zeros((ds.Rows, ds.Columns, 3), dtype=np.uint8)
     mock_detect.return_value = [
-        OCRText(text="Portable", top_left=(0, 0), bottom_right=(10, 10), prob=0.9),
+        OCRText(
+            text="Portable",
+            top_left=(0, 0),
+            bottom_right=(10, 10),
+            ocr=OcrEvidence(prob=0.9),
+        ),
     ]
 
     ws = WorkState()
@@ -141,8 +155,6 @@ def test_runner_cleared_whitelist_does_not_load_modality_defaults(
 
     mock_load_wl.assert_not_called()
     mock_detect.assert_called_once()
-    assert mock_detect.call_args.kwargs["apply_noise_filter"] is False
-    assert mock_detect.call_args.kwargs["whitelist"] == []
 
 
 @patch("anonymizer.controller.jobs.runner.load_modality_whitelist", return_value=["PORTABLE"])
@@ -176,5 +188,3 @@ def test_runner_none_whitelist_loads_modality_defaults(
 
     mock_load_wl.assert_called_once_with(Path("/tmp/fake-project"), "CT")
     mock_detect.assert_called_once()
-    assert mock_detect.call_args.kwargs["apply_noise_filter"] is False
-    assert mock_detect.call_args.kwargs["whitelist"] == ["PORTABLE"]

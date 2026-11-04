@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 import numpy as np
 
 from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
+    load_modality_whitelist,
     load_project_exclude_rects,
-    load_project_whitelist,
 )
 from anonymizer.controller.series.series_overlay import OverlayData, UserRectangle
 from anonymizer.controller.series.workspace import (
@@ -90,14 +90,14 @@ def test_whitelist_and_exclude_save_round_trip(tmp_path: Path) -> None:
             exclude_dirty=True,
             exclude_rects_normalized=[{"x1": 0.1, "y1": 0.1, "x2": 0.2, "y2": 0.2}],
             whitelist_items=["PORTABLE", "AP"],
-            whitelist_match_settings=None,
+            match_mode=None,
             texts_by_frame={},
             ocr_transcript_by_frame={},
         )
     )
     assert result.ok
     assert not result.should_close
-    assert set(load_project_whitelist(tmp_path, "CT")) == {"PORTABLE", "AP"}
+    assert set(load_modality_whitelist(tmp_path, "CT")) == {"PORTABLE", "AP"}
     stored = load_project_exclude_rects(tmp_path, "CT")
     assert exclude_rects_fingerprint(stored) == result.saved_exclude_fingerprint
 

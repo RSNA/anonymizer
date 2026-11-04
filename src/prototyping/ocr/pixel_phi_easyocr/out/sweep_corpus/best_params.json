@@ -1,0 +1,13 @@
+{
+  "params_key": "rot_none_cheaper:{\"rotation_info\":[]}",
+  "score_case_accuracy": 0.8064516129032258,
+  "box_recall": 0.8064516129032258,
+  "relative_cost": 1.0,
+  "product_baseline_cost": 3.0,
+  "max_relative_cost": 3.5,
+  "met_target": false,
+  "easyocr": {
+    "rotation_info": []
+  },
+  "merge_hint": "Apply non-empty keys into detect_text._easyocr_readtext only if relative_cost stays \u2264 product baseline when possible."
+}

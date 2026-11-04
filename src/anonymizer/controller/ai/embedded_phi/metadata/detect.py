@@ -18,7 +18,7 @@ NerDetectOptions
 DEFAULT_NER_DETECT_OPTIONS
     Product defaults (newline + full stop; 1600-char chunks, 200 overlap).
 
-detect_phi_in_texts(texts: Iterable[str] | None=None, ds: Dataset | None=None, *, items: Iterable[MetadataNerItem] | None=None, locale: str='en_US', whitelist: Sequence[str] | None=None, whitelist_match_settings: object | None=None, project_dir: Path | None=None, modality: str | None=None, script_operations: Mapping[str, str] | None=None, detect_options: NerDetectOptions | None=None) -> dict[str, tuple[Entity, ...]]
+detect_phi_in_texts(texts: Iterable[str] | None=None, ds: Dataset | None=None, *, items: Iterable[MetadataNerItem] | None=None, locale: str='en_US', whitelist: Sequence[str] | None=None, match_mode: PhiMatchMode | None=None, project_dir: Path | None=None, modality: str | None=None, script_operations: Mapping[str, str] | None=None, detect_options: NerDetectOptions | None=None) -> dict[str, tuple[Entity, ...]]
     Run Clean Descriptors detect steps 1–5; return original Content → entities.
 
 entity_count_by_label(entities_by_text: Mapping[str, Sequence[Entity]]) -> dict[str, int]
@@ -60,11 +60,10 @@ from anonymizer.controller.ai.embedded_phi.ner.radiology_filters import (
     drop_measurement_digit_id_entities,
     is_anon_identity_tag,
 )
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    OcrWhitelistMatchSettings,
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import PhiMatchMode, thresholds_for
+from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
+    load_modality_phi_match_mode,
     load_modality_whitelist,
-    load_modality_whitelist_match_settings,
-    resolve_whitelist_match,
 )
 from anonymizer.controller.ai.embedded_phi.term_similarity import similarity_term_match
 from anonymizer.controller.script.compile import project_script_operations
@@ -108,7 +107,7 @@ def detect_phi_in_texts(
     items: Iterable[MetadataNerItem] | None = None,
     locale: str = "en_US",
     whitelist: Sequence[str] | None = None,
-    whitelist_match_settings: object | None = None,
+    match_mode: PhiMatchMode | None = None,
     project_dir: Path | None = None,
     modality: str | None = None,
     script_operations: Mapping[str, str] | None = None,
@@ -124,8 +123,8 @@ def detect_phi_in_texts(
         whitelist: Effective whitelist terms. None loads the modality
             whitelist for project_dir + modality (pixel SSOT);
             an explicit list (including empty) is used as given.
-        whitelist_match_settings: Pixel whitelist matching preset/settings;
-            None loads the per-modality sidecar for project_dir.
+        match_mode: PhiMatchMode for whitelist similarity; None loads the
+            per-modality sidecar for project_dir.
         project_dir: Project storage dir holding per-modality whitelists
             and the compiled *-anonymizer.script (@safe skip).
         modality: DICOM Modality code selecting the whitelist (e.g. US).
@@ -145,13 +144,10 @@ def detect_phi_in_texts(
     effective_whitelist = _with_dicom_vr_allow_terms(
         list(whitelist) if whitelist is not None else load_modality_whitelist(project_dir, modality)
     )
-    if isinstance(whitelist_match_settings, OcrWhitelistMatchSettings):
-        match_settings = whitelist_match_settings
-    elif whitelist_match_settings is None:
-        match_settings = load_modality_whitelist_match_settings(project_dir, modality)
-    else:
-        match_settings = None
-    similarity, min_length_ratio = resolve_whitelist_match(match_settings)
+    effective_match = match_mode or load_modality_phi_match_mode(project_dir, modality)
+    thresholds = thresholds_for(effective_match)
+    similarity = thresholds.whitelist_similarity
+    min_length_ratio = 0.70
 
     ops = (
         {str(k).upper(): str(v) for k, v in script_operations.items()}
@@ -553,7 +549,13 @@ def _merge_ner_then_patterns(
     for ent in pattern_ents:
         overlap_idxs = [i for i, (a, b) in enumerate(occupied) if ent.start < b and ent.end > a]
         if overlap_idxs:
+            # Replace only when the pattern strictly expands every overlapped
+            # span (e.g. "Harris" → "Harris Community Clinic"). Equal-length
+            # overlaps keep the earlier claim so DATE / NER win over a same-span
+            # long_digit_id fill.
             if not all(ent.start <= occupied[i][0] and ent.end >= occupied[i][1] for i in overlap_idxs):
+                continue
+            if not any(ent.start < occupied[i][0] or ent.end > occupied[i][1] for i in overlap_idxs):
                 continue
             for i in sorted(overlap_idxs, reverse=True):
                 del merged[i]

@@ -11,16 +11,20 @@ user_rects_from_normalized(rects: Sequence[dict], *, width: int, height: int) ->
 modality_exclude_rects_for_series(project_dir: Path | None, modality: str | None, *, width: int, height: int) -> list[UserRectangle]
     Load saved exclude areas for modality and scale to pixels.
 
-filter_ocr_for_remove_mode(detections: Sequence[OCRText], *, remove_mode: object, whitelist: Sequence[str], whitelist_match_settings=None, exclude_rects: Sequence[UserRectangle] | None=None) -> list[OCRText]
-    WYSIWYG / remove set: exclude zones, whitelist veto, then remove scope.
+rects_intersect(a, b) -> bool
+    True when two axis-aligned boxes overlap (inclusive edges).
+
+filter_ocr_outside_exclude_rects(detections: Sequence[OCRText], exclude_rects: Sequence[UserRectangle] | None) -> list[OCRText]
+    Drop OCR boxes that intersect any exclude rectangle.
+
+filter_ocr_for_remove_mode(detections: Sequence[OCRText], *, remove_mode: OcrRemoveMode, match_mode: PhiMatchMode, exclude_rects: Sequence[UserRectangle] | None=None) -> list[OCRText]
+    WYSIWYG / remove set: exclude zones, then Remove Scope via texts_for_remove_mode.
 """
 from collections.abc import Sequence
 from pathlib import Path
 
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    filter_ocr_outside_exclude_rects,
-    filter_ocr_whitelist_only,
-)
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import PhiMatchMode
+from anonymizer.controller.ai.embedded_phi.pixel.remove_scope import OcrRemoveMode, texts_for_remove_mode
 from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_project_exclude_rects
 from anonymizer.controller.series.series_overlay import OCRText, UserRectangle
 
@@ -88,30 +92,44 @@ def modality_exclude_rects_for_series(
     )
 
 
+def rects_intersect(
+    a: tuple[int, int, int, int] | OCRText | UserRectangle,
+    b: tuple[int, int, int, int] | OCRText | UserRectangle,
+) -> bool:
+    """Return True when two axis-aligned boxes overlap (inclusive edges count as overlap)."""
+
+    def as_box(item: tuple[int, int, int, int] | OCRText | UserRectangle) -> tuple[int, int, int, int]:
+        if isinstance(item, tuple):
+            return item
+        return item.get_bounding_box()
+
+    ax1, ay1, ax2, ay2 = as_box(a)
+    bx1, by1, bx2, by2 = as_box(b)
+    return not (ax2 < bx1 or bx2 < ax1 or ay2 < by1 or by2 < ay1)
+
+
+def filter_ocr_outside_exclude_rects(
+    detections: Sequence[OCRText],
+    exclude_rects: Sequence[UserRectangle] | None,
+) -> list[OCRText]:
+    """Drop OCR boxes that intersect any exclude rectangle (spatial keepers)."""
+    if not exclude_rects:
+        return list(detections)
+    kept: list[OCRText] = []
+    for ocr_text in detections:
+        if any(rects_intersect(ocr_text, rect) for rect in exclude_rects):
+            continue
+        kept.append(ocr_text)
+    return kept
+
+
 def filter_ocr_for_remove_mode(
     detections: Sequence[OCRText],
     *,
-    remove_mode: object,
-    whitelist: Sequence[str],
-    whitelist_match_settings=None,
+    remove_mode: OcrRemoveMode,
+    match_mode: PhiMatchMode = PhiMatchMode.STANDARD,
     exclude_rects: Sequence[UserRectangle] | None = None,
 ) -> list[OCRText]:
-    """WYSIWYG / remove set: exclude zones, whitelist veto, then remove scope.
-
-    All text is the only scope that ignores the whitelist; every other
-    scope keeps whitelisted boxes even when NER labelled them (a false
-    positive must not erase a protected keeper, e.g. AXILLA as NAME).
-    """
+    """WYSIWYG / remove set: exclude zones, then Remove Scope + PhiMatchMode."""
     kept = filter_ocr_outside_exclude_rects(detections, exclude_rects)
-    mode = getattr(remove_mode, "value", str(remove_mode))
-    if mode == "all_text":
-        return kept
-    if whitelist:
-        kept = filter_ocr_whitelist_only(
-            kept,
-            whitelist=whitelist,
-            whitelist_match_settings=whitelist_match_settings,
-        )
-    if mode == "phi_only":
-        return [item for item in kept if (item.phi_label or "").strip()]
-    return kept
+    return texts_for_remove_mode(kept, remove_mode, match_mode)

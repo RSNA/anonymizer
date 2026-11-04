@@ -4,16 +4,19 @@ from pathlib import Path
 
 import pytest
 
-from anonymizer.controller.jobs.runner import (
-    OcrEditContext,
-    OcrRemoveMode,
-    edit_context_menu_labels,
+from anonymizer.controller.ai.embedded_phi.pixel.remove_scope import OcrEditContext, OcrRemoveMode
+from anonymizer.view.ocr_ui import (
+    edit_context_display_label,
     edit_context_menu_values,
     normalize_edit_context,
     ocr_detect_tooltip,
     ocr_remove_mode_tooltip,
 )
 from anonymizer.utils.translate import set_language_code
+
+
+def edit_context_menu_labels() -> tuple[str, ...]:
+    return tuple(edit_context_display_label(member) for member in edit_context_menu_values())
 
 
 def test_edit_context_menu_values_are_language_agnostic() -> None:

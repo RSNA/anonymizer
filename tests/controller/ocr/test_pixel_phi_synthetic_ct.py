@@ -1,18 +1,15 @@
 """End-to-end pixel PHI tests using synthetic CT with burnt-in sample annotations."""
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import numpy as np
 import pydicom
 import pytest
 
 from anonymizer.controller.ai.batch_process import AiBatchAlgorithm, _apply_remove_pixel_phi_series
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    PixelPhiRemovalMode,
-    detect_text,
-)
-from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import remove_pixel_phi
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import detect_text, filter_ocr_noise
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import PixelPhiRemovalMode, remove_pixel_phi
 from anonymizer.controller.phi.phi_io import build_phi_index
 from anonymizer.model.anonymizer import AnonymizerModel, Instance
 from tests.controller.support.pixel_phi_test_support import (
@@ -47,21 +44,24 @@ def _overlay_region_changed(before: np.ndarray, after: np.ndarray) -> bool:
     return not np.array_equal(before[region], after[region])
 
 
-@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext")
-def test_remove_pixel_phi_detects_and_blackouts_synthetic_phi(
-    mock_readtext: MagicMock,
-    tmp_path: Path,
-) -> None:
+def _ocr_reader(return_value=None, *, side_effect=None) -> MagicMock:
+    reader = MagicMock()
+    if side_effect is not None:
+        reader.readtext.side_effect = side_effect
+    else:
+        reader.readtext.return_value = return_value if return_value is not None else []
+    return reader
+
+
+def test_remove_pixel_phi_detects_and_blackouts_synthetic_phi(tmp_path: Path) -> None:
     series_dir = build_synthetic_ct_series_with_burned_in_phi(tmp_path / "phi_ct")
     dcm_path = _phi_slice_path(series_dir)
     before = pydicom.dcmread(dcm_path).pixel_array.copy()
     overlay = (slice(20, 120), slice(20, 280))
 
-    mock_readtext.return_value = easyocr_results_for_default_phi()
-
     modified, texts, pixels_changed = remove_pixel_phi(
         dcm_path,
-        MagicMock(),
+        _ocr_reader(easyocr_results_for_default_phi()),
         whitelist=[],
         removal_mode=PixelPhiRemovalMode.BLACKOUT,
     )
@@ -75,29 +75,25 @@ def test_remove_pixel_phi_detects_and_blackouts_synthetic_phi(
     assert np.count_nonzero(before[overlay] > 2500) > np.count_nonzero(after[overlay] > 2500)
 
 
-@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext")
-def test_detect_text_returns_filtered_phi_from_synthetic_ct(
-    mock_readtext: MagicMock,
-    tmp_path: Path,
-) -> None:
+def test_detect_text_returns_filtered_phi_from_synthetic_ct(tmp_path: Path) -> None:
     series_dir = build_synthetic_single_slice_ct_series(tmp_path / "single")
     apply_burned_in_phi_to_dicom(_phi_slice_path(series_dir))
     pixels = pydicom.dcmread(_phi_slice_path(series_dir)).pixel_array
     display = np.clip(pixels.astype(np.int32), 0, None).astype(np.uint8)
 
-    mock_readtext.return_value = easyocr_results_for_default_phi() + [
-        ([(0, 0), (20, 0), (20, 20), (0, 20)], ";", 0.95),
-    ]
-
-    results = detect_text(display, MagicMock(), whitelist=[])
+    reader = _ocr_reader(
+        easyocr_results_for_default_phi()
+        + [
+            ([(0, 0), (20, 0), (20, 20), (0, 20)], ";", 0.95),
+        ]
+    )
+    results = filter_ocr_noise(detect_text(display, reader))
 
     assert results is not None
     assert [item.text for item in results] == list(DEFAULT_BURNED_IN_PHI_LINES)
 
 
-@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext")
 def test_batch_pixel_phi_pipeline_updates_model_and_phi_index(
-    mock_readtext: MagicMock,
     anonymizer_model: AnonymizerModel,
     tmp_path: Path,
 ) -> None:
@@ -108,13 +104,13 @@ def test_batch_pixel_phi_pipeline_updates_model_and_phi_index(
     anon_series_uid, _ = register_series_with_anonymizer(series_dir, anonymizer_model)
     slice_count = len(list_dcm_files(series_dir))
 
-    mock_readtext.side_effect = [easyocr_results_for_default_phi()] + [[]] * (slice_count - 1)
-
     outcome = _apply_remove_pixel_phi_series(
         series_dir,
         anon_model=anonymizer_model,
-        ocr_reader=MagicMock(),
+        ocr_reader=_ocr_reader(side_effect=[easyocr_results_for_default_phi()] + [[]] * (slice_count - 1)),
         removal_mode=PixelPhiRemovalMode.BLACKOUT,
+        metadata_enabled=False,
+        reports_enabled=False,
     )
 
     assert outcome.status == "ok"
@@ -143,9 +139,7 @@ def test_batch_pixel_phi_pipeline_updates_model_and_phi_index(
     assert np.count_nonzero(before_phi[overlay] > 2500) > np.count_nonzero(after_phi[overlay] > 2500)
 
 
-@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext")
 def test_batch_pixel_phi_leaves_unmarked_slices_unchanged(
-    mock_readtext: MagicMock,
     anonymizer_model: AnonymizerModel,
     tmp_path: Path,
 ) -> None:
@@ -156,13 +150,13 @@ def test_batch_pixel_phi_leaves_unmarked_slices_unchanged(
     clean_path = paths[1]
     clean_before = pydicom.dcmread(clean_path).pixel_array.copy()
 
-    mock_readtext.return_value = []
-
     outcome = _apply_remove_pixel_phi_series(
         series_dir,
         anon_model=anonymizer_model,
-        ocr_reader=MagicMock(),
+        ocr_reader=_ocr_reader([]),
         removal_mode=PixelPhiRemovalMode.BLACKOUT,
+        metadata_enabled=False,
+        reports_enabled=False,
     )
 
     assert outcome.status == "complete"
@@ -170,9 +164,7 @@ def test_batch_pixel_phi_leaves_unmarked_slices_unchanged(
     assert np.array_equal(pydicom.dcmread(clean_path).pixel_array, clean_before)
 
 
-@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext")
 def test_phi_index_digest_deduplicates_across_instances(
-    mock_readtext: MagicMock,
     anonymizer_model: AnonymizerModel,
     tmp_path: Path,
 ) -> None:
@@ -180,17 +172,19 @@ def test_phi_index_digest_deduplicates_across_instances(
     register_series_with_anonymizer(series_dir, anonymizer_model)
 
     slice_count = len(list_dcm_files(series_dir))
-    mock_readtext.side_effect = [
-        easyocr_results_for_lines(("SMITH^JOHN", "01-Jan-2024")),
-        easyocr_results_for_lines(("SMITH^JOHN", "ACC12345")),
-        *([[]] * (slice_count - 2)),
-    ]
-
     outcome = _apply_remove_pixel_phi_series(
         series_dir,
         anon_model=anonymizer_model,
-        ocr_reader=MagicMock(),
+        ocr_reader=_ocr_reader(
+            side_effect=[
+                easyocr_results_for_lines(("SMITH^JOHN", "01-Jan-2024")),
+                easyocr_results_for_lines(("SMITH^JOHN", "ACC12345")),
+                *([[]] * (slice_count - 2)),
+            ]
+        ),
         removal_mode=PixelPhiRemovalMode.BLACKOUT,
+        metadata_enabled=False,
+        reports_enabled=False,
     )
 
     assert outcome.status == "ok"

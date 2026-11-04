@@ -43,9 +43,9 @@ def _open_project_with_davidson() -> dict:
     return imported
 
 
-def _fake_easyocr_results(_reader, pixels, *, modality=None, overrides=None):
+def _fake_easyocr_results(pixels, *args, **kwargs):
     """Synthetic OCR boxes in corners (no real PHI strings that must stay out of MCP)."""
-    del overrides  # match _easyocr_readtext; unused in the fake
+    del args, kwargs
     h, w = pixels.shape[:2]
     # Minimal EasyOCR-like tuples: (bbox, text, conf)
     return [
@@ -145,16 +145,13 @@ def test_invented_series_path_rejected():
         )
 
 
-@patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext",
-    side_effect=_fake_easyocr_results,
-)
-def test_remove_pixel_phi_then_export_davidson(mock_ocr: MagicMock):
+def test_remove_pixel_phi_then_export_davidson():
     _open_project_with_davidson()
 
     # Avoid downloading real EasyOCR weights in unit tests.
     fake_handle = MagicMock()
     fake_handle.reader = MagicMock()
+    fake_handle.reader.readtext.side_effect = _fake_easyocr_results
     with patch.object(SESSION, "ensure_ocr_reader", return_value=fake_handle):
         result = await_job(
             mcp_tools.remove_pixel_phi(patient="1", series="1"),
@@ -169,7 +166,7 @@ def test_remove_pixel_phi_then_export_davidson(mock_ocr: MagicMock):
     assert "PatientName" not in blob
     assert "detected_texts" not in blob
     assert "series_path" not in result
-    mock_ocr.assert_called()
+    fake_handle.reader.readtext.assert_called()
 
     inv2 = mcp_tools.list_inventory()
     assert inv2["series"][0]["pixel_phi_scanned"] is True

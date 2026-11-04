@@ -4683,7 +4683,6 @@
  <e en="T" t="4010107D" n="SecondaryInspectionMethodSeq">@remove()</e>
  <e en="T" t="4010107E" n="PRCSToRCSOrientation">@remove()</e>
  <e en="T" t="4FFE0001" n="MACParametersSeq">@remove()</e>
- <e en="T" t="50XXXXXX" n="Curve Data">@remove()</e>
  <e en="T" t="52009229" n="SharedFunctionalGroupsSeq">@keep</e>
  <e en="T" t="52009230" n="PerFrameFunctionalGroupsSeq">@keep</e>
  <e en="T" t="54000100" n="WaveformSeq">@remove()</e>
@@ -4695,8 +4694,6 @@
  <e en="T" t="54001010" n="WaveformData">@remove()</e>
  <e en="T" t="56000010" n="FirstOrderPhaseCorrectionAngle">@remove()</e>
  <e en="T" t="56000020" n="SpectroscopyData">@remove()</e>
- <e en="T" t="60XX3000" n="Overlay Data">@remove()</e>
- <e en="T" t="60XX4000" n="Overlay Comments">@remove()</e>
  <e en="T" t="7FE00001" n="ExtendedOffsetTable">@keep</e>
  <e en="T" t="7FE00002" n="ExtendedOffsetTableLengths">@keep</e>
  <e en="T" t="7FE00008" n="FloatPixelData">@keep</e>
@@ -4710,6 +4707,5 @@
  <e en="T" t="FFFEE000" n="Item">@keep</e>
  <e en="T" t="FFFEE00D" n="ItemDelimitationItem">@keep</e>
  <e en="T" t="FFFEE0DD" n="SeqDelimitationItem">@keep</e>
- <e en="T" t="GGGGEEEE-WHERE-GGGG-IS-ODD" n="Private Attributes">@remove()</e>
  <r en="T" t="privategroups">Remove private groups</r>
 </script>

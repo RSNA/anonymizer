@@ -9,6 +9,10 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import (
+    PhiMatchMode,
+    effective_phi_label,
+)
 from anonymizer.controller.ai.tseg.config import segmentation_mode_display
 from anonymizer.controller.series.series_io import SeriesProjections
 from anonymizer.controller.series.series_overlay import LayerType, OCRText, OverlayData, Segmentation, UserRectangle
@@ -158,6 +162,8 @@ class ImageViewer(ctk.CTkFrame):
         self._last_paint_xy: tuple[int, int] | None = None
         self._brush_cursor_id: int | None = None
         self._ocr_hover_tip: MotionTooltipController | None = None
+        # PhiMatchMode for OCR box color/tooltip (margin whitelist override).
+        self._ocr_match_mode: PhiMatchMode = PhiMatchMode.STANDARD
         self._brush_size_label: ctk.CTkLabel | None = None
         self._view_mode_btn: ctk.CTkButton | None = None
         self._annotate_mode_btn: ctk.CTkButton | None = None
@@ -1211,15 +1217,7 @@ class ImageViewer(ctk.CTkFrame):
         if ndx is None:
             return None
         hit = texts[ndx]
-        if hit.phi_entities:
-            label = hit.phi_entities[0][0]
-            return TooltipContent(
-                text=label,
-                bg=entity_color_hex(label),
-                fg="#ffffff",
-                bold=True,
-            )
-        label = (hit.phi_label or "").strip()
+        label = effective_phi_label(hit, self._ocr_match_mode)
         if label:
             return TooltipContent(
                 text=label,
@@ -1282,7 +1280,23 @@ class ImageViewer(ctk.CTkFrame):
         self._last_paint_xy = (x_img, y_img)
         self._draw_brush_cursor(int(event.x), int(event.y))
 
-    def set_text_overlay_data(self, frame_index: int, data: list[OCRText]):
+    def set_text_overlay_data(
+        self,
+        frame_index: int,
+        data: list[OCRText],
+        *,
+        match_mode: PhiMatchMode | None = None,
+    ):
+        """
+        Store OCR overlay boxes for a frame.
+
+        Args:
+            frame_index: Frame index in the viewer stack.
+            data: OCR boxes to draw (already filtered by Remove Scope).
+            match_mode: Optional PhiMatchMode for whitelist-over-NER coloring.
+        """
+        if match_mode is not None:
+            self._ocr_match_mode = match_mode
         # Creates new text overlay if one doesn't exist yet:
         if frame_index not in self.overlay_data:
             self.overlay_data[frame_index] = OverlayData()
@@ -1989,10 +2003,9 @@ class ImageViewer(ctk.CTkFrame):
                     if overlay_data.ocr_texts:
                         for text_data in overlay_data.ocr_texts:
                             x1, y1, x2, y2 = text_data.get_bounding_box()
+                            phi_label = effective_phi_label(text_data, self._ocr_match_mode)
                             box_color = (
-                                entity_color_bgr(text_data.phi_label)
-                                if text_data.phi_label
-                                else self.TEXT_BOX_COLOR_BGR
+                                entity_color_bgr(phi_label) if phi_label else self.TEXT_BOX_COLOR_BGR
                             )
                             cv2.rectangle(
                                 combined_overlay,
@@ -2262,10 +2275,14 @@ class ImageViewer(ctk.CTkFrame):
             self.change_image(self.current_image_index + 1)
 
     def prev_image(self, event):
+        """Step one frame back. Return break so SeriesView's duplicate bind does not fire."""
         self.change_image(self.current_image_index - 1)
+        return "break"
 
     def next_image(self, event):
+        """Step one frame forward. Return break so SeriesView's duplicate bind does not fire."""
         self.change_image(self.current_image_index + 1)
+        return "break"
 
     def change_image(self, new_index):
         if not self._startup_complete or not self._interaction_allowed() or self.images is None:
@@ -2278,21 +2295,27 @@ class ImageViewer(ctk.CTkFrame):
 
     def change_image_home(self, event):
         self.change_image(0)
+        return "break"
 
     def change_image_end(self, event):
         self.change_image(self.num_images - 1)
+        return "break"
 
     def change_image_next(self, event):
         self.change_image(self.current_image_index + self.large_jump)
+        return "break"
 
     def change_image_prior(self, event):
         self.change_image(self.current_image_index - self.large_jump)
+        return "break"
 
     def change_image_up(self, event):
         self.change_image(self.current_image_index + 1)
+        return "break"
 
     def change_image_down(self, event):
         self.change_image(self.current_image_index - 1)
+        return "break"
 
     def update_scrollbar(self):
         if not hasattr(self, "scrollbar") or self.num_images <= 1:

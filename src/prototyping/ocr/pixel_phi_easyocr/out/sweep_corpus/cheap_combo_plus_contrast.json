@@ -1,0 +1,15 @@
+{
+  "name": "cheap_combo_plus_contrast",
+  "overrides": {
+    "add_margin": 0.2,
+    "width_ths": 0.05,
+    "text_threshold": 0.55,
+    "low_text": 0.3,
+    "contrast_ths": 0.05,
+    "adjust_contrast": 0.7
+  },
+  "case_accuracy": 0.6612903225806451,
+  "box_recall": 0.6612903225806451,
+  "relative_cost": 3.0,
+  "met_target": false
+}

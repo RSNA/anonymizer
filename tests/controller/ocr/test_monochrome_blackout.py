@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pydicom
 from pydicom.data import get_testdata_file
 
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import PixelPhiRemovalMode
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import PixelPhiRemovalMode
 from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
     blackout_rectangular_areas,
     remove_pixel_phi,
@@ -45,9 +45,7 @@ def test_monochrome1_blackout_uses_viewer_space_not_stored_zero() -> None:
 
 
 @patch("anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi.dcmread")
-@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext")
 def test_remove_pixel_phi_blackout_monochrome1_writes_dark_pixels(
-    mock_readtext: MagicMock,
     mock_dcmread: MagicMock,
     tmp_path: Path,
 ) -> None:
@@ -56,13 +54,14 @@ def test_remove_pixel_phi_blackout_monochrome1_writes_dark_pixels(
     ds.save_as(dcm_path)
     mock_dcmread.return_value = pydicom.dcmread(dcm_path)
 
-    mock_readtext.return_value = [
+    reader = MagicMock()
+    reader.readtext.return_value = [
         ([(30, 30), (50, 30), (50, 50), (30, 50)], "PATIENT PHI", 0.95),
     ]
 
     modified, texts, pixels_changed = remove_pixel_phi(
         dcm_path,
-        MagicMock(),
+        reader,
         whitelist=[],
         removal_mode=PixelPhiRemovalMode.BLACKOUT,
         border_size=0,

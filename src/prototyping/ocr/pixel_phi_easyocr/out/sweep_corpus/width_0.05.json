@@ -1,0 +1,10 @@
+{
+  "name": "width_0.05",
+  "overrides": {
+    "width_ths": 0.05
+  },
+  "case_accuracy": 0.6774193548387096,
+  "box_recall": 0.6774193548387096,
+  "relative_cost": 3.0,
+  "met_target": false
+}

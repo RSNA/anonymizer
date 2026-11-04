@@ -1,0 +1,107 @@
+{
+  "description": "Cheap-first EasyOCR tweaks for MIDI-B pixel_phi (target 95% case accuracy without raising scan cost vs product baseline ~3.0).",
+  "target_accuracy": 0.95,
+  "max_relative_cost": 3.5,
+  "baseline": {
+    "name": "product_baseline",
+    "easyocr": {}
+  },
+  "grid": [
+    {
+      "name": "rot_none_cheaper",
+      "easyocr": { "rotation_info": [] },
+      "note": "Drops TTA — cheaper; only keep if accuracy holds"
+    },
+    {
+      "name": "rot_90_only",
+      "easyocr": { "rotation_info": [90] },
+      "note": "Half of current TTA cost"
+    },
+    {
+      "name": "margin_0.15",
+      "easyocr": { "add_margin": 0.15 }
+    },
+    {
+      "name": "margin_0.2",
+      "easyocr": { "add_margin": 0.2 }
+    },
+    {
+      "name": "width_0.05",
+      "easyocr": { "width_ths": 0.05 }
+    },
+    {
+      "name": "width_0.2",
+      "easyocr": { "width_ths": 0.2 }
+    },
+    {
+      "name": "text_0.55_low_0.35",
+      "easyocr": { "text_threshold": 0.55, "low_text": 0.35 }
+    },
+    {
+      "name": "contrast_mild",
+      "easyocr": { "contrast_ths": 0.05, "adjust_contrast": 0.7 }
+    },
+    {
+      "name": "cheap_combo_margin_width_text",
+      "easyocr": {
+        "add_margin": 0.15,
+        "width_ths": 0.05,
+        "text_threshold": 0.55,
+        "low_text": 0.35
+      }
+    },
+    {
+      "name": "cheap_combo_plus_contrast",
+      "easyocr": {
+        "add_margin": 0.2,
+        "width_ths": 0.05,
+        "text_threshold": 0.55,
+        "low_text": 0.3,
+        "contrast_ths": 0.05,
+        "adjust_contrast": 0.7
+      }
+    },
+    {
+      "name": "rot_none_plus_cheap_combo",
+      "easyocr": {
+        "rotation_info": [],
+        "add_margin": 0.2,
+        "width_ths": 0.05,
+        "text_threshold": 0.55,
+        "low_text": 0.3,
+        "contrast_ths": 0.05,
+        "adjust_contrast": 0.7
+      },
+      "note": "Best efficiency candidate if accuracy ≥ baseline"
+    },
+    {
+      "name": "hires_no_tta_1800",
+      "easyocr": { "canvas_size": 1800, "rotation_info": [] },
+      "note": "Spend canvas budget; drop TTA → rel_cost≈1.5 < baseline 3.0"
+    },
+    {
+      "name": "hires_no_tta_2560",
+      "easyocr": { "canvas_size": 2560, "rotation_info": [] },
+      "note": "rel_cost≈2.13 < baseline; better small-marker CRAFT"
+    },
+    {
+      "name": "hires_no_tta_2560_combo",
+      "easyocr": {
+        "canvas_size": 2560,
+        "rotation_info": [],
+        "add_margin": 0.2,
+        "width_ths": 0.05,
+        "text_threshold": 0.55,
+        "low_text": 0.3,
+        "contrast_ths": 0.05,
+        "adjust_contrast": 0.7
+      },
+      "note": "Highest-res cheap path under cost cap"
+    },
+    {
+      "name": "hires_keep_tta_1600",
+      "easyocr": { "canvas_size": 1600 },
+      "note": "Mild canvas bump keeping TTA → rel_cost≈4.0 (over soft cap)"
+    }
+  ]
+}

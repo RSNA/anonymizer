@@ -2,16 +2,21 @@
 
 from unittest.mock import MagicMock, patch
 
-from anonymizer.controller.ai.embedded_phi.ner.engine import Entity
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    annotate_ocr_phi_labels,
-    detect_text,
-    filter_ocr_phi_ner,
-    filter_ocr_whitelist_only,
-)
-from anonymizer.controller.series.series_overlay import OCRText
+import numpy as np
 
-# Davidson-like overlay corpus (controller-level, no EasyOCR).
+from anonymizer.controller.ai.embedded_phi.ner.engine import Entity
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import build_series_view_ocr_pixels
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import (
+    PhiMatchMode,
+    annotate_ner,
+    detect_text,
+    filter_ocr_noise,
+    make_annotate_whitelist,
+    pipe,
+)
+from anonymizer.controller.ai.embedded_phi.pixel.remove_scope import OcrRemoveMode, texts_for_remove_mode
+from anonymizer.controller.series.series_overlay import OCRText, OcrEvidence
+
 _DAVIDSON_TEXTS = (
     "DAVIDSON DOUGLAS [M]",
     "01.09.2012",
@@ -23,15 +28,15 @@ _DAVIDSON_TEXTS = (
 
 
 def _ocr(text: str, *, prob: float = 0.95) -> OCRText:
-    return OCRText(text=text, top_left=(0, 0), bottom_right=(40, 20), prob=prob)
+    return OCRText(text=text, top_left=(0, 0), bottom_right=(40, 20), ocr=OcrEvidence(prob=prob))
 
 
 def _davidson_detections() -> list[OCRText]:
     return [_ocr(t) for t in _DAVIDSON_TEXTS]
 
 
-def _fake_detect_phi(text: str, *, locale: str = "en_US") -> list[Entity]:
-    """Deterministic PHI spans in the joined frame context (no model)."""
+def _fake_detect_phi(text: str, *, locale: str = "en_US", include_time: bool = False) -> list[Entity]:
+    del include_time  # pixel annotate_ner always passes True; metadata fakes ignore it
     ents: list[Entity] = []
     for needle, label, score in (
         ("DAVIDSON", "FIRST_NAME", 0.99),
@@ -48,151 +53,134 @@ def _fake_detect_phi(text: str, *, locale: str = "en_US") -> list[Entity]:
     return sorted(ents, key=lambda e: e.start)
 
 
-# --- Whitelist only -----------------------------------------------------------------
+def _annotate_pipeline(terms: list[str] | None, detections: list[OCRText]) -> list[OCRText]:
+    wl = list(terms) if terms is not None else []
+    return pipe(make_annotate_whitelist(wl), annotate_ner)(detections)
 
 
-def test_empty_whitelist_keeps_all_davidson_overlay_text(caplog) -> None:
+def _drawn_non_whitelisted(detections: list[OCRText], terms: list[str]) -> list[OCRText]:
+    annotated = make_annotate_whitelist(terms)(detections)
+    return texts_for_remove_mode(annotated, OcrRemoveMode.NON_WHITELISTED, PhiMatchMode.STANDARD)
+
+
+# --- Whitelist annotate + overlay filter ------------------------------------------------
+
+
+def test_empty_whitelist_keeps_all_davidson_overlay_text() -> None:
     dets = _davidson_detections()
-    with caplog.at_level("INFO"):
-        kept = filter_ocr_whitelist_only(dets, whitelist=[])
-    assert [t.text for t in kept] == list(_DAVIDSON_TEXTS)
-    assert "OCR whitelist: empty" in caplog.text
+    drawn = _drawn_non_whitelisted(dets, [])
+    assert [t.text for t in drawn] == list(_DAVIDSON_TEXTS)
 
 
-def test_none_whitelist_keeps_all() -> None:
+def test_none_whitelist_terms_treated_as_empty_for_display() -> None:
     dets = _davidson_detections()
-    assert [t.text for t in filter_ocr_whitelist_only(dets, whitelist=None)] == list(_DAVIDSON_TEXTS)
+    drawn = _drawn_non_whitelisted(dets, [])
+    assert [t.text for t in drawn] == list(_DAVIDSON_TEXTS)
 
 
-def test_portable_whitelist_hides_portable_keeps_semi_upright(caplog) -> None:
+def test_portable_whitelist_hides_portable_keeps_semi_upright() -> None:
     dets = _davidson_detections()
-    with caplog.at_level("INFO"):
-        kept = filter_ocr_whitelist_only(dets, whitelist=["PORTABLE"])
-    texts = [t.text for t in kept]
+    drawn = _drawn_non_whitelisted(dets, ["PORTABLE"])
+    texts = [t.text for t in drawn]
     assert "Portable" not in texts
     assert "Semi-Upright" in texts
     assert "DAVIDSON DOUGLAS [M]" in texts
-    assert "OCR whitelist hid 1 detection(s)" in caplog.text
 
 
-def test_whitelist_preserves_phi_label() -> None:
-    labeled = OCRText(
-        text="Portable",
-        top_left=(0, 0),
-        bottom_right=(10, 10),
-        prob=0.9,
-        phi_label=None,
-    )
-    name = OCRText(
-        text="DAVIDSON",
-        top_left=(0, 0),
-        bottom_right=(10, 10),
-        prob=0.9,
-        phi_label="FIRST_NAME",
-    )
-    kept = filter_ocr_whitelist_only([labeled, name], whitelist=["PORTABLE"])
+def test_whitelist_preserves_ner_label() -> None:
+    labeled = _ocr("Portable")
+    name = _ocr("DAVIDSON")
+    name = annotate_ner(
+        [name],
+        detect_fn=lambda body: [Entity("FIRST_NAME", 0, len(body), score=0.99)],
+    )[0]
+    kept = _drawn_non_whitelisted([labeled, name], ["PORTABLE"])
     assert [t.text for t in kept] == ["DAVIDSON"]
-    assert kept[0].phi_label == "FIRST_NAME"
+    assert kept[0].ner.label == "NAME"
 
 
 # --- NER annotate (Series View) -------------------------------------------------------
 
 
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_locale_supported", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.ner_ready", return_value=True)
 @patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
-    return_value=True,
-)
-@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
-@patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_entities",
+    "anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_entities",
     side_effect=_fake_detect_phi,
 )
 def test_annotate_labels_phi_without_dropping_overlay(
     _mock_detect: MagicMock,
     _mock_ready: MagicMock,
     _mock_locale: MagicMock,
-    caplog,
 ) -> None:
-    dets = filter_ocr_whitelist_only(_davidson_detections(), whitelist=[])
-    with caplog.at_level("INFO"):
-        out = annotate_ocr_phi_labels(dets)
-    by_text = {t.text: t.phi_label for t in out}
+    dets = _davidson_detections()
+    out = annotate_ner(dets)
+    by_text = {t.text: t.ner.label for t in out}
     assert len(out) == len(dets)
     assert by_text["DAVIDSON DOUGLAS [M]"] == "NAME"
     assert by_text["01.09.2012"] == "DATE"
     assert by_text["DOB: 06.16.1976"] == "DATE"
     assert by_text["Portable"] is None
     assert by_text["Semi-Upright"] is None
-    assert "OCR→NER classify: 3 labeled" in caplog.text
 
 
-@patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
-    return_value=True,
-)
-@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_locale_supported", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.ner_ready", return_value=True)
 def test_annotate_one_contextual_call_and_box_entities(
     _mock_ready: MagicMock, _mock_locale: MagicMock, caplog
 ) -> None:
-    """One NER call on the joined frame; entities recorded per box for hover."""
     seen: list[str] = []
 
-    def detect(body: str, *, locale: str = "en_US") -> list[Entity]:
+    def detect(body: str, *, locale: str = "en_US", include_time: bool = False) -> list[Entity]:
         seen.append(body)
-        return _fake_detect_phi(body)
+        return _fake_detect_phi(body, locale=locale, include_time=include_time)
 
-    name = OCRText(text="DAVIDSON", top_left=(0, 0), bottom_right=(80, 20), prob=0.95)
-    dob = OCRText(text="DOB: 06.16.1976", top_left=(0, 30), bottom_right=(120, 50), prob=0.95)
-    portable = OCRText(text="Portable", top_left=(200, 30), bottom_right=(260, 50), prob=0.95)
+    name = _ocr("DAVIDSON")
+    dob = _ocr("DOB: 06.16.1976")
+    portable = _ocr("Portable")
     with caplog.at_level("INFO"):
-        out = annotate_ocr_phi_labels([name, dob, portable], detect_fn=detect)
+        out = annotate_ner([name, dob, portable], detect_fn=detect)
     assert seen == ["DAVIDSON, DOB: 06.16.1976, Portable"]
     by_text = {t.text: t for t in out}
-    # Pixel category collapses the model's FIRST_NAME to NAME.
-    assert by_text["DAVIDSON"].phi_label == "NAME"
-    assert by_text["DAVIDSON"].phi_entities == (("NAME", "DAVIDSON"),)
-    # Only the entity inside the box is recorded — not the "DOB:" prefix.
-    assert by_text["DOB: 06.16.1976"].phi_label == "DATE"
-    assert by_text["DOB: 06.16.1976"].phi_entities == (("DATE", "06.16.1976"),)
-    assert by_text["Portable"].phi_label is None
-    assert by_text["Portable"].phi_entities == ()
-    assert "OCR→NER box 'DOB: 06.16.1976' → DATE" in caplog.text
+    assert by_text["DAVIDSON"].ner.label == "NAME"
+    assert by_text["DAVIDSON"].ner.entities == (("NAME", "DAVIDSON"),)
+    assert by_text["DOB: 06.16.1976"].ner.label == "DATE"
+    assert by_text["DOB: 06.16.1976"].ner.entities == (("DATE", "06.16.1976"),)
+    assert by_text["Portable"].ner.label is None
+    assert by_text["Portable"].ner.entities == ()
 
 
-@patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
-    return_value=True,
-)
-@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_locale_supported", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.ner_ready", return_value=True)
 def test_annotate_entity_spanning_two_boxes_labels_both(
     _mock_ready: MagicMock, _mock_locale: MagicMock
 ) -> None:
-    def detect(body: str, *, locale: str = "en_US") -> list[Entity]:
+    def detect(body: str, *, locale: str = "en_US", include_time: bool = False) -> list[Entity]:
+        del locale, include_time
         return [Entity("FIRST_NAME", 0, len(body), score=0.9)]
 
-    left = OCRText(text="Olivia", top_left=(0, 0), bottom_right=(50, 20), prob=0.95)
-    right = OCRText(text="Diaz", top_left=(56, 0), bottom_right=(100, 20), prob=0.95)
-    out = annotate_ocr_phi_labels([left, right], detect_fn=detect)
-    assert [t.phi_label for t in out] == ["NAME", "NAME"]
-    assert out[0].phi_entities == (("NAME", "Olivia"),)
-    assert out[1].phi_entities == (("NAME", "Diaz"),)
+    left = _ocr("Olivia")
+    right = _ocr("Diaz")
+    out = annotate_ner([left, right], detect_fn=detect)
+    assert [t.ner.label for t in out] == ["NAME", "NAME"]
+    assert out[0].ner.entities == (("NAME", "Olivia"),)
+    assert out[1].ner.entities == (("NAME", "Diaz"),)
 
 
-def _name_split_detect_phi(text: str, *, locale: str = "en_US") -> list[Entity]:
-    """Olivia is FIRST_NAME in the joined context; Diaz is not labelled."""
+def _name_split_detect_phi(
+    text: str, *, locale: str = "en_US", include_time: bool = False
+) -> list[Entity]:
+    del locale, include_time
     idx = text.find("Olivia")
     if idx < 0:
         return []
     return [Entity("FIRST_NAME", idx, idx + 6, score=0.99)]
 
 
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_locale_supported", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.ner_ready", return_value=True)
 @patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
-    return_value=True,
-)
-@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
-@patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_entities",
+    "anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_entities",
     side_effect=_name_split_detect_phi,
 )
 def test_annotate_does_not_propagate_name_to_adjacent_unlabeled_box(
@@ -200,25 +188,20 @@ def test_annotate_does_not_propagate_name_to_adjacent_unlabeled_box(
     _mock_ready: MagicMock,
     _mock_locale: MagicMock,
 ) -> None:
-    """No OCR-box band-aid: a box the model did not label stays unlabeled,
-    even next to a labelled first name."""
-    olivia = OCRText(text="Olivia", top_left=(100, 20), bottom_right=(160, 40), prob=0.95)
-    diaz = OCRText(text="Diaz", top_left=(166, 20), bottom_right=(210, 40), prob=0.95)
-    left = OCRText(text="LEFT", top_left=(120, 200), bottom_right=(180, 220), prob=0.95)
-    out = annotate_ocr_phi_labels([olivia, diaz, left])
-    by_text = {t.text: t.phi_label for t in out}
+    olivia = _ocr("Olivia")
+    diaz = _ocr("Diaz")
+    left = _ocr("LEFT")
+    out = annotate_ner([olivia, diaz, left])
+    by_text = {t.text: t.ner.label for t in out}
     assert by_text["Olivia"] == "NAME"
     assert by_text["Diaz"] is None
     assert by_text["LEFT"] is None
 
 
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_locale_supported", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.ner_ready", return_value=True)
 @patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
-    return_value=True,
-)
-@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
-@patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_entities",
+    "anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_entities",
     side_effect=_name_split_detect_phi,
 )
 def test_annotate_does_not_label_adjacent_overlay_when_span_is_first_name_only(
@@ -226,118 +209,103 @@ def test_annotate_does_not_label_adjacent_overlay_when_span_is_first_name_only(
     _mock_ready: MagicMock,
     _mock_locale: MagicMock,
 ) -> None:
-    olivia = OCRText(text="Olivia", top_left=(100, 20), bottom_right=(160, 40), prob=0.95)
-    left = OCRText(text="LEFT", top_left=(166, 20), bottom_right=(210, 40), prob=0.95)
-    out = annotate_ocr_phi_labels([olivia, left])
-    by_text = {t.text: t.phi_label for t in out}
+    olivia = _ocr("Olivia")
+    left = _ocr("LEFT")
+    out = annotate_ner([olivia, left])
+    by_text = {t.text: t.ner.label for t in out}
     assert by_text["Olivia"] == "NAME"
     assert by_text["LEFT"] is None
 
 
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_locale_supported", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.ner_ready", return_value=True)
 @patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
-    return_value=True,
-)
-@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
-@patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_entities",
+    "anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_entities",
     side_effect=_name_split_detect_phi,
 )
-def test_batch_ner_filter_drops_adjacent_unlabeled_box(
+def test_phi_only_remove_keeps_only_labeled_boxes(
     _mock_detect: MagicMock,
     _mock_ready: MagicMock,
     _mock_locale: MagicMock,
 ) -> None:
-    """Batch filter keeps only boxes the model itself labelled."""
-    olivia = OCRText(text="Olivia", top_left=(100, 20), bottom_right=(160, 40), prob=0.95)
-    diaz = OCRText(text="Diaz", top_left=(166, 20), bottom_right=(210, 40), prob=0.95)
-    portable = OCRText(text="Portable", top_left=(10, 80), bottom_right=(90, 100), prob=0.95)
-    kept = filter_ocr_phi_ner([olivia, diaz, portable])
-    assert {t.text: t.phi_label for t in kept} == {"Olivia": "NAME"}
+    olivia = _ocr("Olivia")
+    diaz = _ocr("Diaz")
+    portable = _ocr("Portable")
+    annotated = annotate_ner([olivia, diaz, portable])
+    kept = texts_for_remove_mode(annotated, OcrRemoveMode.PHI_ONLY, PhiMatchMode.STANDARD)
+    assert {t.text: t.ner.label for t in kept} == {"Olivia": "NAME"}
 
 
-@patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
-    return_value=True,
-)
-@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=False)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_locale_supported", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.ner_ready", return_value=False)
 def test_annotate_when_ner_missing_keeps_all_unlabeled(
     _mock_ready: MagicMock,
     _mock_locale: MagicMock,
 ) -> None:
     dets = _davidson_detections()
-    out = annotate_ocr_phi_labels(dets)
+    out = annotate_ner(dets)
     assert len(out) == len(dets)
-    assert all(t.phi_label is None for t in out)
+    assert all(t.ner.label is None for t in out)
 
 
-# --- NER filter (batch remove) --------------------------------------------------------
+# --- PHI-only remove (batch) ----------------------------------------------------------
 
 
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_locale_supported", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.ner_ready", return_value=True)
 @patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
-    return_value=True,
-)
-@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
-@patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_entities",
+    "anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_entities",
     side_effect=_fake_detect_phi,
 )
-def test_batch_ner_filter_drops_portable_keeps_name_date(
+def test_phi_only_remove_drops_portable_keeps_name_date(
     _mock_detect: MagicMock,
     _mock_ready: MagicMock,
     _mock_locale: MagicMock,
 ) -> None:
-    after_wl = filter_ocr_whitelist_only(_davidson_detections(), whitelist=[])
-    kept = filter_ocr_phi_ner(after_wl)
+    annotated = _annotate_pipeline([], _davidson_detections())
+    kept = texts_for_remove_mode(annotated, OcrRemoveMode.PHI_ONLY, PhiMatchMode.STANDARD)
     texts = [t.text for t in kept]
     assert "Portable" not in texts
     assert "Semi-Upright" not in texts
     assert "DAVIDSON DOUGLAS [M]" in texts
     assert "01.09.2012" in texts
-    assert all(t.phi_label in {"NAME", "DATE"} for t in kept)
+    assert all(t.ner.label in {"NAME", "DATE"} for t in kept)
 
 
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_locale_supported", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.ner_ready", return_value=True)
 @patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
-    return_value=True,
-)
-@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
-@patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_entities",
+    "anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_entities",
     side_effect=_fake_detect_phi,
 )
-def test_batch_whitelist_then_ner_hides_portable_before_classify(
+def test_whitelist_then_phi_only_hides_portable_before_classify(
     _mock_detect: MagicMock,
     _mock_ready: MagicMock,
     _mock_locale: MagicMock,
 ) -> None:
-    """PORTABLE never reaches NER when whitelisted; PHI still kept."""
-    after_wl = filter_ocr_whitelist_only(_davidson_detections(), whitelist=["PORTABLE"])
-    assert not any("portable" in t.text.lower() for t in after_wl)
-    kept = filter_ocr_phi_ner(after_wl)
+    annotated = _annotate_pipeline(["PORTABLE"], _davidson_detections())
+    drawn = texts_for_remove_mode(annotated, OcrRemoveMode.NON_WHITELISTED, PhiMatchMode.STANDARD)
+    assert not any("portable" in t.text.lower() for t in drawn)
+    kept = texts_for_remove_mode(annotated, OcrRemoveMode.PHI_ONLY, PhiMatchMode.STANDARD)
     texts = [t.text for t in kept]
     assert "Portable" not in texts
     assert "DAVIDSON DOUGLAS [M]" in texts
 
 
-@patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
-    return_value=True,
-)
-@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=False)
-def test_batch_ner_filter_drops_all_when_ner_missing(
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_locale_supported", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.ner_ready", return_value=False)
+def test_phi_only_remove_empty_when_ner_missing(
     _mock_ready: MagicMock,
     _mock_locale: MagicMock,
 ) -> None:
-    assert filter_ocr_phi_ner(_davidson_detections()) == []
+    annotated = annotate_ner(_davidson_detections())
+    assert texts_for_remove_mode(annotated, OcrRemoveMode.PHI_ONLY, PhiMatchMode.STANDARD) == []
 
 
-# --- detect_text mode wiring (mocked EasyOCR) -----------------------------------------
+# --- detect_text + pipe wiring (mocked EasyOCR) -----------------------------------------
 
 
 def _easyocr_davidson_results():
-    """Minimal EasyOCR-shaped results for detect_text."""
     out = []
     for i, text in enumerate(_DAVIDSON_TEXTS):
         y = i * 30
@@ -346,126 +314,88 @@ def _easyocr_davidson_results():
     return out
 
 
+def _series_view_process(reader: MagicMock, *, whitelist: list[str]) -> list[OCRText]:
+    pixels = np.zeros((200, 200), dtype=np.uint8)
+    detected = detect_text(pixels, reader, modality="CR")
+    return pipe(make_annotate_whitelist(whitelist), annotate_ner)(detected)
+
+
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_locale_supported", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.ner_ready", return_value=True)
 @patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
-    return_value=True,
-)
-@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
-@patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_entities",
+    "anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_entities",
     side_effect=_fake_detect_phi,
 )
-@patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext",
-    return_value=_easyocr_davidson_results(),
-)
-def test_series_view_detect_mode_keeps_portable_and_labels_phi(
-    _mock_ocr: MagicMock,
+def test_series_view_detect_pipeline_keeps_portable_and_labels_phi(
     _mock_detect: MagicMock,
     _mock_ready: MagicMock,
     _mock_locale: MagicMock,
 ) -> None:
-    import numpy as np
-
-    pixels = np.zeros((200, 200), dtype=np.uint8)
-    results = detect_text(
-        pixels,
-        MagicMock(),
-        modality="CR",
-        apply_noise_filter=False,
-        apply_phi_ner_filter=False,
-        annotate_phi_labels=True,
-        whitelist=[],
-    )
-    assert results is not None
+    reader = MagicMock()
+    reader.readtext.return_value = _easyocr_davidson_results()
+    results = _series_view_process(reader, whitelist=[])
     texts = [t.text for t in results]
     assert "Portable" in texts
     assert "Semi-Upright" in texts
-    by_text = {t.text: t.phi_label for t in results}
+    by_text = {t.text: t.ner.label for t in results}
     assert by_text.get("DAVIDSON DOUGLAS [M]") == "NAME"
     assert by_text.get("Portable") is None
 
 
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_locale_supported", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.ner_ready", return_value=True)
 @patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
-    return_value=True,
-)
-@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
-@patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_entities",
+    "anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_entities",
     side_effect=_fake_detect_phi,
 )
-@patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext",
-    return_value=_easyocr_davidson_results(),
-)
-def test_series_view_detect_with_portable_whitelist_hides_before_classify(
-    _mock_ocr: MagicMock,
+def test_series_view_stores_all_whitelist_filters_on_display(
     _mock_detect: MagicMock,
     _mock_ready: MagicMock,
     _mock_locale: MagicMock,
 ) -> None:
-    import numpy as np
-
-    pixels = np.zeros((200, 200), dtype=np.uint8)
-    results = detect_text(
-        pixels,
-        MagicMock(),
-        modality="CR",
-        apply_noise_filter=False,
-        apply_phi_ner_filter=False,
-        annotate_phi_labels=True,
-        whitelist=["PORTABLE"],
+    reader = MagicMock()
+    reader.readtext.return_value = _easyocr_davidson_results()
+    stored = _series_view_process(reader, whitelist=[])
+    drawn = texts_for_remove_mode(
+        make_annotate_whitelist(["PORTABLE"])(stored),
+        OcrRemoveMode.NON_WHITELISTED,
+        PhiMatchMode.STANDARD,
     )
-    assert results is not None
-    texts = [t.text for t in results]
+    texts = [t.text for t in drawn]
     assert "Portable" not in texts
     assert "Semi-Upright" in texts
-    assert any(t.phi_label == "NAME" for t in results)
+    assert any(t.ner.label == "NAME" for t in stored)
 
 
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_locale_supported", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.ner_ready", return_value=True)
 @patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
-    return_value=True,
-)
-@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
-@patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_entities",
+    "anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_entities",
     side_effect=_fake_detect_phi,
 )
-@patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext",
-    return_value=_easyocr_davidson_results(),
-)
-def test_batch_detect_mode_filters_to_phi_only(
-    _mock_ocr: MagicMock,
+def test_batch_pipeline_noise_then_phi_only(
     _mock_detect: MagicMock,
     _mock_ready: MagicMock,
     _mock_locale: MagicMock,
 ) -> None:
-    """Opt-in NER keep-filter: batch may request PHI-only after noise+whitelist."""
-    import numpy as np
-
+    reader = MagicMock()
+    reader.readtext.return_value = _easyocr_davidson_results()
     pixels = np.zeros((200, 200), dtype=np.uint8)
-    results = detect_text(
-        pixels,
-        MagicMock(),
-        modality="CR",
-        apply_noise_filter=True,
-        apply_phi_ner_filter=True,
-        annotate_phi_labels=False,
-        whitelist=[],
-    )
-    assert results is not None
+    detected = detect_text(pixels, reader, modality="CR")
+    processed = pipe(
+        lambda texts: filter_ocr_noise(texts, modality="CR"),
+        make_annotate_whitelist([]),
+        annotate_ner,
+    )(detected)
+    results = texts_for_remove_mode(processed, OcrRemoveMode.PHI_ONLY, PhiMatchMode.STANDARD)
     texts = [t.text for t in results]
     assert "Portable" not in texts
     assert "Semi-Upright" not in texts
     assert any("DAVIDSON" in t for t in texts)
-    assert all(t.phi_label for t in results)
+    assert all(t.ner.label for t in results)
 
 
 def test_series_view_store_all_then_display_whitelist() -> None:
-    """Series View contract: detect stores all; display filter applies whitelist."""
     from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_default_whitelist
 
     stored = _davidson_detections()
@@ -473,7 +403,7 @@ def test_series_view_store_all_then_display_whitelist() -> None:
     assert any(t.text == "Semi-Upright" for t in stored)
 
     cr_wl = [t.upper() for t in load_default_whitelist("CR")]
-    drawn = filter_ocr_whitelist_only(stored, whitelist=cr_wl)
+    drawn = _drawn_non_whitelisted(stored, cr_wl)
     drawn_texts = [t.text for t in drawn]
     assert "Portable" not in drawn_texts
     assert "Semi-Upright" not in drawn_texts
@@ -481,41 +411,6 @@ def test_series_view_store_all_then_display_whitelist() -> None:
     assert "01.09.2012" in drawn_texts
 
 
-@patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
-    return_value=True,
-)
-@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
-@patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_entities",
-    side_effect=_fake_detect_phi,
-)
-@patch(
-    "anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext",
-    return_value=_easyocr_davidson_results(),
-)
-def test_both_ner_flags_prefers_batch_filter(
-    _mock_ocr: MagicMock,
-    _mock_detect: MagicMock,
-    _mock_ready: MagicMock,
-    _mock_locale: MagicMock,
-    caplog,
-) -> None:
-    import numpy as np
-
-    pixels = np.zeros((200, 200), dtype=np.uint8)
-    with caplog.at_level("WARNING"):
-        results = detect_text(
-            pixels,
-            MagicMock(),
-            modality="CR",
-            apply_noise_filter=True,
-            apply_phi_ner_filter=True,
-            annotate_phi_labels=True,
-            whitelist=[],
-        )
-    assert results is not None
-    assert "using filter (batch) mode" in caplog.text
-    texts = [t.text for t in results]
-    assert "Portable" not in texts
-    assert any("DAVIDSON" in t for t in texts)
+def test_build_series_view_ocr_pixels_importable() -> None:
+    """Guard against accidental removal of Series View OCR prep helper."""
+    assert callable(build_series_view_ocr_pixels)

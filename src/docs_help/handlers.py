@@ -481,7 +481,7 @@ def shot_metadata_assessment(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
             project_dir=project_dir,
             modality=str(getattr(ds, "Modality", "") or "") or None,
             whitelist=whitelist,
-            whitelist_match_settings=getattr(view, "_whitelist_match_settings", None),
+            match_mode=getattr(view, "_match_mode", None),
         )
         settle(dlg, max(ctx.settle_ms, 800))
         wait_mapped(dlg)
@@ -2158,9 +2158,9 @@ def _stage_ai_batch_running(dlg: Any) -> None:
 def shot_ai_batch_running(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     """Capture AiBatchProcessDialog mid-run (staged; worker never starts)."""
     from anonymizer.controller.ai.batch_process import AiBatchAlgorithm, AiBatchProcessOptions
-    from anonymizer.controller.jobs.runner import OcrRemoveMode
+    from anonymizer.controller.ai.embedded_phi.pixel.remove_scope import OcrRemoveMode
     from anonymizer.controller.ai.blur_face import FaceBlurMode
-    from anonymizer.controller.ai.embedded_phi.pixel.detect_text import PixelPhiRemovalMode
+    from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import PixelPhiRemovalMode
     from anonymizer.view.ai.ai_batch_process_dialog import AiBatchProcessDialog
 
     # Always ensure both demo fixtures for a multi-study mid-run shot.
@@ -2730,12 +2730,12 @@ def shot_process_remove_pixel(ctx: CaptureContext, shot: ShotSpec) -> ShotResult
     Do not resize Series View — grab the window the app opened. Detect runs live
     EasyOCR (same path as the working app); boxes are never read from a cache.
     """
-    from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
+    from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
         PixelPhiRemovalMode,
         normalize_pixel_phi_removal_mode,
-        pixel_phi_removal_mode_option_label,
     )
-    from anonymizer.controller.jobs.runner import OcrEditContext, edit_context_display_label
+    from anonymizer.controller.ai.embedded_phi.pixel.remove_scope import OcrEditContext
+    from anonymizer.view.ocr_ui import edit_context_display_label, pixel_phi_removal_mode_option_label
     from anonymizer.controller.series.series_overlay import UserRectangle
 
     fixture = _fixture_from_deps(shot.deps) or "davidson_cxr"
@@ -2756,8 +2756,8 @@ def shot_process_remove_pixel(ctx: CaptureContext, shot: ShotSpec) -> ShotResult
             view.edit_context = edit_ctx
             if hasattr(view, "edit_context_change"):
                 view.edit_context_change(label)
-            if hasattr(view, "_load_whitelist_match_settings"):
-                view._load_whitelist_match_settings()
+            if hasattr(view, "_load_match_mode"):
+                view._load_match_mode()
             if hasattr(view, "remove_text_mode_var"):
                 view.remove_text_mode_var.set(pixel_phi_removal_mode_option_label(removal_mode))
         except Exception as exc:

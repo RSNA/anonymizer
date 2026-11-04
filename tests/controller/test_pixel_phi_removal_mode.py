@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    PixelPhiRemovalMode,
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import PixelPhiRemovalMode
+from anonymizer.view.ocr_ui import (
     normalize_pixel_phi_removal_mode,
     pixel_phi_removal_mode_menu_labels,
     pixel_phi_removal_mode_menu_values,

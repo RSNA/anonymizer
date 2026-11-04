@@ -2,7 +2,8 @@
 
 import pytest
 
-from anonymizer.controller.jobs.runner import OcrEditContext, RemovePixelPhiRunner, RunOptions
+from anonymizer.controller.ai.embedded_phi.pixel.remove_scope import OcrEditContext
+from anonymizer.controller.jobs.runner import RemovePixelPhiRunner, RunOptions
 from anonymizer.controller.jobs.work_state import WorkState
 from anonymizer.controller.series.series_io import load_series_frames
 from tests.controller.ocr.conftest import assert_dcm

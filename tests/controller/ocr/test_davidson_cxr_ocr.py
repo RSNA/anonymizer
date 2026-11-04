@@ -4,12 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    filter_ocr_whitelist_only,
-    load_modality_whitelist,
-    load_modality_whitelist_match_settings,
-)
-from anonymizer.controller.jobs.runner import OcrEditContext, RemovePixelPhiRunner, RunOptions
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import PhiMatchMode, is_whitelisted, make_annotate_whitelist
+from anonymizer.controller.ai.embedded_phi.pixel.remove_scope import OcrEditContext
+from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_modality_phi_match_mode, load_modality_whitelist
+from anonymizer.controller.jobs.runner import RemovePixelPhiRunner, RunOptions
 from anonymizer.controller.jobs.work_state import WorkState
 from anonymizer.controller.series.series_io import load_series_frames
 from tests.controller.ocr.conftest import assert_dcm
@@ -60,27 +58,27 @@ def test_davidson_cxr_ocr_finds_burned_in_text(davidson_loaded) -> None:
     assert any("portable" in t.lower() for t in texts), f"Expected Portable in OCR results, got {texts}"
     # Series View annotate path: overlay kept; PHI strings labeled when NER is ready.
     portable = next(t for t in ws.result[0] if "portable" in t.text.lower())
-    assert portable.phi_label is None, f"Portable must not be classified as PHI, got {portable.phi_label}"
+    assert portable.ner.label is None, f"Portable must not be classified as PHI, got {portable.ner.label}"
     if ner_ready():
-        assert any(t.phi_label in {"NAME", "DATE"} for t in ws.result[0]), (
+        assert any(t.ner.label in {"NAME", "DATE"} for t in ws.result[0]), (
             f"Expected pixel NAME or DATE labels on Davidson PHI, got "
-            f"{[(t.text, t.phi_label) for t in ws.result[0]]}"
+            f"{[(t.text, t.ner.label) for t in ws.result[0]]}"
         )
         # Frame-context gate: name and DOB boxes labelled from one contextual
         # call; hover entities recorded per box (entity only, no "DOB:" prefix).
         dob_box = next(t for t in ws.result[0] if "DOB" in t.text)
-        assert dob_box.phi_label == "DATE", (
-            f"DOB box must be DATE-labelled, got {[(t.text, t.phi_label) for t in ws.result[0]]}"
+        assert dob_box.ner.label == "DATE", (
+            f"DOB box must be DATE-labelled, got {[(t.text, t.ner.label) for t in ws.result[0]]}"
         )
-        assert dob_box.phi_entities, "DOB box must record its detected entities for hover"
-        assert all(label == "DATE" for label, _text in dob_box.phi_entities)
+        assert dob_box.ner.entities, "DOB box must record its detected entities for hover"
+        assert all(label == "DATE" for label, _text in dob_box.ner.entities)
         # The model may fragment this date (e.g. '.' + '.1976'); the box is
         # still DATE-labelled/removed whole, and the date must be among them.
-        assert any("1976" in text or "06" in text for _label, text in dob_box.phi_entities)
+        assert any("1976" in text or "06" in text for _label, text in dob_box.ner.entities)
         name_boxes = [t for t in ws.result[0] if "DAVIDSON" in t.text or "DOUGLAS" in t.text]
         assert name_boxes and all(
-            t.phi_label == "NAME" for t in name_boxes
-        ), f"Name boxes mislabelled: {[(t.text, t.phi_label) for t in name_boxes]}"
+            t.ner.label == "NAME" for t in name_boxes
+        ), f"Name boxes mislabelled: {[(t.text, t.ner.label) for t in name_boxes]}"
 
 
 @pytest.mark.ocr_integration
@@ -159,21 +157,20 @@ def test_davidson_overlay_draw_includes_portable_when_project_whitelist_omits_it
     project_whitelist.parent.mkdir(parents=True)
     project_whitelist.write_text("AXIAL\nCHEST\n", encoding="utf-8")
 
+    from anonymizer.controller.series.series_overlay import OcrEvidence
+
     detections = [
-        OCRText(text="DAVIDSON", top_left=(0, 0), bottom_right=(10, 10), prob=0.9),
-        OCRText(text="DOUGLAS [M]", top_left=(0, 0), bottom_right=(10, 10), prob=0.9),
-        OCRText(text="01.09.2012", top_left=(0, 0), bottom_right=(10, 10), prob=0.9),
-        OCRText(text="Semi-Upright", top_left=(0, 0), bottom_right=(10, 10), prob=0.9),
-        OCRText(text="DOB: 06.16.1976", top_left=(0, 0), bottom_right=(10, 10), prob=0.9),
-        OCRText(text="Portable", top_left=(0, 0), bottom_right=(10, 10), prob=0.9),
+        OCRText(text="DAVIDSON", top_left=(0, 0), bottom_right=(10, 10), ocr=OcrEvidence(prob=0.9)),
+        OCRText(text="DOUGLAS [M]", top_left=(0, 0), bottom_right=(10, 10), ocr=OcrEvidence(prob=0.9)),
+        OCRText(text="01.09.2012", top_left=(0, 0), bottom_right=(10, 10), ocr=OcrEvidence(prob=0.9)),
+        OCRText(text="Semi-Upright", top_left=(0, 0), bottom_right=(10, 10), ocr=OcrEvidence(prob=0.9)),
+        OCRText(text="DOB: 06.16.1976", top_left=(0, 0), bottom_right=(10, 10), ocr=OcrEvidence(prob=0.9)),
+        OCRText(text="Portable", top_left=(0, 0), bottom_right=(10, 10), ocr=OcrEvidence(prob=0.9)),
     ]
     effective_whitelist = load_modality_whitelist(project_dir, "CR")
-    match_settings = load_modality_whitelist_match_settings(project_dir, "CR")
-    drawn = filter_ocr_whitelist_only(
-        detections,
-        whitelist=effective_whitelist,
-        whitelist_match_settings=match_settings,
-    )
+    match_mode = load_modality_phi_match_mode(project_dir, "CR")
+    annotated = make_annotate_whitelist(effective_whitelist)(detections)
+    drawn = [t for t in annotated if not is_whitelisted(t, match_mode)]
     drawn_texts = [item.text for item in drawn]
 
     assert "Portable" in drawn_texts
@@ -186,16 +183,19 @@ def test_davidson_default_cr_whitelist_hides_portable_and_semi_upright() -> None
     from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_default_whitelist
     from anonymizer.controller.series.series_overlay import OCRText
 
+    from anonymizer.controller.series.series_overlay import OcrEvidence
+
     detections = [
-        OCRText(text="DAVIDSON DOUGLAS [M]", top_left=(0, 0), bottom_right=(10, 10), prob=0.9),
-        OCRText(text="01.09.2012", top_left=(0, 0), bottom_right=(10, 10), prob=0.9),
-        OCRText(text="Semi-Upright", top_left=(0, 0), bottom_right=(10, 10), prob=0.9),
-        OCRText(text="Portable", top_left=(0, 0), bottom_right=(10, 10), prob=0.9),
+        OCRText(text="DAVIDSON DOUGLAS [M]", top_left=(0, 0), bottom_right=(10, 10), ocr=OcrEvidence(prob=0.9)),
+        OCRText(text="01.09.2012", top_left=(0, 0), bottom_right=(10, 10), ocr=OcrEvidence(prob=0.9)),
+        OCRText(text="Semi-Upright", top_left=(0, 0), bottom_right=(10, 10), ocr=OcrEvidence(prob=0.9)),
+        OCRText(text="Portable", top_left=(0, 0), bottom_right=(10, 10), ocr=OcrEvidence(prob=0.9)),
     ]
     cr_wl = load_default_whitelist("CR")
     assert "PORTABLE" in cr_wl
     assert "SEMI-UPRIGHT" in cr_wl
-    drawn = filter_ocr_whitelist_only(detections, whitelist=cr_wl)
+    annotated = make_annotate_whitelist(cr_wl)(detections)
+    drawn = [t for t in annotated if not is_whitelisted(t, PhiMatchMode.STANDARD)]
     texts = [t.text for t in drawn]
     assert "Portable" not in texts
     assert "Semi-Upright" not in texts

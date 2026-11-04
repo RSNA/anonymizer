@@ -10,8 +10,12 @@ from anonymizer.controller.ai.embedded_phi.pixel.cache import (
     OCR_MODEL_DIR,
     ocr_models_ready,
 )
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import PixelPhiRemovalMode
-from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import remove_pixel_phi
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import PhiMatchMode
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
+    PixelPhiRemovalMode,
+    remove_pixel_phi,
+)
+from anonymizer.controller.ai.embedded_phi.pixel.remove_scope import OcrRemoveMode
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +54,13 @@ def scrub_pixels(
         if sop_uid not in burnin_sops:
             return False, [], 0
     reader = get_ocr_reader()
+    # Legacy flag: True ≈ PHI_ONLY (NER decide); False ≈ ALL_TEXT.
+    remove_mode = OcrRemoveMode.PHI_ONLY if apply_phi_ner_filter else OcrRemoveMode.ALL_TEXT
     return remove_pixel_phi(
         dcm_path,
         reader,
         removal_mode=removal_mode,
-        apply_phi_ner_filter=apply_phi_ner_filter,
+        remove_mode=remove_mode,
+        match_mode=PhiMatchMode.STANDARD,
         whitelist=[] if apply_phi_ner_filter else None,
     )

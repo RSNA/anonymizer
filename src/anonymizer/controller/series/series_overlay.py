@@ -5,8 +5,17 @@ Public API
 LayerType
     LayerType type.
 
+OcrEvidence
+    EasyOCR confidence for one box (set by detect).
+
+WhitelistEvidence
+    Whitelist annotate result; score None means annotate not run yet.
+
+NerEvidence
+    NER annotate result; score None means annotate not run yet.
+
 OCRText
-    OCRText type.
+    Burnt-in text box; nested ocr / whitelist / ner evidence only (no decision flags).
 
 UserRectangle
     UserRectangle type.
@@ -31,21 +40,47 @@ class LayerType(Enum):
     SEGMENTATIONS = auto()  # polygon vertices
 
 
+@dataclass()
+class OcrEvidence:
+    """EasyOCR confidence for one box."""
+
+    prob: float
+
+
+@dataclass()
+class WhitelistEvidence:
+    """Whitelist annotate result; score None means annotate not run yet."""
+
+    term: str | None = None
+    score: float | None = None
+
+
+@dataclass()
+class NerEvidence:
+    """NER annotate result; score None means annotate not run yet."""
+
+    label: str | None = None
+    entities: tuple[tuple[str, str], ...] = ()
+    score: float | None = None
+
+
 @dataclass()  # Mutable: user can edit boxes in ImageViewer
 class OCRText:
+    """Burnt-in text box; evidence only — callers decide with PhiMatchMode helpers."""
+
     text: str
     top_left: tuple[int, int]
     bottom_right: tuple[int, int]
-    prob: float
-    phi_label: str | None = None  # Best pixel category in this box (NAME, DATE, …)
-    # (label, span text) for every entity the model detected inside this box.
-    phi_entities: tuple[tuple[str, str], ...] = ()
+    ocr: OcrEvidence
+    whitelist: WhitelistEvidence = field(default_factory=WhitelistEvidence)
+    ner: NerEvidence = field(default_factory=NerEvidence)
 
     def get_bounding_box(self) -> tuple[int, int, int, int]:
         """Returns the bounding box as (x1, y1, x2, y2)."""
         return (self.top_left[0], self.top_left[1], self.bottom_right[0], self.bottom_right[1])
 
     def box_area(self) -> int:
+        """Axis-aligned box area in pixels."""
         x1, y1, x2, y2 = self.get_bounding_box()
         return max(0, x2 - x1) * max(0, y2 - y1)
 

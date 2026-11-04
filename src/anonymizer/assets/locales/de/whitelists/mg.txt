@@ -1,0 +1,97 @@
+# Freigabeliste für häufige Begriffe auf Mammographie-Bildern (MG)
+# Ein Begriff/Ausdruck pro Zeile. Groß-/Kleinschreibung wird beim Laden ignoriert.
+# Zeilen, die mit # beginnen, sind Kommentare und werden ignoriert.
+
+# --- Seitigkeit ---
+L
+R
+LINKS
+RECHTS
+LT
+RT
+BEIDSEITIG
+BILATERAL
+BILAT
+
+# --- Aufnahmeprojektionen (DICOM / Hersteller) ---
+CC # Craniocaudal
+MLO # Mediolateral oblique
+ML # Mediolateral
+LM # Lateromedial
+XCCL
+XCCM
+FB
+SIO
+ISO
+LMO
+AT
+CV
+TAN
+SPOT
+MAG
+ID
+
+# --- Seitigkeit + Projektion ---
+LCC
+RCC
+LMLO
+RMLO
+LMCC
+RMCC
+LML
+RML
+LLM
+RLM
+LXCCL
+RXCCL
+LXCCM
+RXCCM
+
+# --- Markierungsbuchstaben ---
+M
+S
+
+# --- Anatomie / Untersuchung ---
+BREAST
+BRUST
+MAMMO
+MAMMOGRAPHIE
+MG
+DBT
+TOMO
+TOMOSYNTHESIS
+FFDM
+FFD
+
+# --- Technik / Overlay ---
+COMP
+COMPRESSION
+GRID
+NO GRID
+AEC
+KV
+KVP
+MA
+MAS
+EXPOSURE
+TECH
+TECHNOLOGIST
+SERIES
+IMAGE
+IMG
+VIEW
+EXAM DATE
+EXAM TIME
+POS
+POSITION
+NONE
+N/A
+SEE REPORT
+CLINICAL HISTORY
+COMPARISON
+PREVIOUS
+PRIOR
+ARTIFACT
+IMPLANT
+MARKER
+CLIP

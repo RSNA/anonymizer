@@ -1,0 +1,87 @@
+{
+  "description": "MIDI-B CR chest markers (FTA required, R wanted). Promote winning easyocr dict into detect_text._easyocr_readtext.",
+  "baseline": {
+    "easyocr": {}
+  },
+  "grid": [
+    {
+      "name": "canvas_2560",
+      "easyocr": { "canvas_size": 2560 }
+    },
+    {
+      "name": "canvas_3027",
+      "easyocr": { "canvas_size": 3027 }
+    },
+    {
+      "name": "mag_1.5",
+      "easyocr": { "mag_ratio": 1.5 }
+    },
+    {
+      "name": "mag_2_canvas_2560",
+      "easyocr": { "mag_ratio": 2.0, "canvas_size": 2560 }
+    },
+    {
+      "name": "margin_0.2",
+      "easyocr": { "add_margin": 0.2 }
+    },
+    {
+      "name": "margin_0.05",
+      "easyocr": { "add_margin": 0.05 }
+    },
+    {
+      "name": "width_0.05",
+      "easyocr": { "width_ths": 0.05 }
+    },
+    {
+      "name": "width_0.2",
+      "easyocr": { "width_ths": 0.2 }
+    },
+    {
+      "name": "width_0.3",
+      "easyocr": { "width_ths": 0.3 }
+    },
+    {
+      "name": "text_0.5_low_0.3",
+      "easyocr": { "text_threshold": 0.5, "low_text": 0.3 }
+    },
+    {
+      "name": "contrast_boost",
+      "easyocr": { "contrast_ths": 0.05, "adjust_contrast": 0.7 }
+    },
+    {
+      "name": "rot_full",
+      "easyocr": { "rotation_info": [90, 180, 270] }
+    },
+    {
+      "name": "rot_none",
+      "easyocr": { "rotation_info": [] }
+    },
+    {
+      "name": "slope_0.2",
+      "easyocr": { "slope_ths": 0.2 }
+    },
+    {
+      "name": "combo_canvas_mag_margin",
+      "easyocr": {
+        "canvas_size": 2560,
+        "mag_ratio": 1.5,
+        "add_margin": 0.15,
+        "width_ths": 0.05,
+        "text_threshold": 0.55,
+        "low_text": 0.3
+      }
+    },
+    {
+      "name": "combo_hires_contrast",
+      "easyocr": {
+        "canvas_size": 2560,
+        "mag_ratio": 2.0,
+        "add_margin": 0.2,
+        "contrast_ths": 0.05,
+        "adjust_contrast": 0.8,
+        "width_ths": 0.05,
+        "rotation_info": [90, 270]
+      }
+    }
+  ]
+}

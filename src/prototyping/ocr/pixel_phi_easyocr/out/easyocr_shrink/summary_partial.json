@@ -1,0 +1,54 @@
+{
+  "note": "partial; kill before full/enlarge finish",
+  "results": [
+    {
+      "name": "corners_clahe_scale1.0_baseline",
+      "n_pass": 11,
+      "n_total": 14,
+      "seconds": 57.9,
+      "still": "['validation/5220588395', 'validation/2051580196', 'test/8225398083']"
+    },
+    {
+      "name": "corners_clahe_scale0.75",
+      "n_pass": 9,
+      "n_total": 14,
+      "seconds": 41.8,
+      "still": "['validation/5220588395', 'validation/2051580196', 'validation/3056777156', 'validation/6208874732', 'test/8225398083']"
+    },
+    {
+      "name": "corners_clahe_scale0.5",
+      "n_pass": 8,
+      "n_total": 14,
+      "seconds": 22.4,
+      "still": "['validation/5155749005', 'validation/5220588395', 'validation/2051580196', 'validation/3056777156', 'validation/6208874732', 'test/8225398083']"
+    },
+    {
+      "name": "corners_clahe_scale0.35",
+      "n_pass": 9,
+      "n_total": 14,
+      "seconds": 15.2,
+      "still": "['validation/5155749005', 'validation/5220588395', 'validation/2051580196', 'validation/3056777156', 'test/8225398083']"
+    },
+    {
+      "name": "corners_clahe_canvas800_mag0.7",
+      "n_pass": 9,
+      "n_total": 14,
+      "seconds": 29.4,
+      "still": "['validation/5220588395', 'validation/2051580196', 'validation/3056777156', 'validation/6208874732', 'test/8225398083']"
+    },
+    {
+      "name": "corners_clahe_canvas600_mag0.5",
+      "n_pass": 9,
+      "n_total": 14,
+      "seconds": 18.8,
+      "still": "['validation/5220588395', 'validation/2051580196', 'validation/3056777156', 'validation/6208874732', 'test/8225398083']"
+    },
+    {
+      "name": "corners_clahe_scale1.5",
+      "n_pass": 9,
+      "n_total": 14,
+      "seconds": 67.9,
+      "still": "['validation/5220588395', 'validation/2051580196', 'validation/3056777156', 'validation/6208874732', 'test/8225398083']"
+    }
+  ]
+}

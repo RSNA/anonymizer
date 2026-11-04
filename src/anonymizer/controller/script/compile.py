@@ -23,6 +23,10 @@ TCIA_RESEARCH_OPERANDS
 CLINICAL_TRIAL_SPONSOR_NAME_TAG
     (0012,0010) — TCIA Research @safe() so Clean Descriptors does not blank
     grant/sponsor codes.
+
+DESCRIPTOR_KEEP_TAGS
+    Public tags kept under Basic so Clean Descriptors / Embedded PHI can scrub
+    free text (Study/Series Description, Institutional Department Name, …).
 """
 import json
 import logging
@@ -58,6 +62,17 @@ KEEP_DEVICE_TAGS = frozenset(
     {
         "00181000",  # DeviceSerialNumber
         "00081010",  # StationName
+    }
+)
+
+# Clean Descriptors deferrals: stay @keep under Basic (see assets/scripts/README.md).
+DESCRIPTOR_KEEP_TAGS = frozenset(
+    {
+        "00081030",  # Study Description
+        "0008103E",  # Series Description
+        "00189937",  # Requested Series Description
+        "00081040",  # Institutional Department Name
+        "00204000",  # Image Comments
     }
 )
 
@@ -261,10 +276,13 @@ def script_operations_by_tag(document: ScriptDocument) -> dict[str, str]:
 
 
 def basic_strip_ok(operation: str) -> bool:
-    """True when a Basic operand strips or protects identity (remove/empty/round/date)."""
+    """True when a Basic operand strips or remaps identity (remove/empty/round/date/uid)."""
     op = normalize_script_operation(operation)
     if is_remove_operation(op) or op.startswith("@empty"):
         return True
     if op.startswith("@round"):
+        return True
+    # E.1-1 action U — replace with a different UID (original identity gone).
+    if op == "@uid" or op.startswith("@uid("):
         return True
     return bool(is_date_delta_operation(op))

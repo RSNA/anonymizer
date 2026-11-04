@@ -1,0 +1,8 @@
+{
+  "name": "product_baseline",
+  "overrides": {},
+  "case_accuracy": 0.6774193548387096,
+  "box_recall": 0.6774193548387096,
+  "relative_cost": 3.0,
+  "met_target": false
+}

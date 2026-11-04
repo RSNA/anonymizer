@@ -6,15 +6,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydicom import Dataset
 
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import _dedupe_texts
 from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
+    _dedupe_texts,
     apply_instance_embedded_phi,
     apply_instance_embedded_phi_for_dcm,
     apply_series_view_embedded_phi,
-    collect_series_view_embedded_phi_texts,
     remove_pixel_phi,
 )
-from anonymizer.controller.series.series_overlay import OCRText, OverlayData, UserRectangle
+from anonymizer.view.ocr_ui import collect_series_view_embedded_phi_texts
+from anonymizer.controller.series.series_overlay import OCRText, OcrEvidence, OverlayData, UserRectangle
 from anonymizer.model.anonymizer import Instance
 from tests.opened_anonymizer_model import opened_anonymizer_model
 
@@ -117,13 +117,13 @@ def test_collect_series_view_embedded_phi_texts() -> None:
     viewer.overlay_data = {
         0: OverlayData(
             ocr_texts=[
-                OCRText(text="  A ", top_left=(0, 0), bottom_right=(1, 1), prob=0.9),
-                OCRText(text="B", top_left=(2, 2), bottom_right=(3, 3), prob=0.8),
+                OCRText(text="  A ", top_left=(0, 0), bottom_right=(1, 1), ocr=OcrEvidence(prob=0.9)),
+                OCRText(text="B", top_left=(2, 2), bottom_right=(3, 3), ocr=OcrEvidence(prob=0.8)),
             ]
         ),
         1: OverlayData(ocr_texts=[]),
         2: OverlayData(
-            ocr_texts=[OCRText(text="A", top_left=(0, 0), bottom_right=(1, 1), prob=0.9)],
+            ocr_texts=[OCRText(text="A", top_left=(0, 0), bottom_right=(1, 1), ocr=OcrEvidence(prob=0.9))],
             user_rects=[UserRectangle(top_left=(0, 0), bottom_right=(5, 5))],
         ),
     }

@@ -7,16 +7,17 @@ from pathlib import Path
 import customtkinter as ctk
 
 from anonymizer.controller.ai.batch_process import (
-    effective_modality_whitelist_match_settings,
+    effective_modality_phi_match_modes,
     effective_modality_whitelists,
     format_modality_whitelist_heading,
     modalities_in_selected_studies,
 )
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import OcrWhitelistMatchSettings, describe_match_settings
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import PhiMatchMode
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.features.look import FEATURE_ACTION_BUTTON_WIDTH, FEATURE_DIALOG_PAD, FEATURE_INTRO_WRAP
 from anonymizer.view.common.app_window import AppToplevel, fit_toplevel_to_content, present_toplevel_centered_on_parent
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
+from anonymizer.view.ocr_ui import match_mode_menu_label
 
 
 def populate_modality_whitelist_preview_textbox(
@@ -25,7 +26,7 @@ def populate_modality_whitelist_preview_textbox(
     *,
     no_modalities_message: str,
     no_terms_label: str,
-    match_settings_by_modality: dict[str, OcrWhitelistMatchSettings] | None = None,
+    match_mode_by_modality: dict[str, PhiMatchMode] | None = None,
 ) -> None:
     """Fill a text box with whitelist preview content and bold modality headings."""
     inner = text_box._textbox
@@ -51,10 +52,10 @@ def populate_modality_whitelist_preview_textbox(
             inner.insert("end", "\n\n")
         terms = whitelists_by_modality[modality]
         inner.insert("end", format_modality_whitelist_heading(modality, len(terms)) + "\n", "modality_heading")
-        if match_settings_by_modality and modality in match_settings_by_modality:
+        if match_mode_by_modality and modality in match_mode_by_modality:
             inner.insert(
                 "end",
-                f"  {_('Match strictness')}: {describe_match_settings(match_settings_by_modality[modality])}\n",
+                f"  {_('Match strictness')}: {match_mode_menu_label(match_mode_by_modality[modality])}\n",
             )
         if terms:
             inner.insert("end", "\n".join(f"  {term}" for term in terms))
@@ -86,7 +87,7 @@ class ModalityWhitelistPreviewDialog(AppToplevel):
 
         modalities = modalities_in_selected_studies(images_dir, studies)
         whitelists = effective_modality_whitelists(project_dir, modalities)
-        match_settings = effective_modality_whitelist_match_settings(project_dir, modalities)
+        match_modes = effective_modality_phi_match_modes(project_dir, modalities)
         no_modalities_message = _(
             "No modalities found in the selected studies."
             + "\n\n"
@@ -121,7 +122,7 @@ class ModalityWhitelistPreviewDialog(AppToplevel):
             whitelists,
             no_modalities_message=no_modalities_message,
             no_terms_label=no_terms_label,
-            match_settings_by_modality=match_settings,
+            match_mode_by_modality=match_modes,
         )
 
         ctk.CTkLabel(

@@ -1,0 +1,11 @@
+{
+  "name": "hires_no_tta_2560",
+  "overrides": {
+    "canvas_size": 2560,
+    "rotation_info": []
+  },
+  "case_accuracy": 0.8064516129032258,
+  "box_recall": 0.8064516129032258,
+  "relative_cost": 2.1333333333333333,
+  "met_target": false
+}

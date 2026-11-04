@@ -8,56 +8,8 @@ Algorithm
 CANONICAL_ALGORITHM_ORDER
     Canonical algorithm order.
 
-OcrEditContext
-    Language-agnostic Series View OCR scope (combobox stores these codes).
-
-OcrRemoveMode
-    What Detect/Remove keeps: NER PHI, non-whitelisted OCR, or every OCR box.
-
-edit_context_menu_values() -> tuple[OcrEditContext, ...]
-    Internal codes for the Edit Context picker (never pass through gettext).
-
-edit_context_display_label(context: OcrEditContext) -> str
-    Translated combobox label for an edit context (not used for menu state).
-
-edit_context_menu_labels() -> tuple[str, ...]
-    Translated combobox labels in canonical order.
-
-normalize_edit_context(value: object | None, *, default: OcrEditContext=OcrEditContext.FRAME) -> OcrEditContext
-    Resolve combobox / legacy label text to OcrEditContext.
-
-ocr_remove_mode_menu_values() -> tuple[OcrRemoveMode, ...]
-    Ocr remove mode menu values.
-
-ocr_remove_mode_display_label(mode: OcrRemoveMode) -> str
-    Ocr remove mode display label.
-
-ocr_remove_mode_menu_labels() -> tuple[str, ...]
-    Ocr remove mode menu labels.
-
-ocr_detect_tooltip(edit_context: OcrEditContext) -> str
-    Ocr detect tooltip.
-
-ocr_remove_mode_tooltip(mode: OcrRemoveMode) -> str
-    Ocr remove mode tooltip.
-
-remove_text_button_label(mode: OcrRemoveMode) -> str
-    Remove text button label.
-
-normalize_ocr_remove_mode(value: object | None, *, default: OcrRemoveMode=...) -> OcrRemoveMode
-    Normalize ocr remove mode.
-
-ocr_remove_mode_from_legacy_whitelist(*, use_modality_whitelist: bool) -> OcrRemoveMode
-    Map historic batch checkbox: True = non-whitelisted, False = all text.
-
-whitelist_arg_for_ocr_remove_mode(mode: OcrRemoveMode) -> list[str] | None
-    None loads the effective modality whitelist; [] disables whitelist filtering.
-
-apply_phi_ner_filter_for_ocr_remove_mode(mode: OcrRemoveMode) -> bool
-    Apply phi ner filter for ocr remove mode.
-
 RunOptions
-    RunOptions type.
+    Per-run options (edit context, whitelist, match mode, removal mode).
 
 ModelHandle
     ModelHandle type.
@@ -103,7 +55,6 @@ run_batch(work_state: WorkState, batch: BatchSpec, *, on_series_start: Callable[
 """
 import logging
 from dataclasses import dataclass, field
-from enum import StrEnum
 from pathlib import Path
 from typing import Callable, Protocol
 
@@ -111,14 +62,19 @@ from easyocr import Reader
 
 from anonymizer.controller.ai.embedded_phi.ner.cache import download_ner_models
 from anonymizer.controller.ai.embedded_phi.pixel.cache import OCR_LANGS, OCR_MODEL_DIR, download_ocr_models
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    OcrWhitelistMatchSettings,
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import ocr_image_for_frame
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import (
+    PhiMatchMode,
+    annotate_ner,
     detect_text,
-    load_modality_whitelist,
-    load_modality_whitelist_match_settings,
-    ocr_image_for_frame,
+    filter_ocr_noise,
+    log_ocr_decisions,
+    make_annotate_whitelist,
+    pipe,
 )
 from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import _ocr_use_gpu, remove_pixel_phi
+from anonymizer.controller.ai.embedded_phi.pixel.remove_scope import OcrEditContext, OcrRemoveMode
+from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_modality_whitelist
 from anonymizer.controller.ai.feature_availability import embedded_phi_has_models
 from anonymizer.controller.ai.tseg.contrast import release_working_memory
 from anonymizer.controller.ai.tseg.model_cache import clear_predictor_cache, preload_face_models, tseg_batch_session
@@ -137,165 +93,14 @@ CANONICAL_ALGORITHM_ORDER: tuple[Algorithm, ...] = (
 )
 
 
-class OcrEditContext(StrEnum):
-    """Language-agnostic Series View OCR scope (combobox stores these codes)."""
-
-    FRAME = "frame"
-    SERIES = "series"
-
-
-class OcrRemoveMode(StrEnum):
-    """What Detect/Remove keeps: NER PHI, non-whitelisted OCR, or every OCR box."""
-
-    NON_WHITELISTED = "non_whitelisted"
-    PHI_ONLY = "phi_only"
-    ALL_TEXT = "all_text"
-
-
-def edit_context_menu_values() -> tuple[OcrEditContext, ...]:
-    """Internal codes for the Edit Context picker (never pass through gettext)."""
-    return (OcrEditContext.FRAME, OcrEditContext.SERIES)
-
-
-def edit_context_display_label(context: OcrEditContext) -> str:
-    """Translated combobox label for an edit context (not used for menu state)."""
-    if context is OcrEditContext.FRAME:
-        return _("FRAME")
-    return _("SERIES")
-
-
-def edit_context_menu_labels() -> tuple[str, ...]:
-    """Translated combobox labels in canonical order."""
-    return tuple(edit_context_display_label(member) for member in edit_context_menu_values())
-
-
-def normalize_edit_context(
-    value: object | None,
-    *,
-    default: OcrEditContext = OcrEditContext.FRAME,
-) -> OcrEditContext:
-    """Resolve combobox / legacy label text to OcrEditContext."""
-    text = str(value or "").strip()
-    if not text:
-        return default
-    lowered = text.lower().replace(" ", "")
-    if lowered in (OcrEditContext.FRAME, "frame"):
-        return OcrEditContext.FRAME
-    if lowered in (OcrEditContext.SERIES, "series"):
-        return OcrEditContext.SERIES
-    for member in edit_context_menu_values():
-        if text == edit_context_display_label(member):
-            return member
-    legacy = {
-        "FRAME": OcrEditContext.FRAME,
-        "SERIES": OcrEditContext.SERIES,
-    }
-    return legacy.get(text, default)
-
-
-def ocr_remove_mode_menu_values() -> tuple[OcrRemoveMode, ...]:
-    return (
-        OcrRemoveMode.NON_WHITELISTED,
-        OcrRemoveMode.PHI_ONLY,
-        OcrRemoveMode.ALL_TEXT,
-    )
-
-
-def ocr_remove_mode_display_label(mode: OcrRemoveMode) -> str:
-    if mode is OcrRemoveMode.PHI_ONLY:
-        return _("PHI only")
-    if mode is OcrRemoveMode.ALL_TEXT:
-        return _("All text")
-    return _("Non-whitelisted text")
-
-
-def ocr_remove_mode_menu_labels() -> tuple[str, ...]:
-    return tuple(ocr_remove_mode_display_label(member) for member in ocr_remove_mode_menu_values())
-
-
-def ocr_detect_tooltip(edit_context: OcrEditContext) -> str:
-    if edit_context is OcrEditContext.SERIES:
-        return _(
-            "Detect burnt-in text in all frames. Boxes show what Remove would delete "
-            "for the selected Remove Scope; no pixels are changed."
-        )
-    return _(
-        "Detect burnt-in text in the current frame. Boxes show what Remove would delete "
-        "for the selected Remove Scope; no pixels are changed."
-    )
-
-
-def ocr_remove_mode_tooltip(mode: OcrRemoveMode) -> str:
-    if mode is OcrRemoveMode.PHI_ONLY:
-        return _(
-            "Named Entity Recognition (NER) labels only: names, dates, IDs, phones, emails. "
-            "Unlabeled text and whitelist matches are left."
-        )
-    if mode is OcrRemoveMode.ALL_TEXT:
-        return _("Remove every detected burnt-in text box; whitelist is ignored.")
-    return _("Remove detected burnt-in text except whitelist matches and exclude areas.")
-
-
-def remove_text_button_label(mode: OcrRemoveMode) -> str:
-    if mode is OcrRemoveMode.PHI_ONLY:
-        return _("Remove PHI")
-    return _("Remove Text")
-
-
-def normalize_ocr_remove_mode(
-    value: object | None,
-    *,
-    default: OcrRemoveMode = OcrRemoveMode.NON_WHITELISTED,
-) -> OcrRemoveMode:
-    text = str(value or "").strip()
-    if not text:
-        return default
-    key = text.lower().replace(" ", "_").replace("-", "_")
-    aliases = {
-        OcrRemoveMode.NON_WHITELISTED.value: OcrRemoveMode.NON_WHITELISTED,
-        "non_whitelisted_text": OcrRemoveMode.NON_WHITELISTED,
-        "whitelist": OcrRemoveMode.NON_WHITELISTED,
-        OcrRemoveMode.PHI_ONLY.value: OcrRemoveMode.PHI_ONLY,
-        "phi": OcrRemoveMode.PHI_ONLY,
-        "ner": OcrRemoveMode.PHI_ONLY,
-        OcrRemoveMode.ALL_TEXT.value: OcrRemoveMode.ALL_TEXT,
-        "all": OcrRemoveMode.ALL_TEXT,
-    }
-    if key in aliases:
-        return aliases[key]
-    for member in ocr_remove_mode_menu_values():
-        if text == ocr_remove_mode_display_label(member):
-            return member
-    return default
-
-
-def ocr_remove_mode_from_legacy_whitelist(*, use_modality_whitelist: bool) -> OcrRemoveMode:
-    """Map historic batch checkbox: True = non-whitelisted, False = all text."""
-    return OcrRemoveMode.NON_WHITELISTED if use_modality_whitelist else OcrRemoveMode.ALL_TEXT
-
-
-def whitelist_arg_for_ocr_remove_mode(mode: OcrRemoveMode) -> list[str] | None:
-    """None loads the effective modality whitelist; [] disables whitelist filtering.
-
-    The whitelist is a veto in every scope except All text, so PHI only
-    also loads it (NER filter then keeps only labelled non-whitelisted).
-    """
-    if mode is OcrRemoveMode.ALL_TEXT:
-        return []
-    return None
-
-
-def apply_phi_ner_filter_for_ocr_remove_mode(mode: OcrRemoveMode) -> bool:
-    return mode is OcrRemoveMode.PHI_ONLY
-
-
 @dataclass
 class RunOptions:
     edit_context: OcrEditContext = OcrEditContext.SERIES
     whitelist: list[str] | None = None
     project_dir: Path | None = None
     removal_mode: object | None = None  # PixelPhiRemovalMode when batch applies PHI removal
-    whitelist_match: OcrWhitelistMatchSettings | None = None
+    match_mode: PhiMatchMode = PhiMatchMode.STANDARD
+    remove_mode: OcrRemoveMode = OcrRemoveMode.NON_WHITELISTED
 
 
 @dataclass
@@ -361,20 +166,32 @@ class RemovePixelPhiRunner:
             self._process_batch_removal(work_state, handle, options)
             return
 
-        self._process_detect_only(work_state, handle, whitelist, options.edit_context)
+        self._process_detect_only(work_state, handle, whitelist, options)
 
     def _process_detect_only(
         self,
         work_state: WorkState,
         handle: ModelHandle,
         whitelist: list[str] | None,
-        edit_context: OcrEditContext,
+        options: RunOptions,
     ) -> None:
+        """Series View Detect: same EasyOCR + noise filter as batch; annotate NER labels."""
+        edit_context = options.edit_context
         logger.info("RemovePixelPhiRunner._process_detect_only edit_context=%s", edit_context)
         assert handle.reader is not None
         ds = work_state.ds
         assert ds is not None
         modality = str(ds.get("Modality", "") or "")
+        # Series View passes PhiMatchMode from the toolbar; do not reload over it.
+        match_mode = options.match_mode
+        terms = list(whitelist) if whitelist is not None else load_modality_whitelist(
+            options.project_dir, modality or None
+        )
+        process = pipe(
+            lambda texts: filter_ocr_noise(texts, modality=modality),
+            make_annotate_whitelist(terms),
+            lambda texts: annotate_ner(texts, modality=modality),
+        )
 
         total = work_state.frame_count(Algorithm.REMOVE_PIXEL_PHI)
         indices = (
@@ -386,72 +203,30 @@ class RemovePixelPhiRunner:
         detections: dict[int, list[OCRText]] = {}
         for frame_index in indices:
             if work_state.should_cancel():
-                logger.info("OCR detect cancelled at frame_index=%s", frame_index)
+                logger.info(f"OCR detect cancelled at frame_index={frame_index}")
                 work_state.result = dict(detections)
                 return
 
             ocr_pixels = work_state.ocr_pixels
             if ocr_pixels is not None and frame_index < ocr_pixels.shape[0]:
-                logger.debug(
-                    "OCR frame_index=%s using Series View pixels shape=%s",
-                    frame_index,
-                    ocr_pixels[frame_index].shape,
-                )
-                raw = detect_text(
-                    ocr_pixels[frame_index],
-                    handle.reader,
-                    draw_boxes_and_text=False,
-                    modality=modality,
-                    apply_noise_filter=False,
-                    apply_phi_ner_filter=False,
-                    annotate_phi_labels=True,
-                    whitelist=whitelist,
-                )
+                pixels = ocr_pixels[frame_index]
             else:
                 frame = work_state.frame_at(frame_index, Algorithm.REMOVE_PIXEL_PHI)
-                bgr = ocr_image_for_frame(ds, frame)
-                logger.debug("OCR frame_index=%s bgr_shape=%s", frame_index, bgr.shape)
-                raw = detect_text(
-                    bgr,
-                    handle.reader,
-                    draw_boxes_and_text=False,
-                    modality=modality,
-                    apply_noise_filter=False,
-                    apply_phi_ner_filter=False,
-                    annotate_phi_labels=True,
-                    whitelist=whitelist,
+                pixels = ocr_image_for_frame(ds, frame)
+            detected = detect_text(pixels, handle.reader, modality=modality)
+            annotated = process(detected)
+            # Full annotated cache; Remove Scope re-filters in the view for WYSIWYG.
+            if annotated:
+                log_ocr_decisions(
+                    annotated,
+                    match_mode,
+                    remove_mode=options.remove_mode.value,
                 )
-            filtered = raw or []
-            logger.debug(
-                "OCR frame_index=%s: %d detection(s) (Series View detect, noise_filter=False)",
-                frame_index,
-                len(filtered),
-            )
-            if filtered:
-                detections[frame_index] = filtered
-                all_texts = [t.text for t in filtered]
+                detections[frame_index] = annotated
                 logger.info(
-                    "OCR frame_index=%s: %d detection(s): %s",
-                    frame_index,
-                    len(all_texts),
-                    all_texts,
+                    f"OCR frame_index={frame_index}: {len(annotated)} detection(s) "
+                    f"match_mode={match_mode.value} remove_mode={options.remove_mode.value}"
                 )
-                preview = all_texts[:5]
-                if len(filtered) > 5:
-                    logger.debug(
-                        "OCR frame_index=%s: %d detection(s) after filter: %s (showing 5 of %d)",
-                        frame_index,
-                        len(filtered),
-                        preview,
-                        len(filtered),
-                    )
-                else:
-                    logger.debug(
-                        "OCR frame_index=%s: %d detection(s) after filter: %s",
-                        frame_index,
-                        len(filtered),
-                        preview,
-                    )
             work_state.result = dict(detections)
             work_state.set_progress(
                 frame_index,
@@ -459,7 +234,7 @@ class RemovePixelPhiRunner:
             )
 
         work_state.result = dict(detections)
-        logger.info("RemovePixelPhiRunner detect complete: %s frames with text", len(detections))
+        logger.info(f"RemovePixelPhiRunner detect complete: {len(detections)} frames with text")
 
     def _process_batch_removal(
         self,
@@ -472,9 +247,6 @@ class RemovePixelPhiRunner:
         paths = sorted(set(work_state.slice_paths))
         logger.info("RemovePixelPhiRunner batch removal: %s instance files", len(paths))
         modality = str(work_state.ds.get("Modality", "") or "") if work_state.ds else ""
-        whitelist_match = options.whitelist_match
-        if whitelist_match is None and options.project_dir is not None:
-            whitelist_match = load_modality_whitelist_match_settings(options.project_dir, modality or None)
         for index, dcm_path in enumerate(paths, start=1):
             if work_state.should_cancel():
                 return
@@ -483,10 +255,11 @@ class RemovePixelPhiRunner:
                 dcm_path,
                 handle.reader,
                 removal_mode=options.removal_mode,
+                remove_mode=options.remove_mode,
                 project_dir=options.project_dir,
                 modality=modality or None,
                 whitelist=options.whitelist,
-                whitelist_match_settings=whitelist_match,
+                match_mode=options.match_mode,
             )
 
 

@@ -1,0 +1,298 @@
+{
+  "params_key": "product_baseline",
+  "overrides": {},
+  "case_accuracy": 0.5967741935483871,
+  "box_recall": 0.5967741935483871,
+  "relative_cost": 3.0,
+  "met_target": false,
+  "failures": [
+    {
+      "case_id": "validation/333877207",
+      "modality": "DX",
+      "miss": [
+        "JT"
+      ],
+      "raw": [
+        "PORTABLE",
+        "UPRIGHT",
+        "5"
+      ]
+    },
+    {
+      "case_id": "validation/527545790",
+      "modality": "MG",
+      "miss": [
+        "BELL AUSTIN [U] 02.29.2012"
+      ],
+      "raw": [
+        "|",
+        "DOB: 01.24.1964",
+        "RCC"
+      ]
+    },
+    {
+      "case_id": "validation/5155749005",
+      "modality": "DX",
+      "miss": [
+        "JT"
+      ],
+      "raw": [
+        "UPRIGHT",
+        "PORTABLE",
+        "14"
+      ]
+    },
+    {
+      "case_id": "validation/5220588395",
+      "modality": "DX",
+      "miss": [
+        "MWF"
+      ],
+      "raw": [
+        "SEMLERECT",
+        "2",
+        "POPTABLE"
+      ]
+    },
+    {
+      "case_id": "validation/8697164365",
+      "modality": "DX",
+      "miss": [
+        "ICG"
+      ],
+      "raw": [
+        "6",
+        "PORTABLE",
+        "INTRA OP",
+        "SUPINE",
+        "1"
+      ]
+    },
+    {
+      "case_id": "validation/8697164365",
+      "modality": "DX",
+      "miss": [
+        "ICG"
+      ],
+      "raw": [
+        "6",
+        "PORTABLE",
+        "INTRA OP",
+        "SUPINE",
+        "1"
+      ]
+    },
+    {
+      "case_id": "validation/2051580196",
+      "modality": "CR",
+      "miss": [
+        "NKF"
+      ],
+      "raw": [
+        "7M"
+      ]
+    },
+    {
+      "case_id": "validation/2051580196",
+      "modality": "CR",
+      "miss": [
+        "NKF"
+      ],
+      "raw": [
+        "2"
+      ]
+    },
+    {
+      "case_id": "validation/2548095243",
+      "modality": "CR",
+      "miss": [
+        "ACO"
+      ],
+      "raw": [
+        "SEMI-ERECT",
+        "PORTABLE",
+        "G"
+      ]
+    },
+    {
+      "case_id": "validation/3056777156",
+      "modality": "CR",
+      "miss": [
+        "CMS"
+      ],
+      "raw": [
+        "8"
+      ]
+    },
+    {
+      "case_id": "validation/3056777156",
+      "modality": "CR",
+      "miss": [
+        "CMS"
+      ],
+      "raw": [
+        "8"
+      ]
+    },
+    {
+      "case_id": "validation/3615823051",
+      "modality": "DX",
+      "miss": [
+        "JGR"
+      ],
+      "raw": [
+        "BEMIL-ERECT",
+        "PORTABLE"
+      ]
+    },
+    {
+      "case_id": "validation/5454430957",
+      "modality": "CR",
+      "miss": [
+        "MARTIN ERIC [M] 09.20.2010"
+      ],
+      "raw": [
+        "|",
+        "DOB: 07.28.1938"
+      ]
+    },
+    {
+      "case_id": "validation/5454430957",
+      "modality": "CR",
+      "miss": [
+        "MHS"
+      ],
+      "raw": [
+        "R",
+        "4",
+        "2"
+      ]
+    },
+    {
+      "case_id": "validation/6208874732",
+      "modality": "DX",
+      "miss": [
+        "ROC"
+      ],
+      "raw": [
+        "R8C"
+      ]
+    },
+    {
+      "case_id": "validation/6208874732",
+      "modality": "DX",
+      "miss": [
+        "ROC"
+      ],
+      "raw": [
+        "8"
+      ]
+    },
+    {
+      "case_id": "validation/7516817726",
+      "modality": "MG",
+      "miss": [
+        "LM"
+      ],
+      "raw": [
+        "K",
+        "2"
+      ]
+    },
+    {
+      "case_id": "test/8225398083",
+      "modality": "DX",
+      "miss": [
+        "RCN"
+      ],
+      "raw": [
+        "UPRIGHT",
+        "242",
+        "PORTABLE"
+      ]
+    },
+    {
+      "case_id": "test/8225398083",
+      "modality": "DX",
+      "miss": [
+        "RCN"
+      ],
+      "raw": [
+        "UPRIGHT",
+        "PORTABLE",
+        "142",
+        "1"
+      ]
+    },
+    {
+      "case_id": "test/3427864259",
+      "modality": "DX",
+      "miss": [
+        "CERVANTES CHRISTOPHER [M] 07.09.2014"
+      ],
+      "raw": [
+        "CERVANTES CHRISTOPHER LMA0IG",
+        "PORTABLE",
+        "D0E: 05071930",
+        "UPRIGHTT"
+      ]
+    },
+    {
+      "case_id": "test/113575183",
+      "modality": "CR",
+      "miss": [
+        "FTA"
+      ],
+      "raw": [
+        "8",
+        "8",
+        "PORTABLE",
+        "SEMI-ERECT"
+      ]
+    },
+    {
+      "case_id": "test/7655797887",
+      "modality": "DX",
+      "miss": [
+        "LACI"
+      ],
+      "raw": [
+        "3"
+      ]
+    },
+    {
+      "case_id": "test/7655797887",
+      "modality": "DX",
+      "miss": [
+        "LACI"
+      ],
+      "raw": [
+        "\u0160"
+      ]
+    },
+    {
+      "case_id": "test/3930620761",
+      "modality": "DX",
+      "miss": [
+        "RAY RYAN [M] 07.06.2011"
+      ],
+      "raw": [
+        "RAY RYAN EMAI 07.06.2011",
+        "DOB: 06.03.1968",
+        "SEMRERBLE"
+      ]
+    },
+    {
+      "case_id": "test/5694644350",
+      "modality": "DX",
+      "miss": [
+        "TR"
+      ],
+      "raw": [
+        "1",
+        "3",
+        "PORTABLE"
+      ]
+    }
+  ]
+}

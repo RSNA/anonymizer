@@ -12,6 +12,13 @@ import customtkinter as ctk
 import numpy as np
 from pydicom import Dataset, dcmread
 
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import PhiMatchMode, log_ocr_decisions
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import PixelPhiRemovalMode
+from anonymizer.controller.ai.embedded_phi.pixel.remove_scope import OcrEditContext, OcrRemoveMode
+from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
+    load_modality_phi_match_mode,
+    save_modality_phi_match_mode,
+)
 from anonymizer.controller.project import ProjectController
 from anonymizer.controller.series.series_io import (
     LoadedSeries,
@@ -28,11 +35,6 @@ from anonymizer.controller.series.workspace import (
     FaceBlurGateReason,
     FaceBlurMode,
     ImportProfile,
-    OcrEditContext,
-    OcrRemoveMode,
-    OcrWhitelistMatchMode,
-    OcrWhitelistMatchSettings,
-    PixelPhiRemovalMode,
     SeriesGeometryResult,
     SeriesLoadError,
     SeriesViewSaveRequest,
@@ -40,12 +42,7 @@ from anonymizer.controller.series.workspace import (
     WorkState,
     blur_face_toolbar_visible,
     clear_cache_button_visible,
-    collect_series_view_embedded_phi_texts,
     commit_user_rects_to_exclude,
-    default_whitelist_match_settings,
-    describe_match_settings,
-    edit_context_display_label,
-    edit_context_menu_values,
     edit_context_toolbar_visible,
     exclude_rects_fingerprint,
     face_blur_allowed,
@@ -57,28 +54,14 @@ from anonymizer.controller.series.workspace import (
     harmonize_allowed_for_modality,
     load_default_whitelist,
     load_modality_whitelist,
-    load_modality_whitelist_match_settings,
     load_project_exclude_rects,
-    match_mode_description,
-    match_mode_menu_label,
-    match_mode_menu_labels,
     modality_exclude_rects_for_series,
-    normalize_edit_context,
-    normalize_ocr_remove_mode,
-    normalize_pixel_phi_removal_mode,
     normalize_user_rects,
-    ocr_detect_tooltip,
     ocr_image_for_frame,
     ocr_remove_enabled,
-    ocr_remove_mode_display_label,
-    ocr_remove_mode_menu_labels,
-    ocr_remove_mode_tooltip,
     ocr_results_available_for_edit_context,
-    pixel_phi_removal_mode_menu_labels,
-    pixel_phi_removal_mode_option_label,
     read_cached_segmentation_mode,
     read_primary_segment_voxels,
-    save_modality_whitelist_match_settings,
     save_project_whitelist,
     stackable_dicom_paths,
 )
@@ -106,6 +89,23 @@ from anonymizer.view.common.ux_fields import (
     button_width_for_label,
     option_menu_width_for_labels,
     truncate_series_description,
+)
+from anonymizer.view.ocr_ui import (
+    collect_series_view_embedded_phi_texts,
+    edit_context_display_label,
+    edit_context_menu_values,
+    match_mode_description,
+    match_mode_menu_label,
+    match_mode_menu_labels,
+    normalize_edit_context,
+    normalize_ocr_remove_mode,
+    normalize_pixel_phi_removal_mode,
+    ocr_detect_tooltip,
+    ocr_remove_mode_display_label,
+    ocr_remove_mode_menu_labels,
+    ocr_remove_mode_tooltip,
+    pixel_phi_removal_mode_menu_labels,
+    pixel_phi_removal_mode_option_label,
 )
 from anonymizer.view.series.anatomy_overlay import (
     collect_primary_segment_voxels,
@@ -204,7 +204,7 @@ class SeriesView(AppCTkToplevel):
         self._ocr_transcript_by_frame: dict[int, list[str]] = {}
         self._whitelist_changed = False
         self._whitelist_match_changed = False
-        self._whitelist_match_settings = default_whitelist_match_settings()
+        self._match_mode = PhiMatchMode.STANDARD
         self._loading = True
         self._load_queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self._loading_shell: ctk.CTkFrame | None = None
@@ -840,23 +840,22 @@ class SeriesView(AppCTkToplevel):
             f" delta={delta}" if delta else "",
         )
 
-    def _load_whitelist_match_settings(self) -> None:
+    def _load_match_mode(self) -> None:
         if self._ds is None or self._ds.Modality is None:
-            self._whitelist_match_settings = default_whitelist_match_settings()
+            self._match_mode = PhiMatchMode.STANDARD
             return
         project_dir = self._controller.model.storage_dir
-        self._whitelist_match_settings = load_modality_whitelist_match_settings(project_dir, self._ds.Modality)
-        self._apply_whitelist_match_settings_to_ui()
+        self._match_mode = load_modality_phi_match_mode(project_dir, self._ds.Modality)
+        self._apply_match_mode_to_ui()
         self._log_whitelist_trace(
             "match_init",
-            delta=describe_match_settings(self._whitelist_match_settings),
+            delta=self._match_mode.value,
         )
 
-    def _apply_whitelist_match_settings_to_ui(self) -> None:
+    def _apply_match_mode_to_ui(self) -> None:
         if not hasattr(self, "_whitelist_match_mode_var"):
             return
-        settings = self._whitelist_match_settings
-        self._whitelist_match_mode_var.set(match_mode_menu_label(settings.match_mode))
+        self._whitelist_match_mode_var.set(match_mode_menu_label(self._match_mode))
         self._sync_match_dropdown_state()
 
     def _sync_match_dropdown_state(self) -> None:
@@ -866,19 +865,20 @@ class SeriesView(AppCTkToplevel):
         has_items = self.whitelist.size() > 0
         self._whitelist_match_mode_menu.configure(state="normal" if has_items else "disabled")
 
-    def _whitelist_match_settings_from_ui(self) -> OcrWhitelistMatchSettings:
+    def _match_mode_from_ui(self) -> PhiMatchMode:
         label = self._whitelist_match_mode_var.get()
-        mode = self._match_mode_labels.get(label, OcrWhitelistMatchMode.STANDARD)
-        return OcrWhitelistMatchSettings(match_mode=mode)
+        return self._match_mode_labels.get(label, PhiMatchMode.STANDARD)
 
     def _on_whitelist_match_mode_changed(self, _choice: str | None = None) -> None:
-        self._whitelist_match_settings = self._whitelist_match_settings_from_ui()
+        self._match_mode = self._match_mode_from_ui()
         self._whitelist_match_changed = True
-        self._apply_whitelist_match_settings_to_ui()
+        self._apply_match_mode_to_ui()
         self._log_whitelist_trace(
             "match_mode",
-            delta=describe_match_settings(self._whitelist_match_settings),
+            delta=self._match_mode.value,
         )
+        # Match floors changed: re-log decisions on cached annotations (no re-OCR).
+        self._log_ocr_decisions_for_current_detections()
         self._redraw_text_overlays_if_detected()
 
     def _redraw_text_overlays_if_detected(self) -> None:
@@ -1066,7 +1066,7 @@ class SeriesView(AppCTkToplevel):
         self.whitelist_clear_button.grid(row=0, column=1, padx=(0, 2))
 
         self._match_mode_labels = match_mode_menu_labels()
-        self._whitelist_match_mode_var = tk.StringVar(value=match_mode_menu_label(OcrWhitelistMatchMode.STANDARD))
+        self._whitelist_match_mode_var = tk.StringVar(value=match_mode_menu_label(PhiMatchMode.STANDARD))
         self._whitelist_match_mode_menu = ctk.CTkOptionMenu(
             toolbar,
             values=list(self._match_mode_labels.keys()),
@@ -1081,7 +1081,7 @@ class SeriesView(AppCTkToplevel):
             lambda: match_mode_description(
                 self._match_mode_labels.get(
                     self._whitelist_match_mode_var.get(),
-                    OcrWhitelistMatchMode.STANDARD,
+                    PhiMatchMode.STANDARD,
                 )
             ),
             parent=self,
@@ -1361,7 +1361,7 @@ class SeriesView(AppCTkToplevel):
                 self.whitelist.insert(tk.END, item)
             self._sync_match_dropdown_state()
             self._log_whitelist_trace("init")
-            self._load_whitelist_match_settings()
+            self._load_match_mode()
             self._load_saved_exclude_areas()
 
     def load_frames(self, series_path: Path) -> tuple[Dataset, np.ndarray, tuple[Path, ...]]:
@@ -1637,7 +1637,7 @@ class SeriesView(AppCTkToplevel):
             project_dir=project_dir,
             modality=str(getattr(ds, "Modality", "") or "") or None,
             whitelist=whitelist,
-            whitelist_match_settings=getattr(self, "_whitelist_match_settings", None),
+            match_mode=getattr(self, "_match_mode", PhiMatchMode.STANDARD),
         )
 
     def _current_slice_path(self) -> Path | None:
@@ -2190,8 +2190,7 @@ class SeriesView(AppCTkToplevel):
                         exclude_rects_by_frame[frame_i] = rects
         status = format_ocr_detection_complete_status(
             detections_by_frame,
-            whitelist=self.get_whitelist_set() if hasattr(self, "whitelist") else [],
-            whitelist_match_settings=getattr(self, "_whitelist_match_settings", None),
+            match_mode=self._match_mode_from_ui() if hasattr(self, "_whitelist_match_mode_var") else self._match_mode,
             exclude_rects_by_frame=exclude_rects_by_frame,
             frames_scanned=frames_scanned,
             remove_mode=self._selected_ocr_remove_mode(),
@@ -2222,6 +2221,11 @@ class SeriesView(AppCTkToplevel):
             frame_index=frame_index,
             ocr_source_images=ocr_source,
         )
+        options.whitelist = self.get_whitelist_set() if hasattr(self, "whitelist") else []
+        options.match_mode = (
+            self._match_mode_from_ui() if hasattr(self, "_whitelist_match_mode_var") else self._match_mode
+        )
+        options.remove_mode = self._selected_ocr_remove_mode()
         if edit_context is not OcrEditContext.FRAME:
             self.detected_text.clear()
             if hasattr(self, "image_viewer"):
@@ -2253,8 +2257,23 @@ class SeriesView(AppCTkToplevel):
 
     def _on_ocr_remove_mode_changed(self, _choice: str | None = None) -> None:
         # Changing Remove Scope only re-filters existing detections.
+        self._log_ocr_decisions_for_current_detections()
         self._redraw_text_overlays_if_detected()
         self._refresh_ocr_toolbar_buttons()
+
+    def _log_ocr_decisions_for_current_detections(self) -> None:
+        """Log decide outcomes for cached OCR boxes (match mode / Remove Scope change)."""
+        if not self.detected_text:
+            return
+        match_mode = (
+            self._match_mode_from_ui() if hasattr(self, "_whitelist_match_mode_var") else self._match_mode
+        )
+        remove_mode = self._selected_ocr_remove_mode()
+        for frame_index, texts in sorted(self.detected_text.items()):
+            if not texts:
+                continue
+            logger.info("Series View OCR decisions frame_index=%s", frame_index)
+            log_ocr_decisions(texts, match_mode, remove_mode=remove_mode.value)
 
     def filter_text_data(self, frame_index: int) -> list[OCRText]:
         """Hide boxes that the current remove target would not remove."""
@@ -2266,8 +2285,7 @@ class SeriesView(AppCTkToplevel):
         return filter_series_view_ocr_overlay(
             self.detected_text[frame_index],
             remove_mode=self._selected_ocr_remove_mode(),
-            whitelist=self.get_whitelist_set() if hasattr(self, "whitelist") else [],
-            whitelist_match_settings=getattr(self, "_whitelist_match_settings", None),
+            match_mode=self._match_mode_from_ui() if hasattr(self, "_whitelist_match_mode_var") else self._match_mode,
             exclude_rects=exclude_rects,
         )
 
@@ -2277,16 +2295,24 @@ class SeriesView(AppCTkToplevel):
         raw_detections = self.detected_text.get(frame_index, [])
         raw_count = len(raw_detections)
         if raw_count != len(filtered_text_data):
-            filtered_texts = {item.text for item in filtered_text_data}
-            filtered_out = [item.text for item in raw_detections if item.text not in filtered_texts]
+            in_scope = {id(item) for item in filtered_text_data}
+            hidden = [item.text for item in raw_detections if id(item) not in in_scope]
             logger.info(
-                "Series View OCR overlay frame_index=%s: %d stored, %d drawn; filtered: %s",
+                "Series View OCR overlay frame_index=%s remove_mode=%s: "
+                "%d stored, %d in scope (drawn), %d hidden=%s",
                 frame_index,
+                self._selected_ocr_remove_mode().value,
                 raw_count,
                 len(filtered_text_data),
-                filtered_out,
+                len(hidden),
+                hidden,
             )
-        self.image_viewer.set_text_overlay_data(frame_index, filtered_text_data)
+        match_mode = (
+            self._match_mode_from_ui() if hasattr(self, "_whitelist_match_mode_var") else self._match_mode
+        )
+        self.image_viewer.set_text_overlay_data(
+            frame_index, filtered_text_data, match_mode=match_mode
+        )
 
     def detect_text_for_series(self):
         """Detects text in all frames via background job (SERIES edit context)."""
@@ -3192,16 +3218,16 @@ class SeriesView(AppCTkToplevel):
 
         if self._whitelist_match_changed:
             try:
-                settings = self._whitelist_match_settings_from_ui()
-                self._whitelist_match_settings = settings
-                options_path = save_modality_whitelist_match_settings(project_dir, self._ds.Modality, settings)
+                mode = self._match_mode_from_ui()
+                self._match_mode = mode
+                options_path = save_modality_phi_match_mode(project_dir, self._ds.Modality, mode)
                 self._whitelist_match_changed = False
                 self._log_whitelist_trace(
                     "match_save",
-                    delta=f"path={options_path} mode={describe_match_settings(settings)}",
+                    delta=f"path={options_path} mode={mode.value}",
                 )
             except Exception as e:
-                logger.error(f"Error saving whitelist match settings: {e}")
+                logger.error(f"Error saving PhiMatchMode: {e}")
 
     def save_series_button_clicked(self):
         if self._ds is None:
@@ -3216,14 +3242,14 @@ class SeriesView(AppCTkToplevel):
             return
 
         whitelist_items: list[str] | None = None
-        whitelist_match: OcrWhitelistMatchSettings | None = None
+        match_mode: PhiMatchMode | None = None
         if self._whitelist_changed:
             whitelist_set = self.get_whitelist_set()
             if whitelist_set:
                 whitelist_items = list(whitelist_set)
         if self._whitelist_match_changed:
-            whitelist_match = self._whitelist_match_settings_from_ui()
-            self._whitelist_match_settings = whitelist_match
+            match_mode = self._match_mode_from_ui()
+            self._match_mode = match_mode
 
         texts_by_frame: dict[int, list[str]] = {}
         if pixel_dirty and hasattr(self, "image_viewer"):
@@ -3248,7 +3274,7 @@ class SeriesView(AppCTkToplevel):
                 exclude_dirty=exclude_dirty,
                 exclude_rects_normalized=self._all_active_exclude_normalized(),
                 whitelist_items=whitelist_items,
-                whitelist_match_settings=whitelist_match,
+                match_mode=match_mode,
                 texts_by_frame=texts_by_frame,
                 ocr_transcript_by_frame=self._ocr_transcript_by_frame,
             )
@@ -3264,7 +3290,7 @@ class SeriesView(AppCTkToplevel):
 
         if whitelist_items is not None:
             self._whitelist_changed = False
-        if whitelist_match is not None:
+        if match_mode is not None:
             self._whitelist_match_changed = False
         self._saved_exclude_fingerprint = result.saved_exclude_fingerprint
         if result.ocr_sr_note:
@@ -3286,10 +3312,10 @@ class SeriesView(AppCTkToplevel):
         self.clear_whitelist()
         self.load_whitelist_defaults()
         self._whitelist_changed = True
-        self._whitelist_match_settings = default_whitelist_match_settings()
+        self._match_mode = PhiMatchMode.STANDARD
         self._whitelist_match_changed = True
-        self._apply_whitelist_match_settings_to_ui()
-        self._log_whitelist_trace("match_mode", delta=describe_match_settings(self._whitelist_match_settings))
+        self._apply_match_mode_to_ui()
+        self._log_whitelist_trace("match_mode", delta=self._match_mode.value)
 
     def load_whitelist_defaults(self):
         # TODO: whitelist load error message to user
@@ -3343,11 +3369,26 @@ class SeriesView(AppCTkToplevel):
         return isinstance(focused, (ctk.CTkEntry, ctk.CTkComboBox, ctk.CTkTextbox))
 
     def _on_slice_navigation_key(self, event, method_name: str):
+        """Handle arrows when focus is outside ImageViewer (toolbar, etc.).
+
+        ImageViewer already binds the same keys and returns ``break`` so this
+        path must not run again when the event originated under the viewer —
+        otherwise one keypress advances two frames.
+        """
         if self._focus_is_text_input():
             return
         viewer = getattr(self, "image_viewer", None)
         if viewer is None:
             return
+        widget = getattr(event, "widget", None)
+        if widget is not None:
+            try:
+                viewer_path = str(viewer)
+                widget_path = str(widget)
+            except tk.TclError:
+                viewer_path = widget_path = ""
+            if widget_path == viewer_path or widget_path.startswith(viewer_path + "."):
+                return "break"
         handler = getattr(viewer, method_name, None)
         if handler is None:
             return

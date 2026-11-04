@@ -112,7 +112,7 @@ The DICOM **Clean Graphics** option targets **non-text** burned-in graphics in p
 - **Clean\* pixel, report, descriptor, and face options** require installed on-device AI features; selecting them without models is blocked or offered as a download in the UI.
 - **Custom CTP scripts** may be imported; unknown operands are rejected; all date rules must match the Study Date operand; recorded option codes are those you confirm after import inference.
 - **Re-accepting de-identification options** on an existing project recompiles from the packaged default plus overlays and **discards** prior custom script edits; already-imported instances are not re-anonymized.
-- **MIDI-B** scores are evidence for header review, not a substitute for institutional determination ([protocol](deidentification-protocol.md#hipaa-safe-harbor-and-midi-b)).
+- **MIDI-B** scores are evidence for header review, not a substitute for institutional determination ([protocol](deidentification-protocol.md#hipaa-safe-harbor-and-midi-b); [published scores](midi-b-scores.md)).
 
 !!! note "For compliance review"
     Have your privacy officer review this statement together with the project’s [de-identification options](05-create-project/index.md#2-de-identification-options), compiled script, and any [custom script edits](05-create-project/anonymizer-script.md#4-custom-script-edits). This manual is operational and standards documentation, not legal advice.

@@ -8,17 +8,42 @@ from anonymizer.controller.ai.embedded_phi.pixel.exclude_zones import (
     normalize_user_rects,
     user_rects_from_normalized,
 )
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import PhiMatchMode, make_annotate_whitelist
+from anonymizer.controller.ai.embedded_phi.pixel.remove_scope import OcrRemoveMode
 from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
     load_project_exclude_rects,
     save_project_exclude_rects,
 )
-from anonymizer.controller.jobs.runner import OcrRemoveMode
-from anonymizer.controller.series.series_overlay import OCRText, UserRectangle
+from anonymizer.controller.series.series_overlay import NerEvidence, OCRText, OcrEvidence, UserRectangle, WhitelistEvidence
 
 
-def _ocr(text: str, *, phi: str | None = None, box: tuple[int, int, int, int] = (0, 0, 10, 10)) -> OCRText:
+def _ocr(
+    text: str,
+    *,
+    ner_label: str | None = None,
+    ner_score: float = 0.95,
+    wl_term: str | None = None,
+    wl_score: float | None = None,
+    box: tuple[int, int, int, int] = (0, 0, 10, 10),
+) -> OCRText:
     x1, y1, x2, y2 = box
-    return OCRText(text=text, top_left=(x1, y1), bottom_right=(x2, y2), prob=0.9, phi_label=phi)
+    entities = (("NAME", text),) if ner_label else ()
+    return OCRText(
+        text=text,
+        top_left=(x1, y1),
+        bottom_right=(x2, y2),
+        ocr=OcrEvidence(prob=0.9),
+        whitelist=WhitelistEvidence(term=wl_term, score=wl_score),
+        ner=NerEvidence(
+            label=ner_label,
+            entities=entities,
+            score=ner_score if ner_label else 0.0,
+        ),
+    )
+
+
+def _with_whitelist(detections: list[OCRText], terms: list[str]) -> list[OCRText]:
+    return make_annotate_whitelist(terms)(detections)
 
 
 def test_normalize_and_scale_rects_round_trip() -> None:
@@ -65,59 +90,64 @@ def test_load_legacy_named_zones_file(tmp_path: Path) -> None:
 
 
 def test_filter_ocr_for_remove_mode_phi_only_and_all_text() -> None:
-    detections = [
-        _ocr("DAVIDSON", phi="NAME", box=(0, 0, 20, 20)),
-        _ocr("Portable", box=(30, 0, 50, 20)),
-        _ocr("VEL", box=(100, 100, 140, 120)),
-    ]
+    detections = _with_whitelist(
+        [
+            _ocr("DAVIDSON", ner_label="NAME", box=(0, 0, 20, 20)),
+            _ocr("Portable", box=(30, 0, 50, 20)),
+            _ocr("VEL", box=(100, 100, 140, 120)),
+        ],
+        ["PORTABLE"],
+    )
     panel = [UserRectangle(top_left=(90, 90), bottom_right=(200, 200))]
     phi_only = filter_ocr_for_remove_mode(
         detections,
         remove_mode=OcrRemoveMode.PHI_ONLY,
-        whitelist=["PORTABLE"],
+        match_mode=PhiMatchMode.STANDARD,
         exclude_rects=panel,
     )
     assert [t.text for t in phi_only] == ["DAVIDSON"]
     all_text = filter_ocr_for_remove_mode(
         detections,
         remove_mode=OcrRemoveMode.ALL_TEXT,
-        whitelist=["PORTABLE"],
+        match_mode=PhiMatchMode.STANDARD,
         exclude_rects=panel,
     )
     assert [t.text for t in all_text] == ["DAVIDSON", "Portable"]
     non_wl = filter_ocr_for_remove_mode(
         detections,
         remove_mode=OcrRemoveMode.NON_WHITELISTED,
-        whitelist=["PORTABLE"],
+        match_mode=PhiMatchMode.STANDARD,
         exclude_rects=panel,
     )
     assert [t.text for t in non_wl] == ["DAVIDSON"]
 
 
 def test_filter_phi_only_whitelist_vetoes_labeled_keeper() -> None:
-    """A whitelisted box stays even when NER labelled it (AXILLA-as-NAME case)."""
-    detections = [
-        _ocr("DAVIDSON", phi="NAME", box=(0, 0, 20, 20)),
-        _ocr("AXILLA", phi="NAME", box=(30, 0, 50, 20)),
-        _ocr("Portable", box=(60, 0, 80, 20)),
-    ]
-    whitelist = ["AXILLA"]
+    """Whitelist overrides NER NAME when ner.score < whitelist.score - 0.1."""
+    detections = _with_whitelist(
+        [
+            _ocr("DAVIDSON", ner_label="NAME", box=(0, 0, 20, 20)),
+            # Exact AXILLA (wl=1.0); NER 0.85 < 0.9 → chrome kept.
+            _ocr("AXILLA", ner_label="NAME", ner_score=0.85, box=(30, 0, 50, 20)),
+            _ocr("Portable", box=(60, 0, 80, 20)),
+        ],
+        ["AXILLA"],
+    )
     phi_only = filter_ocr_for_remove_mode(
         detections,
         remove_mode=OcrRemoveMode.PHI_ONLY,
-        whitelist=whitelist,
+        match_mode=PhiMatchMode.STANDARD,
     )
     assert [t.text for t in phi_only] == ["DAVIDSON"]
-    # All text is the only scope that ignores the whitelist.
     all_text = filter_ocr_for_remove_mode(
         detections,
         remove_mode=OcrRemoveMode.ALL_TEXT,
-        whitelist=whitelist,
+        match_mode=PhiMatchMode.STANDARD,
     )
     assert [t.text for t in all_text] == ["DAVIDSON", "AXILLA", "Portable"]
     non_wl = filter_ocr_for_remove_mode(
         detections,
         remove_mode=OcrRemoveMode.NON_WHITELISTED,
-        whitelist=whitelist,
+        match_mode=PhiMatchMode.STANDARD,
     )
     assert [t.text for t in non_wl] == ["DAVIDSON", "Portable"]

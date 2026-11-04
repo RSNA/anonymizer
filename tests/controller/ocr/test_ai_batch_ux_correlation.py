@@ -9,7 +9,7 @@ from anonymizer.controller.ai.batch_process import (
     format_remove_pixel_phi_instance_detail,
     format_remove_pixel_phi_series_message,
 )
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import PixelPhiRemovalMode
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import PixelPhiRemovalMode
 from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import remove_pixel_phi
 from anonymizer.controller.jobs.runner import RemovePixelPhiRunner
 from tests.controller.ocr.conftest import assert_dcm

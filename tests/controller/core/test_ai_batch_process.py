@@ -48,12 +48,9 @@ from anonymizer.controller.ai.blur_face import (
     FaceBlurMode,
     face_blur_gate_message,
 )
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    OcrWhitelistMatchMode,
-    OcrWhitelistMatchSettings,
-    PixelPhiRemovalMode,
-)
-from anonymizer.controller.jobs.runner import OcrRemoveMode
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import PhiMatchMode
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import PixelPhiRemovalMode
+from anonymizer.controller.ai.embedded_phi.pixel.remove_scope import OcrRemoveMode
 from tests.controller.blur_face.test_face_blur_gate import _geometry, _write_chest_region_cache
 
 
@@ -70,6 +67,10 @@ def _pending_anon_model() -> MagicMock:
     model.series_embedded_phi_scanned.return_value = False
     model.series_is_harmonized.return_value = False
     model.series_has_face_blur.return_value = False
+    # Real UIDs — MagicMock strings become empty MultiValue on VR UI.
+    model.get_or_create_anon_uid.side_effect = (
+        lambda key: f"1.2.840.10008.10.20.0.{abs(hash(str(key))) % 10_000_000}"
+    )
     return model
 
 
@@ -336,8 +337,8 @@ def test_format_remove_pixel_phi_series_message_uses_counts_not_phi_text() -> No
     )
     assert message.startswith("PHI removed")
     assert "2/5 instance(s)" in message
-    assert "Remove PHI" in message
-    assert "Black out text" in message
+    assert "PHI only" in message
+    assert "blackout" in message
     assert "2 PHI removed" in message
     assert "text region" not in message
     assert "pixels" not in message
@@ -355,8 +356,8 @@ def test_format_remove_pixel_phi_instance_detail_inpainted() -> None:
         ocr_remove_mode=OcrRemoveMode.NON_WHITELISTED,
     )
     assert "Instance 12/188" in detail
-    assert "Remove Text" in detail
-    assert "Blend into background" in detail
+    assert "Non-whitelisted text" in detail
+    assert "inpaint" in detail
     assert "2 PHI removed" in detail
     assert "text region" not in detail
     assert "pixels" not in detail
@@ -1006,9 +1007,9 @@ def test_ai_batch_process_forwards_project_storage_dir_for_pixel_phi(
 
 
 @patch("anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi.load_modality_whitelist", return_value=["CUSTOMTERM"])
-@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext")
+@patch("anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi.detect_text")
 def test_apply_remove_pixel_phi_series_uses_saved_modality_whitelist(
-    mock_readtext: MagicMock,
+    mock_detect: MagicMock,
     mock_load_whitelist: MagicMock,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1027,9 +1028,11 @@ def test_apply_remove_pixel_phi_series_uses_saved_modality_whitelist(
         dcm_path,
     )
 
-    mock_readtext.return_value = [
-        ([(0, 0), (40, 0), (40, 20), (0, 20)], "CUSTOMTERM", 0.95),
-        ([(0, 0), (60, 0), (60, 20), (0, 20)], "SMITH", 0.92),
+    from anonymizer.controller.series.series_overlay import OCRText, OcrEvidence
+
+    mock_detect.return_value = [
+        OCRText(text="CUSTOMTERM", top_left=(0, 0), bottom_right=(40, 20), ocr=OcrEvidence(prob=0.95)),
+        OCRText(text="SMITH", top_left=(0, 0), bottom_right=(60, 20), ocr=OcrEvidence(prob=0.92)),
     ]
 
     outcome = _apply_remove_pixel_phi_series(
@@ -1040,9 +1043,10 @@ def test_apply_remove_pixel_phi_series_uses_saved_modality_whitelist(
     )
 
     mock_load_whitelist.assert_called_once_with(storage_dir, "CR")
+    mock_detect.assert_called()
     assert outcome.status == "ok"
     assert outcome.algorithm is AiBatchAlgorithm.REMOVE_PIXEL_PHI
-    assert "1 PHI removed" in outcome.message
+    assert "PHI removed" in outcome.message
     assert "SMITH" not in outcome.message
     assert "CUSTOMTERM" not in outcome.message
 
@@ -1079,8 +1083,8 @@ def test_format_modality_whitelist_preview_groups_by_modality() -> None:
         {"CR": ["PORTABLE", "L"], "US": []},
         no_modalities_message="none",
         no_terms_label="(empty)",
-        match_settings_by_modality={
-            "CR": OcrWhitelistMatchSettings(match_mode=OcrWhitelistMatchMode.STANDARD),
+        match_mode_by_modality={
+            "CR": PhiMatchMode.STANDARD,
         },
     )
 
@@ -1197,7 +1201,8 @@ def test_apply_remove_pixel_phi_series_phi_only_and_named_zones(
     )
 
     assert mock_remove.call_args.kwargs["whitelist"] is None
-    assert mock_remove.call_args.kwargs["apply_phi_ner_filter"] is True
+    assert mock_remove.call_args.kwargs["remove_mode"] is OcrRemoveMode.PHI_ONLY
+    assert mock_remove.call_args.kwargs["match_mode"] is PhiMatchMode.STANDARD
     assert mock_remove.call_args.kwargs["use_exclude_areas"] is True
     assert details
     assert details[0] == "US: 1 exclude area"

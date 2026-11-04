@@ -28,6 +28,9 @@ def entity_scored_family(label: str) -> str:
     key = str(label).upper()
     if key == "NAME":
         return "FIRST_NAME"
+    # Pixel PHI TIME shares the DATE color family (not in SCORED_LABELS).
+    if key == "TIME":
+        return "DATE"
     return METADATA_LABEL_SCORED_FAMILY.get(key, key)
 
 

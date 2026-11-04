@@ -710,11 +710,17 @@ def descriptor_phi_pattern_entities(text: str) -> list[Entity]:
             raw_label="at_site_name",
         )
     # Long digit IDs only in prose (letters present). Pure numeric / decimal
-    # measurement cells must stay for text_retained.
+    # measurement cells must stay for text_retained. Valid compact DA
+    # (YYYYMMDD) is claimed by date_time_pattern_entities, not as ID.
     if has_letters and not whole_pure:
         for match in _LONG_DIGIT_ID_RE.finditer(body):
             if match.start() <= lead and match.end() >= trail:
                 continue
+            token = match.group(0)
+            if len(token) == 8 and token[:2] in {"19", "20"}:
+                month, day = int(token[4:6]), int(token[6:8])
+                if 1 <= month <= 12 and 1 <= day <= 31:
+                    continue
             _claim(match.start(), match.end(), label="ID", raw_label="long_digit_id")
 
     out.sort(key=lambda e: (e.start, e.end))

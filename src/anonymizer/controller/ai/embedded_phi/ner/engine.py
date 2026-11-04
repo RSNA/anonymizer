@@ -1,7 +1,8 @@
 """Model-only PHI NER: unicode text in → labeled spans; blank or synthetic replace.
 Uses OpenMed ClinicalE5 token-classification only (no lexicon / phone regex).
 Product labels: FIRST_NAME, LAST_NAME, LOCATION, ID,
-PHONE, DATE, EMAIL. Model spans are returned exactly as classified
+PHONE, DATE, EMAIL. Pixel PHI may also keep TIME via include_time.
+Model spans are returned exactly as classified
 
 Public API
 ----------
@@ -23,8 +24,8 @@ SEGMENT_SEP
 Entity
     One PHI span: product label plus character offsets into the source string.
 
-detect_entities(text: str, *, locale: str='en_US') -> list[Entity]
-    Run OpenMed token-classification on text.
+detect_entities(text: str, *, locale: str='en_US', include_time: bool=False) -> list[Entity]
+    Run OpenMed token-classification on text. Pixel PHI sets include_time to keep TIME.
 
 detect_entities_in_segments(segments: Sequence[str], *, locale: str='en_US', max_chars: int=_DEFAULT_SEGMENT_MAX_CHARS, scan_fn: Callable[[str], list[Entity]] | None=None) -> list[list[Entity]]
     Run a text PHI scanner on **chunks of whole fields**.
@@ -45,9 +46,8 @@ detect_locale_supported(locale: str) -> bool
 
 import logging
 import re
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
-from pprint import pformat
 from typing import Any, Literal
 
 from anonymizer.controller.ai.embedded_phi.ner.cache import (
@@ -215,7 +215,12 @@ class Entity:
         return asdict(self)
 
 
-def detect_entities(text: str, *, locale: str = "en_US") -> list[Entity]:
+def detect_entities(
+    text: str,
+    *,
+    locale: str = "en_US",
+    include_time: bool = False,
+) -> list[Entity]:
     """
     Run OpenMed token-classification on text.
 
@@ -230,12 +235,18 @@ def detect_entities(text: str, *, locale: str = "en_US") -> list[Entity]:
     Args:
         text: Source unicode to scan.
         locale: NER locale pack (default en_US).
+        include_time: When True (pixel PHI), keep model TIME as product
+            label TIME. Metadata / report paths leave this False.
 
     Returns:
         List of Entity spans (may be empty if models missing or text blank).
     """
     body = str(text or "")
-    logger.info(f"ner: step 1/4 input locale={locale} chars={len(body)}\n{_trace(body)}")
+    allowed_labels = _allowed_scored_labels(include_time=include_time)
+    logger.info(
+        f"ner: step 1/4 input locale={locale} include_time={include_time} "
+        f"chars={len(body)}\n{_trace(body)}"
+    )
 
     if not body.strip():
         logger.info("ner: skip — empty / whitespace-only text (steps 2-4 not run)")
@@ -253,25 +264,22 @@ def detect_entities(text: str, *, locale: str = "en_US") -> list[Entity]:
     raw_ents = _run_pipeline(body, locale=locale)
     logger.info(
         f"ner: step 2/4 model raw spans count={len(raw_ents)}\n"
-        f"{pformat(_raw_ents_for_log(raw_ents, body), sort_dicts=False)}"
+        f"{format_ner_raw_spans_for_log(raw_ents, body)}"
     )
 
     mapped: list[Entity] = []
-    dropped_rows: list[dict[str, Any]] = []
+    dropped_rows: list[tuple[str, float, str]] = []
     for ent in raw_ents:
         raw = str(ent.get("entity_group") or ent.get("entity") or "")
-        scored = _to_scored_label(raw)
-        if scored is None or scored not in SCORED_LABELS:
+        scored = _to_scored_label(raw, include_time=include_time)
+        if scored is None or scored not in allowed_labels:
             start, end = int(ent["start"]), int(ent["end"])
             dropped_rows.append(
-                {
-                    "text": body[start:end],
-                    "start": start,
-                    "end": end,
-                    "score": _score_for_log(float(ent.get("score", 0.5))),
-                    "raw_label": raw,
-                    "reason": f"no product label for raw label {raw!r}",
-                }
+                (
+                    body[start:end],
+                    float(ent.get("score", 0.5)),
+                    f"no product label for raw label {raw!r}",
+                )
             )
             continue
         mapped.append(
@@ -285,9 +293,9 @@ def detect_entities(text: str, *, locale: str = "en_US") -> list[Entity]:
         )
     logger.info(
         f"ner: step 3/4 label map kept={len(mapped)} dropped={len(dropped_rows)} "
-        f"(product labels={', '.join(SCORED_LABELS)})\n"
-        f"kept={pformat(_entities_for_log(mapped, body), sort_dicts=False)}\n"
-        f"dropped={pformat(dropped_rows, sort_dicts=False)}"
+        f"(product labels={', '.join(allowed_labels)})\n"
+        f"kept=\n{format_ner_entities_for_log(mapped, body)}\n"
+        f"dropped=\n{format_ner_drops_for_log(dropped_rows)}"
     )
 
     tagged = _format_entities_xml(body, mapped)
@@ -456,7 +464,7 @@ def replace_entities(
         mode,
         meta_n,
         len(used) - meta_n,
-        pformat(_entities_for_log(used, body), sort_dicts=False),
+        format_ner_entities_for_log(used, body),
     )
     ordinals: dict[str, int] = {}
     # Non-blank writes keep explicit (start, end, repl); blank ranges merge first.
@@ -652,56 +660,75 @@ def _score_for_log(score: float) -> float:
     return float(f"{float(score):.2g}")
 
 
-def _raw_ents_for_log(raw_ents: Sequence[dict[str, Any]], source: str = "") -> list[dict[str, Any]]:
+def _ner_span_word(ent: Mapping[str, Any], source: str = "") -> str:
+    """Best available surface form for a raw model span (source slice, else word)."""
+    start, end = ent.get("start"), ent.get("end")
+    if source and isinstance(start, int) and isinstance(end, int) and 0 <= start <= end <= len(source):
+        return source[start:end]
+    return str(ent.get("word") or "")
+
+
+def format_ner_raw_spans_for_log(
+    raw_ents: Sequence[dict[str, Any]],
+    source: str = "",
+) -> str:
     """
-    Copy pipeline dicts for logging, adding the covered source text.
+    Format model raw spans for logs (word + score only).
 
     Args:
-        raw_ents: Raw Hugging Face token-classification entity dicts.
-        source: Source unicode the span offsets index into (text is only
-            added when both offsets are valid into it).
+        raw_ents: Hugging Face token-classification entity dicts.
+        source: Source unicode for span text when offsets are valid.
 
     Returns:
-        Shallow copies suitable for pformat (originals unchanged), with
-        scores rounded to two significant digits.
+        Multi-line log body, or "none".
     """
-    out: list[dict[str, Any]] = []
+    if not raw_ents:
+        return "none"
+    lines: list[str] = []
     for ent in raw_ents:
-        row = dict(ent)
-        if "score" in row:
-            row["score"] = _score_for_log(row["score"])
-        start, end = ent.get("start"), ent.get("end")
-        if source and isinstance(start, int) and isinstance(end, int) and 0 <= start <= end <= len(source):
-            row["text"] = source[start:end]
-        out.append(row)
-    return out
+        word = _ner_span_word(ent, source)
+        score = _score_for_log(float(ent.get("score", 0.0)))
+        lines.append(f"  {word!r}  score={score}")
+    return "\n".join(lines)
 
 
-def _entities_for_log(entities: Sequence[Entity], source: str) -> list[dict[str, Any]]:
+def format_ner_entities_for_log(entities: Sequence[Entity], source: str) -> str:
     """
-    Serialize product entities for pformat logging (span text + rounded score).
+    Format product Entity spans for logs (word + score only).
 
     Args:
         entities: Product Entity spans.
         source: Source unicode for text slices.
 
     Returns:
-        List of plain dicts for readable logs.
+        Multi-line log body, or "none".
     """
-    rows: list[dict[str, Any]] = []
+    if not entities:
+        return "none"
+    lines: list[str] = []
     for ent in entities:
-        row: dict[str, Any] = {
-            "label": ent.label,
-            "text": source[ent.start : ent.end],
-            "start": ent.start,
-            "end": ent.end,
-            "score": _score_for_log(ent.score),
-            "raw_label": ent.raw_label,
-        }
-        if ent.replacement is not None:
-            row["replacement"] = ent.replacement
-        rows.append(row)
-    return rows
+        word = source[ent.start : ent.end]
+        score = _score_for_log(ent.score)
+        lines.append(f"  {word!r}  score={score}")
+    return "\n".join(lines)
+
+
+def format_ner_drops_for_log(dropped: Sequence[tuple[str, float, str]]) -> str:
+    """
+    Format NER label-map drops for logs (word + score + reason).
+
+    Args:
+        dropped: (word, score, reason) rows from the product-label filter.
+
+    Returns:
+        Multi-line log body, or "none".
+    """
+    if not dropped:
+        return "none"
+    lines: list[str] = []
+    for word, score, reason in dropped:
+        lines.append(f"  {word!r}  score={_score_for_log(score)}  reason={reason}")
+    return "\n".join(lines)
 
 
 def _format_entities_xml(text: str, entities: Sequence[Entity]) -> str:
@@ -740,21 +767,37 @@ def _format_entities_xml(text: str, entities: Sequence[Entity]) -> str:
     return "".join(parts)
 
 
-def _to_scored_label(raw: str) -> str | None:
+def _allowed_scored_labels(*, include_time: bool) -> tuple[str, ...]:
+    """
+    Product labels accepted for this detect call.
+
+    Args:
+        include_time: When True, allow pixel-PHI TIME alongside SCORED_LABELS.
+
+    Returns:
+        Ordered label tuple used by the product-label filter.
+    """
+    if include_time:
+        return (*SCORED_LABELS, "TIME")
+    return SCORED_LABELS
+
+
+def _to_scored_label(raw: str, *, include_time: bool = False) -> str | None:
     """
     Map a raw HF / OpenMed entity group string onto a product label.
 
     Args:
         raw: Model entity_group or entity string (may include B-/I- prefix).
+        include_time: When True, map TIME → TIME (pixel PHI). Otherwise drop TIME.
 
     Returns:
-        Product label in SCORED_LABELS, or None if unmapped / dropped (e.g. TIME).
+        Product label, or None if unmapped / dropped.
     """
     key = raw.strip().upper().replace(" ", "_").replace("-", "_")
     if len(key) > 2 and key[1] in {"_", "-"} and key[0] in {"B", "I", "E", "S"}:
         key = key[2:]
     if key == "TIME":
-        return None
+        return "TIME" if include_time else None
     return _TO_SCORED.get(key)
 
 

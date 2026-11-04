@@ -1,0 +1,96 @@
+# Lista blanca de términos habituales en imágenes de mamografía (MG)
+# Un término/frase por línea. La coincidencia no distingue mayúsculas/minúsculas al cargar.
+# Las líneas que comienzan con # son comentarios y se ignorarán.
+
+# --- Lateralidad ---
+L
+R
+IZQUIERDA
+DERECHA
+LT
+RT
+BILATERAL
+BILAT
+
+# --- Proyecciones (DICOM / fabricante) ---
+CC # Craniocaudal
+MLO # Mediolateral oblique
+ML # Mediolateral
+LM # Lateromedial
+XCCL
+XCCM
+FB
+SIO
+ISO
+LMO
+AT
+CV
+TAN
+SPOT
+MAG
+ID
+
+# --- Lateralidad + proyección ---
+LCC
+RCC
+LMLO
+RMLO
+LMCC
+RMCC
+LML
+RML
+LLM
+RLM
+LXCCL
+RXCCL
+LXCCM
+RXCCM
+
+# --- Letras de marcador ---
+M
+S
+
+# --- Anatomía / estudio ---
+BREAST
+MAMA
+MAMMO
+MAMOGRAFIA
+MG
+DBT
+TOMO
+TOMOSYNTHESIS
+FFDM
+FFD
+
+# --- Técnica / superposición ---
+COMP
+COMPRESSION
+GRID
+NO GRID
+AEC
+KV
+KVP
+MA
+MAS
+EXPOSURE
+TECH
+TECHNOLOGIST
+SERIES
+IMAGE
+IMG
+VIEW
+EXAM DATE
+EXAM TIME
+POS
+POSITION
+NONE
+N/A
+SEE REPORT
+CLINICAL HISTORY
+COMPARISON
+PREVIOUS
+PRIOR
+ARTIFACT
+IMPLANT
+MARKER
+CLIP

@@ -22,8 +22,8 @@ from anonymizer.controller.ai.batch_config import (
 )
 from anonymizer.controller.ai.batch_process import AiBatchAlgorithm, AiBatchProcessOptions, AiBatchSummary
 from anonymizer.controller.ai.blur_face import FaceBlurMode
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import PixelPhiRemovalMode
-from anonymizer.controller.jobs.runner import OcrRemoveMode
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import PixelPhiRemovalMode
+from anonymizer.controller.ai.embedded_phi.pixel.remove_scope import OcrRemoveMode
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 

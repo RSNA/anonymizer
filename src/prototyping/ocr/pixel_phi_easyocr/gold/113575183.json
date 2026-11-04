@@ -1,0 +1,17 @@
+{
+  "patient_id": "113575183",
+  "modality": "CR",
+  "source": "MIDI-B pixel_phi test manifest",
+  "must_detect": ["FTA"],
+  "want_detect": ["R"],
+  "must_drop_after_noise": ["8"],
+  "boxes": [
+    {
+      "text": "FTA",
+      "top_left": [225, 213],
+      "bottom_right": [318, 317],
+      "required": true
+    }
+  ],
+  "notes": "Answer key lists FTA as pixels_hidden. R is a clear laterality marker on the same film; treat as want_detect. Small digit 8 must stay noise-filtered."
+}

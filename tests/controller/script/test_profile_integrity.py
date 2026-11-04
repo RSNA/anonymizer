@@ -6,6 +6,7 @@ import pytest
 
 from anonymizer.controller.dates import is_date_delta_operation
 from anonymizer.controller.script.compile import (
+    DESCRIPTOR_KEEP_TAGS,
     DEVICE_IDENTITY_TAGS,
     INSTITUTION_IDENTITY_TAGS,
     PATIENT_CHARACTERISTICS_TAGS,
@@ -91,10 +92,22 @@ def test_basic_strips_device_identity_tags(tag: str) -> None:
     assert basic_strip_ok(op), f"{tag} under Basic should strip, got {op!r}"
 
 
-@pytest.mark.parametrize("tag", _institution_in_script())
+@pytest.mark.parametrize(
+    "tag",
+    [t for t in _institution_in_script() if t not in DESCRIPTOR_KEEP_TAGS],
+)
 def test_basic_strips_institution_identity_tags(tag: str) -> None:
     op = _ops(BASIC_OPTIONS)[tag]
     assert basic_strip_ok(op), f"{tag} under Basic should strip, got {op!r}"
+
+
+@pytest.mark.parametrize(
+    "tag",
+    [t for t in _institution_in_script() if t in DESCRIPTOR_KEEP_TAGS],
+)
+def test_basic_keeps_descriptor_institution_tags_for_clean_descriptors(tag: str) -> None:
+    """Institution free-text kept under Basic so Clean Descriptors can scrub."""
+    assert _ops(BASIC_OPTIONS)[tag] == "@keep"
 
 
 @pytest.mark.parametrize("tag", [t for t in _patient_in_script() if t != patient_age_tag()])

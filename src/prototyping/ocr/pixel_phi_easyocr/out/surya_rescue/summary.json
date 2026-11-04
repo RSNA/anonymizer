@@ -1,0 +1,412 @@
+{
+  "library": "surya-ocr",
+  "goal": "Rescue EasyOCR MIDI-B pixel_phi failures with one full-image Surya pass",
+  "n_requested": 0,
+  "n_selected": 14,
+  "n_easyocr_failures_in_eval_latest": 14,
+  "n_easyocr_failures_in_selection": 13,
+  "n_surya_pass": 9,
+  "n_rescued_easyocr_failures": 8,
+  "n_easyocr_failures_still_miss": 5,
+  "selection_counts": {
+    "easyocr_failure": 14,
+    "short_marker": 0,
+    "fill": 0
+  },
+  "device": {
+    "backend": "llamacpp",
+    "llama_cpp_ngl": 99,
+    "torch_device": "mps",
+    "fast_detector_device": "mps",
+    "mps_available": true,
+    "gguf": "/Users/michaelevans/Downloads/surya-2.5.gguf",
+    "mmproj": "/Users/michaelevans/Downloads/surya-2.5-mmproj.gguf"
+  },
+  "init_seconds": 1.291,
+  "cases": [
+    {
+      "case_id": "validation/333877207",
+      "modality": "DX",
+      "selection_reason": "easyocr_failure",
+      "gold": [
+        "JT"
+      ],
+      "easyocr_passed": false,
+      "easyocr_miss": [
+        "JT"
+      ],
+      "easyocr_raw": [
+        "PORTABLE",
+        "UPRIGHT",
+        "5"
+      ],
+      "surya_passed": true,
+      "surya_miss": [],
+      "surya_raw": [
+        "PORTABLE UPRIGHT JT"
+      ],
+      "surya_rescued": true,
+      "infer_seconds": 11.955,
+      "error": null
+    },
+    {
+      "case_id": "validation/5155749005",
+      "modality": "DX",
+      "selection_reason": "easyocr_failure",
+      "gold": [
+        "JT"
+      ],
+      "easyocr_passed": false,
+      "easyocr_miss": [
+        "JT"
+      ],
+      "easyocr_raw": [
+        "UPRIGHT",
+        "PORTABLE",
+        "14"
+      ],
+      "surya_passed": false,
+      "surya_miss": [
+        "JT"
+      ],
+      "surya_raw": [],
+      "surya_rescued": false,
+      "infer_seconds": 9.416,
+      "error": null
+    },
+    {
+      "case_id": "validation/5220588395",
+      "modality": "DX",
+      "selection_reason": "easyocr_failure",
+      "gold": [
+        "MWF"
+      ],
+      "easyocr_passed": false,
+      "easyocr_miss": [
+        "MWF"
+      ],
+      "easyocr_raw": [
+        "ERECT",
+        "3",
+        "2",
+        "POPTABLE"
+      ],
+      "surya_passed": false,
+      "surya_miss": [
+        "MWF"
+      ],
+      "surya_raw": [],
+      "surya_rescued": false,
+      "infer_seconds": 11.009,
+      "error": null
+    },
+    {
+      "case_id": "validation/8697164365",
+      "modality": "DX",
+      "selection_reason": "easyocr_failure",
+      "gold": [
+        "ICG"
+      ],
+      "easyocr_passed": false,
+      "easyocr_miss": [
+        "ICG"
+      ],
+      "easyocr_raw": [
+        "6",
+        "PORTABLE",
+        "INTRA",
+        "OP",
+        "SUPINE",
+        "PORTABLE",
+        "#6"
+      ],
+      "surya_passed": true,
+      "surya_miss": [],
+      "surya_raw": [
+        "L ICG",
+        "PORTABLE",
+        "INTRA OP",
+        "SUPINE",
+        "PORTABLE #6"
+      ],
+      "surya_rescued": true,
+      "infer_seconds": 12.104,
+      "error": null
+    },
+    {
+      "case_id": "validation/2051580196",
+      "modality": "CR",
+      "selection_reason": "easyocr_failure",
+      "gold": [
+        "NKF"
+      ],
+      "easyocr_passed": false,
+      "easyocr_miss": [
+        "NKF"
+      ],
+      "easyocr_raw": [
+        "7",
+        "2"
+      ],
+      "surya_passed": false,
+      "surya_miss": [
+        "NKF"
+      ],
+      "surya_raw": [
+        "LKE"
+      ],
+      "surya_rescued": false,
+      "infer_seconds": 9.374,
+      "error": null
+    },
+    {
+      "case_id": "validation/2548095243",
+      "modality": "CR",
+      "selection_reason": "easyocr_failure",
+      "gold": [
+        "ACO"
+      ],
+      "easyocr_passed": false,
+      "easyocr_miss": [
+        "ACO"
+      ],
+      "easyocr_raw": [
+        "SEMI-ERECT",
+        "PORTABLE",
+        "G"
+      ],
+      "surya_passed": true,
+      "surya_miss": [],
+      "surya_raw": [
+        "SEMI-ERECT PORTABLE",
+        "L ACO"
+      ],
+      "surya_rescued": true,
+      "infer_seconds": 11.269,
+      "error": null
+    },
+    {
+      "case_id": "validation/3056777156",
+      "modality": "CR",
+      "selection_reason": "easyocr_failure",
+      "gold": [
+        "CMS"
+      ],
+      "easyocr_passed": false,
+      "easyocr_miss": [
+        "CMS"
+      ],
+      "easyocr_raw": [
+        "8"
+      ],
+      "surya_passed": true,
+      "surya_miss": [],
+      "surya_raw": [
+        "LM CMS"
+      ],
+      "surya_rescued": true,
+      "infer_seconds": 10.098,
+      "error": null
+    },
+    {
+      "case_id": "validation/3615823051",
+      "modality": "DX",
+      "selection_reason": "easyocr_failure",
+      "gold": [
+        "TJN"
+      ],
+      "easyocr_passed": true,
+      "easyocr_miss": [],
+      "easyocr_raw": [
+        "PORTABLE",
+        "SEMI-ERECT",
+        "2/2",
+        "TJN",
+        "PORTABLE",
+        "#6"
+      ],
+      "surya_passed": true,
+      "surya_miss": [],
+      "surya_raw": [
+        "PORTABLE SEMI-ERECT",
+        "2/2",
+        "R TJN",
+        "PORTABLE #6"
+      ],
+      "surya_rescued": false,
+      "infer_seconds": 11.793,
+      "error": null
+    },
+    {
+      "case_id": "validation/5454430957",
+      "modality": "CR",
+      "selection_reason": "easyocr_failure",
+      "gold": [
+        "MHS"
+      ],
+      "easyocr_passed": false,
+      "easyocr_miss": [
+        "MHS"
+      ],
+      "easyocr_raw": [
+        "R",
+        "4",
+        "2"
+      ],
+      "surya_passed": true,
+      "surya_miss": [],
+      "surya_raw": [
+        "R MHS"
+      ],
+      "surya_rescued": true,
+      "infer_seconds": 10.642,
+      "error": null
+    },
+    {
+      "case_id": "validation/6208874732",
+      "modality": "DX",
+      "selection_reason": "easyocr_failure",
+      "gold": [
+        "ROC"
+      ],
+      "easyocr_passed": false,
+      "easyocr_miss": [
+        "ROC"
+      ],
+      "easyocr_raw": [
+        "8"
+      ],
+      "surya_passed": true,
+      "surya_miss": [],
+      "surya_raw": [
+        "ROC LI"
+      ],
+      "surya_rescued": true,
+      "infer_seconds": 10.957,
+      "error": null
+    },
+    {
+      "case_id": "test/8225398083",
+      "modality": "DX",
+      "selection_reason": "easyocr_failure",
+      "gold": [
+        "RCN"
+      ],
+      "easyocr_passed": false,
+      "easyocr_miss": [
+        "RCN"
+      ],
+      "easyocr_raw": [
+        "UPRIGHT",
+        "PORTABLE",
+        "142",
+        "1"
+      ],
+      "surya_passed": false,
+      "surya_miss": [
+        "RCN"
+      ],
+      "surya_raw": [],
+      "surya_rescued": false,
+      "infer_seconds": 9.505,
+      "error": null
+    },
+    {
+      "case_id": "test/113575183",
+      "modality": "CR",
+      "selection_reason": "easyocr_failure",
+      "gold": [
+        "FTA"
+      ],
+      "easyocr_passed": false,
+      "easyocr_miss": [
+        "FTA"
+      ],
+      "easyocr_raw": [
+        "8",
+        "8",
+        "PORTABLE",
+        "SEMI-ERECT"
+      ],
+      "surya_passed": true,
+      "surya_miss": [],
+      "surya_raw": [
+        "R FTA",
+        "PORTABLE SEMI-ERECT"
+      ],
+      "surya_rescued": true,
+      "infer_seconds": 9.61,
+      "error": null
+    },
+    {
+      "case_id": "test/7655797887",
+      "modality": "DX",
+      "selection_reason": "easyocr_failure",
+      "gold": [
+        "LACI"
+      ],
+      "easyocr_passed": false,
+      "easyocr_miss": [
+        "LACI"
+      ],
+      "easyocr_raw": [
+        "\u0160"
+      ],
+      "surya_passed": false,
+      "surya_miss": [
+        "LACI"
+      ],
+      "surya_raw": [
+        "LACH"
+      ],
+      "surya_rescued": false,
+      "infer_seconds": 8.41,
+      "error": null
+    },
+    {
+      "case_id": "test/5694644350",
+      "modality": "DX",
+      "selection_reason": "easyocr_failure",
+      "gold": [
+        "TR"
+      ],
+      "easyocr_passed": false,
+      "easyocr_miss": [
+        "TR"
+      ],
+      "easyocr_raw": [
+        "1",
+        "3",
+        "PORTABLE"
+      ],
+      "surya_passed": true,
+      "surya_miss": [],
+      "surya_raw": [
+        "SEMI-ERECT",
+        "L TR",
+        "PORTABLE"
+      ],
+      "surya_rescued": true,
+      "infer_seconds": 11.659,
+      "error": null
+    }
+  ],
+  "rescued_case_ids": [
+    "validation/333877207",
+    "validation/8697164365",
+    "validation/2548095243",
+    "validation/3056777156",
+    "validation/5454430957",
+    "validation/6208874732",
+    "test/113575183",
+    "test/5694644350"
+  ],
+  "still_fail_case_ids": [
+    "validation/5155749005",
+    "validation/5220588395",
+    "validation/2051580196",
+    "test/8225398083",
+    "test/7655797887"
+  ],
+  "plain_english": "Only 14 unique EasyOCR product-baseline failures exist in the 62-case MIDI-B pixel_phi corpus; selected 14 cases (13 confirmed EasyOCR failures + short-marker fill). Surya rescued 8/13 of those EasyOCR failures; 5 still miss gold text."
+}

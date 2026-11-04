@@ -2,12 +2,14 @@
 
 Evidence for enquiry with TCIA / MIDI-B maintainers. Measured on:
 
-- Full Synthetic **Validation** scoring run `validation_20261101T120658Z_full`
+- Full Synthetic **Validation** scoring run `validation_20261101T154826Z_full`
   (`MIDI-B-Answer-Key-Validation.db`) against
   `…/Synthetic Validation/manifest-1740445452889/MIDI-B-Synthetic-Validation`
+  (published card: [validation_20261101_full.md](validation_20261101_full.md))
 - Full Synthetic **Test** scoring run `test_20261101T174432Z_full`
   (`MIDI-B-Answer-Key-Test.db`) against
   `…/Synthetic Test/manifest-1740627604844/MIDI-B-Synthetic-Test`
+  (published card: [test_20261101_full.md](test_20261101_full.md))
 
 These are **not** Clean Descriptors / Embedded PHI failures (except where noted). They are
 mismatches between (1) what is in the published synthetic source, (2) TCIA Private Tag
@@ -246,7 +248,7 @@ pixel MD5** (same method as early prototyping). Curated roots:
 - Test: `Curated Test/MIDI-B-Curated-Test`
 - Validation: `Curated Validation/MIDI-B-Curated-Validation`
 
-Machine-readable rows: `.midi_b_runs/source_answer_curated_compare.json`.
+Machine-readable rows were generated during investigation; the durable sample is the table in this section.
 
 Legend: **EMPTY** = tag present, no value; **ABSENT** = tag not in dataset;
 **NO_DIGEST_MATCH** = no pixel-digest pair (often non-pixel / SR-like); curated
@@ -336,8 +338,7 @@ reference, PTKB, de-id option baseline, or answer key.
   (`validate_text_retained`: empty `file_value` → fail;
   `validate_tag_retained`: tag missing from file index → fail)
 - PTKB mirror: `src/anonymizer/controller/private_tags/tcia_kb_data.py`
-- Scorecards:
-  - `.midi_b_runs/validation_20261101T120658Z_full/SCORECARD.md` (99.03%)
-  - `.midi_b_runs/test_20261101T174432Z_full/SCORECARD.md` (99.08%)
-- Source / answer / curated sample table: §4 and
-  `.midi_b_runs/source_answer_curated_compare.json`
+- Scorecards (published):
+  - [validation_20261101_full.md](validation_20261101_full.md) (99.03%)
+  - [test_20261101_full.md](test_20261101_full.md) (99.08%)
+- Source / answer / curated sample table: §4

@@ -6,22 +6,25 @@ from anonymizer.controller.script.compile import normalize_script_operation
 from anonymizer.controller.script.document import load_script_rules
 from anonymizer.model.project import ProjectModel
 from prototyping.script.align_default_script_e1_1 import (
+    is_packaged_script_e1_1_tag,
     load_basic_profile,
     target_operand,
 )
 
 
 def test_default_script_covers_every_e1_1_basic_tag() -> None:
-    """Every E.1-1 Basic attribute exists in the packaged default script."""
+    """Every packaged E.1-1 Basic attribute exists in the default script."""
     profile = load_basic_profile()
     document = load_script_rules(ProjectModel.default_anonymizer_script_path())
     ops = {rule.tag.upper(): rule.operation for rule in document.rules}
-    missing = sorted(tag for tag in profile if tag not in ops)
+    missing = sorted(
+        tag for tag in profile if is_packaged_script_e1_1_tag(tag) and tag not in ops
+    )
     assert missing == [], f"missing E.1-1 tags: {missing[:20]}"
 
 
 def test_default_script_operands_match_e1_1_mapping() -> None:
-    """Each E.1-1 tag uses the aligned operand (mapping A + remaps + deferrals)."""
+    """Each packaged E.1-1 tag uses the aligned operand (mapping A + remaps + deferrals)."""
     profile = load_basic_profile()
     document = load_script_rules(ProjectModel.default_anonymizer_script_path())
     ops = {
@@ -30,6 +33,8 @@ def test_default_script_operands_match_e1_1_mapping() -> None:
     }
     mismatches: list[str] = []
     for tag, info in profile.items():
+        if not is_packaged_script_e1_1_tag(tag):
+            continue
         current = ops[tag]
         expected = normalize_script_operation(
             target_operand(tag=tag, basic=info["basic"], current=current)

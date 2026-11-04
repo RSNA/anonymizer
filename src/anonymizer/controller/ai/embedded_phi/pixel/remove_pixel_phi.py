@@ -2,40 +2,54 @@
 
 Public API
 ----------
+PixelPhiRemovalMode
+    BLACKOUT | INPAINT.
+
 blackout_ocr_text_areas(pixels: ndarray, ocr_texts: list[OCRText]) -> None
     Zero-fill OCR bounding boxes on the source pixel array (in-place).
 
 remove_text(pixels: ndarray, windowed_frame: NDArray[np.uint8], ocr_texts: list[OCRText]) -> ndarray
-    Remove the PHI in the pixel data of the supplied pixels 2D frame using the suplied ocr_text rectangles
+    Remove PHI in the pixel data of one 2D frame using the supplied OCR rectangles.
 
 remove_ocr_text_from_frame(raw_pixels: ndarray, windowed_frame: NDArray[np.uint8], ocr_texts: list[OCRText], *, removal_mode: PixelPhiRemovalMode) -> ndarray
     Remove OCR text from one frame using blackout or inpaint (Series View).
 
-blackout_rectangular_areas(pixels: ndarray, user_rects: list[UserRectangle])
-    Blacks out rectangular areas defined in user_rects on the input image.
+blackout_rectangular_areas(pixels: ndarray, user_rects: list[UserRectangle]) -> None
+    Black out rectangular areas defined in user_rects.
 
-remove_pixel_phi(dcm_path: Path, ocr_reader: Reader, downscale_dimension_threshold: int=800, border_size: int=20, *, removal_mode: PixelPhiRemovalMode=PixelPhiRemovalMode.BLACKOUT, project_dir: Path | None=None, modality: str | None=None, whitelist: Sequence[str] | None=None, whitelist_match_settings: OcrWhitelistMatchSettings | None=None, apply_phi_ner_filter: bool=False, exclude_rects: Sequence[UserRectangle] | None=None, use_exclude_areas: bool=False) -> tuple[bool, list[str], int]
-    Description:
+remove_pixel_phi(dcm_path: Path, ocr_reader: Reader, downscale_dimension_threshold: int=800, border_size: int=20, *, removal_mode: PixelPhiRemovalMode=..., remove_mode: OcrRemoveMode=..., project_dir: Path | None=None, modality: str | None=None, whitelist: Sequence[str] | None=None, match_mode: PhiMatchMode=..., exclude_rects: Sequence[UserRectangle] | None=None, use_exclude_areas: bool=False) -> tuple[bool, list[str], int]
+    Detect→annotate via ocr_pipeline; select by Remove Scope; blackout/inpaint.
 
 apply_instance_embedded_phi(anon_model: AnonymizerModel, anon_sop_instance_uid: str, texts: Sequence[str]) -> bool
-    Apply instance embedded phi.
+    Persist instance embedded PHI text list.
 
 apply_instance_embedded_phi_for_dcm(anon_model: AnonymizerModel, dcm_path: Path, texts: Sequence[str]) -> bool
-    Apply instance embedded phi for dcm.
-
-collect_series_view_embedded_phi_texts(image_viewer) -> dict[int, list[str]]
-    Collect OCR text strings from a Series View image viewer overlay, keyed by frame index.
+    Persist embedded PHI for a DICOM path.
 
 apply_series_view_embedded_phi(anon_model: AnonymizerModel, slice_paths: Sequence[Path], texts_by_frame: Mapping[int, Sequence[str]], *, projection_frame_count: int=0, anon_series_uid: str | None=None) -> int
     Persist pixel PHI metadata for series slices that have overlay OCR text.
 """
 import logging
 from collections.abc import Mapping, Sequence
+from enum import StrEnum
 from pathlib import Path
 
 import numpy as np
 import torch
-from cv2 import INPAINT_TELEA, dilate, inpaint
+from cv2 import (
+    CHAIN_APPROX_SIMPLE,
+    COLOR_BGR2GRAY,
+    COLOR_RGB2GRAY,
+    INPAINT_TELEA,
+    RETR_TREE,
+    THRESH_OTSU,
+    cvtColor,
+    dilate,
+    drawContours,
+    findContours,
+    inpaint,
+    threshold,
+)
 from easyocr import Reader
 from numpy import ndarray
 from numpy.typing import NDArray
@@ -45,29 +59,104 @@ from pydicom.encaps import encapsulate
 from pydicom.pixels.processing import apply_color_lut, convert_color_space
 from pydicom.uid import JPEG2000Lossless
 
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    OcrWhitelistMatchSettings,
-    PixelPhiRemovalMode,
-    _dedupe_texts,
-    _draw_text_contours_on_mask,
-    _ocr_bgr_from_stored_monochrome,
-    detect_text,
-    load_modality_whitelist,
-    load_modality_whitelist_match_settings,
-    ocr_image_for_frame,
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import ocr_image_for_frame
+from anonymizer.controller.ai.embedded_phi.pixel.exclude_zones import (
+    filter_ocr_outside_exclude_rects,
+    modality_exclude_rects_for_series,
 )
-from anonymizer.controller.ai.embedded_phi.pixel.exclude_zones import modality_exclude_rects_for_series
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import (
+    PhiMatchMode,
+    annotate_ner,
+    detect_text,
+    filter_ocr_noise,
+    log_ocr_decisions,
+    make_annotate_whitelist,
+    pipe,
+)
+from anonymizer.controller.ai.embedded_phi.pixel.remove_scope import (
+    OcrRemoveMode,
+    texts_for_remove_mode,
+)
+from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_modality_whitelist
 from anonymizer.controller.series.create_projections import invalidate_projection_cache
 from anonymizer.controller.series.series_io import (
     series_buffer_monochrome_to_stored,
     stored_monochrome_to_series_buffer,
 )
-from anonymizer.controller.series.series_overlay import OCRText, UserRectangle
+from anonymizer.controller.series.series_overlay import OcrEvidence, OCRText, UserRectangle
 from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.utils.dicom import SUPPORTED_PHOTOMETRIC_INTERPRETATIONS, DeidMethodCode, record_deid_method_codes
 
 logging.getLogger("openjpeg").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
+
+
+class PixelPhiRemovalMode(StrEnum):
+    """How burnt-in text pixels are cleared."""
+
+    INPAINT = "inpaint"
+    BLACKOUT = "blackout"
+
+
+def normalize_pixel_phi_removal_mode(
+    value: object | None,
+    *,
+    default: PixelPhiRemovalMode = PixelPhiRemovalMode.BLACKOUT,
+) -> PixelPhiRemovalMode:
+    """
+    Resolve internal code (or enum) to PixelPhiRemovalMode.
+
+    Translated combobox labels are handled in view.ocr_ui.
+    """
+    if isinstance(value, PixelPhiRemovalMode):
+        return value
+    text = str(value or "").strip().lower().replace(" ", "")
+    if not text:
+        return default
+    if text in (PixelPhiRemovalMode.BLACKOUT, "blackout"):
+        return PixelPhiRemovalMode.BLACKOUT
+    if text in (PixelPhiRemovalMode.INPAINT, "inpaint"):
+        return PixelPhiRemovalMode.INPAINT
+    return default
+
+
+def _dedupe_texts(texts: Sequence[str]) -> list[str]:
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for item in texts:
+        stripped = item.strip()
+        if stripped and stripped not in seen:
+            seen.add(stripped)
+            deduped.append(stripped)
+    return deduped
+
+
+def _ocr_bgr_from_stored_monochrome(stored: np.ndarray, ds: Dataset) -> NDArray[np.uint8]:
+    viewer_pixels, _ = stored_monochrome_to_series_buffer(stored, ds)
+    return ocr_image_for_frame(ds, viewer_pixels)
+
+
+def _draw_text_contours_on_mask(
+    image: ndarray,
+    top_left: tuple,
+    bottom_right: tuple,
+    mask: NDArray[np.uint8],
+    *,
+    is_bgr: bool = False,
+) -> None:
+    x1, y1 = top_left
+    x2, y2 = bottom_right
+    if x2 - x1 < 10 or y2 - y1 < 10:
+        return
+    sub_image = image[y1:y2, x1:x2]
+    if sub_image.shape[-1] == 3:
+        gray_code = COLOR_BGR2GRAY if is_bgr else COLOR_RGB2GRAY
+        sub_image = cvtColor(sub_image, gray_code)
+    _, thresh = threshold(sub_image, 0, 255, THRESH_OTSU)
+    contours, _ = findContours(thresh, RETR_TREE, CHAIN_APPROX_SIMPLE)
+    for cnt in contours:
+        cnt += np.array([x1, y1])
+    drawContours(mask, contours, -1, (255, 255, 255), thickness=-1)
 
 def blackout_ocr_text_areas(pixels: ndarray, ocr_texts: list[OCRText]) -> None:
     """Zero-fill OCR bounding boxes on the source pixel array (in-place)."""
@@ -106,7 +195,9 @@ def _map_ocr_texts_to_source_coordinates(
                 text=ocr_text.text,
                 top_left=(x1_source, y1_source),
                 bottom_right=(x2_source, y2_source),
-                prob=ocr_text.prob,
+                ocr=OcrEvidence(prob=ocr_text.ocr.prob),
+                whitelist=ocr_text.whitelist,
+                ner=ocr_text.ner,
             )
         )
     return mapped
@@ -283,11 +374,11 @@ def remove_pixel_phi(
     border_size: int = 20,
     *,
     removal_mode: PixelPhiRemovalMode = PixelPhiRemovalMode.BLACKOUT,
+    remove_mode: OcrRemoveMode = OcrRemoveMode.NON_WHITELISTED,
     project_dir: Path | None = None,
     modality: str | None = None,
     whitelist: Sequence[str] | None = None,
-    whitelist_match_settings: OcrWhitelistMatchSettings | None = None,
-    apply_phi_ner_filter: bool = False,
+    match_mode: PhiMatchMode = PhiMatchMode.STANDARD,
     exclude_rects: Sequence[UserRectangle] | None = None,
     use_exclude_areas: bool = False,
 ) -> tuple[bool, list[str], int]:
@@ -330,8 +421,6 @@ def remove_pixel_phi(
     effective_whitelist = (
         list(whitelist) if whitelist is not None else load_modality_whitelist(project_dir, series_modality or None)
     )
-    if whitelist_match_settings is None and project_dir is not None:
-        whitelist_match_settings = load_modality_whitelist_match_settings(project_dir, series_modality or None)
 
     logger.debug(f"Processing Image, SOPClassUID: {ds.SOPClassUID} AnonPatientID: {ds.PatientID}")
 
@@ -510,24 +599,22 @@ def remove_pixel_phi(
                 [rect.get_bounding_box() for rect in frame_exclude],
             )
 
-        ocr_texts = detect_text(
-            pixels,
-            ocr_reader,
-            modality=series_modality,
-            whitelist=effective_whitelist,
-            apply_noise_filter=True,
-            whitelist_match_settings=whitelist_match_settings,
-            apply_phi_ner_filter=apply_phi_ner_filter,
-            exclude_rects=frame_exclude or None,
-        ) or []
+        detected = detect_text(pixels, ocr_reader, modality=series_modality)
+        detected = filter_ocr_outside_exclude_rects(detected, frame_exclude or None)
+        process = pipe(
+            lambda texts: filter_ocr_noise(texts, modality=series_modality),
+            make_annotate_whitelist(effective_whitelist),
+            lambda texts: annotate_ner(texts, modality=series_modality),
+        )
+        annotated = process(detected)
+        log_ocr_decisions(annotated, match_mode, remove_mode=remove_mode.value)
+        source_ocr_texts = texts_for_remove_mode(annotated, remove_mode, match_mode)
 
-        if not ocr_texts:
+        if not source_ocr_texts:
             logger.debug("No qualifying text found in frame after OCR filter")
             continue
 
-        logger.debug("Text boxes retained after filter in frame: %d", len(ocr_texts))
-
-        source_ocr_texts = ocr_texts
+        logger.debug("Text boxes retained after filter in frame: %d", len(source_ocr_texts))
 
         for ocr_text in source_ocr_texts:
             detected_texts.append(ocr_text.text)
@@ -553,7 +640,7 @@ def remove_pixel_phi(
             frame_pixels_changed = sum(text.box_area() for text in source_ocr_texts)
         else:
             mask = np.zeros(pixels.shape[:2], dtype=np.uint8)
-            for ocr_text in ocr_texts:
+            for ocr_text in source_ocr_texts:
                 _draw_text_contours_on_mask(
                     pixels,
                     ocr_text.top_left,
@@ -657,21 +744,6 @@ def apply_instance_embedded_phi_for_dcm(
 ) -> bool:
     ds = dcmread(dcm_path, stop_before_pixels=True)
     return apply_instance_embedded_phi(anon_model, str(ds.SOPInstanceUID), texts)
-
-
-def collect_series_view_embedded_phi_texts(image_viewer) -> dict[int, list[str]]:
-    """Collect OCR text strings from a Series View image viewer overlay, keyed by frame index."""
-    texts_by_frame: dict[int, list[str]] = {}
-    overlay_data = getattr(image_viewer, "overlay_data", None)
-    if not overlay_data:
-        return texts_by_frame
-
-    for frame_index, overlay in overlay_data.items():
-        frame_texts = [text.text for text in overlay.ocr_texts if text.text.strip()]
-        deduped = _dedupe_texts(frame_texts)
-        if deduped:
-            texts_by_frame[frame_index] = deduped
-    return texts_by_frame
 
 
 def apply_series_view_embedded_phi(

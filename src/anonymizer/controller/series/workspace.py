@@ -75,48 +75,12 @@ from anonymizer.controller.ai.embedded_phi.ner.cache import download_ner_models
 from anonymizer.controller.ai.embedded_phi.ner.engine import SCORED_LABELS
 from anonymizer.controller.ai.embedded_phi.pixel.cache import OCR_LANGS, OCR_MODEL_DIR, download_ocr_models
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    OcrWhitelistMatchMode as OcrWhitelistMatchMode,
-)
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    OcrWhitelistMatchSettings,
-    PixelPhiRemovalMode,
     build_series_view_ocr_pixels,
-    describe_match_settings,
-    detect_text,
-    filter_ocr_outside_exclude_rects,
-    filter_ocr_whitelist_only,
     ocr_image_for_frame,
-    save_modality_whitelist_match_settings,
-)
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    default_whitelist_match_settings as default_whitelist_match_settings,
-)
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    load_modality_whitelist as load_modality_whitelist,
-)
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    load_modality_whitelist_match_settings as load_modality_whitelist_match_settings,
-)
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    match_mode_description as match_mode_description,
-)
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    match_mode_menu_label as match_mode_menu_label,
-)
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    match_mode_menu_labels as match_mode_menu_labels,
-)
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    normalize_pixel_phi_removal_mode as normalize_pixel_phi_removal_mode,
-)
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    pixel_phi_removal_mode_menu_labels as pixel_phi_removal_mode_menu_labels,
-)
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    pixel_phi_removal_mode_option_label as pixel_phi_removal_mode_option_label,
 )
 from anonymizer.controller.ai.embedded_phi.pixel.exclude_zones import (
     filter_ocr_for_remove_mode,
+    filter_ocr_outside_exclude_rects,
 )
 from anonymizer.controller.ai.embedded_phi.pixel.exclude_zones import (
     modality_exclude_rects_for_series as modality_exclude_rects_for_series,
@@ -124,20 +88,39 @@ from anonymizer.controller.ai.embedded_phi.pixel.exclude_zones import (
 from anonymizer.controller.ai.embedded_phi.pixel.exclude_zones import (
     normalize_user_rects as normalize_user_rects,
 )
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import PhiMatchMode as PhiMatchMode
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import (
+    annotate_ner,
+    detect_text,
+    effective_phi_label,
+    is_whitelisted,
+    make_annotate_whitelist,
+    phi_accepted,
+    pipe,
+)
 from anonymizer.controller.ai.embedded_phi.pixel.ocr_transcript_sr import cleansed_ocr_lines, write_ocr_report_sr
 from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
+    PixelPhiRemovalMode,
     apply_series_view_embedded_phi,
     blackout_rectangular_areas,
     remove_ocr_text_from_frame,
 )
-from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
-    collect_series_view_embedded_phi_texts as collect_series_view_embedded_phi_texts,
-)
+from anonymizer.controller.ai.embedded_phi.pixel.remove_scope import OcrEditContext as OcrEditContext
+from anonymizer.controller.ai.embedded_phi.pixel.remove_scope import OcrRemoveMode as OcrRemoveMode
 from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
     load_default_whitelist as load_default_whitelist,
 )
 from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
+    load_modality_phi_match_mode as load_modality_phi_match_mode,
+)
+from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
+    load_modality_whitelist as load_modality_whitelist,
+)
+from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
     load_project_exclude_rects as load_project_exclude_rects,
+)
+from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
+    save_modality_phi_match_mode as save_modality_phi_match_mode,
 )
 from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
     save_project_exclude_rects,
@@ -188,34 +171,8 @@ from anonymizer.controller.annotations import (
 from anonymizer.controller.annotations.import_nii import AnnotationGeometryUnsupported
 from anonymizer.controller.jobs.runner import (
     Algorithm,
-    OcrEditContext,
-    OcrRemoveMode,
     RunOptions,
     run_job,
-)
-from anonymizer.controller.jobs.runner import (
-    edit_context_display_label as edit_context_display_label,
-)
-from anonymizer.controller.jobs.runner import (
-    edit_context_menu_values as edit_context_menu_values,
-)
-from anonymizer.controller.jobs.runner import (
-    normalize_edit_context as normalize_edit_context,
-)
-from anonymizer.controller.jobs.runner import (
-    normalize_ocr_remove_mode as normalize_ocr_remove_mode,
-)
-from anonymizer.controller.jobs.runner import (
-    ocr_detect_tooltip as ocr_detect_tooltip,
-)
-from anonymizer.controller.jobs.runner import (
-    ocr_remove_mode_display_label as ocr_remove_mode_display_label,
-)
-from anonymizer.controller.jobs.runner import (
-    ocr_remove_mode_menu_labels as ocr_remove_mode_menu_labels,
-)
-from anonymizer.controller.jobs.runner import (
-    ocr_remove_mode_tooltip as ocr_remove_mode_tooltip,
 )
 from anonymizer.controller.jobs.work_state import WorkState
 from anonymizer.controller.project import ProjectController
@@ -264,7 +221,7 @@ class SeriesViewSaveRequest:
     exclude_dirty: bool
     exclude_rects_normalized: list[dict]
     whitelist_items: list[str] | None
-    whitelist_match_settings: OcrWhitelistMatchSettings | None
+    match_mode: PhiMatchMode | None
     texts_by_frame: Mapping[int, Sequence[str]]
     ocr_transcript_by_frame: Mapping[int, Sequence[str]]
 
@@ -327,16 +284,14 @@ def filter_series_view_ocr_overlay(
     detections: Sequence[OCRText],
     *,
     remove_mode: OcrRemoveMode,
-    whitelist: Sequence[str],
-    whitelist_match_settings: OcrWhitelistMatchSettings | None = None,
+    match_mode: PhiMatchMode = PhiMatchMode.STANDARD,
     exclude_rects: Sequence[UserRectangle] | None = None,
 ) -> list[OCRText]:
-    """WYSIWYG overlay: exclude zones, then remove-mode (PHI / whitelist / all)."""
+    """WYSIWYG overlay: exclude zones, then Remove Scope + PhiMatchMode."""
     return filter_ocr_for_remove_mode(
         detections,
         remove_mode=remove_mode,
-        whitelist=whitelist,
-        whitelist_match_settings=whitelist_match_settings,
+        match_mode=match_mode,
         exclude_rects=exclude_rects,
     )
 
@@ -344,8 +299,7 @@ def filter_series_view_ocr_overlay(
 def format_ocr_detection_complete_status(
     detections_by_frame: Mapping[int, Sequence[OCRText]],
     *,
-    whitelist: Sequence[str],
-    whitelist_match_settings: OcrWhitelistMatchSettings | None = None,
+    match_mode: PhiMatchMode = PhiMatchMode.STANDARD,
     exclude_rects_by_frame: Mapping[int, Sequence[UserRectangle]] | None = None,
     frames_scanned: int | None = None,
     remove_mode: OcrRemoveMode = OcrRemoveMode.NON_WHITELISTED,
@@ -364,20 +318,21 @@ def format_ocr_detection_complete_status(
             frames_with_text += 1
             active.extend(kept_spatial)
     total = len(active)
+    # Decide with current match_mode (reuse annotated; margin whitelist override).
     if remove_mode is OcrRemoveMode.NON_WHITELISTED:
-        shown = filter_ocr_whitelist_only(
-            active,
-            whitelist=whitelist,
-            whitelist_match_settings=whitelist_match_settings,
+        whitelisted = sum(
+            1
+            for item in active
+            if is_whitelisted(item, match_mode) and not phi_accepted(item, match_mode)
         )
-        whitelisted = max(0, total - len(shown))
     else:
         whitelisted = 0
-
     ner_counts: Counter[str] = Counter()
     unlabeled = 0
     for item in active:
-        label = (item.phi_label or "").strip().upper()
+        if is_whitelisted(item, match_mode) and not phi_accepted(item, match_mode):
+            continue
+        label = (effective_phi_label(item, match_mode) or "").strip().upper()
         if label:
             ner_counts[label] += 1
         else:
@@ -846,16 +801,12 @@ class SeriesWorkspace:
             download_ner_models()
         reader = Reader(lang_list=list(OCR_LANGS), model_storage_directory=str(OCR_MODEL_DIR))
         bgr = ocr_image_for_frame(ds, frame)
-        results = detect_text(
-            bgr,
-            reader,
-            draw_boxes_and_text=False,
-            modality=str(ds.get("Modality", "") or ""),
-            apply_noise_filter=False,
-            apply_phi_ner_filter=False,
-            annotate_phi_labels=True,
+        modality = str(ds.get("Modality", "") or "")
+        process = pipe(
+            make_annotate_whitelist([]),
+            lambda texts: annotate_ner(texts, modality=modality or None),
         )
-        return list(results or [])
+        return process(detect_text(bgr, reader, modality=modality or None))
 
     def remove_ocr_from_frame(
         self,
@@ -938,20 +889,18 @@ class SeriesWorkspace:
             except Exception as exc:
                 logger.error("Error saving whitelist: %s", exc)
 
-        if request.whitelist_match_settings is not None and modality:
+        if request.match_mode is not None and modality:
             try:
-                options_path = save_modality_whitelist_match_settings(
+                options_path = save_modality_phi_match_mode(
                     project_dir,
                     modality,
-                    request.whitelist_match_settings,
+                    request.match_mode,
                 )
                 logger.info(
-                    "Saved whitelist match settings path=%s mode=%s",
-                    options_path,
-                    describe_match_settings(request.whitelist_match_settings),
+                    f"Saved PhiMatchMode path={options_path} mode={request.match_mode.value}"
                 )
             except Exception as exc:
-                logger.error("Error saving whitelist match settings: %s", exc)
+                logger.error(f"Error saving PhiMatchMode: {exc}")
 
         if not request.pixel_dirty:
             if request.exclude_dirty:

@@ -3,13 +3,13 @@
 import pytest
 
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    PixelPhiRemovalMode,
     build_series_view_ocr_pixels,
-    filter_ocr_outside_exclude_rects,
     ocr_image_for_frame,
 )
-from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import remove_ocr_text_from_frame
-from anonymizer.controller.jobs.runner import OcrEditContext, RemovePixelPhiRunner, RunOptions
+from anonymizer.controller.ai.embedded_phi.pixel.exclude_zones import filter_ocr_outside_exclude_rects
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import PixelPhiRemovalMode, remove_ocr_text_from_frame
+from anonymizer.controller.ai.embedded_phi.pixel.remove_scope import OcrEditContext
+from anonymizer.controller.jobs.runner import RemovePixelPhiRunner, RunOptions
 from anonymizer.controller.jobs.work_state import WorkState
 from anonymizer.controller.series.series_io import load_series_frames
 from anonymizer.controller.series.series_overlay import UserRectangle

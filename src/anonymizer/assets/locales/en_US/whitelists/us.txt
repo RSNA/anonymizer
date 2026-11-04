@@ -16,9 +16,11 @@ BILAT
 SAG # Sagittal
 TRV # Transverse
 TRA # Transverse
+TRANS # Transverse (burn-in spelling)
 COR # Coronal
 LONG # Longitudinal
 AXIAL
+AXILLA
 AX
 OBLIQUE
 SUPINE

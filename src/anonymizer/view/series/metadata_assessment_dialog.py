@@ -35,7 +35,8 @@ from anonymizer.controller.ai.embedded_phi.metadata.viewer_tree import (
 )
 from anonymizer.controller.ai.embedded_phi.ner.engine import REPLACE_MODE_VALUES, SCORED_LABELS, Entity, ReplaceMode
 from anonymizer.controller.ai.embedded_phi.ner.radiology_filters import MetadataNerItem
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import OcrWhitelistMatchSettings
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import PhiMatchMode
+from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_modality_phi_match_mode
 from anonymizer.controller.ai.embedded_phi.report.process_report_text import remove_phi
 from anonymizer.controller.ai.feature_availability import report_text_phi_ready
 from anonymizer.utils.dicom import DeidMethodCode, record_deid_method_codes
@@ -701,7 +702,7 @@ class MetadataAssessmentDialog(AppCTkToplevel):
         project_dir: Path | None = None,
         modality: str | None = None,
         whitelist: Sequence[str] | None = None,
-        whitelist_match_settings: OcrWhitelistMatchSettings | None = None,
+        match_mode: PhiMatchMode | None = None,
         dataset_path: Path | None = None,
     ) -> None:
         super().__init__(master=parent)
@@ -713,7 +714,7 @@ class MetadataAssessmentDialog(AppCTkToplevel):
         self._project_dir = project_dir
         self._modality = modality or str(getattr(dataset, "Modality", "") or "") or None
         self._whitelist = list(whitelist) if whitelist is not None else None
-        self._whitelist_match_settings = whitelist_match_settings
+        self._match_mode = match_mode
         self._destroyed = False
         self._detecting = False
         self._detect_queue: queue.Queue[tuple[str, object]] = queue.Queue()
@@ -916,7 +917,10 @@ class MetadataAssessmentDialog(AppCTkToplevel):
         project_dir = self._project_dir
         modality = self._modality
         whitelist = self._whitelist
-        match_settings = self._whitelist_match_settings
+        resolved_match_mode = self._match_mode
+        if resolved_match_mode is None:
+            resolved_match_mode = load_modality_phi_match_mode(project_dir, modality)
+
         def _worker() -> None:
             try:
                 self._detect_queue.put(
@@ -926,7 +930,7 @@ class MetadataAssessmentDialog(AppCTkToplevel):
                             ds=ds,
                             items=items,
                             whitelist=whitelist,
-                            whitelist_match_settings=match_settings,
+                            match_mode=resolved_match_mode,
                             project_dir=project_dir,
                             modality=modality,
                         ),

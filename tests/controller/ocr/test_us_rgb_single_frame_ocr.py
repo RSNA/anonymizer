@@ -2,6 +2,7 @@
 
 import shutil
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import numpy as np
 import pydicom
@@ -9,15 +10,19 @@ import pytest
 
 from anonymizer.controller.ai.batch_process import AiBatchAlgorithm, _apply_remove_pixel_phi_series
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    PixelPhiRemovalMode,
-    _ocr_rotation_angles,
     build_series_view_ocr_pixels,
-    detect_text,
-    filter_ocr_whitelist_only,
     ocr_image_for_frame,
 )
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import (
+    PhiMatchMode,
+    detect_text,
+    filter_ocr_noise,
+    make_annotate_whitelist,
+)
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import PixelPhiRemovalMode
+from anonymizer.controller.ai.embedded_phi.pixel.remove_scope import OcrEditContext, OcrRemoveMode, texts_for_remove_mode
 from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_default_whitelist
-from anonymizer.controller.jobs.runner import OcrEditContext, RemovePixelPhiRunner, RunOptions
+from anonymizer.controller.jobs.runner import RemovePixelPhiRunner, RunOptions
 from anonymizer.controller.jobs.work_state import WorkState
 from anonymizer.controller.script.paths import packaged_default_script_path
 from anonymizer.controller.series.series_io import load_series_frames
@@ -86,11 +91,18 @@ def anonymizer_model(tmp_path: Path):
 
 
 
-def test_ocr_rotation_angles_us_uses_horizontal_only() -> None:
-    assert _ocr_rotation_angles("US") == [0]
-    assert _ocr_rotation_angles("us") == [0]
-    assert _ocr_rotation_angles("CT") == [0, 90]
-    assert _ocr_rotation_angles(None) == [0, 90]
+def test_detect_text_us_passes_no_rotation_to_easyocr() -> None:
+    reader = MagicMock()
+    reader.readtext.return_value = []
+    detect_text(np.zeros((10, 10), dtype=np.uint8), reader, modality="US")
+    assert reader.readtext.call_args.kwargs["rotation_info"] == []
+
+
+def test_detect_text_ct_passes_tta_rotations_to_easyocr() -> None:
+    reader = MagicMock()
+    reader.readtext.return_value = []
+    detect_text(np.zeros((10, 10), dtype=np.uint8), reader, modality="CT")
+    assert reader.readtext.call_args.kwargs["rotation_info"] == [90, 270]
 
 
 def test_ocr_image_for_frame_rgb_uint8_returns_bgr(us_rgb_loaded) -> None:
@@ -125,27 +137,8 @@ def test_us_rgb_batch_noise_filter_drops_speckle_hits(us_rgb_loaded) -> None:
     handle = runner.enter_models()
     try:
         bgr = ocr_image_for_frame(loaded.metadata, loaded.frames[0])
-        unfiltered = (
-            detect_text(
-                bgr,
-                handle.reader,
-                modality="US",
-                apply_noise_filter=False,
-                apply_phi_ner_filter=False,
-                annotate_phi_labels=False,
-            )
-            or []
-        )
-        filtered = (
-            detect_text(
-                bgr,
-                handle.reader,
-                modality="US",
-                apply_noise_filter=True,
-                apply_phi_ner_filter=False,
-            )
-            or []
-        )
+        unfiltered = detect_text(bgr, handle.reader, modality="US") or []
+        filtered = filter_ocr_noise(detect_text(bgr, handle.reader, modality="US") or [], modality="US")
     finally:
         runner.exit_models(handle)
 
@@ -164,15 +157,9 @@ def test_us_rgb_batch_detect_matches_noise_filtered_expectations(us_rgb_loaded) 
     handle = runner.enter_models()
     try:
         bgr = ocr_image_for_frame(loaded.metadata, loaded.frames[0])
-        results = (
-            detect_text(
-                bgr,
-                handle.reader,
-                modality="US",
-                apply_noise_filter=True,
-                apply_phi_ner_filter=False,
-            )
-            or []
+        results = filter_ocr_noise(
+            detect_text(bgr, handle.reader, modality="US") or [],
+            modality="US",
         )
         texts = [item.text for item in results]
     finally:
@@ -190,15 +177,9 @@ def test_us_rgb_batch_ocr_regression_after_ct_veracity_guard(us_rgb_loaded) -> N
     handle = runner.enter_models()
     try:
         bgr = ocr_image_for_frame(loaded.metadata, loaded.frames[0])
-        results = (
-            detect_text(
-                bgr,
-                handle.reader,
-                modality="US",
-                apply_noise_filter=True,
-                apply_phi_ner_filter=False,
-            )
-            or []
+        results = filter_ocr_noise(
+            detect_text(bgr, handle.reader, modality="US") or [],
+            modality="US",
         )
         texts = [item.text for item in results]
     finally:
@@ -215,18 +196,7 @@ def test_us_rgb_series_view_snapshot_matches_direct_ocr(us_rgb_loaded) -> None:
     handle = runner.enter_models()
     try:
         bgr = ocr_image_for_frame(loaded.metadata, loaded.frames[0])
-        direct = [
-            t.text
-            for t in detect_text(
-                bgr,
-                handle.reader,
-                modality="US",
-                apply_noise_filter=False,
-                apply_phi_ner_filter=False,
-                annotate_phi_labels=True,
-            )
-            or []
-        ]
+        direct = [t.text for t in detect_text(bgr, handle.reader, modality="US") or []]
 
         ws = WorkState()
         ws.bind(
@@ -278,7 +248,15 @@ def test_us_rgb_display_whitelist_hides_anatomy_labels(us_rgb_loaded) -> None:
     all_texts = [t.text for t in ws.result[0]]
     assert all_texts == EXPECTED_OCR_TEXTS
     us_wl = load_default_whitelist("US")
-    displayed = [t.text for t in filter_ocr_whitelist_only(ws.result[0], whitelist=us_wl)]
+    annotated = make_annotate_whitelist(us_wl)(ws.result[0])
+    displayed = [
+        t.text
+        for t in texts_for_remove_mode(
+            annotated,
+            OcrRemoveMode.NON_WHITELISTED,
+            PhiMatchMode.STANDARD,
+        )
+    ]
     assert "26,05/2018" in displayed
     assert "LIVER" not in displayed
     assert "Dist" not in displayed

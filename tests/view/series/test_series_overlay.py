@@ -2,7 +2,9 @@
 
 from anonymizer.controller.series.series_overlay import (
     LayerType,
+    NerEvidence,
     OCRText,
+    OcrEvidence,
     OverlayData,
     PolygonPoint,
     Segmentation,
@@ -36,10 +38,10 @@ def test_overlay_data_defaults_empty() -> None:
 
 
 def test_ocr_text_box_helpers() -> None:
-    text = OCRText(text="A", top_left=(1, 2), bottom_right=(11, 12), prob=0.5)
+    text = OCRText(text="A", top_left=(1, 2), bottom_right=(11, 12), ocr=OcrEvidence(prob=0.5))
     assert text.get_bounding_box() == (1, 2, 11, 12)
     assert text.box_area() == 100
-    assert text.phi_entities == ()
+    assert text.ner.entities == ()
 
 
 def test_ocr_hover_shows_only_category_chip_for_phi_box() -> None:
@@ -49,19 +51,17 @@ def test_ocr_hover_shows_only_category_chip_for_phi_box() -> None:
         text="DOB: 06.16.1976",
         top_left=(0, 0),
         bottom_right=(100, 20),
-        prob=0.95,
-        phi_label="DATE",
-        phi_entities=(("DATE", "06.16.1976"),),
+        ocr=OcrEvidence(prob=0.95),
+        ner=NerEvidence(label="DATE", entities=(("DATE", "06.16.1976"),), score=1.0),
     )
     name = OCRText(
         text="DOUGLAS [M]",
         top_left=(0, 60),
         bottom_right=(100, 80),
-        prob=0.95,
-        phi_label="NAME",
-        phi_entities=(("NAME", "DOUGLAS"),),
+        ocr=OcrEvidence(prob=0.95),
+        ner=NerEvidence(label="NAME", entities=(("NAME", "DOUGLAS"),), score=1.0),
     )
-    plain = OCRText(text="Portable", top_left=(0, 30), bottom_right=(80, 50), prob=0.95)
+    plain = OCRText(text="Portable", top_left=(0, 30), bottom_right=(80, 50), ocr=OcrEvidence(prob=0.95))
     viewer._interaction_allowed = lambda: True
     viewer.enable_interactive_editing = True
     viewer._annotate_mode = "view"

@@ -44,4 +44,6 @@ killed mid-run with no traceback.
 
 Pregenerated project: `assets/ProjectModel.json` (Retain stack + TCIA Research;
 **Retain Device Identity off** — manufacturer/model/software come from TCIA Research
-`@safe()`). Runs write under `/Volumes/MBOD.DX.LIFE/TCIA/MIDI-B/harness-runs/`.
+`@safe()`). Runs write under `/Volumes/MBOD.DX.LIFE/TCIA/MIDI-B/harness-runs/`
+(scratch; do not commit). Published milestone scorecards live in
+[`scorecards/`](scorecards/README.md).

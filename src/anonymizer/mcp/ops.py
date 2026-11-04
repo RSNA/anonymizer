@@ -20,7 +20,7 @@ import numpy as np
 from PIL import Image
 
 from anonymizer.controller.ai.batch_process import apply_remove_pixel_phi_series
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
     PixelPhiRemovalMode,
     normalize_pixel_phi_removal_mode,
 )

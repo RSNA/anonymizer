@@ -9,21 +9,19 @@ from openjpeg.utils import decode
 from pydicom import dcmread
 from pydicom.uid import JPEG2000Lossless
 
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import ocr_image_for_frame
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
     PixelPhiRemovalMode,
     _draw_text_contours_on_mask,
-    ocr_image_for_frame,
-)
-from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
     _encode_decompressed_frame_for_save,
     remove_pixel_phi,
 )
-from anonymizer.controller.series.series_overlay import OCRText
+from anonymizer.controller.series.series_overlay import OCRText, OcrEvidence
 from tests.controller.ocr.conftest import assert_dcm
 from tests.controller.support.us_rgb_fixtures import US_RGB_DCM, make_jpeg2000_rgb_dicom
 
 _FAKE_OCR = [
-    OCRText(text="TEST", top_left=(100, 100), bottom_right=(200, 140), prob=0.99),
+    OCRText(text="TEST", top_left=(100, 100), bottom_right=(200, 140), ocr=OcrEvidence(prob=0.99)),
 ]
 
 

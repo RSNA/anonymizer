@@ -1,0 +1,1017 @@
+{
+  "dcm": "/Volumes/MBOD.DX.LIFE/TCIA/MIDI-B/pixel_phi/test/113575183/11-11-2013-NA-XR CHEST 1 VIEW AP for 486-93-8764-77898/20131111.000000-AP-54935/1-1.dcm",
+  "n_trials": 88,
+  "best": {
+    "name": "retry_box0_none_ang+30",
+    "score": 2,
+    "found_fta": true,
+    "found_r": true,
+    "texts": [
+      "R",
+      "FTA"
+    ]
+  },
+  "trials_with_both_fta_and_r": [
+    {
+      "name": "retry_box0_none_ang+30",
+      "texts": [
+        "R",
+        "FTA"
+      ]
+    },
+    {
+      "name": "retry_box0_none_ang+45",
+      "texts": [
+        "R",
+        "FTA"
+      ]
+    },
+    {
+      "name": "retry_box0_none_ang+60",
+      "texts": [
+        "R",
+        "FTA"
+      ]
+    },
+    {
+      "name": "retry_box0_clahe_ang+30",
+      "texts": [
+        "R",
+        "FTa"
+      ]
+    },
+    {
+      "name": "retry_box0_clahe_ang+45",
+      "texts": [
+        "R",
+        "FTA"
+      ]
+    },
+    {
+      "name": "retry_box0_clahe_ang+60",
+      "texts": [
+        "R",
+        "Fta"
+      ]
+    },
+    {
+      "name": "retry_box0_clahe_strong_ang+30",
+      "texts": [
+        "R",
+        "FTa"
+      ]
+    },
+    {
+      "name": "retry_box0_clahe_strong_ang+45",
+      "texts": [
+        "R",
+        "FTa"
+      ]
+    },
+    {
+      "name": "retry_box0_clahe_strong_ang+60",
+      "texts": [
+        "R",
+        "FTa"
+      ]
+    },
+    {
+      "name": "topleft_band_none_ang+30",
+      "texts": [
+        "R",
+        "FTA"
+      ]
+    },
+    {
+      "name": "topleft_band_none_ang+45",
+      "texts": [
+        "R",
+        "FTa"
+      ]
+    },
+    {
+      "name": "topleft_band_none_ang+60",
+      "texts": [
+        "R",
+        "FTa"
+      ]
+    },
+    {
+      "name": "topleft_band_clahe_ang+30",
+      "texts": [
+        "R",
+        "FTA"
+      ]
+    },
+    {
+      "name": "topleft_band_clahe_ang+45",
+      "texts": [
+        "R",
+        "Fta"
+      ]
+    },
+    {
+      "name": "topleft_band_clahe_ang+60",
+      "texts": [
+        "R",
+        "Fta"
+      ]
+    },
+    {
+      "name": "topleft_band_clahe_strong_ang+30",
+      "texts": [
+        "R",
+        "FTA"
+      ]
+    },
+    {
+      "name": "topleft_band_clahe_strong_ang+45",
+      "texts": [
+        "R",
+        "FTA"
+      ]
+    },
+    {
+      "name": "topleft_band_clahe_strong_ang+60",
+      "texts": [
+        "R",
+        "FTa"
+      ]
+    }
+  ],
+  "all_trials": [
+    {
+      "name": "retry_box0_none_ang+30",
+      "score": 2,
+      "found_fta": true,
+      "found_r": true,
+      "texts": [
+        "R",
+        "FTA"
+      ]
+    },
+    {
+      "name": "retry_box0_none_ang+45",
+      "score": 2,
+      "found_fta": true,
+      "found_r": true,
+      "texts": [
+        "R",
+        "FTA"
+      ]
+    },
+    {
+      "name": "retry_box0_none_ang+60",
+      "score": 2,
+      "found_fta": true,
+      "found_r": true,
+      "texts": [
+        "R",
+        "FTA"
+      ]
+    },
+    {
+      "name": "retry_box0_clahe_ang+30",
+      "score": 2,
+      "found_fta": true,
+      "found_r": true,
+      "texts": [
+        "R",
+        "FTa"
+      ]
+    },
+    {
+      "name": "retry_box0_clahe_ang+45",
+      "score": 2,
+      "found_fta": true,
+      "found_r": true,
+      "texts": [
+        "R",
+        "FTA"
+      ]
+    },
+    {
+      "name": "retry_box0_clahe_ang+60",
+      "score": 2,
+      "found_fta": true,
+      "found_r": true,
+      "texts": [
+        "R",
+        "Fta"
+      ]
+    },
+    {
+      "name": "retry_box0_clahe_strong_ang+30",
+      "score": 2,
+      "found_fta": true,
+      "found_r": true,
+      "texts": [
+        "R",
+        "FTa"
+      ]
+    },
+    {
+      "name": "retry_box0_clahe_strong_ang+45",
+      "score": 2,
+      "found_fta": true,
+      "found_r": true,
+      "texts": [
+        "R",
+        "FTa"
+      ]
+    },
+    {
+      "name": "retry_box0_clahe_strong_ang+60",
+      "score": 2,
+      "found_fta": true,
+      "found_r": true,
+      "texts": [
+        "R",
+        "FTa"
+      ]
+    },
+    {
+      "name": "topleft_band_none_ang+30",
+      "score": 2,
+      "found_fta": true,
+      "found_r": true,
+      "texts": [
+        "R",
+        "FTA"
+      ]
+    },
+    {
+      "name": "topleft_band_none_ang+45",
+      "score": 2,
+      "found_fta": true,
+      "found_r": true,
+      "texts": [
+        "R",
+        "FTa"
+      ]
+    },
+    {
+      "name": "topleft_band_none_ang+60",
+      "score": 2,
+      "found_fta": true,
+      "found_r": true,
+      "texts": [
+        "R",
+        "FTa"
+      ]
+    },
+    {
+      "name": "topleft_band_clahe_ang+30",
+      "score": 2,
+      "found_fta": true,
+      "found_r": true,
+      "texts": [
+        "R",
+        "FTA"
+      ]
+    },
+    {
+      "name": "topleft_band_clahe_ang+45",
+      "score": 2,
+      "found_fta": true,
+      "found_r": true,
+      "texts": [
+        "R",
+        "Fta"
+      ]
+    },
+    {
+      "name": "topleft_band_clahe_ang+60",
+      "score": 2,
+      "found_fta": true,
+      "found_r": true,
+      "texts": [
+        "R",
+        "Fta"
+      ]
+    },
+    {
+      "name": "topleft_band_clahe_strong_ang+30",
+      "score": 2,
+      "found_fta": true,
+      "found_r": true,
+      "texts": [
+        "R",
+        "FTA"
+      ]
+    },
+    {
+      "name": "topleft_band_clahe_strong_ang+45",
+      "score": 2,
+      "found_fta": true,
+      "found_r": true,
+      "texts": [
+        "R",
+        "FTA"
+      ]
+    },
+    {
+      "name": "topleft_band_clahe_strong_ang+60",
+      "score": 2,
+      "found_fta": true,
+      "found_r": true,
+      "texts": [
+        "R",
+        "FTa"
+      ]
+    },
+    {
+      "name": "retry_box0_clahe_ang+15",
+      "score": 1,
+      "found_fta": true,
+      "found_r": false,
+      "texts": [
+        "P",
+        "FTA"
+      ]
+    },
+    {
+      "name": "topleft_band_none_ang+15",
+      "score": 1,
+      "found_fta": true,
+      "found_r": false,
+      "texts": [
+        "|",
+        "FTA"
+      ]
+    },
+    {
+      "name": "topleft_band_clahe_ang+15",
+      "score": 1,
+      "found_fta": true,
+      "found_r": false,
+      "texts": [
+        "6",
+        "FTa"
+      ]
+    },
+    {
+      "name": "topleft_band_clahe_strong_ang+15",
+      "score": 1,
+      "found_fta": true,
+      "found_r": false,
+      "texts": [
+        "6",
+        "FTa"
+      ]
+    },
+    {
+      "name": "retry_box0_none_ang+15",
+      "score": 1,
+      "found_fta": false,
+      "found_r": true,
+      "texts": [
+        "R"
+      ]
+    },
+    {
+      "name": "retry_box0_clahe_strong_ang+15",
+      "score": 1,
+      "found_fta": false,
+      "found_r": true,
+      "texts": [
+        "R"
+      ]
+    },
+    {
+      "name": "topleft_band_clahe_easyocr_rot_15_30_45",
+      "score": 1,
+      "found_fta": false,
+      "found_r": true,
+      "texts": [
+        "R",
+        "4"
+      ]
+    },
+    {
+      "name": "full_product_rot_90_270",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "8",
+        "8",
+        "PORTABLE",
+        "SEMI-ERECT"
+      ]
+    },
+    {
+      "name": "full_no_rot",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "PORTABLE",
+        "SEMI-ERECT",
+        "Uod",
+        "7 33"
+      ]
+    },
+    {
+      "name": "full_rot_45",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "&",
+        "4",
+        "PORTABLE",
+        "SEMI-ERECT"
+      ]
+    },
+    {
+      "name": "full_rot_15_30_45",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "02",
+        "4",
+        "PORTABLE",
+        "SEMI-ERECT"
+      ]
+    },
+    {
+      "name": "full_rot_45_90_270",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "8",
+        "4",
+        "PORTABLE",
+        "SEMI-ERECT"
+      ]
+    },
+    {
+      "name": "full_contrast_boost",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "PORTABLE",
+        "SEMI-ERECT",
+        "Uod",
+        "7 33"
+      ]
+    },
+    {
+      "name": "full_low_text_thresh",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "UiD",
+        "PORTABLE",
+        "SEMI-ERECT",
+        "( 33"
+      ]
+    },
+    {
+      "name": "full_clahe_no_rot",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "PORTABLE",
+        "SEMI-ERECT",
+        "ai2",
+        "32"
+      ]
+    },
+    {
+      "name": "full_clahe_rot_45",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "&",
+        "32",
+        "PORTABLE",
+        "SEMI-ERECT"
+      ]
+    },
+    {
+      "name": "full_clahe_rot_15_30_45",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "&",
+        "32",
+        "PORTABLE",
+        "SEMI-ERECT"
+      ]
+    },
+    {
+      "name": "full_clahe_strong_no_rot",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "PORTABLE",
+        "SEMI-ERECT",
+        "O02",
+        "32"
+      ]
+    },
+    {
+      "name": "full_clahe_strong_rot_45",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "&",
+        "32",
+        "PORTABLE",
+        "SEMI-ERECT"
+      ]
+    },
+    {
+      "name": "full_clahe_strong_rot_15_30_45",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "&",
+        "32",
+        "PORTABLE",
+        "SEMI-ERECT"
+      ]
+    },
+    {
+      "name": "full_clahe_thresh_80_no_rot",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "PO\u00c9TABLE",
+        "SEM]-EFEC"
+      ]
+    },
+    {
+      "name": "full_clahe_thresh_80_rot_45",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "PO\u00c9TABLE",
+        "SEM]-EFEC"
+      ]
+    },
+    {
+      "name": "full_clahe_thresh_80_rot_15_30_45",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "PO\u00c9TABLE",
+        "SEM]-EFEC"
+      ]
+    },
+    {
+      "name": "full_clahe_thresh_100_no_rot",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "P\u00f8RTABLE",
+        "SEMI-ERECT"
+      ]
+    },
+    {
+      "name": "full_clahe_thresh_100_rot_45",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "P\u00f8RTABLE",
+        "SEMI-ERECT"
+      ]
+    },
+    {
+      "name": "full_clahe_thresh_100_rot_15_30_45",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "P\u00f8RTABLE",
+        "SEMI-ERECT"
+      ]
+    },
+    {
+      "name": "full_otsu_no_rot",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "PORTABLE",
+        "SEMI-ERECT",
+        "33"
+      ]
+    },
+    {
+      "name": "full_otsu_rot_45",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "33",
+        "PORTABLE",
+        "SEMI-ERECT"
+      ]
+    },
+    {
+      "name": "full_otsu_rot_15_30_45",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "4",
+        "PORTABLE",
+        "SEMI-ERECT"
+      ]
+    },
+    {
+      "name": "retry_box0_none_ang+0",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "320"
+      ]
+    },
+    {
+      "name": "retry_box0_none_ang-15",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "370"
+      ]
+    },
+    {
+      "name": "retry_box0_none_ang-30",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "37"
+      ]
+    },
+    {
+      "name": "retry_box0_clahe_ang+0",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "37"
+      ]
+    },
+    {
+      "name": "retry_box0_clahe_ang-15",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "3",
+        "3"
+      ]
+    },
+    {
+      "name": "retry_box0_clahe_ang-30",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "32"
+      ]
+    },
+    {
+      "name": "retry_box0_clahe_strong_ang+0",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "32"
+      ]
+    },
+    {
+      "name": "retry_box0_clahe_strong_ang-15",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "2",
+        "3"
+      ]
+    },
+    {
+      "name": "retry_box0_clahe_strong_ang-30",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "37"
+      ]
+    },
+    {
+      "name": "retry_box1_none_ang+0",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "U0"
+      ]
+    },
+    {
+      "name": "retry_box1_none_ang+15",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "U0o"
+      ]
+    },
+    {
+      "name": "retry_box1_none_ang+30",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "Uo"
+      ]
+    },
+    {
+      "name": "retry_box1_none_ang+45",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "8"
+      ]
+    },
+    {
+      "name": "retry_box1_none_ang+60",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "8"
+      ]
+    },
+    {
+      "name": "retry_box1_none_ang-15",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "Uio"
+      ]
+    },
+    {
+      "name": "retry_box1_none_ang-30",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "Uoo"
+      ]
+    },
+    {
+      "name": "retry_box1_clahe_ang+0",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "U2"
+      ]
+    },
+    {
+      "name": "retry_box1_clahe_ang+15",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "O2"
+      ]
+    },
+    {
+      "name": "retry_box1_clahe_ang+30",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "a2"
+      ]
+    },
+    {
+      "name": "retry_box1_clahe_ang+45",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "8"
+      ]
+    },
+    {
+      "name": "retry_box1_clahe_ang+60",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "8"
+      ]
+    },
+    {
+      "name": "retry_box1_clahe_ang-15",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "a2"
+      ]
+    },
+    {
+      "name": "retry_box1_clahe_ang-30",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "U02"
+      ]
+    },
+    {
+      "name": "retry_box1_clahe_strong_ang+0",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "O2"
+      ]
+    },
+    {
+      "name": "retry_box1_clahe_strong_ang+15",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "U2"
+      ]
+    },
+    {
+      "name": "retry_box1_clahe_strong_ang+30",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "O2"
+      ]
+    },
+    {
+      "name": "retry_box1_clahe_strong_ang+45",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "8"
+      ]
+    },
+    {
+      "name": "retry_box1_clahe_strong_ang+60",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": []
+    },
+    {
+      "name": "retry_box1_clahe_strong_ang-15",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "a"
+      ]
+    },
+    {
+      "name": "retry_box1_clahe_strong_ang-30",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "U2"
+      ]
+    },
+    {
+      "name": "topleft_band_none_ang+0",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "320"
+      ]
+    },
+    {
+      "name": "topleft_band_none_ang-15",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "37"
+      ]
+    },
+    {
+      "name": "topleft_band_none_ang-30",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "37"
+      ]
+    },
+    {
+      "name": "topleft_band_none_easyocr_rot_15_30_45",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "320"
+      ]
+    },
+    {
+      "name": "topleft_band_clahe_ang+0",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "8",
+        "3"
+      ]
+    },
+    {
+      "name": "topleft_band_clahe_ang-15",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "3",
+        "3"
+      ]
+    },
+    {
+      "name": "topleft_band_clahe_ang-30",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "37"
+      ]
+    },
+    {
+      "name": "topleft_band_clahe_strong_ang+0",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "0",
+        "3"
+      ]
+    },
+    {
+      "name": "topleft_band_clahe_strong_ang-15",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "&",
+        "2",
+        "3"
+      ]
+    },
+    {
+      "name": "topleft_band_clahe_strong_ang-30",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "320"
+      ]
+    },
+    {
+      "name": "topleft_band_clahe_strong_easyocr_rot_15_30_45",
+      "score": 0,
+      "found_fta": false,
+      "found_r": false,
+      "texts": [
+        "8",
+        "4"
+      ]
+    }
+  ],
+  "plain_english": "SUCCESS: 18 setup(s) found both FTA and R. Best example: retry_box0_none_ang+30 \u2192 ['R', 'FTA']. A second pass also worked: take EasyOCR's own large short/digit box(es) [('8', (44, 90), (463, 440)), ('8', (2275, 105), (2344, 150))], crop that box, optionally CLAHE, rotate the crop, run EasyOCR again. Example: retry_box0_none_ang+30."
+}

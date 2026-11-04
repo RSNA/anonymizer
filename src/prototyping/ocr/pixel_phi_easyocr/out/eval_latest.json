@@ -1,0 +1,271 @@
+{
+  "params_key": "product_baseline",
+  "overrides": {},
+  "case_accuracy": 0.6451612903225806,
+  "box_recall": 0.6451612903225806,
+  "relative_cost": 3.0,
+  "met_target": false,
+  "failures": [
+    {
+      "case_id": "validation/333877207",
+      "modality": "DX",
+      "miss": [
+        "JT"
+      ],
+      "raw": [
+        "PORTABLE",
+        "UPRIGHT",
+        "5"
+      ]
+    },
+    {
+      "case_id": "validation/5155749005",
+      "modality": "DX",
+      "miss": [
+        "JT"
+      ],
+      "raw": [
+        "UPRIGHT",
+        "PORTABLE",
+        "14"
+      ]
+    },
+    {
+      "case_id": "validation/5220588395",
+      "modality": "DX",
+      "miss": [
+        "MWF"
+      ],
+      "raw": [
+        "ERECT",
+        "3",
+        "2",
+        "POPTABLE"
+      ]
+    },
+    {
+      "case_id": "validation/8697164365",
+      "modality": "DX",
+      "miss": [
+        "ICG"
+      ],
+      "raw": [
+        "6",
+        "PORTABLE",
+        "INTRA",
+        "OP",
+        "SUPINE",
+        "PORTABLE",
+        "#6"
+      ]
+    },
+    {
+      "case_id": "validation/8697164365",
+      "modality": "DX",
+      "miss": [
+        "ICG"
+      ],
+      "raw": [
+        "6",
+        "PORTABLE",
+        "INTRA",
+        "OP",
+        "SUPINE",
+        "PORTABLE",
+        "#6"
+      ]
+    },
+    {
+      "case_id": "validation/2051580196",
+      "modality": "CR",
+      "miss": [
+        "NKF"
+      ],
+      "raw": [
+        "7M"
+      ]
+    },
+    {
+      "case_id": "validation/2051580196",
+      "modality": "CR",
+      "miss": [
+        "NKF"
+      ],
+      "raw": [
+        "7M"
+      ]
+    },
+    {
+      "case_id": "validation/2548095243",
+      "modality": "CR",
+      "miss": [
+        "ACO"
+      ],
+      "raw": [
+        "SEMI-ERECT",
+        "PORTABLE",
+        "G"
+      ]
+    },
+    {
+      "case_id": "validation/3056777156",
+      "modality": "CR",
+      "miss": [
+        "CMS"
+      ],
+      "raw": [
+        "8"
+      ]
+    },
+    {
+      "case_id": "validation/3056777156",
+      "modality": "CR",
+      "miss": [
+        "CMS"
+      ],
+      "raw": [
+        "8"
+      ]
+    },
+    {
+      "case_id": "validation/3615823051",
+      "modality": "DX",
+      "miss": [
+        "JGR"
+      ],
+      "raw": [
+        "BEMIL-ERECT",
+        "PORTABLE",
+        "1"
+      ]
+    },
+    {
+      "case_id": "validation/3615823051",
+      "modality": "DX",
+      "miss": [
+        "MSS"
+      ],
+      "raw": [
+        "BEMIL-ERECT",
+        "PORTABLE",
+        "1"
+      ]
+    },
+    {
+      "case_id": "validation/3615823051",
+      "modality": "DX",
+      "miss": [
+        "TJN"
+      ],
+      "raw": [
+        "BEMIL-ERECT",
+        "PORTABLE",
+        "1"
+      ]
+    },
+    {
+      "case_id": "validation/5454430957",
+      "modality": "CR",
+      "miss": [
+        "MHS"
+      ],
+      "raw": [
+        "MARTIN",
+        "ERIC",
+        "[M] 09.20.2010",
+        "DOB: 07",
+        "28.1938",
+        "8"
+      ]
+    },
+    {
+      "case_id": "validation/6208874732",
+      "modality": "DX",
+      "miss": [
+        "ROC"
+      ],
+      "raw": [
+        "R8C"
+      ]
+    },
+    {
+      "case_id": "validation/6208874732",
+      "modality": "DX",
+      "miss": [
+        "ROC"
+      ],
+      "raw": [
+        "R8C"
+      ]
+    },
+    {
+      "case_id": "test/8225398083",
+      "modality": "DX",
+      "miss": [
+        "RCN"
+      ],
+      "raw": [
+        "UPRIGHT",
+        "242",
+        "PORTABLE"
+      ]
+    },
+    {
+      "case_id": "test/8225398083",
+      "modality": "DX",
+      "miss": [
+        "RCN"
+      ],
+      "raw": [
+        "UPRIGHT",
+        "242",
+        "PORTABLE"
+      ]
+    },
+    {
+      "case_id": "test/113575183",
+      "modality": "CR",
+      "miss": [
+        "FTA"
+      ],
+      "raw": [
+        "8",
+        "8",
+        "PORTABLE",
+        "SEMI-ERECT"
+      ]
+    },
+    {
+      "case_id": "test/7655797887",
+      "modality": "DX",
+      "miss": [
+        "LACI"
+      ],
+      "raw": [
+        "3"
+      ]
+    },
+    {
+      "case_id": "test/7655797887",
+      "modality": "DX",
+      "miss": [
+        "LACI"
+      ],
+      "raw": [
+        "3"
+      ]
+    },
+    {
+      "case_id": "test/5694644350",
+      "modality": "DX",
+      "miss": [
+        "TR"
+      ],
+      "raw": [
+        "PORTABLE",
+        "SEMI-ERECT",
+        "HA"
+      ]
+    }
+  ]
+}

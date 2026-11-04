@@ -1,7 +1,14 @@
 """Unit tests for Series View toolbar gate helpers (no CTk window)."""
 
-from anonymizer.controller.jobs.runner import OcrEditContext
-from anonymizer.controller.series.series_overlay import OCRText, OverlayData, UserRectangle
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import make_annotate_whitelist
+from anonymizer.controller.ai.embedded_phi.pixel.remove_scope import OcrEditContext
+from anonymizer.controller.series.series_overlay import (
+    NerEvidence,
+    OCRText,
+    OcrEvidence,
+    OverlayData,
+    UserRectangle,
+)
 from anonymizer.controller.series.workspace import (
     blur_face_toolbar_visible,
     clear_cache_button_visible,
@@ -21,12 +28,15 @@ def _ocr(
     top_left: tuple[int, int] = (0, 0),
     bottom_right: tuple[int, int] = (10, 10),
 ) -> OCRText:
+    ner = NerEvidence()
+    if phi_label is not None:
+        ner = NerEvidence(label=phi_label, entities=((phi_label, text),), score=1.0)
     return OCRText(
         text=text,
         top_left=top_left,
         bottom_right=bottom_right,
-        prob=0.9,
-        phi_label=phi_label,
+        ocr=OcrEvidence(prob=0.9),
+        ner=ner,
     )
 
 
@@ -199,22 +209,22 @@ def test_blackout_series_with_rects_applies_and_replays() -> None:
 
 
 def test_format_ocr_detection_complete_includes_ner_and_whitelist() -> None:
-    status = format_ocr_detection_complete_status(
-        {
-            0: [
-                _ocr("DAVIDSON", phi_label="NAME"),
-                _ocr("01.09.2012", phi_label="DATE"),
-                _ocr("Portable"),
-                _ocr("Semi-Upright"),
-            ]
-        },
-        whitelist=["PORTABLE"],
+    boxes = make_annotate_whitelist(["PORTABLE", "AXILLA"])(
+        [
+            _ocr("DAVIDSON", phi_label="NAME"),
+            _ocr("01.09.2012", phi_label="DATE"),
+            _ocr("Portable"),
+            _ocr("Semi-Upright"),
+            # NER false positive: whitelist classification wins in status counts.
+            _ocr("AXILLA", phi_label="NAME"),
+        ]
     )
-    assert "4 detections" in status
+    status = format_ocr_detection_complete_status({0: boxes})
+    assert "5 detections" in status
     assert "Name 1" in status
     assert "Date 1" in status
-    assert "unlabeled 2" in status
-    assert "1 whitelisted" in status
+    assert "unlabeled 1" in status
+    assert "2 whitelisted" in status
     assert "frames with text" not in status
 
 
@@ -227,7 +237,6 @@ def test_format_ocr_detection_complete_reports_excluded_not_as_unlabeled() -> No
                 _ocr("cm/s", top_left=(110, 130), bottom_right=(150, 150)),
             ]
         },
-        whitelist=[],
         exclude_rects_by_frame={
             0: [UserRectangle(top_left=(90, 90), bottom_right=(200, 200))],
         },
@@ -241,7 +250,6 @@ def test_format_ocr_detection_complete_reports_excluded_not_as_unlabeled() -> No
 def test_format_ocr_detection_complete_series_includes_frame_counts() -> None:
     status = format_ocr_detection_complete_status(
         {0: [_ocr("A", phi_label="NAME")], 2: [_ocr("B")]},
-        whitelist=[],
         frames_scanned=5,
     )
     assert "2 detections" in status
@@ -314,3 +322,60 @@ def test_blur_face_toolbar_visible_for_head_until_orm_applied() -> None:
         face_blur_already_applied=False,
         is_head_series=True,
     )
+
+
+def test_image_viewer_nav_keys_return_break_to_stop_toplevel_bind() -> None:
+    """Arrow handlers must return break so SeriesView does not advance a second time."""
+    from anonymizer.view.series.image import ImageViewer
+
+    viewer = ImageViewer.__new__(ImageViewer)
+    viewer.current_image_index = 2
+    viewer.num_images = 10
+    viewer._startup_complete = True
+    viewer._interaction_enabled = True
+    viewer.images = object()
+    viewer._suppress_callbacks = True
+    viewer.on_slice_index_changed = None
+    loads: list[int] = []
+
+    def _load(index: int) -> None:
+        loads.append(index)
+        viewer.current_image_index = index
+
+    viewer.load_and_display_image = _load
+
+    assert ImageViewer.next_image(viewer, None) == "break"
+    assert loads == [3]
+    assert viewer.current_image_index == 3
+    assert ImageViewer.prev_image(viewer, None) == "break"
+    assert loads == [3, 2]
+    assert viewer.current_image_index == 2
+
+
+def test_series_view_skips_nav_key_when_event_from_image_viewer() -> None:
+    """SeriesView must not re-dispatch arrows that ImageViewer already handled."""
+    view = SeriesView.__new__(SeriesView)
+    view._focus_is_text_input = lambda: False
+    calls: list[str] = []
+
+    class _Viewer:
+        def __str__(self) -> str:
+            return ".!seriesview.!imageviewer"
+
+        def next_image(self, _event) -> str:
+            calls.append("next")
+            return "break"
+
+    view.image_viewer = _Viewer()
+
+    class _Event:
+        widget = type("W", (), {"__str__": lambda self: ".!seriesview.!imageviewer.!canvas"})()
+
+    assert SeriesView._on_slice_navigation_key(view, _Event(), "next_image") == "break"
+    assert calls == []
+
+    class _ToolbarEvent:
+        widget = type("W", (), {"__str__": lambda self: ".!seriesview.!button"})()
+
+    assert SeriesView._on_slice_navigation_key(view, _ToolbarEvent(), "next_image") == "break"
+    assert calls == ["next"]

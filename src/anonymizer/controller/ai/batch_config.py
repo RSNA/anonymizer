@@ -13,7 +13,7 @@ AiBatchStudyRef
     One study selection for headless studies lists.
 
 EmbeddedPhiPixelOptions
-    Pixel OCR knobs (removal_method, remove_scope, use_exclude_areas).
+    Pixel OCR knobs (removal_method, remove_scope, match_mode, use_exclude_areas).
 
 EmbeddedPhiTextOptions
     Metadata or Reports NER knobs (enabled, replace_mode).
@@ -50,10 +50,9 @@ from typing import Any, Literal, Self
 
 from anonymizer.controller.ai.batch_process import AiBatchAlgorithm, AiBatchProcessOptions
 from anonymizer.controller.ai.blur_face import FaceBlurMode
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    PixelPhiRemovalMode,
-    normalize_pixel_phi_removal_mode,
-)
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import PhiMatchMode
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import PixelPhiRemovalMode
+from anonymizer.controller.ai.embedded_phi.pixel.remove_scope import OcrRemoveMode
 from anonymizer.controller.ai.feature_availability import (
     brain_structures_allowed,
     embedded_phi_allowed,
@@ -66,7 +65,6 @@ from anonymizer.controller.ai.tseg.config import (
     set_ct_segmentation_mode,
     set_mr_segmentation_mode,
 )
-from anonymizer.controller.jobs.runner import OcrRemoveMode, normalize_ocr_remove_mode
 from anonymizer.controller.phi.phi_io import build_phi_index
 from anonymizer.model.anonymizer import AnonymizerModel
 
@@ -88,6 +86,7 @@ class EmbeddedPhiPixelOptions:
     enabled: bool = True
     removal_method: PixelPhiRemovalMode = PixelPhiRemovalMode.BLACKOUT
     remove_scope: OcrRemoveMode = OcrRemoveMode.NON_WHITELISTED
+    match_mode: PhiMatchMode | None = None
     use_exclude_areas: bool = False
 
 
@@ -148,6 +147,7 @@ class AiBatchConfig:
             blur_mode=self.face_blur.blur_mode,
             pixel_phi_removal_mode=self.embedded_phi.pixel.removal_method,
             ocr_remove_mode=self.embedded_phi.pixel.remove_scope,
+            phi_match_mode=self.embedded_phi.pixel.match_mode,
             ocr_use_exclude_areas=self.embedded_phi.pixel.use_exclude_areas,
             include_brain_structures=self.harmonize.include_brain_structures,
             prefer_description_mappings=self.harmonize.prefer_description_mappings,
@@ -183,6 +183,11 @@ class AiBatchConfig:
                         "enabled": self.embedded_phi.pixel.enabled,
                         "removal_method": self.embedded_phi.pixel.removal_method.value,
                         "remove_scope": self.embedded_phi.pixel.remove_scope.value,
+                        "match_mode": (
+                            self.embedded_phi.pixel.match_mode.value
+                            if self.embedded_phi.pixel.match_mode is not None
+                            else None
+                        ),
                         "use_exclude_areas": self.embedded_phi.pixel.use_exclude_areas,
                     },
                     "metadata": {
@@ -321,6 +326,10 @@ def _parse_embedded_phi(raw: dict[str, Any]) -> EmbeddedPhiFeatureOptions:
             remove_scope=_parse_remove_scope(
                 pixel_raw.get("remove_scope", OcrRemoveMode.NON_WHITELISTED.value)
             ),
+            match_mode=_parse_phi_match_mode(
+                pixel_raw.get("match_mode"),
+                field="features.embedded_phi.pixel.match_mode",
+            ),
             use_exclude_areas=_parse_bool(
                 pixel_raw.get("use_exclude_areas", False),
                 field="features.embedded_phi.pixel.use_exclude_areas",
@@ -357,17 +366,32 @@ def _parse_blur_mode(value: object) -> FaceBlurMode:
 
 
 def _parse_removal_method(value: object) -> PixelPhiRemovalMode:
-    try:
-        return normalize_pixel_phi_removal_mode(value)
-    except Exception as exc:
-        allowed = ", ".join(mode.value for mode in PixelPhiRemovalMode)
-        raise AiBatchConfigError(
-            f"Unknown removal_method {value!r}; expected one of: {allowed}"
-        ) from exc
+    text = str(value or PixelPhiRemovalMode.BLACKOUT.value).strip().lower()
+    for mode in PixelPhiRemovalMode:
+        if text == mode.value:
+            return mode
+    allowed = ", ".join(mode.value for mode in PixelPhiRemovalMode)
+    raise AiBatchConfigError(f"Unknown removal_method {value!r}; expected one of: {allowed}")
 
 
 def _parse_remove_scope(value: object) -> OcrRemoveMode:
-    return normalize_ocr_remove_mode(value)
+    text = str(value or OcrRemoveMode.NON_WHITELISTED.value).strip().lower()
+    for mode in OcrRemoveMode:
+        if text == mode.value:
+            return mode
+    allowed = ", ".join(mode.value for mode in OcrRemoveMode)
+    raise AiBatchConfigError(f"Unknown remove_scope {value!r}; expected one of: {allowed}")
+
+
+def _parse_phi_match_mode(value: object, *, field: str) -> PhiMatchMode | None:
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    for mode in PhiMatchMode:
+        if text == mode.value:
+            return mode
+    allowed = ", ".join(mode.value for mode in PhiMatchMode)
+    raise AiBatchConfigError(f"{field} must be one of: {allowed}")
 
 
 def _parse_replace_mode(value: object, *, field: str) -> ReplaceMode:

@@ -13,7 +13,7 @@ What we *do* claim:
 - Default **date shifting** keeps longitudinal spacing (Modified Dates). That is **not** the same as Safe Harbor’s year-only date rule. Sites that need year-only (or Expert Determination) must set policy with their privacy officer.
 - Pixel text, report prose, and faces still need the optional AI / Report Text Review steps when those objects are present.
 
-Use MIDI-B scores and this protocol as **evidence for review**, not as a substitute for institutional determination.
+Use MIDI-B scores and this protocol as **evidence for review**, not as a substitute for institutional determination. Published Validation / Test scores: [MIDI-B scores](midi-b-scores.md).
 
 ## De-identification options (ingest)
 

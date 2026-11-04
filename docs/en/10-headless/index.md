@@ -45,7 +45,7 @@ Both `-c` / `--config` and `--ai-batch` are required with `--ai-batch-run`. You 
 
 ### MIDI-B evaluation
 
-The standalone harness `python -m eval.midi_b` runs those two phases as subprocesses, then the official CBIIT validator (see `src/eval/midi_b/README.md` in the repository).
+The standalone harness `python -m eval.midi_b` runs those two phases as subprocesses, then the official CBIIT validator (see `src/eval/midi_b/README.md` in the repository). Published Validation / Test scores: [MIDI-B scores](../midi-b-scores.md).
 
 ## What each file is for
 

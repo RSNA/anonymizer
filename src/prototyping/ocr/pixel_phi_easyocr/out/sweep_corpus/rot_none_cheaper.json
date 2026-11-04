@@ -1,0 +1,10 @@
+{
+  "name": "rot_none_cheaper",
+  "overrides": {
+    "rotation_info": []
+  },
+  "case_accuracy": 0.8064516129032258,
+  "box_recall": 0.8064516129032258,
+  "relative_cost": 1.0,
+  "met_target": false
+}

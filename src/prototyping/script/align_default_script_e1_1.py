@@ -17,7 +17,10 @@ import argparse
 import json
 from pathlib import Path
 
-from anonymizer.controller.script.compile import normalize_script_operation
+from anonymizer.controller.script.compile import (
+    DESCRIPTOR_KEEP_TAGS,
+    normalize_script_operation,
+)
 from anonymizer.controller.script.document import (
     ScriptDocument,
     ScriptRule,
@@ -31,19 +34,27 @@ _BASIC_PROFILE_PATH = (
 )
 _DEFAULT_SCRIPT = _ANONYMIZER_SRC / "assets" / "scripts" / "default-anonymizer.script"
 
-# Clean Descriptors deferrals: keep under Basic so Embedded PHI can scrub.
-_DESCRIPTOR_DEFERRALS: frozenset[str] = frozenset(
-    {
-        "00081030",  # Study Description
-        "0008103E",  # Series Description
-        "00189937",  # Requested Series Description
-        "00081040",  # Institutional Department Name (free-text site)
-        "00204000",  # Image Comments
-    }
-)
-
 # Product Patient Age band even when Basic Profile lists X.
 _AGE_ROUND_TAG = "00101010"
+
+
+def is_packaged_script_e1_1_tag(tag: str) -> bool:
+    """
+    True when an E.1-1 tag belongs in the packaged default script.
+
+    Skips CTP-style XX / GGGGEEEE wildcards and odd (private) groups — those
+    are not matched by this product; private tags use the TCIA KB at import.
+
+    Args:
+        tag: E.1-1 attribute id (eight hex or a wildcard placeholder).
+
+    Returns:
+        True for real eight-hex even-group public tags.
+    """
+    key = str(tag or "").strip().upper()
+    if len(key) != 8 or any(c not in "0123456789ABCDEF" for c in key):
+        return False
+    return int(key[:4], 16) % 2 == 0
 
 
 def _basic_letters(basic: str) -> list[str]:
@@ -133,7 +144,7 @@ def target_operand(
         Operation to store.
     """
     tag = tag.upper()
-    if tag in _DESCRIPTOR_DEFERRALS:
+    if tag in DESCRIPTOR_KEEP_TAGS:
         return "@keep"
     if current is not None:
         op = normalize_script_operation(current)
@@ -184,13 +195,15 @@ def align_document(
     counts = {"changed": 0, "added": 0, "deferred": 0, "remapped": 0, "unchanged": 0}
 
     for tag, info in sorted(profile.items()):
+        if not is_packaged_script_e1_1_tag(tag):
+            continue
         basic = info["basic"]
         name = info["name"]
         current_rule = by_tag.get(tag)
         current_op = current_rule.operation if current_rule is not None else None
         new_op = target_operand(tag=tag, basic=basic, current=current_op)
 
-        if tag in _DESCRIPTOR_DEFERRALS:
+        if tag in DESCRIPTOR_KEEP_TAGS:
             counts["deferred"] += 1
         elif current_op is not None and normalize_script_operation(
             current_op
@@ -215,6 +228,12 @@ def align_document(
         else:
             current_rule.operation = new_op
             counts["changed"] += 1
+
+    def _is_product_script_tag(tag: str) -> bool:
+        t = tag.upper()
+        return len(t) == 8 and all(c in "0123456789ABCDEF" for c in t) and int(t[:4], 16) % 2 == 0
+
+    document.rules = [rule for rule in document.rules if _is_product_script_tag(rule.tag)]
 
     # Keep stable tag order for readable diffs.
     document.rules.sort(key=lambda rule: rule.tag.upper())

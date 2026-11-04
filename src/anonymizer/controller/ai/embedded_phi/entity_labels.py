@@ -27,6 +27,7 @@ def entity_label_display(label: str) -> str:
         "ID": _("ID"),
         "PHONE": _("Phone"),
         "DATE": _("Date"),
+        "TIME": _("Time"),
         "EMAIL": _("Email"),
     }
     return names.get(str(label).upper(), str(label))

@@ -5,13 +5,15 @@ from pathlib import Path
 
 import pytest
 
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    PixelPhiRemovalMode,
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import ocr_image_for_frame
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import (
+    PhiMatchMode,
     detect_text,
-    filter_ocr_detections,
-    ocr_image_for_frame,
+    filter_ocr_noise,
+    make_annotate_whitelist,
 )
-from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import remove_pixel_phi
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import PixelPhiRemovalMode, remove_pixel_phi
+from anonymizer.controller.ai.embedded_phi.pixel.remove_scope import OcrRemoveMode, texts_for_remove_mode
 from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_default_whitelist
 from anonymizer.controller.jobs.runner import RemovePixelPhiRunner
 from anonymizer.controller.series.series_io import load_series_frames
@@ -45,18 +47,17 @@ def test_us_rgb_series_view_after_batch_shows_no_whitelist_display_survivors(
 
         ds = pydicom.dcmread(dcm_path)
         bgr_after = ocr_image_for_frame(loaded.metadata, ds.pixel_array)
-        after_all = (
-            detect_text(
-                bgr_after,
-                handle.reader,
-                modality="US",
-                apply_noise_filter=False,
-                apply_phi_ner_filter=False,
-            )
-            or []
+        after_all = filter_ocr_noise(
+            detect_text(bgr_after, handle.reader, modality="US") or [],
+            modality="US",
         )
         us_wl = [item.upper() for item in load_default_whitelist("US")]
-        after_display = filter_ocr_detections(after_all, whitelist=us_wl)
+        annotated = make_annotate_whitelist(us_wl)(after_all)
+        after_display = texts_for_remove_mode(
+            annotated,
+            OcrRemoveMode.NON_WHITELISTED,
+            PhiMatchMode.STANDARD,
+        )
         display_texts = [item.text for item in after_display]
     finally:
         runner.exit_models(handle)

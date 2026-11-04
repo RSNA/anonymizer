@@ -1,0 +1,13 @@
+{
+  "name": "cheap_combo_margin_width_text",
+  "overrides": {
+    "add_margin": 0.15,
+    "width_ths": 0.05,
+    "text_threshold": 0.55,
+    "low_text": 0.35
+  },
+  "case_accuracy": 0.6290322580645161,
+  "box_recall": 0.6290322580645161,
+  "relative_cost": 3.0,
+  "met_target": false
+}

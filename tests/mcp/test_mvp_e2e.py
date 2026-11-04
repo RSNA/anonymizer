@@ -43,8 +43,8 @@ def mvp_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     SESSION.close()
 
 
-def _fake_easyocr(_reader, pixels, *, modality=None, overrides=None):
-    del overrides  # match _easyocr_readtext; unused in the fake
+def _fake_easyocr(pixels, *args, **kwargs):
+    del args, kwargs
     h, w = pixels.shape[:2]
     return [
         ([[0, 0], [30, 0], [30, 10], [0, 10]], "X", 0.9),
@@ -72,13 +72,8 @@ def test_mvp_create_import_strip_export_davidson(mvp_store: Path):
 
     fake_handle = MagicMock()
     fake_handle.reader = MagicMock()
-    with (
-        patch.object(SESSION, "ensure_ocr_reader", return_value=fake_handle),
-        patch(
-            "anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext",
-            side_effect=_fake_easyocr,
-        ),
-    ):
+    fake_handle.reader.readtext.side_effect = _fake_easyocr
+    with patch.object(SESSION, "ensure_ocr_reader", return_value=fake_handle):
         stripped = await_job(
             mcp_tools.remove_pixel_phi(series="all"), mcp_tools.job_status
         )

@@ -4,13 +4,13 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import PixelPhiRemovalMode
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import PixelPhiRemovalMode
 from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import remove_ocr_text_from_frame
-from anonymizer.controller.series.series_overlay import OCRText
+from anonymizer.controller.series.series_overlay import OCRText, OcrEvidence
 
 
 def _ocr_texts() -> list[OCRText]:
-    return [OCRText(text="PHI", top_left=(2, 2), bottom_right=(5, 5), prob=0.9)]
+    return [OCRText(text="PHI", top_left=(2, 2), bottom_right=(5, 5), ocr=OcrEvidence(prob=0.9))]
 
 
 def test_remove_ocr_text_from_frame_blackout_zeros_boxes() -> None:

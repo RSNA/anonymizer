@@ -1,0 +1,231 @@
+{
+  "dcm": "/Volumes/MBOD.DX.LIFE/TCIA/MIDI-B/pixel_phi/test/113575183/11-11-2013-NA-XR CHEST 1 VIEW AP for 486-93-8764-77898/20131111.000000-AP-54935/1-1.dcm",
+  "library": "surya-ocr",
+  "goal": "Detect both FTA and R in one full-image pass",
+  "device": {
+    "backend": "llamacpp",
+    "llama_cpp_ngl": 99,
+    "torch_device": "mps",
+    "fast_detector_device": "mps",
+    "mps_available": true,
+    "gguf": "/Users/michaelevans/Downloads/surya-2.5.gguf",
+    "mmproj": "/Users/michaelevans/Downloads/surya-2.5-mmproj.gguf"
+  },
+  "note": "User snippet used block.text; Surya 0.23 exposes block.html. Apple Silicon uses llamacpp + Metal (-ngl 99). R and FTA arrived as one phrase 'R FTA'; scoring uses whole-token R.",
+  "trials": [
+    {
+      "name": "full_page",
+      "ok": true,
+      "init_seconds": 9.481,
+      "infer_seconds": 11.086,
+      "found_fta": true,
+      "found_r": true,
+      "texts": [
+        "R FTA",
+        "PORTABLE SEMI-ERECT"
+      ],
+      "hits": [
+        {
+          "text": "R FTA",
+          "label": "Text",
+          "confidence": 0.8073147718903636,
+          "box": [
+            [
+              223.998,
+              123.284
+            ],
+            [
+              417.72600000000006,
+              123.284
+            ],
+            [
+              417.72600000000006,
+              314.5
+            ],
+            [
+              223.998,
+              314.5
+            ]
+          ],
+          "skipped": false,
+          "error": false,
+          "html": "<p><b>R</b><br/>FTA</p>"
+        },
+        {
+          "text": "PORTABLE SEMI-ERECT",
+          "label": "Text",
+          "confidence": 0.8073147718903636,
+          "box": [
+            [
+              2433.708,
+              329.596
+            ],
+            [
+              3020.946,
+              329.596
+            ],
+            [
+              3020.946,
+              538.424
+            ],
+            [
+              2433.708,
+              538.424
+            ]
+          ],
+          "skipped": false,
+          "error": false,
+          "html": "<p>PORTABLE<br/>SEMI-ERECT</p>"
+        }
+      ]
+    },
+    {
+      "name": "full_page_clahe",
+      "ok": true,
+      "init_seconds": 0.0,
+      "infer_seconds": 9.469,
+      "found_fta": true,
+      "found_r": true,
+      "texts": [
+        "R FTA",
+        "PORTABLE SEMI-ERECT"
+      ],
+      "hits": [
+        {
+          "text": "R FTA",
+          "label": "Text",
+          "confidence": 0.7925637845307657,
+          "box": [
+            [
+              223.998,
+              123.284
+            ],
+            [
+              417.72600000000006,
+              123.284
+            ],
+            [
+              417.72600000000006,
+              314.5
+            ],
+            [
+              223.998,
+              314.5
+            ]
+          ],
+          "skipped": false,
+          "error": false,
+          "html": "<p><b>R</b><br/>FTA</p>"
+        },
+        {
+          "text": "PORTABLE SEMI-ERECT",
+          "label": "Text",
+          "confidence": 0.7925637845307657,
+          "box": [
+            [
+              2433.708,
+              329.596
+            ],
+            [
+              3020.946,
+              329.596
+            ],
+            [
+              3020.946,
+              538.424
+            ],
+            [
+              2433.708,
+              538.424
+            ]
+          ],
+          "skipped": false,
+          "error": false,
+          "html": "<p>PORTABLE<br/>SEMI-ERECT</p>"
+        }
+      ]
+    },
+    {
+      "name": "full_page_png",
+      "ok": true,
+      "init_seconds": 0.0,
+      "infer_seconds": 1.148,
+      "found_fta": true,
+      "found_r": true,
+      "texts": [
+        "R FTA",
+        "PORTABLE SEMI-ERECT"
+      ],
+      "hits": [
+        {
+          "text": "R FTA",
+          "label": "Text",
+          "confidence": 0.8073147718903636,
+          "box": [
+            [
+              223.998,
+              123.284
+            ],
+            [
+              417.72600000000006,
+              123.284
+            ],
+            [
+              417.72600000000006,
+              314.5
+            ],
+            [
+              223.998,
+              314.5
+            ]
+          ],
+          "skipped": false,
+          "error": false,
+          "html": "<p><b>R</b><br/>FTA</p>"
+        },
+        {
+          "text": "PORTABLE SEMI-ERECT",
+          "label": "Text",
+          "confidence": 0.8073147718903636,
+          "box": [
+            [
+              2433.708,
+              329.596
+            ],
+            [
+              3020.946,
+              329.596
+            ],
+            [
+              3020.946,
+              538.424
+            ],
+            [
+              2433.708,
+              538.424
+            ]
+          ],
+          "skipped": false,
+          "error": false,
+          "html": "<p>PORTABLE<br/>SEMI-ERECT</p>"
+        }
+      ]
+    }
+  ],
+  "trials_with_both": [
+    "full_page",
+    "full_page_clahe",
+    "full_page_png"
+  ],
+  "best": {
+    "name": "full_page_png",
+    "found_fta": true,
+    "found_r": true,
+    "infer_seconds": 1.148,
+    "texts": [
+      "R FTA",
+      "PORTABLE SEMI-ERECT"
+    ]
+  },
+  "plain_english": "Surya found both FTA and R in one full-image pass (full_page, 11.086s): ['R FTA', 'PORTABLE SEMI-ERECT']."
+}

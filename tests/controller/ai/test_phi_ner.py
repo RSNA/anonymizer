@@ -117,6 +117,35 @@ def test_detect_entities_logs_key_steps(caplog) -> None:
     assert [e.label for e in ents] == ["FIRST_NAME", "LAST_NAME"]
 
 
+def test_detect_entities_include_time_keeps_time_for_pixel_phi() -> None:
+    """Pixel PHI path opts into TIME; metadata default still drops it."""
+    text = "Jane Doe 10:00"
+
+    def fake_run(_text: str, *, locale: str = "en_US"):
+        return [
+            {"entity_group": "first_name", "start": 0, "end": 4, "score": 0.9},
+            {"entity_group": "last_name", "start": 5, "end": 8, "score": 0.9},
+            {"entity_group": "time", "start": 9, "end": 14, "score": 0.9},
+        ]
+
+    with (
+        patch("anonymizer.controller.ai.embedded_phi.ner.engine.ner_ready", return_value=True),
+        patch("anonymizer.controller.ai.embedded_phi.ner.engine._run_pipeline", side_effect=fake_run),
+    ):
+        without = detect_entities(text, locale="en_US")
+        with_time = detect_entities(text, locale="en_US", include_time=True)
+
+    assert [e.label for e in without] == ["FIRST_NAME", "LAST_NAME"]
+    assert [e.label for e in with_time] == ["FIRST_NAME", "LAST_NAME", "TIME"]
+    assert with_time[2].text_of(text) == "10:00"
+
+
+def test_to_scored_label_time_gated_by_include_time() -> None:
+    assert _to_scored_label("time") is None
+    assert _to_scored_label("TIME", include_time=True) == "TIME"
+    assert _to_scored_label("B-TIME", include_time=True) == "TIME"
+
+
 def test_detect_entities_dob_dotted_date_raw_model_output_when_model_ready() -> None:
     """Documented raw behaviour (davidson_cxr): used as-is, the model may
     fragment ``DOB: 06.16.1976`` (the middle token can win ipv4, which has

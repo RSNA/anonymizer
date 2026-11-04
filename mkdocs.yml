@@ -69,6 +69,7 @@ plugins:
             8.4 Batch: 8.4 Stapel
             9. Send: 9. Senden
             De-identification protocol: De-Identifikationsprotokoll
+            MIDI-B scores: MIDI-B-Scores
             DICOM Conformance Statement: DICOM-Konformitätserklärung
             Troubleshooting: Fehlerbehebung
             License: Lizenz
@@ -96,6 +97,7 @@ plugins:
             8.4 Batch: 8.4 Lote
             9. Send: 9. Enviar
             De-identification protocol: Protocolo de desidentificación
+            MIDI-B scores: Puntuaciones MIDI-B
             DICOM Conformance Statement: Declaración de conformidad DICOM
             Troubleshooting: Solución de problemas
             License: Licencia
@@ -123,6 +125,7 @@ plugins:
             8.4 Batch: 8.4 Lot
             9. Send: 9. Envoyer
             De-identification protocol: Protocole de désidentification
+            MIDI-B scores: Scores MIDI-B
             DICOM Conformance Statement: Déclaration de conformité DICOM
             Troubleshooting: Dépannage
             License: Licence
@@ -188,5 +191,6 @@ nav:
       - De-identification protocol: deidentification-protocol.md
       - Anonymizer script (advanced): 05-create-project/anonymizer-script.md
       - DICOM Conformance Statement: dicom-conformance-statement.md
+      - MIDI-B scores: midi-b-scores.md
       - Troubleshooting: troubleshooting.md
       - License: license.md

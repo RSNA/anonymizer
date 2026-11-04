@@ -1,14 +1,14 @@
 """Unit tests for spatial OCR exclude rectangles."""
 
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
+from anonymizer.controller.ai.embedded_phi.pixel.exclude_zones import (
     filter_ocr_outside_exclude_rects,
     rects_intersect,
 )
-from anonymizer.controller.series.series_overlay import OCRText, UserRectangle
+from anonymizer.controller.series.series_overlay import OCRText, OcrEvidence, UserRectangle
 
 
 def _ocr(text: str, x1: int, y1: int, x2: int, y2: int) -> OCRText:
-    return OCRText(text=text, top_left=(x1, y1), bottom_right=(x2, y2), prob=0.9)
+    return OCRText(text=text, top_left=(x1, y1), bottom_right=(x2, y2), ocr=OcrEvidence(prob=0.9))
 
 
 def _rect(x1: int, y1: int, x2: int, y2: int) -> UserRectangle:

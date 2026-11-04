@@ -1,0 +1,95 @@
+# Whitelist for common terms found on Mammography (MG) images
+# One term/phrase per line. Case-insensitive matching is assumed after loading.
+# Lines starting with # are comments and will be ignored.
+
+# --- Laterality ---
+L
+R
+LEFT
+RIGHT
+LT
+RT
+BILATERAL
+BILAT
+
+# --- View abbreviations (DICOM / vendor burnt-in) ---
+CC # Craniocaudal
+MLO # Mediolateral oblique
+ML # Mediolateral
+LM # Lateromedial
+XCCL # Exaggerated CC lateral
+XCCM # Exaggerated CC medial
+FB # From below
+SIO # Superior inferior oblique
+ISO
+LMO
+AT # Axillary tail
+CV # Cleavage view
+TAN # Tangential
+SPOT
+MAG # Magnification
+ID # Implant displaced
+
+# --- Laterality + view (common fused overlays) ---
+LCC
+RCC
+LMLO
+RMLO
+LMCC
+RMCC
+LML
+RML
+LLM
+RLM
+LXCCL
+RXCCL
+LXCCM
+RXCCM
+
+# --- Marker letters (burnt-in position markers) ---
+M
+S
+
+# --- Anatomy / exam ---
+BREAST
+MAMMO
+MAMMOGRAPHY
+MG
+DBT # Digital breast tomosynthesis
+TOMO
+TOMOSYNTHESIS
+FFDM
+FFD
+
+# --- Technical / overlay chrome ---
+COMP
+COMPRESSION
+GRID
+NO GRID
+AEC
+KV
+KVP
+MA
+MAS
+EXPOSURE
+TECH
+TECHNOLOGIST
+SERIES
+IMAGE
+IMG
+VIEW
+EXAM DATE
+EXAM TIME
+POS
+POSITION
+NONE
+N/A
+SEE REPORT
+CLINICAL HISTORY
+COMPARISON
+PREVIOUS
+PRIOR
+ARTIFACT
+IMPLANT
+MARKER
+CLIP

@@ -1,0 +1,172 @@
+{
+  "goal": "Shrink pixels + smaller CXR corner relative size",
+  "shrink_pixels": [
+    {
+      "name": "corners_clahe_scale1.0_baseline",
+      "n_pass": 11,
+      "n_total": 14,
+      "seconds": 57.9
+    },
+    {
+      "name": "corners_clahe_scale0.75",
+      "n_pass": 9,
+      "n_total": 14,
+      "seconds": 41.8
+    },
+    {
+      "name": "corners_clahe_scale0.5",
+      "n_pass": 8,
+      "n_total": 14,
+      "seconds": 22.4
+    },
+    {
+      "name": "corners_clahe_scale0.35",
+      "n_pass": 9,
+      "n_total": 14,
+      "seconds": 15.2
+    },
+    {
+      "name": "corners_clahe_canvas800_mag0.7",
+      "n_pass": 9,
+      "n_total": 14,
+      "seconds": 29.4
+    },
+    {
+      "name": "corners_clahe_canvas600_mag0.5",
+      "n_pass": 9,
+      "n_total": 14,
+      "seconds": 18.8
+    },
+    {
+      "name": "corners_clahe_scale1.5",
+      "n_pass": 9,
+      "n_total": 14,
+      "seconds": 67.9
+    }
+  ],
+  "corner_relative_size": [
+    {
+      "name": "simple_detect_corner_0.32x0.38",
+      "frac_w": 0.32,
+      "frac_h": 0.38,
+      "angles": [
+        0
+      ],
+      "n_pass": 8,
+      "n_total": 14,
+      "seconds": 11.8
+    },
+    {
+      "name": "simple_detect_corner_0.25x0.30",
+      "frac_w": 0.25,
+      "frac_h": 0.3,
+      "angles": [
+        0
+      ],
+      "n_pass": 8,
+      "n_total": 14,
+      "seconds": 7.1
+    },
+    {
+      "name": "simple_detect_corner_0.20x0.25",
+      "frac_w": 0.2,
+      "frac_h": 0.25,
+      "angles": [
+        0
+      ],
+      "n_pass": 6,
+      "n_total": 14,
+      "seconds": 5.1
+    },
+    {
+      "name": "simple_detect_corner_0.15x0.20",
+      "frac_w": 0.15,
+      "frac_h": 0.2,
+      "angles": [
+        0
+      ],
+      "n_pass": 7,
+      "n_total": 14,
+      "seconds": 3.7
+    },
+    {
+      "name": "simple_detect_corner_0.10x0.15",
+      "frac_w": 0.1,
+      "frac_h": 0.15,
+      "angles": [
+        0
+      ],
+      "n_pass": 3,
+      "n_total": 14,
+      "seconds": 3.3
+    },
+    {
+      "name": "simple_detect_corner_0.08x0.12",
+      "frac_w": 0.08,
+      "frac_h": 0.12,
+      "angles": [
+        0
+      ],
+      "n_pass": 2,
+      "n_total": 14,
+      "seconds": 3.0
+    },
+    {
+      "name": "angles_corner_0.32x0.38",
+      "frac_w": 0.32,
+      "frac_h": 0.38,
+      "angles": [
+        0,
+        30,
+        45,
+        -45
+      ],
+      "n_pass": 11,
+      "n_total": 14,
+      "seconds": 57.1
+    },
+    {
+      "name": "angles_corner_0.20x0.25",
+      "frac_w": 0.2,
+      "frac_h": 0.25,
+      "angles": [
+        0,
+        30,
+        45,
+        -45
+      ],
+      "n_pass": 8,
+      "n_total": 14,
+      "seconds": 30.4
+    },
+    {
+      "name": "angles_corner_0.15x0.20",
+      "frac_w": 0.15,
+      "frac_h": 0.2,
+      "angles": [
+        0,
+        30,
+        45,
+        -45
+      ],
+      "n_pass": 9,
+      "n_total": 14,
+      "seconds": 20.4
+    },
+    {
+      "name": "angles_corner_0.10x0.15",
+      "frac_w": 0.1,
+      "frac_h": 0.15,
+      "angles": [
+        0,
+        30,
+        45,
+        -45
+      ],
+      "n_pass": 5,
+      "n_total": 14,
+      "seconds": 13.2
+    }
+  ],
+  "plain_english": "No \u2014 shrinking does not help. Pixel shrink of corner crops drops 11/14 \u2192 8\u20139/14; enlarge to 1.5\u00d7 also drops to 9/14. Smaller corner bands (relative size): simple detect (angle 0) stays 8/14 at 0.32\u00d70.38 or 0.25\u00d70.30, then falls (0.10\u00d70.15 \u2192 3/14). With deskew angles, 0.32\u00d70.38 remains best at 11/14; tighter 0.15\u00d70.20 is faster (20s vs 57s) but only 9/14."
+}

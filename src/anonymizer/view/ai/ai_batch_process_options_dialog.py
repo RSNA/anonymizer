@@ -15,12 +15,9 @@ from anonymizer.controller.ai.batch_process import (
     normalize_selected_algorithms,
 )
 from anonymizer.controller.ai.blur_face import FaceBlurMode
-from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
-    PixelPhiRemovalMode,
-    normalize_pixel_phi_removal_mode,
-    pixel_phi_removal_mode_menu_labels,
-    pixel_phi_removal_mode_option_label,
-)
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import PhiMatchMode
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import PixelPhiRemovalMode
+from anonymizer.controller.ai.embedded_phi.pixel.remove_scope import OcrRemoveMode
 from anonymizer.controller.ai.feature_availability import (
     brain_structures_allowed,
     embedded_phi_allowed,
@@ -31,13 +28,6 @@ from anonymizer.controller.ai.feature_ids import AiFeatureId
 from anonymizer.controller.ai.harmonize.description_mapping_store import (
     load_series_overrides,
     load_study_loinc_overrides,
-)
-from anonymizer.controller.jobs.runner import (
-    OcrRemoveMode,
-    normalize_ocr_remove_mode,
-    ocr_remove_mode_display_label,
-    ocr_remove_mode_menu_labels,
-    ocr_remove_mode_tooltip,
 )
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.blur_face_results import face_blur_mode_from_menu_label, face_blur_mode_menu_values
@@ -60,6 +50,18 @@ from anonymizer.view.common.app_window import (
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.tooltip import bind_hover_tooltip
 from anonymizer.view.common.ux_fields import option_menu_width_for_labels
+from anonymizer.view.ocr_ui import (
+    match_mode_description,
+    match_mode_menu_label,
+    match_mode_menu_labels,
+    normalize_ocr_remove_mode,
+    normalize_pixel_phi_removal_mode,
+    ocr_remove_mode_display_label,
+    ocr_remove_mode_menu_labels,
+    ocr_remove_mode_tooltip,
+    pixel_phi_removal_mode_menu_labels,
+    pixel_phi_removal_mode_option_label,
+)
 
 
 @dataclass(frozen=True)
@@ -201,6 +203,33 @@ class AiBatchProcessOptionsDialog(AppToplevel):
             ocr_remove_mode_tooltip(OcrRemoveMode.PHI_ONLY),
         )
 
+        self._match_mode_labels = match_mode_menu_labels()
+        match_labels = list(self._match_mode_labels.keys())
+        self._phi_match_mode_var = tk.StringVar(value=match_mode_menu_label(PhiMatchMode.STANDARD))
+        match_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        match_frame.grid(row=2, column=0, pady=(self.SECTION_PAD, 0), sticky="w")
+        match_row = ctk.CTkFrame(match_frame, fg_color="transparent")
+        match_row.pack(anchor="w")
+        ctk.CTkLabel(match_row, text=_("Match strictness") + ":").pack(side="left", padx=(0, pad))
+        self._phi_match_mode_menu = ctk.CTkOptionMenu(
+            match_row,
+            variable=self._phi_match_mode_var,
+            values=match_labels,
+            dynamic_resizing=False,
+            width=option_menu_width_for_labels(match_labels),
+        )
+        self._phi_match_mode_menu.pack(side="left")
+        bind_hover_tooltip(
+            self._phi_match_mode_menu,
+            lambda: match_mode_description(
+                self._match_mode_labels.get(self._phi_match_mode_var.get(), PhiMatchMode.STANDARD)
+            ),
+        )
+        self._detail_label(
+            match_frame,
+            _("Applies to whitelist and PHI labels for this batch (does not rewrite project options)."),
+        ).pack(anchor="w", pady=(4, 0))
+
         self._ocr_use_exclude_areas_var = tk.IntVar(value=0)
         modalities = modalities_in_selected_studies(self._images_dir, self._studies)
         exclude_count = sum(
@@ -208,7 +237,7 @@ class AiBatchProcessOptionsDialog(AppToplevel):
         )
         if exclude_count:
             exclude_frame = ctk.CTkFrame(parent, fg_color="transparent")
-            exclude_frame.grid(row=2, column=0, pady=(self.SECTION_PAD, 0), sticky="w")
+            exclude_frame.grid(row=3, column=0, pady=(self.SECTION_PAD, 0), sticky="w")
             exclude_row = ctk.CTkFrame(exclude_frame, fg_color="transparent")
             exclude_row.pack(anchor="w")
             self._ocr_use_exclude_areas_checkbox = ctk.CTkCheckBox(
@@ -402,6 +431,12 @@ class AiBatchProcessOptionsDialog(AppToplevel):
             return OcrRemoveMode.NON_WHITELISTED
         return normalize_ocr_remove_mode(self._ocr_remove_mode_var.get())
 
+    def _selected_phi_match_mode(self) -> PhiMatchMode | None:
+        if not hasattr(self, "_phi_match_mode_var"):
+            return None
+        labels = getattr(self, "_match_mode_labels", None) or match_mode_menu_labels()
+        return labels.get(self._phi_match_mode_var.get(), PhiMatchMode.STANDARD)
+
     def _on_ocr_remove_mode_changed(self, _choice: str | None = None) -> None:
         self._update_pixel_phi_whitelist_controls()
 
@@ -460,6 +495,7 @@ class AiBatchProcessOptionsDialog(AppToplevel):
         if hasattr(self, "_pixel_phi_mode_var"):
             pixel_phi_removal_mode = normalize_pixel_phi_removal_mode(self._pixel_phi_mode_var.get())
         ocr_remove_mode = self._selected_ocr_remove_mode()
+        phi_match_mode = self._selected_phi_match_mode()
         ocr_use_exclude_areas = bool(
             hasattr(self, "_ocr_use_exclude_areas_var") and self._ocr_use_exclude_areas_var.get() == 1
         )
@@ -479,6 +515,7 @@ class AiBatchProcessOptionsDialog(AppToplevel):
                 blur_mode=blur_mode,
                 pixel_phi_removal_mode=pixel_phi_removal_mode,
                 ocr_remove_mode=ocr_remove_mode,
+                phi_match_mode=phi_match_mode,
                 ocr_use_exclude_areas=ocr_use_exclude_areas,
                 include_brain_structures=include_brain,
                 prefer_description_mappings=prefer_mappings,
