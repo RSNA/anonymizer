@@ -602,35 +602,39 @@ def annotate_ner(
         texts: OCR boxes of one frame.
         locale: NER locale pack.
         modality: DICOM modality (clock normalize for XR/US).
-        detect_fn: Optional text → entities override (tests).
+        detect_fn: Optional text → entities override (tests). Skips the model-ready gate.
 
     Returns:
         Copies with ner evidence filled (score 0.0 / label None when no entity).
         Clock-normalized text when modality is XR/US.
     """
     texts = _normalize_clocks_for_modality(texts, modality=modality)
-    ready = ner_ready()
-    if not ready or not detect_locale_supported(locale):
-        logger.info(
-            f"OCR→NER classify skipped (ner_ready={ready} locale={locale}); "
-            f"{len(texts)} text(s) unlabeled"
-        )
-        out = [
-            OCRText(
-                text=t.text,
-                top_left=t.top_left,
-                bottom_right=t.bottom_right,
-                ocr=t.ocr,
-                whitelist=t.whitelist,
-                ner=NerEvidence(label=None, entities=(), score=0.0),
-            )
-            for t in texts
-        ]
-        return log_ocr_stage("annotate_ner", out)
 
-    scan = detect_fn or (
-        lambda body: detect_entities(body, locale=locale, include_time=True)
-    )
+    def scan(body: str):
+        """Run the test override, or the pixel-PHI NER model."""
+        if detect_fn is not None:
+            return detect_fn(body)
+        return detect_entities(body, locale=locale, include_time=True)
+
+    if detect_fn is None:
+        ready = ner_ready()
+        if not ready or not detect_locale_supported(locale):
+            logger.info(
+                f"OCR→NER classify skipped (ner_ready={ready} locale={locale}); "
+                f"{len(texts)} text(s) unlabeled"
+            )
+            out = [
+                OCRText(
+                    text=t.text,
+                    top_left=t.top_left,
+                    bottom_right=t.bottom_right,
+                    ocr=t.ocr,
+                    whitelist=t.whitelist,
+                    ner=NerEvidence(label=None, entities=(), score=0.0),
+                )
+                for t in texts
+            ]
+            return log_ocr_stage("annotate_ner", out)
     ordered = _frame_reading_order(texts)
     joined, spans = _joined_frame_context(texts, ordered)
     entities = scan(joined) if joined.strip() else []
