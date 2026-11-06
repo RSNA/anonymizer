@@ -10,6 +10,7 @@ __pycache__/
 
 # Virtual environments (repo-local and readme-named)
 .venv/
+.venv-*/
 venv/
 ENV/
 env/
@@ -108,3 +109,4 @@ src/prototyping/pseudo_phi_deid/results/**
 src/prototyping/midi_b/results/**
 !src/prototyping/midi_b/results/.gitkeep
 src/prototyping/midi_b/vendor/**
+src/eval/midi_b/vendor/MIDI_validation_script
