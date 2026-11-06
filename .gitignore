@@ -109,4 +109,7 @@ src/prototyping/pseudo_phi_deid/results/**
 src/prototyping/midi_b/results/**
 !src/prototyping/midi_b/results/.gitkeep
 src/prototyping/midi_b/vendor/**
+# Generated Pixel PHI experiment output. Help-site screenshots under docs/ stay tracked.
+src/prototyping/ocr/pixel_phi_easyocr/out/
+src/prototyping/**/.model_cache/
 src/eval/midi_b/vendor/MIDI_validation_script

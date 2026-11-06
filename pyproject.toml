@@ -67,6 +67,20 @@ mcp = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/anonymizer", "src/eval"]
 
+# PyPI source archive: installable packages and project metadata.
+# Prototyping, tests, and the help-site docs stay in git.
+[tool.hatch.build.targets.sdist]
+only-include = [
+  "src/anonymizer",
+  "src/eval",
+  "readme.md",
+  "readme.de.md",
+  "readme.es.md",
+  "readme.fr.md",
+  "CHANGELOG.md",
+  "LICENSE",
+]
+
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
