@@ -15,7 +15,10 @@ def confirm_create(create_project: Callable[..., dict[str, Any]], **kwargs: Any)
     Returns:
         The confirmation-call result/payload.
     """
-    prepared = create_project(**kwargs)
+    prepare_kwargs = dict(kwargs)
+    if prepare_kwargs.get("confidentiality_options") is None and not prepare_kwargs.get("accept_basic_profile"):
+        prepare_kwargs["accept_basic_profile"] = True
+    prepared = create_project(**prepare_kwargs)
     if prepared.get("ok") is False:
         return prepared
     assert prepared.get("status") == "confirmation_required", prepared

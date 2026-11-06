@@ -6,5 +6,5 @@ DICOM values for metadata entities or NER blank/synth replacements.
 Public API
 ----------
 (none)
-    Import process_report_text (detect_phi, remove_phi, write_report_text, …).
+    Import process_report_text (detect_report_text_phi, remove_phi, write_report_text, …).
 """

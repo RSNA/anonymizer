@@ -1,13 +1,15 @@
 """Unit tests: Clean Descriptors detect (compile → OpenMed → post-NER)."""
 
+from pathlib import Path
 from unittest.mock import patch
 
-from pydicom.dataset import Dataset
+from pydicom.dataset import Dataset, FileMetaDataset
+from pydicom.uid import ExplicitVRLittleEndian, generate_uid
 
 from anonymizer.controller.ai.embedded_phi.metadata.detect import (
     DEFAULT_NER_DETECT_OPTIONS,
     NerDetectOptions,
-    detect_phi_in_texts,
+    detect_metadata_phi,
     entity_count_by_label,
 )
 from anonymizer.controller.ai.embedded_phi.metadata.ner_compile import NerCompileOptions
@@ -49,7 +51,7 @@ def test_detect_compile_one_openmed_call() -> None:
         "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
         side_effect=_fake_detect,
     ) as mock_ner:
-        out = detect_phi_in_texts(
+        out = detect_metadata_phi(
             ds=ds,
             items=items,
             whitelist=[],
@@ -75,7 +77,7 @@ def test_detect_plain_texts_batches_prose() -> None:
         "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
         side_effect=_fake_detect,
     ) as mock_ner:
-        out = detect_phi_in_texts(
+        out = detect_metadata_phi(
             ["John Smith", "John Smith", "  ", "100000", ""],
             ds,
             whitelist=[],
@@ -107,7 +109,7 @@ def test_detect_whitelist_drops_after_ner_not_before() -> None:
         "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
         side_effect=_fake_detect,
     ):
-        out = detect_phi_in_texts(ds=ds, items=items, whitelist=["US", "AXILLA"])
+        out = detect_metadata_phi(ds=ds, items=items, whitelist=["US", "AXILLA"])
     assert seen and "Axilla" in seen[0]
     frags = ["US Biopsy Axilla"[e.start : e.end] for e in out["US Biopsy Axilla"]]
     assert frags == ["Biopsy"]
@@ -134,7 +136,7 @@ def test_detect_always_allows_dicom_vr_code_spans() -> None:
         "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
         side_effect=_fake_detect,
     ):
-        out = detect_phi_in_texts(ds=ds, items=items, whitelist=[])
+        out = detect_metadata_phi(ds=ds, items=items, whitelist=[])
     assert "US" not in out
     assert out["Jane"][0].label == "FIRST_NAME"
 
@@ -164,7 +166,7 @@ def test_detect_drops_pure_numeric_whole_cell_false_id() -> None:
         "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
         side_effect=_fake_detect,
     ):
-        out = detect_phi_in_texts(ds=ds, items=items, whitelist=[])
+        out = detect_metadata_phi(ds=ds, items=items, whitelist=[])
     assert "0" not in out
     body = "Ordered for 8371727310 by PH"
     assert body in out
@@ -196,7 +198,7 @@ def test_detect_accepts_legacy_newline_period_compile() -> None:
         "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
         side_effect=_fake_detect,
     ):
-        detect_phi_in_texts(ds=ds, items=items, whitelist=[], detect_options=legacy)
+        detect_metadata_phi(ds=ds, items=items, whitelist=[], detect_options=legacy)
     assert seen and seen[0] == "Series Description: A.\nProtocol Name: B."
 
 
@@ -216,7 +218,7 @@ def test_detect_loads_modality_whitelist_when_whitelist_not_passed() -> None:
     items = [MetadataNerItem(text="Jane Doe", field_name="Series Description", vr="LO")]
     with (
         patch(
-            "anonymizer.controller.ai.embedded_phi.metadata.detect.load_modality_whitelist",
+            "anonymizer.controller.ai.embedded_phi.report.process_report_text.load_modality_whitelist",
             return_value=["Jane"],
         ) as mock_load,
         patch(
@@ -224,7 +226,7 @@ def test_detect_loads_modality_whitelist_when_whitelist_not_passed() -> None:
             side_effect=_fake_detect,
         ),
     ):
-        out = detect_phi_in_texts(ds=ds, items=items, modality="US")
+        out = detect_metadata_phi(ds=ds, items=items, modality="US")
     mock_load.assert_called_once_with(None, "US")
     # Jane still reached the model (post-NER drop).
     assert seen and "Jane" in seen[0]
@@ -250,7 +252,7 @@ def test_detect_keeps_non_whitelist_openmed_spans() -> None:
         "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
         side_effect=_fake_detect,
     ):
-        out = detect_phi_in_texts(ds=ds, items=items, whitelist=[])
+        out = detect_metadata_phi(ds=ds, items=items, whitelist=[])
     frags = ["MAMMO screening for Jane Doe"[e.start : e.end] for e in out["MAMMO screening for Jane Doe"]]
     assert frags == ["MAMMO"]
 
@@ -267,7 +269,7 @@ def test_detect_merges_compact_date_when_ner_misses() -> None:
         "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
         return_value=[],
     ):
-        out = detect_phi_in_texts(ds=ds, items=items, whitelist=[])
+        out = detect_metadata_phi(ds=ds, items=items, whitelist=[])
     assert body in out
     frags = [body[e.start : e.end] for e in out[body]]
     assert frags == ["20101203"]
@@ -287,7 +289,7 @@ def test_detect_pattern_fills_id_site_when_ner_misses() -> None:
         "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
         return_value=[],
     ):
-        out = detect_phi_in_texts(ds=ds, items=items, whitelist=[])
+        out = detect_metadata_phi(ds=ds, items=items, whitelist=[])
     frags = {body[e.start : e.end] for e in out[body]}
     assert "JCH" in frags
     assert "8371727310" in frags
@@ -301,7 +303,7 @@ def test_detect_pattern_fills_dr_name_when_ner_misses() -> None:
         "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
         return_value=[],
     ):
-        out = detect_phi_in_texts(ds=ds, items=items, whitelist=[])
+        out = detect_metadata_phi(ds=ds, items=items, whitelist=[])
     frags = {body[e.start : e.end] for e in out[body]}
     assert "Dr. Brennan" in frags
     assert "867-96-5220" in frags
@@ -324,7 +326,7 @@ def test_detect_includes_pure_series_number_is_for_date_fill() -> None:
         "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
         return_value=[],
     ):
-        out = detect_phi_in_texts(ds=ds, items=items, whitelist=[])
+        out = detect_metadata_phi(ds=ds, items=items, whitelist=[])
     assert body in out
     assert body[out[body][0].start : out[body][0].end] == "20101203"
     assert out[body][0].label == "DATE"
@@ -345,7 +347,7 @@ def test_detect_ner_wins_over_overlapping_date_pattern() -> None:
         "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
         side_effect=_fake_detect,
     ):
-        out = detect_phi_in_texts(ds=ds, items=items, whitelist=[])
+        out = detect_metadata_phi(ds=ds, items=items, whitelist=[])
     assert len(out[body]) == 1
     assert out[body][0].raw_label == "date"
     assert body[out[body][0].start : out[body][0].end] == "20101203"
@@ -361,7 +363,7 @@ def test_entity_count_by_label() -> None:
 
 def test_detect_requires_dataset() -> None:
     try:
-        detect_phi_in_texts(texts=["Jane"], ds=None)
+        detect_metadata_phi(texts=["Jane"], ds=None)
         raise AssertionError("expected TypeError")
     except TypeError as exc:
         assert "requires ds" in str(exc)
@@ -369,23 +371,124 @@ def test_detect_requires_dataset() -> None:
 
 def test_detect_empty_cells_returns_empty() -> None:
     ds = Dataset()
-    assert detect_phi_in_texts(ds=ds, items=[]) == {}
-    assert detect_phi_in_texts(texts=[], ds=ds) == {}
+    assert detect_metadata_phi(ds=ds, items=[]) == {}
+    assert detect_metadata_phi(texts=[], ds=ds) == {}
 
 
 def test_detect_explicit_empty_whitelist_skips_modality_load() -> None:
     ds = Dataset()
     with (
-        patch("anonymizer.controller.ai.embedded_phi.metadata.detect.load_modality_whitelist") as mock_load,
+        patch(
+            "anonymizer.controller.ai.embedded_phi.report.process_report_text.load_modality_whitelist"
+        ) as mock_load,
         patch(
             "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
             return_value=[],
         ),
     ):
-        detect_phi_in_texts(
+        detect_metadata_phi(
             ds=ds,
             items=[MetadataNerItem(text="Jane Doe", field_name="Series Description", vr="LO")],
             whitelist=[],
             modality="US",
         )
     mock_load.assert_not_called()
+
+
+def test_report_metadata_uses_study_whitelist(tmp_path: Path, caplog) -> None:
+    """A one-file report series takes the parent study whitelist in Clean Descriptors."""
+    project = tmp_path / "project"
+    (project / "whitelists").mkdir(parents=True)
+    (project / "whitelists" / "us.txt").write_text("AXILLA\n", encoding="utf-8")
+    study = tmp_path / "study"
+    series = study / "sr"
+    series.mkdir(parents=True)
+    report = Dataset()
+    report.file_meta = FileMetaDataset()
+    report.file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
+    report.SOPClassUID = "1.2.840.10008.5.1.4.1.1.88.11"
+    report.SOPInstanceUID = generate_uid()
+    report.Modality = "SR"
+    report.save_as(series / "report.dcm", enforce_file_format=True)
+    us = Dataset()
+    us.file_meta = FileMetaDataset()
+    us.file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
+    us.SOPClassUID = "1.2.840.10008.5.1.4.1.1.6.1"
+    us.SOPInstanceUID = generate_uid()
+    us.Modality = "US"
+    (study / "us").mkdir()
+    us.save_as(study / "us" / "image.dcm", enforce_file_format=True)
+
+    def _fake_detect(text: str, *, locale: str = "en_US") -> list[Entity]:
+        del locale
+        start = text.index("AXILLA")
+        return [Entity(label="LOCATION", start=start, end=start + len("AXILLA"))]
+
+    items = [MetadataNerItem(text="Clinic AXILLA", field_name="Study Description", vr="LO")]
+    with (
+        caplog.at_level("INFO", logger="anonymizer.controller.ai.embedded_phi.metadata.detect"),
+        patch(
+            "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
+            side_effect=_fake_detect,
+        ),
+    ):
+        out = detect_metadata_phi(
+            ds=report,
+            items=items,
+            project_dir=project,
+            modality="SR",
+            series_dir=series,
+        )
+    assert out == {}
+    assert "Clean Descriptors whitelist source=study modalities=US terms=1 similarity=0.85" in caplog.text
+
+
+def test_imaging_metadata_uses_own_modality_whitelist(tmp_path: Path, caplog) -> None:
+    """Manual Clean Descriptors on an imaging file ignores a sibling modality list."""
+    project = tmp_path / "project"
+    (project / "whitelists").mkdir(parents=True)
+    (project / "whitelists" / "us.txt").write_text("AXILLA\n", encoding="utf-8")
+    (project / "whitelists" / "ct.txt").write_text("AXIAL\n", encoding="utf-8")
+    study = tmp_path / "study"
+    series = study / "ct"
+    series.mkdir(parents=True)
+    ct = Dataset()
+    ct.file_meta = FileMetaDataset()
+    ct.file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
+    ct.SOPClassUID = "1.2.840.10008.5.1.4.1.1.2"
+    ct.SOPInstanceUID = generate_uid()
+    ct.Modality = "CT"
+    ct.save_as(series / "image.dcm", enforce_file_format=True)
+    us = Dataset()
+    us.file_meta = FileMetaDataset()
+    us.file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
+    us.SOPClassUID = "1.2.840.10008.5.1.4.1.1.6.1"
+    us.SOPInstanceUID = generate_uid()
+    us.Modality = "US"
+    (study / "us").mkdir()
+    us.save_as(study / "us" / "image.dcm", enforce_file_format=True)
+
+    def _fake_detect(text: str, *, locale: str = "en_US") -> list[Entity]:
+        del locale
+        start = text.index("AXILLA")
+        return [Entity(label="LOCATION", start=start, end=start + len("AXILLA"))]
+
+    items = [MetadataNerItem(text="Clinic AXILLA", field_name="Study Description", vr="LO")]
+    with (
+        caplog.at_level("INFO", logger="anonymizer.controller.ai.embedded_phi.metadata.detect"),
+        patch(
+            "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
+            side_effect=_fake_detect,
+        ),
+    ):
+        out = detect_metadata_phi(
+            ds=ct,
+            items=items,
+            project_dir=project,
+            modality="CT",
+            series_dir=series,
+        )
+    text = "Clinic AXILLA"
+    spans = [text[e.start : e.end] for e in out.get(text, ())]
+    assert "AXILLA" in spans
+    assert "Clean Descriptors whitelist source=modality modalities=CT terms=1 similarity=0.85" in caplog.text

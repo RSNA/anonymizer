@@ -208,7 +208,7 @@ def test_detect_button_wires_ner(tk_root: tk.Tk) -> None:
             return_value=True,
         ),
         patch(
-            "anonymizer.view.series.metadata_assessment_dialog.detect_phi_in_texts",
+            "anonymizer.view.series.metadata_assessment_dialog.detect_metadata_phi",
             return_value=fake,
         ),
         patch(
@@ -250,7 +250,7 @@ def test_metadata_remove_phi_then_save_writes_file(tk_root: tk.Tk, tmp_path) -> 
             return_value=True,
         ),
         patch(
-            "anonymizer.view.series.metadata_assessment_dialog.detect_phi_in_texts",
+            "anonymizer.view.series.metadata_assessment_dialog.detect_metadata_phi",
             return_value=fake,
         ),
         patch(
@@ -290,7 +290,7 @@ def _run_detect(dialog: MetadataAssessmentDialog, fake: dict) -> None:
             return_value=True,
         ),
         patch(
-            "anonymizer.view.series.metadata_assessment_dialog.detect_phi_in_texts",
+            "anonymizer.view.series.metadata_assessment_dialog.detect_metadata_phi",
             return_value=fake,
         ),
         patch(

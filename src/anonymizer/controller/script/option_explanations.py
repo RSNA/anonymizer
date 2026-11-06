@@ -26,6 +26,13 @@ script_status_line(document, selected, *, base_script_path) -> str
 options_summary_label(selected) -> str
     Alias of options_status_line (checkbox sets are never labeled Custom).
 
+BASIC_OPTIONS
+    Basic Application Confidentiality Profile only.
+
+RETAIN_OPTIONS
+    Basic plus Modified Dates, Patient Characteristics, and Retain Safe Private.
+    Does not include Retain TCIA Research Attributes.
+
 apply_date_option_exclusivity(selected, *, enabled) -> frozenset[DeidMethodCode]
     Clear Full vs Modified Dates conflict when enabling one date option.
 """
@@ -61,6 +68,18 @@ class DeidOptionExplanation:
     link_url: str = ""
     link_tooltip: str = ""
 
+
+# Checkbox sets for the Basic and Retain buttons. The project stores only
+# the selected codes. Neither set includes Retain TCIA Research Attributes.
+BASIC_OPTIONS: frozenset[DeidMethodCode] = frozenset({DeidMethodCode.BASIC})
+RETAIN_OPTIONS: frozenset[DeidMethodCode] = frozenset(
+    {
+        DeidMethodCode.BASIC,
+        DeidMethodCode.MODIFIED_DATES,
+        DeidMethodCode.PATIENT_CHARACTERISTICS,
+        DeidMethodCode.SAFE_PRIVATE,
+    }
+)
 
 # Stable display order for non-Basic options on the script status line.
 _STATUS_ORDER: tuple[DeidMethodCode, ...] = (
@@ -319,6 +338,7 @@ _COPY: dict[DeidMethodCode, tuple[str, str, str]] = {
         "",
     ),
     DeidMethodCode.TCIA_RESEARCH: (
+        "Not a DICOM PS 3.15 option. "
         "At import, keep research attributes listed for TCIA-style archive "
         "submission when Basic would still remove, empty, or age-band them — "
         "for example nuclear medicine acquisition coding, Patient Age kept "

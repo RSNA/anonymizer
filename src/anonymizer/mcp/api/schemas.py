@@ -123,10 +123,15 @@ TRANSFER_SYNTAXES_DESC = (
     "Omit to keep factory defaults."
 )
 OPTIONS_DESC = (
-    "De-identification options as DICOM CID 7050 code values "
-    "(113100 Basic Profile default; e.g. add 113107 Retain Longitudinal "
-    "Modified Dates, 113111 Retain Safe Private). Basic is always included. "
-    "On an existing project, changing options recompiles the anonymizer script."
+    "De-identification options the user chose, by plain name or code. "
+    "Basic Application Confidentiality Profile is always included. "
+    "Use Basic, or accept_basic_profile on create, to accept that default. "
+    "Use Retain for Basic plus Modified Dates, Patient Characteristics, and "
+    "Retain Safe Private. "
+    "Retain TCIA Research Attributes is not a DICOM PS 3.15 option. "
+    "A project cannot be created until the user chooses options or accepts Basic. "
+    "Changing options on an existing project recompiles the anonymizer script "
+    "(custom script edits are lost)."
 )
 # Shown when configure_remote rejects invented keys (single source for retry hints).
 CONFIGURE_REMOTE_EXTRA_HINT = (
@@ -450,6 +455,7 @@ _PROJECT_ANNOTATIONS: dict[str, Any] = {
     "storage_dir": Annotated[str, AfterValidator(_require_user_absolute_path)],
     "scp": LocalDicomNodeArgs,
     "network_timeouts": NetworkTimeoutsArgs,
+    "confidentiality_options": list[int | str],
 }
 
 
@@ -497,6 +503,17 @@ def _create_project_definitions() -> dict[str, tuple[Any, Any]]:
             description=(
                 "Pending configuration revision returned by the prepare call. Required with "
                 "confirm=true; a stale revision will not create a project."
+            ),
+        ),
+    )
+    definitions["accept_basic_profile"] = (
+        bool,
+        Field(
+            default=False,
+            description=(
+                "True only when the user explicitly accepts the default Basic "
+                "Application Confidentiality Profile and did not name other "
+                "de-identification options. Omit when confidentiality_options is set."
             ),
         ),
     )

@@ -15,7 +15,7 @@ from pydicom import Dataset, dcmread
 from anonymizer.controller.ai.embedded_phi.ner.engine import REPLACE_MODE_VALUES, Entity, ReplaceMode
 from anonymizer.controller.ai.embedded_phi.report.process_report_text import (
     _SLOT_SEP,
-    detect_phi,
+    detect_report_text_phi,
     encapsulated_pdf_bytes,
     extract_report_text,
     remove_phi,
@@ -473,6 +473,8 @@ class ReportTextReview(AppCTkToplevel):
         self._refresh_state()
         self._set_status(_("Detecting…"))
         ds = self._ds
+        project_dir = self._controller.model.storage_dir
+        series_dir = self._dcm_path.parent if self._dcm_path is not None else None
 
         def _worker() -> None:
             try:
@@ -483,7 +485,17 @@ class ReportTextReview(AppCTkToplevel):
                         phi_header = self._controller.anonymizer.model.get_study_phi_header_by_anon_study_uid(
                             study_uid
                         )
-                self._detect_queue.put(("ok", detect_phi(ds, phi_header=phi_header)))
+                self._detect_queue.put(
+                    (
+                        "ok",
+                        detect_report_text_phi(
+                            ds,
+                            phi_header=phi_header,
+                            project_dir=project_dir,
+                            series_dir=series_dir,
+                        ),
+                    )
+                )
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Report Text Review detect failed")
                 self._detect_queue.put(("error", str(exc)))

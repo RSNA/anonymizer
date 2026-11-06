@@ -11,6 +11,12 @@ infer_options_from_script(document) -> frozenset[DeidMethodCode]
 apply_option_modality_effects(model, options) -> None
     Ensure SR/PDF modalities when Clean Structured Content / Descriptors are on.
 
+assign_confidentiality_options(model, options) -> frozenset[DeidMethodCode]
+    Store options on a project model, always including Basic, and apply modality side-effects.
+
+resolve_deidentification_choices(value) -> frozenset[DeidMethodCode]
+    Option names or codes (Basic, Retain, or one option) to a set, always including Basic.
+
 REPORT_MODALITIES_FOR_CLEAN_STRUCTURED
     Modality codes (SR, PDF) that need Clean Structured Content at ingest.
 
@@ -41,10 +47,19 @@ from anonymizer.controller.script.operands import (
     is_remove_operation,
     is_retain_value_operation,
 )
+from anonymizer.controller.script.option_explanations import (
+    BASIC_OPTIONS,
+    RETAIN_OPTIONS,
+    option_abbreviation,
+)
 from anonymizer.controller.script.paths import packaged_default_script_path
 from anonymizer.controller.script.retain_option_tags import patient_age_tag
 from anonymizer.model.project import ProjectModel
-from anonymizer.utils.dicom import DeidMethodCode
+from anonymizer.model.settings_validate import (
+    SettingsValidationError,
+    validate_confidentiality_options,
+)
+from anonymizer.utils.dicom import DeidMethodCode, deid_method_meaning
 from anonymizer.utils.modalities import Modality, get_modality_catalog
 
 # SR / Encapsulated PDF — not SC (pixel Secondary Capture).
@@ -169,6 +184,119 @@ def apply_option_modality_effects(
             modalities.append(modality_code.value)
     model.modalities = modalities
     model.ensure_storage_classes_from_modalities()
+
+
+_NAMED_OPTION_SETS: dict[str, frozenset[DeidMethodCode]] = {
+    "basic": BASIC_OPTIONS,
+    "basic profile": BASIC_OPTIONS,
+    "retain": RETAIN_OPTIONS,
+    "retain options": RETAIN_OPTIONS,
+}
+
+
+def assign_confidentiality_options(
+    model: ProjectModel,
+    options: frozenset[DeidMethodCode],
+) -> frozenset[DeidMethodCode]:
+    """
+    Store de-identification options on a project model.
+
+    Always includes the Basic Application Confidentiality Profile, then applies
+    the modality side-effects of the stored set. Does not write the project script.
+
+    Args:
+        model: Project model to update.
+        options: Selected de-identification options.
+
+    Returns:
+        The stored option set.
+    """
+    stored = frozenset(DeidMethodCode(int(code)) for code in options) | {DeidMethodCode.BASIC}
+    model.confidentiality_options = stored
+    apply_option_modality_effects(model, stored)
+    return stored
+
+
+def _option_name_index() -> dict[str, DeidMethodCode]:
+    """Map plain-language option labels to their codes."""
+    index: dict[str, DeidMethodCode] = {}
+    for code in DeidMethodCode:
+        meaning = deid_method_meaning(code).casefold()
+        index[meaning] = code
+        if meaning.endswith(" option"):
+            index[meaning[: -len(" option")]] = code
+        index[option_abbreviation(code).casefold()] = code
+    return index
+
+
+def _codes_for_choice(item: object) -> set[DeidMethodCode]:
+    """
+    Resolve one de-identification choice to option codes.
+
+    Args:
+        item: An option code, a plain name, Basic, or Retain.
+
+    Returns:
+        Codes named by that one choice.
+
+    Raises:
+        SettingsValidationError: When the choice is not a known option.
+    """
+    if isinstance(item, bool) or item is None:
+        raise SettingsValidationError(
+            f"confidentiality_options entries must be option names or codes (got {item!r})"
+        )
+    if isinstance(item, int) or (isinstance(item, str) and item.strip().lstrip("-").isdigit()):
+        try:
+            return {DeidMethodCode(int(item))}
+        except (TypeError, ValueError) as exc:
+            allowed = sorted(int(code) for code in DeidMethodCode)
+            raise SettingsValidationError(
+                f"confidentiality_options codes must be in {allowed} (got {item!r})"
+            ) from exc
+    text = str(item).strip()
+    folded = " ".join(text.casefold().split())
+    named = _NAMED_OPTION_SETS.get(folded)
+    if named is not None:
+        return set(named)
+    code = _option_name_index().get(folded)
+    if code is None:
+        raise SettingsValidationError(
+            f"Unknown de-identification option {item!r}. "
+            "Use Basic, Retain, an option name such as Retain TCIA Research Attributes, "
+            "or a known option code."
+        )
+    return {code}
+
+
+def resolve_deidentification_choices(value: object) -> frozenset[DeidMethodCode]:
+    """
+    Normalize a de-identification choice to option codes.
+
+    Args:
+        value: List of option codes, plain names, Basic, or Retain.
+            None is treated as Basic only.
+
+    Returns:
+        Option codes, always including Basic.
+
+    Raises:
+        SettingsValidationError: When an entry is not a known option.
+    """
+    if value is None:
+        return frozenset({DeidMethodCode.BASIC})
+    try:
+        items = list(value)  # type: ignore[arg-type]
+    except TypeError as exc:
+        raise SettingsValidationError(
+            f"confidentiality_options must be a list of option names or codes (got {value!r})"
+        ) from exc
+    codes: set[DeidMethodCode] = set()
+    for item in items:
+        codes.update(_codes_for_choice(item))
+    codes.add(DeidMethodCode.BASIC)
+    validated = validate_confidentiality_options(sorted(int(code) for code in codes))
+    return frozenset(DeidMethodCode(code) for code in validated)
 
 
 def newly_enabled_report_modalities(

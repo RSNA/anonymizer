@@ -62,17 +62,18 @@ Tool results are plain text (not structured JSON content):
 The server owns the pending configuration. Do not run a setup wizard and do not ask about every setting.
 
 1. When the user asks to create a project, call `create_project` **once** with `project_name`, only the settings the user actually supplied, and `confirm=false`. If `project_name` is missing, ask for it instead of calling.
-2. If the result is `status=confirmation_required`, present its `configuration`, identifying `supplied_by_user` values versus `using_defaults`, plus any `warnings`. Ask: “Create this project with these settings, or what should change?” Then **stop**.
-3. If the user changes a setting before confirming, call `create_project` again with only those changes and `confirm=false`. Present the new `revision` configuration, then **stop**.
-4. Only when the user explicitly confirms in a **later** message, call `create_project` with the same `project_name`, `confirm=true`, and the displayed `revision`. Never set `confirm=true` on the first create call or in the same reply that first presents the configuration — even if the user asks to skip the review or create immediately.
-5. If the result is `status=created`, the project is already open. Reply briefly and **stop** unless that same user message explicitly requested a following import/PACS step.
-6. AWS Cognito for cloud Send is configured in the desktop Project Settings; there is no MCP tool. Do not block local or PACS work for AWS.
+2. If the result is `status=confirmation_required` and `deidentification_choice_required` is true, show `deidentification_prompt` and `deidentification_choices`. Ask the user to choose de-identification options or accept the Basic Application Confidentiality Profile. Call `create_project` again with `confirm=false` and either `confidentiality_options` (plain names or codes) or `accept_basic_profile=true`. Then **stop**. Do not create the project on this turn.
+3. If the result is `status=confirmation_required` and the choice is already set, present `configuration` and `deidentification_options`, identifying `supplied_by_user` values versus `using_defaults`, plus any `warnings`. Ask: “Create this project with these settings, or what should change?” Then **stop**.
+4. If the user changes a setting before confirming, call `create_project` again with only those changes and `confirm=false`. Present the new `revision` configuration and `deidentification_options`, then **stop**.
+5. Only when the user explicitly confirms in a **later** message, and de-identification options are already chosen or Basic is accepted, call `create_project` with the same `project_name`, `confirm=true`, and the displayed `revision`. Never set `confirm=true` on the first create call or in the same reply that first presents the configuration — even if the user asks to skip the review or create immediately.
+6. If the result is `status=created`, the project is already open. Reply briefly and **stop** unless that same user message explicitly requested a following import/PACS step.
+7. AWS Cognito for cloud Send is configured in the desktop Project Settings; there is no MCP tool. Do not block local or PACS work for AWS.
 
 ## Change settings later
 
 1. Call `project_info` (`{}`) if you need current values.
 2. Call `update_project_settings` with mutable fields only: `modalities`, `transfer_syntaxes`, `scp`, `network_timeouts`, `confidentiality_options`.
-3. Changing `confidentiality_options` (CID 7050 code values, e.g. clinical = [113100, 113107, 113108, 113111]) recompiles the project anonymizer script (custom edits lost) — confirm with the clinician first.
+3. Changing `confidentiality_options` recompiles the project anonymizer script (custom edits lost) — confirm with the user first. Pass plain names or codes. `Basic` is the Basic Application Confidentiality Profile. `Retain` is Basic plus Modified Dates, Patient Characteristics, and Retain Safe Private. `Retain TCIA Research Attributes` is not a DICOM PS 3.15 option. The result includes `deidentification_options`.
 4. Fixed-after-create fields (`project_name`, `storage_dir`, `site_id`, `uid_root`, `language_code`) cannot be changed. `language_code` is chosen once at project creation, like the desktop welcome-screen language selector; it is not a project setting. If the user asks to change one, do **not** call `update_project_settings`; explain that it is fixed after creation and do not invent a workaround.
 5. Reply → **stop**.
 

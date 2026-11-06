@@ -209,4 +209,9 @@ def test_project_info_includes_settings_fields():
     assert "network_timeouts" in project
     assert "local_scu" in project
     assert "transfer_syntaxes" in project
+    assert "deidentification_options" in project
+    assert project["deidentification_options"]["summary"] == "Basic"
+    assert project["deidentification_options"]["options"][0]["name"] == (
+        "Basic Application Confidentiality Profile"
+    )
     assert "storage_dir" not in project

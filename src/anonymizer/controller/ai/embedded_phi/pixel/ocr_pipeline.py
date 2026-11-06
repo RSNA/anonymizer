@@ -2,8 +2,8 @@
 
 Stages fill nested OCRText evidence only (no decision flags, no evaluate mutator).
 Callers decide with is_whitelisted / phi_accepted + current PhiMatchMode.
-Whitelist overrides NER only when ner.score < whitelist.score - 0.1 (names that
-merely resemble whitelist terms stay PHI when NER is close enough).
+A whitelist score above 0.8 always wins. A weaker hit wins only when
+ner.score < whitelist.score - 0.1 (a fuzzy resemblance can stay PHI).
 
 Public API
 ----------
@@ -20,13 +20,16 @@ is_whitelisted(t: OCRText, mode: PhiMatchMode) -> bool
     True when whitelist.score is set and meets the mode similarity floor.
 
 phi_accepted(t: OCRText, mode: PhiMatchMode) -> bool
-    True when NER meets the mode floor and whitelist does not override (margin 0.1).
+    True when NER meets the mode floor and whitelist does not override.
 
 effective_phi_label(t: OCRText, mode: PhiMatchMode) -> str | None
-    ner.label when phi_accepted; else None.
+    Highest-scoring accepted NER label. Rectangle color uses this one label.
+
+accepted_phi_entities(t: OCRText, mode: PhiMatchMode) -> tuple[tuple[str, str], ...]
+    NER entities on this box that meet the mode floor. (label, text) in span order.
 
 detect_text(pixels: NDArray[np.uint8], ocr_reader: Reader, *, modality: str | None=None) -> list[OCRText]
-    EasyOCR only. Sets ocr.prob; whitelist/ner scores stay None.
+    EasyOCR only. One upright read. Sets ocr.prob; whitelist/ner scores stay None.
 
 filter_ocr_noise(texts: list[OCRText], *, modality: str | None=None) -> list[OCRText]
     Geometry + min_prob; may drop boxes. Optional in the pipe.
@@ -39,7 +42,8 @@ normalize_clock_text_for_ner(text: str) -> str
     Separators may be non-digits, digit 8 (':' misread), or a mix of both.
 
 annotate_ner(texts: list[OCRText], *, locale: str='en_US', modality: str | None=None, detect_fn=None) -> list[OCRText]
-    Frame-join NER (include_time). XR/US clock normalize. Never drop.
+    Frame-join NER (include_time). Skip boxes of 2 characters or fewer.
+    No comma after a fragment that already ends with a separator. XR/US clock normalize. Never drop.
 
 pipe(*stages)
     Compose annotate stages; each stage logs. No decide/evaluate stage.
@@ -98,8 +102,14 @@ _DEFAULT_LINK_THRESHOLD = 0.4
 _DEFAULT_WIDTH_THS = 0.1
 _DEFAULT_TEXT_THRESHOLD = 0.7
 _FRAME_CONTEXT_SEPARATOR = ", "
+# Boxes of this many characters or fewer are omitted from the NER line.
+_NER_JOIN_MAX_SKIP_CHARS = 2
+# A fragment that already ends with one of these is joined to the next with a space.
+_NER_TRAILING_SEPARATORS = frozenset(":-/\\|;,.")
 _PIXEL_NAME_LABELS = frozenset({"FIRST_NAME", "LAST_NAME"})
-# Whitelist overrides NER only when ner.score < whitelist.score - this margin.
+# A whitelist score above this always wins over NER.
+_WHITELIST_CONFIDENT_SCORE = 0.8
+# Weaker hits override NER only when ner.score < whitelist.score - this margin.
 _WHITELIST_OVER_NER_MARGIN = 0.1
 # XR (CR/DX) and US burn-in clocks: any separators → HH:MM:SS for NER.
 _CLOCK_NORMALIZE_MODALITIES = frozenset({*XR_MODALITIES, Modality.US})
@@ -132,8 +142,8 @@ class PhiMatchThresholds:
 _MATCH_PRESETS: dict[PhiMatchMode, PhiMatchThresholds] = {
     PhiMatchMode.EXACT: PhiMatchThresholds(1.0, 0.90),
     PhiMatchMode.STRICT: PhiMatchThresholds(0.90, 0.80),
-    PhiMatchMode.STANDARD: PhiMatchThresholds(0.85, 0.50),
-    PhiMatchMode.LENIENT: PhiMatchThresholds(0.65, 0.35),
+    PhiMatchMode.STANDARD: PhiMatchThresholds(0.85, 0.30),
+    PhiMatchMode.LENIENT: PhiMatchThresholds(0.65, 0.20),
 }
 
 
@@ -150,10 +160,11 @@ def is_whitelisted(t: OCRText, mode: PhiMatchMode) -> bool:
 
 def _whitelist_overrides_ner(t: OCRText, mode: PhiMatchMode) -> bool:
     """
-    True when the box meets the whitelist floor and NER loses by the margin.
+    True when the box meets the whitelist floor and whitelist wins.
 
-    Whitelist overrides only if ner.score < whitelist.score - 0.1 (or NER is
-    absent). Close NER scores keep names that merely resemble whitelist terms.
+    A whitelist score above 0.8 always wins. A weaker hit wins when NER is
+    absent or ner.score < whitelist.score - 0.1. Close scores on a fuzzy
+    resemblance stay PHI.
 
     Args:
         t: Annotated OCR box.
@@ -167,6 +178,8 @@ def _whitelist_overrides_ner(t: OCRText, mode: PhiMatchMode) -> bool:
     wl_score = t.whitelist.score
     if wl_score is None:
         return False
+    if float(wl_score) > _WHITELIST_CONFIDENT_SCORE:
+        return True
     if t.ner.label is None or t.ner.score is None:
         return True
     return float(t.ner.score) < float(wl_score) - _WHITELIST_OVER_NER_MARGIN
@@ -175,7 +188,8 @@ def _whitelist_overrides_ner(t: OCRText, mode: PhiMatchMode) -> bool:
 def phi_accepted(t: OCRText, mode: PhiMatchMode) -> bool:
     """
     True when ner.label is set, ner.score meets the mode floor, and whitelist
-    does not override (NER must be within 0.1 of whitelist similarity or higher).
+    does not win. Whitelist wins above 0.8, or when NER is below a weaker
+    hit by more than 0.1.
 
     Args:
         t: Annotated OCR box.
@@ -194,11 +208,41 @@ def phi_accepted(t: OCRText, mode: PhiMatchMode) -> bool:
     return not _whitelist_overrides_ner(t, mode)
 
 
+def accepted_phi_entities(t: OCRText, mode: PhiMatchMode) -> tuple[tuple[str, str], ...]:
+    """
+    NER entities on this box that meet the mode floor.
+
+    Whitelist override drops every entity. Each entity is judged by its own
+    score. The OCR string is not given one class.
+
+    Args:
+        t: Annotated OCR box.
+        mode: Current PhiMatchMode floors.
+
+    Returns:
+        (label, text) in NER span order.
+    """
+    if _whitelist_overrides_ner(t, mode):
+        return ()
+    floor = thresholds_for(mode).ner_score
+    accepted: list[tuple[str, str]] = []
+    for row in t.ner.entities:
+        label = str(row[0] or "")
+        text = str(row[1] or "")
+        score = float(row[2]) if len(row) > 2 and row[2] is not None else None
+        if score is None and t.ner.score is not None:
+            score = float(t.ner.score)
+        if not label or score is None or score < floor:
+            continue
+        accepted.append((label, text))
+    return tuple(accepted)
+
+
 def effective_phi_label(t: OCRText, mode: PhiMatchMode) -> str | None:
     """
-    Product PHI class for display/status when callers decide.
+    Highest-scoring NER class on this box that meets the mode floor.
 
-    Returns ner.label only when phi_accepted.
+    One rectangle has one color. Hover uses accepted_phi_entities for every class.
 
     Args:
         t: Annotated OCR box.
@@ -209,7 +253,20 @@ def effective_phi_label(t: OCRText, mode: PhiMatchMode) -> str | None:
     """
     if not phi_accepted(t, mode):
         return None
-    return t.ner.label
+    accepted = accepted_phi_entities(t, mode)
+    if not accepted:
+        return t.ner.label
+    best_score = -1.0
+    best_label = accepted[0][0]
+    for row in t.ner.entities:
+        label = str(row[0] or "")
+        score = float(row[2]) if len(row) > 2 and row[2] is not None else None
+        if score is None or label not in {item[0] for item in accepted}:
+            continue
+        if score > best_score:
+            best_score = score
+            best_label = label
+    return best_label
 
 
 def _decision_outcome(t: OCRText, mode: PhiMatchMode) -> str:
@@ -228,10 +285,56 @@ def _ocr_min_text_len(modality: str | None) -> int:
     return _OCR_MIN_TEXT_LEN
 
 
-def _ocr_rotation_angles(modality: str | None) -> list[int]:
-    if str(modality or "").upper() == "US":
-        return []
-    return [90, 270]
+def _easyocr_readtext(
+    ocr_reader: Reader,
+    pixels: NDArray[np.uint8],
+    *,
+    canvas_size: int,
+):
+    """
+    One upright EasyOCR readtext call with the product box settings.
+
+    Args:
+        ocr_reader: Initialised EasyOCR reader.
+        pixels: 2D or 3-channel uint8 frame.
+        canvas_size: EasyOCR canvas cap for this frame.
+
+    Returns:
+        EasyOCR (box, text, score) rows.
+    """
+    return ocr_reader.readtext(
+        pixels,
+        canvas_size=canvas_size,
+        paragraph=False,
+        add_margin=0.1,
+        rotation_info=[],
+        min_size=1,
+        ycenter_ths=_DEFAULT_YCENTER_THS,
+        link_threshold=_DEFAULT_LINK_THRESHOLD,
+        width_ths=_DEFAULT_WIDTH_THS,
+        text_threshold=_DEFAULT_TEXT_THRESHOLD,
+    )
+
+
+def _boxes_from_readtext(results, img_width: int, img_height: int) -> list[OCRText]:
+    """
+    Parse one readtext result list into OCR boxes, skipping invalid rows.
+
+    Args:
+        results: EasyOCR (box, text, score) rows.
+        img_width: Frame width in pixels.
+        img_height: Frame height in pixels.
+
+    Returns:
+        Parsed boxes. Invalid rows are logged and omitted.
+    """
+    out: list[OCRText] = []
+    for result in results:
+        try:
+            out.append(_ocr_text_from_easyocr_result(result, img_width, img_height))
+        except ValueError as exc:
+            logger.warning(f"Skipping invalid OCR result. Error: {exc}")
+    return out
 
 
 def _ocr_text_from_easyocr_result(result, img_width: int, img_height: int) -> OCRText:
@@ -264,10 +367,12 @@ def detect_text(
     """
     EasyOCR only. Sets ocr.prob; whitelist/ner scores stay None.
 
+    One upright read of the full frame. Noise filtering stays in filter_ocr_noise.
+
     Args:
         pixels: 2D or 3-channel uint8 frame for EasyOCR.
         ocr_reader: Initialised EasyOCR reader.
-        modality: DICOM modality (rotation TTA); optional.
+        modality: Accepted for callers. The read does not vary by modality.
 
     Returns:
         Parsed OCR boxes (may be empty).
@@ -281,25 +386,14 @@ def detect_text(
         return []
 
     canvas_size = min(max(pixels.shape[0], pixels.shape[1]), _OCR_CANVAS_SIZE_THRESHOLD)
-    results = ocr_reader.readtext(
-        pixels,
-        canvas_size=canvas_size,
-        paragraph=False,
-        add_margin=0.1,
-        rotation_info=_ocr_rotation_angles(modality),
-        min_size=1,
-        ycenter_ths=_DEFAULT_YCENTER_THS,
-        link_threshold=_DEFAULT_LINK_THRESHOLD,
-        width_ths=_DEFAULT_WIDTH_THS,
-        text_threshold=_DEFAULT_TEXT_THRESHOLD,
+    return log_ocr_stage(
+        "detect_text",
+        _boxes_from_readtext(
+            _easyocr_readtext(ocr_reader, pixels, canvas_size=canvas_size),
+            img_width,
+            img_height,
+        ),
     )
-    out: list[OCRText] = []
-    for result in results:
-        try:
-            out.append(_ocr_text_from_easyocr_result(result, img_width, img_height))
-        except ValueError as exc:
-            logger.warning(f"Skipping invalid OCR result. Error: {exc}")
-    return log_ocr_stage("detect_text", out)
 
 
 def _is_short_numeric(text: str) -> bool:
@@ -555,20 +649,51 @@ def _frame_reading_order(detections: Sequence[OCRText]) -> list[int]:
     return ordered
 
 
+def _ner_join_separator(previous: str) -> str:
+    """
+    Separator to place before the next NER fragment.
+
+    Args:
+        previous: Fragment already appended to the NER line.
+
+    Returns:
+        A space when previous ends with a separator, otherwise comma-space.
+    """
+    stripped = previous.rstrip()
+    if stripped and stripped[-1] in _NER_TRAILING_SEPARATORS:
+        return " "
+    return _FRAME_CONTEXT_SEPARATOR
+
+
 def _joined_frame_context(
     detections: Sequence[OCRText], ordered: Sequence[int]
 ) -> tuple[str, dict[int, tuple[int, int]]]:
-    parts: list[str] = []
+    """
+    Reading-order NER line. Boxes of 2 characters or fewer are omitted.
+
+    Args:
+        detections: OCR boxes for one frame.
+        ordered: Indices in reading order.
+
+    Returns:
+        Joined text and a map of included box index to (start, end) in that text.
+    """
+    chunks: list[str] = []
     spans: dict[int, tuple[int, int]] = {}
     pos = 0
-    for n, idx in enumerate(ordered):
-        if n:
-            pos += len(_FRAME_CONTEXT_SEPARATOR)
+    for idx in ordered:
         text = detections[idx].text or ""
-        spans[idx] = (pos, pos + len(text))
-        parts.append(text)
+        if len(text.strip()) <= _NER_JOIN_MAX_SKIP_CHARS:
+            continue
+        if chunks:
+            sep = _ner_join_separator(chunks[-1])
+            chunks.append(sep)
+            pos += len(sep)
+        start = pos
+        chunks.append(text)
         pos += len(text)
-    return _FRAME_CONTEXT_SEPARATOR.join(parts), spans
+        spans[idx] = (start, pos)
+    return "".join(chunks), spans
 
 
 def _entities_in_box(entities: Sequence, joined: str, span: tuple[int, int]) -> list[tuple[str, str, float]]:
@@ -597,6 +722,9 @@ def annotate_ner(
 
     Always keeps model TIME as product TIME for pixel PHI. For XR (CR/DX) and
     US, rewrites loose HH MM SS burn-in clocks to HH:MM:SS before the model run.
+    Boxes of 2 characters or fewer are left out of the NER line. A fragment
+    that already ends with a separator (colon, dash, slash, and similar) is
+    followed by a space, not a comma.
 
     Args:
         texts: OCR boxes of one frame.
@@ -640,12 +768,15 @@ def annotate_ner(
     entities = scan(joined) if joined.strip() else []
     out: list[OCRText] = []
     for idx, ocr_text in enumerate(texts):
-        in_box = _entities_in_box(entities, joined, spans[idx])
+        span = spans.get(idx)
+        in_box = _entities_in_box(entities, joined, span) if span is not None else []
         if in_box:
             best = max(in_box, key=lambda row: row[2])
             label = _pixel_phi_label(best[0])
             score = float(best[2])
-            box_entities = tuple((_pixel_phi_label(lab), txt) for lab, txt, _s in in_box)
+            box_entities = tuple(
+                (_pixel_phi_label(lab), txt, float(ent_score)) for lab, txt, ent_score in in_box
+            )
         else:
             label = None
             score = 0.0
@@ -720,12 +851,24 @@ def format_ocr_texts_for_log(
             lines.append(f"  {t.text!r} | {score:.2f} | {term_s}")
     elif stage_name == "annotate_ner":
         for t in texts:
-            score = t.ner.score if t.ner.score is not None else 0.0
-            label = t.ner.label if t.ner.label else "—"
-            lines.append(f"  {t.text!r} | {score:.2f} | {label}")
+            if t.ner.entities and any(len(row) > 2 for row in t.ner.entities):
+                parts = ", ".join(
+                    f"{row[0]} {row[1]} {float(row[2]):.2f}" for row in t.ner.entities if len(row) > 2
+                )
+                lines.append(f"  {t.text!r} | {parts}")
+            else:
+                score = t.ner.score if t.ner.score is not None else 0.0
+                label = t.ner.label if t.ner.label else "—"
+                lines.append(f"  {t.text!r} | {score:.2f} | {label}")
     elif stage_name == "decisions" and mode is not None:
         for t in texts:
-            lines.append(f"  {t.text!r} | {_decision_outcome(t, mode)}")
+            outcome = _decision_outcome(t, mode)
+            if outcome == "phi_accepted":
+                classes = ", ".join(dict.fromkeys(label for label, _text in accepted_phi_entities(t, mode)))
+                if classes:
+                    lines.append(f"  {t.text!r} | {outcome} {classes}")
+                    continue
+            lines.append(f"  {t.text!r} | {outcome}")
     else:
         for t in texts:
             lines.append(f"  {t.text!r}")

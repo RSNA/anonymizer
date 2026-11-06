@@ -2,7 +2,7 @@
 Uses OpenMed ClinicalE5 token-classification only (no lexicon / phone regex).
 Product labels: FIRST_NAME, LAST_NAME, LOCATION, ID,
 PHONE, DATE, EMAIL. Pixel PHI may also keep TIME via include_time.
-Model spans are returned exactly as classified
+Unmapped model spans that are entirely a date or time pattern are kept.
 
 Public API
 ----------
@@ -26,6 +26,7 @@ Entity
 
 detect_entities(text: str, *, locale: str='en_US', include_time: bool=False) -> list[Entity]
     Run OpenMed token-classification on text. Pixel PHI sets include_time to keep TIME.
+    Before dropping an unmapped label, keep the span when it is a date or time.
 
 detect_entities_in_segments(segments: Sequence[str], *, locale: str='en_US', max_chars: int=_DEFAULT_SEGMENT_MAX_CHARS, scan_fn: Callable[[str], list[Entity]] | None=None) -> list[list[Entity]]
     Run a text PHI scanner on **chunks of whole fields**.
@@ -47,13 +48,16 @@ detect_locale_supported(locale: str) -> bool
 import logging
 import re
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
 from anonymizer.controller.ai.embedded_phi.ner.cache import (
     load_token_classification_pipeline,
     ner_ready,
     resolve_model_id,
+)
+from anonymizer.controller.ai.embedded_phi.ner.entity import Entity as Entity
+from anonymizer.controller.ai.embedded_phi.ner.radiology_filters import (
+    date_time_pattern_entities,
 )
 from anonymizer.controller.ai.embedded_phi.ner.synthetic_phi import generate_synthetic_phi
 
@@ -168,51 +172,13 @@ _PIPE_MODEL_ID: str | None = None
 _PIPE_ERROR: str | None = None
 
 
+# Clock raw labels from date_time_pattern_entities (colon and compact TM).
+_DATE_TIME_CLOCK_RAW = frozenset({"colon_tm", "compact_tm"})
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True, slots=True)
-class Entity:
-    """One PHI span: product label plus character offsets into the source string.
-
-    score is the model's softmax confidence for raw_label (fine-grained HF
-    class), not for the mapped product label. No score threshold is applied —
-    see module README. UI hover shows label only.
-
-    replacement: when set (metadata PHI tagged with a DICOM keyword as
-    label), replace_entities always writes this string — the anonymized
-    DICOM value — instead of blanking or generate_synthetic_phi.
-    """
-
-    label: str
-    start: int
-    end: int
-    score: float = 1.0
-    raw_label: str = ""
-    replacement: str | None = None
-
-    def text_of(self, source: str) -> str:
-        """
-        Return the substring of source covered by this entity.
-
-        Args:
-            source: Full source string into which start/end index.
-
-        Returns:
-            Slice source[start:end].
-        """
-        return source[self.start : self.end]
-
-    def to_dict(self) -> dict[str, Any]:
-        """
-        Serialize this entity to a plain dict.
-
-        Returns:
-            Mapping of field names to values (via dataclasses.asdict).
-        """
-        return asdict(self)
 
 
 def detect_entities(
@@ -225,8 +191,8 @@ def detect_entities(
     Run OpenMed token-classification on text.
 
     Product-labeled entities with start/end into text. No lexicon,
-    phone-regex, merging, or other post-filters — the model's spans are
-    returned exactly as classified (label mapping only).
+    phone-regex, or merging. An unmapped model label is kept when the span
+    is entirely a date or time from date_time_pattern_entities.
 
     Logging: **INFO** traces the key processing steps in order —
     step 1/4 input, step 2/4 model raw spans, step 3/4 label map
@@ -274,10 +240,26 @@ def detect_entities(
         scored = _to_scored_label(raw, include_time=include_time)
         if scored is None or scored not in allowed_labels:
             start, end = int(ent["start"]), int(ent["end"])
+            word = body[start:end]
+            score = float(ent.get("score", 0.5))
+            # TIME gated off by include_time is a known label, not a misclass.
+            if _to_scored_label(raw, include_time=True) is None:
+                rescued = _date_time_label_for_span(word, include_time=include_time)
+                if rescued is not None and rescued in allowed_labels:
+                    mapped.append(
+                        Entity(
+                            label=rescued,
+                            start=start,
+                            end=end,
+                            score=score,
+                            raw_label=raw,
+                        )
+                    )
+                    continue
             dropped_rows.append(
                 (
-                    body[start:end],
-                    float(ent.get("score", 0.5)),
+                    word,
+                    score,
                     f"no product label for raw label {raw!r}",
                 )
             )
@@ -320,7 +302,7 @@ def detect_entities_in_segments(
     [].
 
     Default scan_fn is detect_entities (NER only). Report View / Metadata
-    pass detect_phi_in_text so study-PHI matching + NER share one join pass.
+    pass detect_report_text_phi_in_text so study-PHI matching + NER share one join pass.
 
     Args:
         segments: Source strings (order preserved in the return value).
@@ -673,7 +655,7 @@ def format_ner_raw_spans_for_log(
     source: str = "",
 ) -> str:
     """
-    Format model raw spans for logs (word + score only).
+    Format model raw spans for logs (word, entity_group, and score).
 
     Args:
         raw_ents: Hugging Face token-classification entity dicts.
@@ -687,8 +669,9 @@ def format_ner_raw_spans_for_log(
     lines: list[str] = []
     for ent in raw_ents:
         word = _ner_span_word(ent, source)
+        group = str(ent.get("entity_group") or ent.get("entity") or "")
         score = _score_for_log(float(ent.get("score", 0.0)))
-        lines.append(f"  {word!r}  score={score}")
+        lines.append(f"  {word!r}  entity_group={group}  score={score}")
     return "\n".join(lines)
 
 
@@ -765,6 +748,29 @@ def _format_entities_xml(text: str, entities: Sequence[Entity]) -> str:
     if cursor < len(text):
         parts.append(text[cursor:])
     return "".join(parts)
+
+
+def _date_time_label_for_span(span: str, *, include_time: bool) -> str | None:
+    """
+    Product label when span is entirely one date_time_pattern_entities hit.
+
+    Args:
+        span: Model span text.
+        include_time: When True, a colon or compact clock maps to TIME.
+
+    Returns:
+        DATE, TIME, or None when the span is not wholly a date or time.
+    """
+    body = span.strip()
+    if not body:
+        return None
+    for ent in date_time_pattern_entities(body):
+        if ent.start != 0 or ent.end != len(body):
+            continue
+        if ent.raw_label in _DATE_TIME_CLOCK_RAW:
+            return "TIME" if include_time else "DATE"
+        return "DATE"
+    return None
 
 
 def _allowed_scored_labels(*, include_time: bool) -> tuple[str, ...]:

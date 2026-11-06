@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from anonymizer.controller.ai.embedded_phi.metadata.detect import detect_phi_in_texts
+from anonymizer.controller.ai.embedded_phi.metadata.detect import detect_metadata_phi
 from anonymizer.controller.ai.embedded_phi.ner.engine import Entity, SCORED_LABELS
 from tests.controller.ai.embedded_phi.metadata.support_phi_catalog import (
     assert_private_names_include_creators,
@@ -110,7 +110,7 @@ def test_catalog_extract_scope_and_detect_labels(row: dict) -> None:
         "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
         side_effect=_fake_detect,
     ):
-        out = detect_phi_in_texts(ds=ds, items=items, whitelist=whitelist)
+        out = detect_metadata_phi(ds=ds, items=items, whitelist=whitelist)
 
     assert row["text"] in out, f"detect missed original text for {row['id']}: keys={list(out)}"
     labels_found = {e.label for e in out[row["text"]]}
@@ -169,7 +169,7 @@ def test_combo_public_and_private_in_one_detect() -> None:
         "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
         side_effect=_fake_detect,
     ):
-        out = detect_phi_in_texts(
+        out = detect_metadata_phi(
             ds=ds,
             items=ner_items_from_dataset(ds),
             whitelist=[],

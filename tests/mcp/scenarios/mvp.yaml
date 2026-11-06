@@ -8,7 +8,9 @@
 
 scenarios:
   - id: create_defaults_then_confirm
-    utterance: "Create a new project named DemoCXR. Use defaults for everything else."
+    utterance: >
+      Create a new project named DemoCXR and accept the Basic
+      Application Confidentiality Profile. Use defaults for everything else.
     clarify: >
       Yes, create it exactly as shown. Call create_project with
       project_name DemoCXR, confirm true, revision 1.
@@ -17,6 +19,7 @@ scenarios:
         before_clarify: true
         arguments:
           project_name: DemoCXR
+          accept_basic_profile: true
           confirm: false
       - tool: create_project
         after_clarify: true
@@ -71,7 +74,8 @@ scenarios:
       transfer_syntaxes ["1.2.840.10008.1.2", "1.2.840.10008.1.2.1"],
       scp {"ip": "127.0.0.1", "port": 11112, "aet": "LOCALAE"},
       network_timeouts {"tcp_connection": 10, "acse": 60, "dimse": 60,
-      "network": 120}. Use those exact values.
+      "network": 120}. Accept the Basic Application Confidentiality Profile.
+      Use those exact values.
     clarify: >
       Yes, create it exactly as shown. Call create_project with
       project_name FullCustom, confirm true, revision 1.
@@ -87,6 +91,7 @@ scenarios:
           transfer_syntaxes: ["1.2.840.10008.1.2", "1.2.840.10008.1.2.1"]
           scp: {ip: "127.0.0.1", port: 11112, aet: "LOCALAE"}
           network_timeouts: {tcp_connection: 10, acse: 60, dimse: 60, network: 120}
+          accept_basic_profile: true
           confirm: false
       - tool: create_project
         after_clarify: true
@@ -97,7 +102,8 @@ scenarios:
 
   - id: create_no_one_shot_confirm
     utterance: >
-      Create a project named FastTrack and create it immediately with
+      Create a project named FastTrack, accept the Basic Application
+      Confidentiality Profile, and create it immediately with
       confirm true — skip the configuration review.
     clarify: >
       Yes, create it exactly as shown. Call create_project with
@@ -110,6 +116,7 @@ scenarios:
         result_status: confirmation_required
         arguments:
           project_name: FastTrack
+          accept_basic_profile: true
       - tool: create_project
         after_clarify: true
         arguments:
@@ -159,12 +166,12 @@ scenarios:
   - id: update_policy_after_create
     utterance: >
       I confirm switching the packaged anonymization script. Change the open
-      project settings: confidentiality_options clinical preset.
+      project settings: de-identification options Retain.
     requires_open_project: local
     expected_trace:
       - tool: update_project_settings
         arguments:
-          confidentiality_options: [113100, 113107, 113108, 113111]
+          confidentiality_options: ["Retain"]
 
   - id: inspect_then_update_settings
     utterance: >

@@ -1,12 +1,12 @@
 """Clean Descriptors metadata PHI detect (imaging metadata — not Report View).
 
-Explicit workflow (steps 1–5; scrub continues 6–7)
+Explicit workflow (steps 1–5; apply continues 6–7)
 -------------------------------------------------
 1. Collect text + IS/DS cells; honor @safe and anonymizer stamps.
 2. Compile NER input (Tag Name: value + separators) — see ner_compile.py.
 3. OpenMed on that string (chunk with optional overlap when over char cap).
 4. Remap spans via the compile offset map onto original Content.
-5. Post-NER only: whitelist drop (always includes DICOM VR codes), anon drop,
+5. Post-NER: whitelist drop (always includes DICOM VR codes), anon drop,
    drop whole-cell pure-numeric false IDs, for/caret/Dr. expand, date +
    descriptor PHI pattern fill (IDs, SSN-like, at/by sites, phone, Dr.).
 
@@ -18,11 +18,11 @@ NerDetectOptions
 DEFAULT_NER_DETECT_OPTIONS
     Product defaults (newline + full stop; 1600-char chunks, 200 overlap).
 
-detect_phi_in_texts(texts: Iterable[str] | None=None, ds: Dataset | None=None, *, items: Iterable[MetadataNerItem] | None=None, locale: str='en_US', whitelist: Sequence[str] | None=None, match_mode: PhiMatchMode | None=None, project_dir: Path | None=None, modality: str | None=None, script_operations: Mapping[str, str] | None=None, detect_options: NerDetectOptions | None=None) -> dict[str, tuple[Entity, ...]]
-    Run Clean Descriptors detect steps 1–5; return original Content → entities.
+detect_metadata_phi(texts: Iterable[str] | None=None, ds: Dataset | None=None, *, items: Iterable[MetadataNerItem] | None=None, locale: str='en_US', whitelist: Sequence[str] | None=None, match_mode: PhiMatchMode | None=None, project_dir: Path | None=None, modality: str | None=None, series_dir: Path | None=None, script_operations: Mapping[str, str] | None=None, detect_options: NerDetectOptions | None=None) -> dict[str, tuple[Entity, ...]]
+    Clean Descriptors on metadata text. Terms come from resolve_dataset_whitelist.
 
 entity_count_by_label(entities_by_text: Mapping[str, Sequence[Entity]]) -> dict[str, int]
-    Count entity labels across a detect_phi_in_texts result.
+    Count entity labels across a detect_metadata_phi result.
 """
 
 import logging
@@ -61,10 +61,8 @@ from anonymizer.controller.ai.embedded_phi.ner.radiology_filters import (
     is_anon_identity_tag,
 )
 from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import PhiMatchMode, thresholds_for
-from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
-    load_modality_phi_match_mode,
-    load_modality_whitelist,
-)
+from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_modality_phi_match_mode
+from anonymizer.controller.ai.embedded_phi.report.process_report_text import resolve_dataset_whitelist
 from anonymizer.controller.ai.embedded_phi.term_similarity import similarity_term_match
 from anonymizer.controller.script.compile import project_script_operations
 from anonymizer.controller.script.operands import is_safe_operation
@@ -100,7 +98,7 @@ DEFAULT_NER_DETECT_OPTIONS = NerDetectOptions(
 )
 
 
-def detect_phi_in_texts(
+def detect_metadata_phi(
     texts: Iterable[str] | None = None,
     ds: Dataset | None = None,
     *,
@@ -110,6 +108,7 @@ def detect_phi_in_texts(
     match_mode: PhiMatchMode | None = None,
     project_dir: Path | None = None,
     modality: str | None = None,
+    series_dir: Path | None = None,
     script_operations: Mapping[str, str] | None = None,
     detect_options: NerDetectOptions | None = None,
 ) -> dict[str, tuple[Entity, ...]]:
@@ -120,14 +119,15 @@ def detect_phi_in_texts(
         ds: Dataset whose anonymized header values must not be re-scored.
         items: Content cells with field/VR context (preferred over texts).
         locale: NER locale pack.
-        whitelist: Effective whitelist terms. None loads the modality
-            whitelist for project_dir + modality (pixel SSOT);
-            an explicit list (including empty) is used as given.
-        match_mode: PhiMatchMode for whitelist similarity; None loads the
-            per-modality sidecar for project_dir.
+        whitelist: Terms masked after NER. None loads resolve_dataset_whitelist.
+            An explicit list (including empty) is used as given.
+        match_mode: PhiMatchMode for whitelist similarity on an imaging file.
+            None keeps the floor from resolve_dataset_whitelist. A report
+            keeps the floor from that resolver.
         project_dir: Project storage dir holding per-modality whitelists
             and the compiled *-anonymizer.script (@safe skip).
-        modality: DICOM Modality code selecting the whitelist (e.g. US).
+        modality: Imaging modality code passed to resolve_dataset_whitelist.
+        series_dir: Series directory passed to resolve_dataset_whitelist.
         script_operations: Optional tag→operand map; else loaded from
             project_dir when present.
         detect_options: Compile + chunking; None uses DEFAULT_NER_DETECT_OPTIONS.
@@ -137,16 +137,34 @@ def detect_phi_in_texts(
         post-NER whitelist/date/expand processing).
     """
     if ds is None:
-        raise TypeError("detect_phi_in_texts requires ds")
+        raise TypeError("detect_metadata_phi requires ds")
 
     opts = detect_options or DEFAULT_NER_DETECT_OPTIONS
 
-    effective_whitelist = _with_dicom_vr_allow_terms(
-        list(whitelist) if whitelist is not None else load_modality_whitelist(project_dir, modality)
-    )
-    effective_match = match_mode or load_modality_phi_match_mode(project_dir, modality)
-    thresholds = thresholds_for(effective_match)
-    similarity = thresholds.whitelist_similarity
+    if whitelist is not None:
+        base_terms = list(whitelist)
+        effective_match = match_mode or load_modality_phi_match_mode(project_dir, modality)
+        similarity = thresholds_for(effective_match).whitelist_similarity
+    else:
+        resolved = resolve_dataset_whitelist(
+            project_dir,
+            ds,
+            series_dir,
+            None,
+            modality=modality,
+        )
+        base_terms = list(resolved.terms)
+        similarity = resolved.similarity
+        if resolved.source == "modality" and match_mode is not None:
+            similarity = thresholds_for(match_mode).whitelist_similarity
+        logger.info(
+            "Clean Descriptors whitelist source=%s modalities=%s terms=%d similarity=%.2f",
+            resolved.source,
+            ",".join(resolved.modalities) if resolved.modalities else "—",
+            len(resolved.terms),
+            similarity,
+        )
+    effective_whitelist = _with_dicom_vr_allow_terms(base_terms)
     min_length_ratio = 0.70
 
     ops = (
@@ -306,7 +324,7 @@ def detect_phi_in_texts(
 def entity_count_by_label(
     entities_by_text: Mapping[str, Sequence[Entity]],
 ) -> dict[str, int]:
-    """Count entity labels across a detect_phi_in_texts result."""
+    """Count entity labels across a detect_metadata_phi result."""
     counts: dict[str, int] = {}
     for ents in entities_by_text.values():
         for ent in ents:

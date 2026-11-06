@@ -12,13 +12,7 @@ from anonymizer.utils.translate import set_language_code
 
 SCENARIOS = Path(__file__).parent / "scenarios" / "mvp.yaml"
 DAVIDSON_DCM = next(
-    (
-        Path(__file__).resolve().parent.parent
-        / "controller"
-        / "assets"
-        / "test_dcm_files"
-        / "davidson_cxr"
-    ).glob("*.dcm")
+    (Path(__file__).resolve().parent.parent / "controller" / "assets" / "test_dcm_files" / "davidson_cxr").glob("*.dcm")
 )
 
 
@@ -48,7 +42,7 @@ def test_scripted_setup_defaults_local_create():
 
     prepared = _call_tool(
         "create_project",
-        {"project_name": "DemoCXR", "confirm": False},
+        {"project_name": "DemoCXR", "confirm": False, "accept_basic_profile": True},
     )
     assert prepared["status"] == "confirmation_required"
     assert prepared["created"] is False
@@ -67,7 +61,10 @@ def test_scripted_setup_defaults_local_create():
 
 def test_scripted_import_after_confirmed_create():
     """A confirmed project can import immediately; no plan/update is needed."""
-    prepared = _call_tool("create_project", {"project_name": "GateDemo"})
+    prepared = _call_tool(
+        "create_project",
+        {"project_name": "GateDemo", "accept_basic_profile": True},
+    )
     assert prepared["status"] == "confirmation_required"
     created = _call_tool(
         "create_project",
@@ -132,10 +129,7 @@ def test_scenario_yaml_pack_is_creation_and_settings_only():
     cases = {case["id"]: case for case in _load_scenarios()}
     assert len(cases) == 10
     tools_used = {
-        step["tool"]
-        for case in cases.values()
-        for step in (case.get("expected_trace") or [])
-        if step.get("tool")
+        step["tool"] for case in cases.values() for step in (case.get("expected_trace") or []) if step.get("tool")
     }
     assert tools_used <= {"create_project", "update_project_settings", "project_info"}
     confirmation = cases["create_defaults_then_confirm"]["expected_trace"]

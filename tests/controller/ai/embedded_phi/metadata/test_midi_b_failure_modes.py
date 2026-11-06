@@ -12,7 +12,7 @@ from unittest.mock import patch
 import pytest
 from pydicom.dataset import Dataset
 
-from anonymizer.controller.ai.embedded_phi.metadata.detect import detect_phi_in_texts
+from anonymizer.controller.ai.embedded_phi.metadata.detect import detect_metadata_phi
 from anonymizer.controller.ai.embedded_phi.metadata.extract import (
     extract_metadata_phi_rows,
     omit_pure_numeric_from_descriptor_ner,
@@ -162,7 +162,7 @@ def test_midi_protocol_for_patient_id_eligible_after_compile() -> None:
         "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
         side_effect=_fake_detect,
     ):
-        out = detect_phi_in_texts(ds=ds, items=items, whitelist=[])
+        out = detect_metadata_phi(ds=ds, items=items, whitelist=[])
     assert seen and "for 2522288856" in seen[0]
     # Post-NER expand may include leading "for "; ID digits must be covered.
     span = body[out[body][0].start : out[body][0].end]
@@ -214,7 +214,7 @@ def test_midi_xfail_openmed_tags_id_after_supine_for() -> None:
     body = "supine for 2522288856"
     ds = Dataset()
     items = [MetadataNerItem(text=body, field_name="Image Comments", vr="LT")]
-    out = detect_phi_in_texts(ds=ds, items=items, whitelist=["SUPINE", "CT", "ABDOMEN"])
+    out = detect_metadata_phi(ds=ds, items=items, whitelist=["SUPINE", "CT", "ABDOMEN"])
     assert body in out
     frags = [body[e.start : e.end] for e in out[body]]
     assert any("2522288856" in f for f in frags)
@@ -233,7 +233,7 @@ def test_midi_xfail_openmed_tags_hyphenated_study_description_id() -> None:
     body = "110-78-3749"
     ds = Dataset()
     items = [MetadataNerItem(text=body, field_name="Study Description", vr="LO")]
-    out = detect_phi_in_texts(ds=ds, items=items, whitelist=[])
+    out = detect_metadata_phi(ds=ds, items=items, whitelist=[])
     assert body in out
     frags = [body[e.start : e.end] for e in out[body]]
     assert any(f.replace("-", "") == "110783749" or "110" in f for f in frags)

@@ -71,7 +71,7 @@ from anonymizer.controller.phi.phi_io import (
 from anonymizer.controller.phi.phi_io import import_java_phi_studies as phi_io_import_java_phi_studies
 from anonymizer.controller.script.compile import compile_script
 from anonymizer.controller.script.document import write_script_rules
-from anonymizer.controller.script.options import apply_option_modality_effects
+from anonymizer.controller.script.options import assign_confidentiality_options
 from anonymizer.model.anonymizer import PHI, SeriesProcessingStatus
 from anonymizer.model.project import AuthenticationError, DICOMRuntimeError, ProjectModel
 from anonymizer.utils.dicom import DeidMethodCode
@@ -964,11 +964,7 @@ class ProjectController(
         """
         if options is None:
             options = self.model.confidentiality_options
-        options = (
-            frozenset(DeidMethodCode(int(code)) for code in options)
-            | {DeidMethodCode.BASIC}
-        )
-        self.model.confidentiality_options = options
+        options = assign_confidentiality_options(self.model, options)
 
         # Leaving the packaged default: project script beside ProjectModel.json.
         self.model.anonymizer_script_path = (
@@ -981,7 +977,6 @@ class ProjectController(
             compile_script(options, ProjectModel.default_anonymizer_script_path()),
         )
         self.anonymizer.reload_script(dest)
-        apply_option_modality_effects(self.model, options)
         logger.info(
             f"Applied confidentiality options {sorted(int(code) for code in options)} → {dest}"
         )

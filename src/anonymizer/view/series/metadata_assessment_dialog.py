@@ -22,7 +22,7 @@ from customtkinter import ThemeManager
 from pydicom import dcmread
 from pydicom.dataset import Dataset
 
-from anonymizer.controller.ai.embedded_phi.metadata.detect import detect_phi_in_texts, entity_count_by_label
+from anonymizer.controller.ai.embedded_phi.metadata.detect import detect_metadata_phi, entity_count_by_label
 from anonymizer.controller.ai.embedded_phi.metadata.extract import apply_text_at_path, is_anonymizer_field
 from anonymizer.controller.ai.embedded_phi.metadata.viewer_tree import (
     ITEM_NAME,
@@ -926,13 +926,14 @@ class MetadataAssessmentDialog(AppCTkToplevel):
                 self._detect_queue.put(
                     (
                         "ok",
-                        detect_phi_in_texts(
+                        detect_metadata_phi(
                             ds=ds,
                             items=items,
                             whitelist=whitelist,
                             match_mode=resolved_match_mode,
                             project_dir=project_dir,
                             modality=modality,
+                            series_dir=self._dataset_path.parent if self._dataset_path is not None else None,
                         ),
                     )
                 )

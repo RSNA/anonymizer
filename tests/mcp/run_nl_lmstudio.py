@@ -540,17 +540,16 @@ async def _confirm_prepared_project(
 ) -> dict[str, Any]:
     """Prepare and confirm one project through the public MCP flow."""
     storage.mkdir(parents=True, exist_ok=True)
-    prepared = await _call_tool_json(
-        session,
-        "create_project",
-        {
-            "project_name": name,
-            "storage_dir": str(storage),
-            "overwrite": True,
-            "confirm": False,
-            **(arguments or {}),
-        },
-    )
+    payload = {
+        "project_name": name,
+        "storage_dir": str(storage),
+        "overwrite": True,
+        "confirm": False,
+        **(arguments or {}),
+    }
+    if payload.get("confidentiality_options") is None and not payload.get("accept_basic_profile"):
+        payload["accept_basic_profile"] = True
+    prepared = await _call_tool_json(session, "create_project", payload)
     if prepared.get("status") != "confirmation_required":
         raise RuntimeError(f"prepare create_project failed: {prepared}")
     created = await _call_tool_json(

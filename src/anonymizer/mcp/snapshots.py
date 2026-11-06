@@ -7,8 +7,10 @@ from pydicom.dataset import Dataset
 
 from anonymizer.controller.dicom.hierarchies import StudyUIDHierarchy
 from anonymizer.controller.project import ProjectController
+from anonymizer.controller.script.option_explanations import options_status_line
 from anonymizer.model.project import DICOMNode, ProjectModel
 from anonymizer.model.settings_validate import timeouts_dict
+from anonymizer.utils.dicom import DeidMethodCode, deid_method_meaning
 
 # Paths teach MCP clients to leave the tool API — omit from public project snapshots.
 _MCP_PROJECT_PATH_KEYS = frozenset({"storage_dir", "images_dir", "private_dir"})
@@ -56,6 +58,8 @@ def serialize_project_info(controller: ProjectController) -> dict[str, Any]:
         "transfer_syntaxes": list(model.transfer_syntaxes),
         "imported_modalities": controller.get_imported_modalities(),
         "network_timeouts": timeouts_dict(model.network_timeouts),
+        "confidentiality_options": sorted(int(code) for code in model.confidentiality_options),
+        "deidentification_options": deidentification_options_view(model.confidentiality_options),
         "totals": {
             "patients": totals.patients,
             "studies": totals.studies,
@@ -95,6 +99,50 @@ def serialize_project_import_summary(controller: ProjectController) -> dict[str,
     }
 
 
+def deidentification_option_choices() -> list[dict[str, Any]]:
+    """
+    Every de-identification option, in plain language, for MCP prompts.
+
+    Returns:
+        One record per option: code, product name, and whether it is a
+        DICOM PS 3.15 Table E.1-1 option.
+    """
+    return [
+        {
+            "code": int(code),
+            "name": deid_method_meaning(code),
+            "dicom_ps315_option": code is not DeidMethodCode.TCIA_RESEARCH,
+        }
+        for code in DeidMethodCode
+    ]
+
+
+def deidentification_options_view(
+    selected: frozenset[DeidMethodCode],
+) -> dict[str, Any]:
+    """
+    Selected de-identification options for an MCP response.
+
+    Args:
+        selected: Option codes stored on the project model.
+
+    Returns:
+        Summary label plus one plain-language record per selected option.
+    """
+    codes = sorted(DeidMethodCode(code) for code in selected)
+    return {
+        "summary": options_status_line(frozenset(codes)),
+        "options": [
+            {
+                "code": int(code),
+                "name": deid_method_meaning(code),
+                "dicom_ps315_option": code is not DeidMethodCode.TCIA_RESEARCH,
+            }
+            for code in codes
+        ],
+    }
+
+
 def serialize_project_configuration(model: ProjectModel) -> dict[str, Any]:
     """
     Public create-configuration view of a core ProjectModel.
@@ -116,12 +164,8 @@ def serialize_project_configuration(model: ProjectModel) -> dict[str, Any]:
         "transfer_syntaxes": list(model.transfer_syntaxes),
         "scp": serialize_dicom_node(model.scp),
         "network_timeouts": timeouts_dict(model.network_timeouts),
-        "confidentiality_options": sorted(
-            int(code) for code in model.confidentiality_options
-        ),
-        "remote_scps": {
-            name: serialize_dicom_node(node) for name, node in model.remote_scps.items()
-        },
+        "confidentiality_options": sorted(int(code) for code in model.confidentiality_options),
+        "remote_scps": {name: serialize_dicom_node(node) for name, node in model.remote_scps.items()},
     }
 
 
@@ -251,9 +295,7 @@ def strip_path_fields(payload: dict[str, Any]) -> dict[str, Any]:
         if isinstance(value, dict):
             out[key] = strip_path_fields(value)
         elif isinstance(value, list):
-            out[key] = [
-                strip_path_fields(item) if isinstance(item, dict) else item for item in value
-            ]
+            out[key] = [strip_path_fields(item) if isinstance(item, dict) else item for item in value]
         else:
             out[key] = value
     return out

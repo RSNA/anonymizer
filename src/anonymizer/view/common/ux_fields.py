@@ -376,10 +376,17 @@ def option_menu_width_for_labels(values: Sequence[str], *, height: int = 28) -> 
     return text_width + height + max(corner_radius, 3) + 16
 
 
-def button_width_for_label(label: str, *, minimum: int = 100) -> int:
-    """Pixel width for a CTkButton so translated labels are not clipped."""
-    font = ctk.CTkFont()
-    return max(minimum, int(font.measure(label)) + 24)
+def button_width_for_label(label: str, *, minimum: int = 100, font: ctk.CTkFont | None = None) -> int:
+    """
+    Pixel width for a CTkButton so translated labels are not clipped.
+
+    Args:
+        label: Button text.
+        minimum: Smallest width in pixels.
+        font: Font used to measure. Defaults to the theme UI font.
+    """
+    measured = font if font is not None else ctk.CTkFont()
+    return max(minimum, int(measured.measure(label)) + 24)
 
 
 # Window titles (Series View / Report Text Review): keep SeriesDescription short.

@@ -16,7 +16,7 @@ from pydicom.dataset import Dataset
 
 from anonymizer.controller.ai.embedded_phi.metadata.detect import (
     DEFAULT_NER_DETECT_OPTIONS,
-    detect_phi_in_texts,
+    detect_metadata_phi,
 )
 from anonymizer.controller.ai.embedded_phi.metadata.extract import (
     NER_INPUT_VRS,
@@ -89,7 +89,7 @@ def test_is_with_embedded_id_and_date_in_compile_and_remap() -> None:
         "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
         side_effect=_fake,
     ):
-        out = detect_phi_in_texts(ds=ds, items=items, whitelist=[])
+        out = detect_metadata_phi(ds=ds, items=items, whitelist=[])
     frags = [body[e.start : e.end] for e in out[body]]
     # Leading "for " may expand onto the ID span before remove.
     assert any("2522288856" in f for f in frags)
@@ -134,7 +134,7 @@ def test_ds_with_embedded_id_in_compile_and_remap() -> None:
         "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
         side_effect=_fake,
     ):
-        out = detect_phi_in_texts(ds=ds, items=items, whitelist=[])
+        out = detect_metadata_phi(ds=ds, items=items, whitelist=[])
     frags = [body[e.start : e.end] for e in out[body]]
     assert any("8371727310" in f for f in frags)
 
@@ -169,7 +169,7 @@ def test_ds_with_embedded_date_in_compile_and_detect() -> None:
         "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
         return_value=[],
     ):
-        out = detect_phi_in_texts(ds=ds, items=items, whitelist=[])
+        out = detect_metadata_phi(ds=ds, items=items, whitelist=[])
     assert body in out
     frags = [body[e.start : e.end] for e in out[body]]
     assert "20101203" in frags
@@ -216,7 +216,7 @@ def test_ds_with_embedded_name_in_compile_and_remap() -> None:
         "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
         side_effect=_fake,
     ):
-        out = detect_phi_in_texts(ds=Dataset(), items=items, whitelist=[])
+        out = detect_metadata_phi(ds=Dataset(), items=items, whitelist=[])
     assert body[out[body][0].start : out[body][0].end] == "Michelle"
 
 
@@ -354,7 +354,7 @@ def test_openmed_detects_id_and_date_inside_is_string() -> None:
             tag_path="SeriesNumber",
         )
     ]
-    out = detect_phi_in_texts(ds=ds, items=items, whitelist=[])
+    out = detect_metadata_phi(ds=ds, items=items, whitelist=[])
     assert body in out
     detected = [body[e.start : e.end] for e in out[body]]
     assert any("2522288856" in f for f in detected), detected
@@ -390,7 +390,7 @@ def test_openmed_detects_id_inside_ds_string() -> None:
             tag_path="RescaleSlope",
         )
     ]
-    out = detect_phi_in_texts(ds=ds, items=items, whitelist=[])
+    out = detect_metadata_phi(ds=ds, items=items, whitelist=[])
     assert body in out
     detected = [body[e.start : e.end] for e in out[body]]
     assert any("8371727310" in f for f in detected), detected
@@ -417,7 +417,7 @@ def test_openmed_detects_name_and_date_inside_ds_string() -> None:
     _require_openmed_hit(frags, "Michelle")
 
     ds = Dataset()
-    out_name = detect_phi_in_texts(
+    out_name = detect_metadata_phi(
         ds=ds,
         items=[
             MetadataNerItem(
@@ -432,7 +432,7 @@ def test_openmed_detects_name_and_date_inside_ds_string() -> None:
     )
     assert any("Michelle" in body_name[e.start : e.end] for e in out_name[body_name])
 
-    out_date = detect_phi_in_texts(
+    out_date = detect_metadata_phi(
         ds=ds,
         items=[
             MetadataNerItem(

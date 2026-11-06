@@ -1,11 +1,17 @@
 """Clean Descriptors batch helper (Embedded PHI Metadata path)."""
 
 import logging
+from pathlib import Path
 from unittest.mock import patch
 
-from pydicom.dataset import Dataset
+from pydicom import dcmread
+from pydicom.dataset import Dataset, FileMetaDataset
+from pydicom.uid import ExplicitVRLittleEndian, generate_uid
 
-from anonymizer.controller.ai.embedded_phi.metadata.scrub import scrub_dataset_descriptors
+from anonymizer.controller.ai.embedded_phi.metadata.scrub import (
+    scrub_dataset_descriptors,
+    scrub_file_descriptors,
+)
 from anonymizer.controller.ai.embedded_phi.ner.engine import Entity
 from anonymizer.controller.ai.embedded_phi.report.process_report_text import (
     apply_project_uids_to_sr,
@@ -266,3 +272,82 @@ def test_apply_project_uids_to_sr_uses_allocate_uid() -> None:
     assert str(sr.file_meta.MediaStorageSOPInstanceUID) == str(sr.SOPInstanceUID)
     assert any(k.startswith("ai-report-series:") for k in allocated)
     assert any(k.startswith("ai-report-sop:") for k in allocated)
+
+
+def _write_instance(path: Path, *, modality: str, description: str, sop_class: str) -> None:
+    ds = Dataset()
+    ds.file_meta = FileMetaDataset()
+    ds.file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
+    ds.SOPClassUID = sop_class
+    ds.SOPInstanceUID = generate_uid()
+    ds.Modality = modality
+    ds.StudyDescription = description
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ds.save_as(path, enforce_file_format=True)
+
+
+def _axilla_ner(text: str, *, locale: str = "en_US") -> list[Entity]:
+    del locale
+    if "AXILLA" not in text:
+        return []
+    start = text.index("AXILLA")
+    return [Entity(label="LOCATION", start=start, end=start + len("AXILLA"))]
+
+
+def test_batch_report_metadata_keeps_study_whitelist_term(tmp_path: Path) -> None:
+    """AI batch Clean Descriptors on a one-file report keeps the parent study term."""
+    project = tmp_path / "project"
+    (project / "whitelists").mkdir(parents=True)
+    (project / "whitelists" / "us.txt").write_text("AXILLA\n", encoding="utf-8")
+    study = tmp_path / "study"
+    report = study / "sr" / "report.dcm"
+    _write_instance(
+        report,
+        modality="SR",
+        description="Clinic AXILLA",
+        sop_class="1.2.840.10008.5.1.4.1.1.88.11",
+    )
+    _write_instance(
+        study / "us" / "image.dcm",
+        modality="US",
+        description="Breast",
+        sop_class="1.2.840.10008.5.1.4.1.1.6.1",
+    )
+    with patch(
+        "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
+        side_effect=_axilla_ner,
+    ):
+        changed, removed = scrub_file_descriptors(report, project_dir=project)
+    assert changed is False
+    assert removed == []
+    assert dcmread(report).StudyDescription == "Clinic AXILLA"
+
+
+def test_batch_imaging_metadata_uses_own_modality_whitelist(tmp_path: Path) -> None:
+    """AI batch Clean Descriptors on an imaging file does not take a sibling list."""
+    project = tmp_path / "project"
+    (project / "whitelists").mkdir(parents=True)
+    (project / "whitelists" / "us.txt").write_text("AXILLA\n", encoding="utf-8")
+    (project / "whitelists" / "ct.txt").write_text("AXIAL\n", encoding="utf-8")
+    study = tmp_path / "study"
+    ct = study / "ct" / "image.dcm"
+    _write_instance(
+        ct,
+        modality="CT",
+        description="Clinic AXILLA",
+        sop_class="1.2.840.10008.5.1.4.1.1.2",
+    )
+    _write_instance(
+        study / "us" / "image.dcm",
+        modality="US",
+        description="Breast",
+        sop_class="1.2.840.10008.5.1.4.1.1.6.1",
+    )
+    with patch(
+        "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
+        side_effect=_axilla_ner,
+    ):
+        changed, removed = scrub_file_descriptors(ct, project_dir=project)
+    assert changed is True
+    assert "AXILLA" in removed
+    assert "AXILLA" not in str(dcmread(ct).StudyDescription)

@@ -105,7 +105,7 @@ def test_format_decisions_outcomes() -> None:
     assert phi_accepted(texts[1], mode)
     body = format_ocr_texts_for_log("decisions", texts, mode=mode)
     lines = body.splitlines()
-    assert lines[0].startswith("=== decisions  mode=STANDARD  wl>=0.85  ner>=0.50  2 boxes ===")
+    assert lines[0].startswith("=== decisions  mode=STANDARD  wl>=0.85  ner>=0.30  2 boxes ===")
     assert lines[1] == "  'M' | whitelisted"
     assert lines[2] == "  'SAWYER' | phi_accepted"
     with_scope = format_ocr_texts_for_log(
@@ -122,11 +122,11 @@ def test_annotate_ner_without_model_stamps_zero_scores() -> None:
 
 
 def test_caller_decide_whitelist_overrides_ner_when_margin_met() -> None:
-    """Whitelist overrides NER only when ner.score < whitelist.score - 0.1."""
+    """A whitelist score above 0.8 wins even when NER is within 0.1."""
     mode = PhiMatchMode.STANDARD
-    # Exact whitelist hit; NER NAME below wl - 0.1 → chrome kept.
+    # Exact whitelist hit at 1.0; NER NAME 0.92 is within 0.1 and still loses.
     axilla = make_annotate_whitelist(["AXILLA"])(
-        [_box("AXILLA", ner_label="NAME", ner_score=0.85)]
+        [_box("AXILLA", ner_label="NAME", ner_score=0.92)]
     )[0]
     axilla = OCRText(
         text=axilla.text,
@@ -134,7 +134,7 @@ def test_caller_decide_whitelist_overrides_ner_when_margin_met() -> None:
         bottom_right=axilla.bottom_right,
         ocr=axilla.ocr,
         whitelist=axilla.whitelist,
-        ner=NerEvidence(label="NAME", score=0.85),
+        ner=NerEvidence(label="NAME", score=0.92),
     )
     assert axilla.ner.label == "NAME"
     assert is_whitelisted(axilla, mode)

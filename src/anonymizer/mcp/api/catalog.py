@@ -118,11 +118,15 @@ TOOL_CATALOG: Final[tuple[ToolSpec, ...]] = (
             "Prepare or confirm a new anonymizer project. First call: pass project_name "
             "and only settings the user supplied, with confirm=false. The server combines "
             "them with ProjectModel defaults and returns status=confirmation_required; "
-            "nothing is created. Present that configuration and stop. If the user changes "
-            "a setting, call again with confirm=false. Only after the user explicitly "
-            "confirms in a later message, call again with project_name, confirm=true, and "
-            "the returned revision. Never set confirm=true on the first call. After "
-            "status=created the project is open — do not call project_open."
+            "nothing is created. The user must choose de-identification options or accept "
+            "the Basic Application Confidentiality Profile before the project can be "
+            "created. Present deidentification_options, and when "
+            "deidentification_choice_required is true ask them to choose or accept Basic, "
+            "then stop. If the user changes a setting, call again with confirm=false. "
+            "Only after the user explicitly confirms in a later message, call again with "
+            "project_name, confirm=true, and the returned revision. Never set confirm=true "
+            "on the first call. After status=created the project is open — do not call "
+            "project_open."
         ),
         args_model=CreateProjectArgs,
         destructive_hint=False,
@@ -147,7 +151,8 @@ TOOL_CATALOG: Final[tuple[ToolSpec, ...]] = (
         title="Project info",
         description=(
             "Return settings summary for the currently open project: language, modalities, "
-            "transfer_syntaxes, network_timeouts, local_scp/local_scu, and remotes. "
+            "transfer_syntaxes, network_timeouts, deidentification_options, "
+            "local_scp/local_scu, and remotes. "
             "Not the series inventory — for the series TSV table call list_inventory. "
             "Call with arguments {}. Requires an open project. Read-only. "
             "Use before update_project_settings when editing an existing project."
@@ -162,6 +167,8 @@ TOOL_CATALOG: Final[tuple[ToolSpec, ...]] = (
         description=(
             "Change mutable settings on the open project: modalities, "
             "transfer_syntaxes, local scp, network_timeouts, confidentiality_options. "
+            "Pass de-identification options by plain name (Basic, Retain, or an option "
+            "name) or by code. The result includes deidentification_options. "
             "language_code is chosen once at project creation and, like project_name, "
             "storage_dir, site_id, and uid_root, is fixed after create — refuse those. "
             "Changing confidentiality_options recompiles the anonymizer script — confirm first. "

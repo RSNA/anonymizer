@@ -173,6 +173,7 @@ def test_mvp_http_server_davidson(tmp_path: Path):
                             "storage_dir": str(proj_dir),
                             "overwrite": True,
                             "confirm": False,
+                            "accept_basic_profile": True,
                         },
                     )
                     prepared_text = "".join(

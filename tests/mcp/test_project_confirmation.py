@@ -20,13 +20,7 @@ from anonymizer.utils.translate import set_language_code
 from tests.mcp.project_create import confirm_create
 
 DAVIDSON_DCM = next(
-    (
-        Path(__file__).resolve().parent.parent
-        / "controller"
-        / "assets"
-        / "test_dcm_files"
-        / "davidson_cxr"
-    ).glob("*.dcm")
+    (Path(__file__).resolve().parent.parent / "controller" / "assets" / "test_dcm_files" / "davidson_cxr").glob("*.dcm")
 )
 
 
@@ -62,6 +56,7 @@ def test_configuration_schemas_are_generated_from_core_dataclasses():
         "overwrite",
         "confirm",
         "revision",
+        "accept_basic_profile",
     }
     assert set(UpdateProjectSettingsArgs.model_fields) == {
         "modalities",
@@ -70,12 +65,8 @@ def test_configuration_schemas_are_generated_from_core_dataclasses():
         "network_timeouts",
         "confidentiality_options",
     }
-    assert set(LocalDicomNodeArgs.model_fields) == {
-        field.name for field in dataclasses.fields(DICOMNode)[:3]
-    }
-    assert set(NetworkTimeoutsArgs.model_fields) == {
-        field.name for field in dataclasses.fields(NetworkTimeouts)
-    }
+    assert set(LocalDicomNodeArgs.model_fields) == {field.name for field in dataclasses.fields(DICOMNode)[:3]}
+    assert set(NetworkTimeoutsArgs.model_fields) == {field.name for field in dataclasses.fields(NetworkTimeouts)}
     dicom_fields = {field.name for field in dataclasses.fields(DICOMNode)}
     assert set(ConfigureRemoteArgs.model_fields) == (dicom_fields - {"local"}) | {"role"}
     assert "import_plan" not in CreateProjectArgs.model_fields
@@ -149,10 +140,15 @@ def test_revision_updates_pending_model_and_stale_revision_cannot_create(tmp_pat
     storage = tmp_path / "RSNA Anonymizer" / "ReviseMe"
     assert not (storage / ProjectController.PROJECT_MODEL_FILENAME_JSON).exists()
 
+    accepted = mcp_tools.create_project(
+        project_name="ReviseMe",
+        accept_basic_profile=True,
+    )
+    assert accepted["deidentification_choice_required"] is False
     created = mcp_tools.create_project(
         project_name="ReviseMe",
         confirm=True,
-        revision=revised["revision"],
+        revision=accepted["revision"],
     )
     assert created["status"] == "created"
     assert created["created"] is True
@@ -196,14 +192,85 @@ def test_confirmed_project_can_update_settings_and_import_without_a_plan():
     assert imported["succeeded"] == 1
 
 
+def test_create_requires_a_deidentification_choice_or_basic_acceptance():
+    prepared = mcp_tools.create_project(project_name="ChooseOpts")
+
+    assert prepared["ok"] is True
+    assert prepared["deidentification_choice_required"] is True
+    assert "Basic Application Confidentiality Profile" in prepared["deidentification_prompt"]
+    assert "confidentiality_options" in prepared["using_defaults"]
+    tcia = next(
+        choice for choice in prepared["deidentification_choices"] if choice["name"] == "Retain TCIA Research Attributes"
+    )
+    assert tcia["dicom_ps315_option"] is False
+    assert tcia["code"] == 990054
+
+    blocked = mcp_tools.create_project(
+        project_name="ChooseOpts",
+        confirm=True,
+        revision=prepared["revision"],
+    )
+    assert blocked["status"] == "confirmation_required"
+    assert blocked["created"] is False
+    assert blocked["deidentification_choice_required"] is True
+    assert SESSION.is_open is False
+
+    accepted = mcp_tools.create_project(
+        project_name="ChooseOpts",
+        accept_basic_profile=True,
+    )
+    assert accepted["deidentification_choice_required"] is False
+    assert accepted["deidentification_options"]["summary"] == "Basic"
+    assert "confidentiality_options" in accepted["supplied_by_user"]
+
+    created = mcp_tools.create_project(
+        project_name="ChooseOpts",
+        confirm=True,
+        revision=accepted["revision"],
+    )
+    assert created["status"] == "created"
+    assert created["project"]["deidentification_options"]["options"][0]["code"] == 113100
+
+
+def test_deidentification_options_accept_plain_names():
+    prepared = mcp_tools.create_project(
+        project_name="NamedOpts",
+        confidentiality_options=["Retain", "Retain TCIA Research Attributes"],
+    )
+
+    assert prepared["ok"] is True
+    assert prepared["configuration"]["confidentiality_options"] == [
+        113100,
+        113107,
+        113108,
+        113111,
+        990054,
+    ]
+    selected = {
+        option["name"]: option["dicom_ps315_option"] for option in prepared["deidentification_options"]["options"]
+    }
+    assert selected["Retain TCIA Research Attributes"] is False
+    assert selected["Retain Safe Private Option"] is True
+
+    created = mcp_tools.create_project(
+        project_name="NamedOpts",
+        confirm=True,
+        revision=prepared["revision"],
+    )
+    assert created["status"] == "created"
+
+    updated = mcp_tools.update_project_settings(confidentiality_options=["Basic"])
+    assert updated["ok"] is True
+    assert updated["project"]["deidentification_options"]["summary"] == "Basic"
+    assert updated["project"]["confidentiality_options"] == [113100]
+
+
 def test_opening_existing_project_discards_pending_configuration():
     created = confirm_create(mcp_tools.create_project, project_name="Existing")
     assert created["ok"] is True
     SESSION.close()
 
-    assert mcp_tools.create_project(project_name="Pending")["status"] == (
-        "confirmation_required"
-    )
+    assert mcp_tools.create_project(project_name="Pending")["status"] == ("confirmation_required")
     assert SESSION.pending_project is not None
 
     opened = mcp_tools.project_open(project_name="Existing")

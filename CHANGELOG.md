@@ -5,15 +5,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-- De-identification Options dialog (Basic / Retain presets and plain-language explanations); anonymizer script compile under ``controller/script/``
+- De-identification Options dialog (Basic / Retain presets and plain-language explanations). Retain is Basic plus Modified Dates, Patient Characteristics, and Retain Safe Private, and leaves out Retain TCIA Research Attributes. Anonymizer script compile and the script editor live under ``controller/script/`` (TCIA date operands: hashdate, lookup dateoffset, DATEINC, rebasedate)
+- DICOM PS 3.15 § E.1.3 conformance statement and HIPAA Safe Harbor wording in the clinician manual. Table E.1-1 compile stays aligned with the Basic Profile and TCIA research operands
 - Clean Structured Content keeps Encapsulated PDF / SR text at import for Report Text Review; enabling SR or PDF modalities auto-enables Clean Structured Content when it is off
 - Metadata (Series View and Report Text Review): Private tags switch; Detect PHI → Blank/Synthetic Remove PHI → Save to the current file; private UID/date fields reported as handled at import
+- Clean Descriptors runs NER on metadata text. Blank and Synthetic follow the entity label. DICOM value-representation codes and clinical keep terms stay. MIDI-B Test is scored against the official answer key
+- Report text PHI and Clean Descriptors share one modality whitelist: several files in the report series use those modalities; one file uses the parent study. Imaging files use their own modality. Pixel detection keeps the Series View list. Report Viewer and AI Batch use the same report-text path
+- Pixel Embedded PHI: one upright OCR read; match-strictness floors (Standard NER 0.30, Lenient 0.20); a whitelist score above 0.8 wins over NER, and a weaker hit wins with a 0.1 margin; clock times are normalized, including digit-8 separators; a date or time that matches a known pattern is kept when the model mislabels it. The mammography whitelist keeps common view symbols
+- AI Batch Process: two-column options for Embedded PHI, Harmonize, and Face De-identify. Embedded PHI lists modalities that have whitelist terms beside Whitelist / Whitelists, and labels Pixel PHI Remove Scope, Pixel PHI removal, and Metadata & Report PHI entity removal
 - Per-project description mapping memory under ``controller/ai/harmonize/``; Dataset Description Mappings viewer; Prefer description mappings in AI batch
-- Sticky Study/Series ``description`` (intake original); Harmonize/Set description write ``harmonized_description`` only; DICOM Original Attributes Sequence when rewriting Study/Series Description
+- Study/Series ``description`` stays the intake original. Harmonize and Set description write ``harmonized_description``. DICOM Original Attributes Sequence is written when Study or Series Description is rewritten
 - Gendered synthetic first-name pools for Replace PHI; Report Text Review opens at a sensible window size
-- Help: EN macOS screenshots and docs for De-identification Options, Description Mappings, Metadata Detect/Remove PHI, and Report Text Review (``demo_report_pdf`` fixture)
-- MIDI-B ingest: reduce over-scrub in the anonymizer script and Retain Safe Private path
-- DICOMweb PACS I/O (QIDO-RS / WADO-RS / STOW-RS) when enabled on a remote; credentials and HTTP port/path in DICOM server dialog
+- Export can write DICOM-SEG from TotalSegmentator masks and ROI annotations before send
+- Welcome window links for de-identification, Embedded PHI, and face blur
+- Help: EN macOS screenshots and docs for De-identification Options, Description Mappings, Metadata Detect/Remove PHI (Blank and Synthetic), Report Text Review (``demo_report_pdf`` fixture), Process/View, and the conformance statement
+- MIDI-B ingest: Clean Descriptors and Retain Safe Private keep Enhanced MG technical tags and unknown numeric private tags
+- DICOMweb PACS I/O (QIDO-RS / WADO-RS / STOW-RS) when enabled on a remote; credentials and HTTP port/path in the DICOM server dialog
+- MCP: two-phase project confirm; de-identification options by plain name, or accept Basic, through the controller API; ``anonymizer_usage``; background jobs for import, Harmonize, and pixel PHI; per-study Harmonize failures
 - Group controller packages (``analytics/``, ``ai/``, ``dicom/``, ``series/``, ``script/``, …); SeriesWorkspace façade for Series View; prototyping tree reorganized into topic folders
 - Prefer Study-Root C-GET over C-MOVE when negotiated
 

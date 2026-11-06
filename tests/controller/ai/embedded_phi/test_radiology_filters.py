@@ -84,6 +84,12 @@ def test_date_time_pattern_entities_claims_compact_da_and_clock() -> None:
     assert by_raw["compact_da"] == "20101203"
     assert by_raw["colon_tm"] == "09:50:45"
     assert all(e.label == "DATE" for e in ents)
+    dotted = date_time_pattern_entities("DOB: 04.25.1937")
+    assert [(e.raw_label, "DOB: 04.25.1937"[e.start : e.end]) for e in dotted] == [
+        ("punctuated_date", "04.25.1937")
+    ]
+    assert date_time_pattern_entities("06.00.00") == []
+    assert date_time_pattern_entities("1.2.840.10008.5.1.4.1.1.1") == []
 
 
 def test_descriptor_phi_pattern_entities_ids_sites_doctor() -> None:

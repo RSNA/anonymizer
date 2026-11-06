@@ -83,13 +83,13 @@ def test_phi_only_uses_ner_not_whitelist_alone() -> None:
 
 
 def test_whitelist_overrides_ner_name_for_phi_only_when_margin_met() -> None:
-    """Whitelist chrome with NER below wl-0.1 is not PHI / not removed as PHI."""
+    """A whitelist score above 0.8 wins even when NER is within 0.1."""
     mode = PhiMatchMode.STANDARD
     axilla = _annotated(
         "AXILLA",
         wl_score=1.0,
         wl_term="AXILLA",
-        ner_score=0.85,
+        ner_score=0.92,
         ner_label="NAME",
     )
     assert is_whitelisted(axilla, mode)
@@ -117,3 +117,17 @@ def test_ner_name_beats_fuzzy_whitelist_for_phi_only() -> None:
     assert texts_for_remove_mode([bailey], OcrRemoveMode.NON_WHITELISTED, mode) == [
         bailey
     ]
+
+
+def test_whitelist_score_at_0_8_still_uses_the_margin() -> None:
+    """0.8 is not above the confident cutoff, so a close NER name still wins."""
+    mode = PhiMatchMode.LENIENT
+    borderline = _annotated(
+        "LANE",
+        wl_score=0.8,
+        wl_term="PLANE",
+        ner_score=0.75,
+        ner_label="NAME",
+    )
+    assert is_whitelisted(borderline, mode)
+    assert phi_accepted(borderline, mode)

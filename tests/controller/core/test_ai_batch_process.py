@@ -34,6 +34,7 @@ from anonymizer.controller.ai.batch_process import (
     format_remove_pixel_phi_series_message,
     harmonize_skip_counts_as_complete,
     modalities_in_selected_studies,
+    modalities_with_whitelist_terms,
     normalize_selected_algorithms,
     series_needs_face_blur,
     series_needs_harmonize,
@@ -1078,6 +1079,15 @@ def test_modalities_in_selected_studies_collects_unique_modalities(
     assert mock_load.call_count == 2
 
 
+def test_modalities_with_whitelist_terms_skips_empty_lists() -> None:
+    """SR, DOC, and OT have no whitelist file, so they are left out."""
+    listed = modalities_with_whitelist_terms(
+        None,
+        ("CR", "DOC", "DX", "MG", "OT", "SR", "US"),
+    )
+    assert listed == ("CR", "DX", "MG", "US")
+
+
 def test_format_modality_whitelist_preview_groups_by_modality() -> None:
     text = format_modality_whitelist_preview(
         {"CR": ["PORTABLE", "L"], "US": []},
@@ -1697,7 +1707,7 @@ def test_report_text_series_records_clean_structured_content(tmp_path: Path) -> 
     text = "Patient John Doe seen"
     with patch.object(
         batch_process,
-        "detect_phi",
+        "detect_report_text_phi",
         return_value=(text, [Entity(label="NAME", start=8, end=16)]),
     ):
         outcome = batch_process._apply_report_text_phi_series(

@@ -13,6 +13,8 @@ import customtkinter as ctk
 from anonymizer.controller.ai.feature_availability import deid_option_ready
 from anonymizer.controller.ai.feature_ids import ai_feature_for_deid_option
 from anonymizer.controller.script.option_explanations import (
+    BASIC_OPTIONS,
+    RETAIN_OPTIONS,
     apply_date_option_exclusivity,
     deid_option_explanation,
 )
@@ -31,27 +33,24 @@ from anonymizer.view.common.ux_fields import button_width_for_label
 
 logger = logging.getLogger(__name__)
 
-# Preset checkbox sets for the Basic / Retain buttons. They store nothing;
-# the project persists only the selected DeidMethodCode values.
-BASIC_OPTIONS: frozenset[DeidMethodCode] = frozenset({DeidMethodCode.BASIC})
-RETAIN_OPTIONS: frozenset[DeidMethodCode] = frozenset(
-    {
-        DeidMethodCode.BASIC,
-        DeidMethodCode.MODIFIED_DATES,
-        DeidMethodCode.PATIENT_CHARACTERISTICS,
-        DeidMethodCode.SAFE_PRIVATE,
-    }
-)
-
 _PAD = 12
 _HELP_WRAP = 380
 _LIST_WIDTH = 440
-_DIALOG_MIN_HEIGHT = 560
+_DIALOG_MIN_HEIGHT = 620
+_TCIA_HEADING_HOVER = (
+    "Not a DICOM PS 3.15 option. Keeps research attributes for TCIA archive "
+    "submission and the MIDI-B answer key. Manufacturer, model name, and "
+    "software versions stay. Device serial number and station name stay "
+    "removed unless Retain Device Identity is also selected."
+)
 
 
 class DeidentificationOptionsDialog(AppToplevel):
     """
-    Choose DICOM confidentiality options with a plain-language detail panel.
+    Choose de-identification options with a plain-language detail panel.
+
+    PS 3.15 options are listed under the DICOM heading. Retain TCIA Research
+    Attributes is a separate checkbox under TCIA Archive Attributes.
 
     Args:
         parent: Parent window.
@@ -95,8 +94,28 @@ class DeidentificationOptionsDialog(AppToplevel):
         except Exception:
             logger.exception("Failed to open URL %s", url)
 
-    def _link_button(self, master: ctk.CTkFrame, text: str, url: str, *, width: int = 90) -> ctk.CTkButton:
-        """Transparent link-styled button (same pattern as Welcome View LOINC/RadLex)."""
+    def _link_button(
+        self,
+        master: ctk.CTkFrame,
+        text: str,
+        url: str,
+        *,
+        width: int = 90,
+        font: ctk.CTkFont | None = None,
+    ) -> ctk.CTkButton:
+        """
+        Transparent link-styled button (same pattern as Welcome View LOINC/RadLex).
+
+        Args:
+            master: Parent frame.
+            text: Link label.
+            url: Address opened on click.
+            width: Button width in pixels.
+            font: Section-title font. Omitted links keep the button font.
+        """
+        button_kwargs: dict[str, ctk.CTkFont] = {}
+        if font is not None:
+            button_kwargs["font"] = font
         button = ctk.CTkButton(
             master=master,
             text=text,
@@ -107,6 +126,7 @@ class DeidentificationOptionsDialog(AppToplevel):
             text_color=("#1a5fb4", "#62a0ea"),
             anchor="w",
             command=lambda: self._open_url(url),
+            **button_kwargs,
         )
         with contextlib.suppress(Exception):
             button.configure(cursor="hand2")
@@ -123,12 +143,14 @@ class DeidentificationOptionsDialog(AppToplevel):
         self._frame.grid_rowconfigure(1, weight=1)
         self._frame.grid_columnconfigure(0, weight=1)
 
-        dicom_ref = _("DICOM confidentiality profile options (PS 3.15 Appendix E, Table E.1-1)")
+        title_font = ctk.CTkFont(weight="bold")
+        dicom_ref = _("DICOM Confidentiality Profile Options (PS 3.15 Appendix E, Table E.1-1)")
         dicom_link = self._link_button(
             self._frame,
             dicom_ref,
             DICOM_CONFIDENTIALITY_PROFILE_URL,
-            width=button_width_for_label(dicom_ref, minimum=100),
+            width=button_width_for_label(dicom_ref, minimum=100, font=title_font),
+            font=title_font,
         )
         dicom_link.grid(row=0, column=0, sticky="w", padx=pad, pady=(pad, 0))
         bind_hover_tooltip(dicom_link, _("View on dicom.nema.org"))
@@ -143,34 +165,20 @@ class DeidentificationOptionsDialog(AppToplevel):
         list_frame.grid(row=0, column=0, sticky="nsew", padx=(0, pad))
         list_frame.grid_columnconfigure(0, weight=1)
 
-        for i, code in enumerate(DeidMethodCode):
-            row = ctk.CTkFrame(list_frame, fg_color="transparent", cursor="hand2")
-            row.grid(row=i, column=0, sticky="ew", pady=2)
-            row.grid_columnconfigure(1, weight=1)
-            self._row_frames[code] = row
+        dicom_codes = [code for code in DeidMethodCode if code is not DeidMethodCode.TCIA_RESEARCH]
+        for i, code in enumerate(dicom_codes):
+            self._add_option_row(list_frame, i, code)
 
-            var = self._option_vars[code]
-            checkbox = ctk.CTkCheckBox(
-                row,
-                text="",
-                width=24,
-                variable=var,
-                command=lambda c=code: self._on_checkbox(c),
-            )
-            if code is DeidMethodCode.BASIC:
-                checkbox.configure(state="disabled")
-            checkbox.grid(row=0, column=0, sticky="nw", padx=(0, 6), pady=2)
-
-            label = ctk.CTkLabel(
-                row,
-                text=_(deid_method_meaning(code)),
-                anchor="w",
-                justify="left",
-                wraplength=_LIST_WIDTH - 48,
-            )
-            label.grid(row=0, column=1, sticky="ew")
-            for widget in (row, label):
-                widget.bind("<Button-1>", lambda _e, c=code: self._focus_option(c))
+        tcia_heading = ctk.CTkLabel(
+            list_frame,
+            text=_("TCIA Archive Attributes"),
+            font=title_font,
+            anchor="w",
+            justify="left",
+        )
+        tcia_heading.grid(row=len(dicom_codes), column=0, sticky="ew", pady=(pad, 2))
+        bind_hover_tooltip(tcia_heading, lambda: _(_TCIA_HEADING_HOVER))
+        self._add_option_row(list_frame, len(dicom_codes) + 1, DeidMethodCode.TCIA_RESEARCH)
 
         ttk.Separator(body, orient="vertical").grid(row=0, column=1, sticky="ns", padx=(pad // 2, pad))
 
@@ -232,8 +240,8 @@ class DeidentificationOptionsDialog(AppToplevel):
 
         self._help_when_heading = ctk.CTkLabel(
             help_panel,
-            text=_("When it runs"),
-            font=ctk.CTkFont(weight="bold"),
+            text=_("When It Runs"),
+            font=title_font,
             anchor="w",
         )
         self._help_when_heading.grid(row=4, column=0, sticky="w", pady=(pad, 0))
@@ -309,8 +317,53 @@ class DeidentificationOptionsDialog(AppToplevel):
         finally:
             self._change_guard = False
 
+    def _add_option_row(self, parent: ctk.CTkFrame, row_index: int, code: DeidMethodCode) -> None:
+        """
+        One checkbox row for a de-identification option.
+
+        Args:
+            parent: Left-hand list frame.
+            row_index: Grid row.
+            code: Option shown on this row.
+        """
+        row = ctk.CTkFrame(parent, fg_color="transparent", cursor="hand2")
+        row.grid(row=row_index, column=0, sticky="ew", pady=2)
+        row.grid_columnconfigure(1, weight=1)
+        self._row_frames[code] = row
+
+        checkbox = ctk.CTkCheckBox(
+            row,
+            text="",
+            width=24,
+            variable=self._option_vars[code],
+            command=lambda c=code: self._on_checkbox(c),
+        )
+        if code is DeidMethodCode.BASIC:
+            checkbox.configure(state="disabled")
+        checkbox.grid(row=0, column=0, sticky="nw", padx=(0, 6), pady=2)
+
+        label = ctk.CTkLabel(
+            row,
+            text=_(deid_method_meaning(code)),
+            anchor="w",
+            justify="left",
+            wraplength=_LIST_WIDTH - 48,
+        )
+        label.grid(row=0, column=1, sticky="ew")
+        for widget in (row, label):
+            widget.bind("<Button-1>", lambda _e, c=code: self._focus_option(c))
+
     def _apply_preset(self, options: frozenset[DeidMethodCode]) -> None:
-        self._set_vars(options)
+        """
+        Set the DICOM checkboxes. Leave Retain TCIA Research Attributes as it is.
+
+        Args:
+            options: DICOM option codes to check. Basic is always included by _set_vars.
+        """
+        kept = set(options)
+        if self._option_vars[DeidMethodCode.TCIA_RESEARCH].get():
+            kept.add(DeidMethodCode.TCIA_RESEARCH)
+        self._set_vars(frozenset(kept))
         self._show_explanation(self._focused)
 
     def _focus_option(self, code: DeidMethodCode) -> None:

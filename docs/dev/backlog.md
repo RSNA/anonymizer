@@ -14,23 +14,24 @@ Optional restriction on top of the full TCIA private-tag knowledge base: the use
 - Store as a project field (creator strings, casefolded).
 - Surface unknown-removed counts per creator in the ingest summary so sites can spot creators worth allowlisting.
 
-### Overlapping burnt-in text detection (pixel path)
+### MIDI-B pixel PHI gold strings not detected
 
-EasyOCR (CRAFT) merges overlapping two-line annotations into one garbled box or misses both lines when letter strokes intersect.
+Upright EasyOCR read (`rotation_info=[]`, `width_ths=0.1`) on the MIDI-B pixel PHI manifest, 2026-11-05: 50 of 62 cases passed. The same 12 gold strings were missed with `width_ths=0`. These strings are not returned, so removal cannot act on them.
 
-Example (date over name — `1st/Oct/1982` over `Stewart`):
+- validation/5155749005 DX: miss `JT`; raw `UPRIGHT`, `PORTABLE`, `REIT`
+- validation/5220588395 DX: miss `MWF`; raw `OEA`, `ERECT`, `NRUYNH`, `POPTABLE`
+- validation/2051580196 CR: miss `NKF`; raw `7M`
+- validation/2051580196 CR: miss `NKF`; raw `7XM`
+- validation/3056777156 CR: miss `CMS`; raw `EVA`
+- validation/3056777156 CR: miss `CMS`; raw `2VJ`
+- validation/3615823051 DX: miss `JGR`; raw `BEMIL-ERECT`, `PORTABLE`
+- validation/6208874732 DX: miss `ROC`; raw `R8C`
+- validation/6208874732 DX: miss `ROC`; raw `RQC`
+- test/8225398083 DX: miss `RCN`; raw `UPRIGH`, `242`, `PORTABLE`
+- test/8225398083 DX: miss `RCN`; raw `UPRIGHT`, `142`, `PORTABLE`, `1`
+- test/113575183 CR: miss `FTA`; raw `PORTABLE`, `SEMI-ERECT`, `UOD`, `7 33`
 
-![Overlapping burnt-in text: date over name](assets/overlapping-burnt-in-text.png)
-
-Approach:
-
-1. Baseline/component line separation before OCR: binarize → connected ink components → cluster into text lines by baseline/vertical centroid → render each line on its own canvas → existing OCR → NER frame-context path per line.
-2. Benchmark a segmentation-based detector (PaddleOCR / DBNet polygons) on this crop plus `davidson_cxr` and `us_rgb_single_frame`.
-3. Cheap EasyOCR threshold sweep first for reference (`mag_ratio`, `text_threshold` / `link_threshold`, `ycenter_ths` / `height_ths`) — helps only where strokes do not touch.
-
-Constraints: pixel frame-context path only; report NER unchanged; no NER post-filters or span merging — separation is at the image level before the model.
-
-Success: name and date return as separate boxes/entities on the example above; no regression on existing OCR fixture suites.
+Repeated patient ids are separate gold boxes. Manifest: `/Volumes/MBOD.DX.LIFE/TCIA/MIDI-B/pixel_phi/manifest.json`. Eval: `src/prototyping/ocr/pixel_phi_easyocr`.
 
 ### NER model(s) for each other project language
 

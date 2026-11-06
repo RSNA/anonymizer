@@ -66,7 +66,7 @@ def feature_capability_description(key: str) -> str:
     """What the feature does at runtime (AI Batch copy; no download/install wording)."""
     return {
         AiFeatureId.EMBEDDED_PHI.value: _(
-            "Remove identifiers from burnt-in pixels and English free text."
+            "Remove identifiers from burnt-in pixels, metadata text and reports."
         ),
         AiFeatureId.HARMONIZE.value: _(
             "Harmonize Series Description using RadLex playbook and Study Description using LOINC dictionary."

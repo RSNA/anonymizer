@@ -111,6 +111,8 @@ def test_detect_entities_logs_key_steps(caplog) -> None:
                  "step 4/4 tagged result"):
         assert step in log_text
     assert "no product label for raw label 'time'" in log_text
+    assert "entity_group=first_name" in log_text
+    assert "entity_group=time" in log_text
     assert "<FIRST_NAME>Jane</FIRST_NAME>" in log_text
     assert "<LAST_NAME>Doe</LAST_NAME>" in log_text
     # No merging: first and last name remain the model's two spans.
@@ -146,11 +148,80 @@ def test_to_scored_label_time_gated_by_include_time() -> None:
     assert _to_scored_label("B-TIME", include_time=True) == "TIME"
 
 
+def test_detect_entities_keeps_date_shaped_unmapped_label() -> None:
+    """An ipv4 label on a dotted date is kept as DATE before the drop."""
+    text = "DOB: 04.25.1937"
+
+    def fake_run(_text: str, *, locale: str = "en_US"):
+        start = text.index("04.25.1937")
+        return [
+            {
+                "entity_group": "ipv4",
+                "start": start,
+                "end": start + len("04.25.1937"),
+                "score": 0.73,
+            }
+        ]
+
+    with (
+        patch("anonymizer.controller.ai.embedded_phi.ner.engine.ner_ready", return_value=True),
+        patch("anonymizer.controller.ai.embedded_phi.ner.engine._run_pipeline", side_effect=fake_run),
+    ):
+        ents = detect_entities(text, locale="en_US")
+
+    assert [(e.label, e.text_of(text), e.raw_label) for e in ents] == [
+        ("DATE", "04.25.1937", "ipv4")
+    ]
+
+
+def test_detect_entities_keeps_clock_shaped_unmapped_label(caplog) -> None:
+    """An unmapped label on a colon clock is kept; the raw group is logged."""
+    text = "scan 10:00"
+
+    def fake_run(_text: str, *, locale: str = "en_US"):
+        start = text.index("10:00")
+        return [
+            {
+                "entity_group": "ipv4",
+                "start": start,
+                "end": start + len("10:00"),
+                "score": 0.4,
+            }
+        ]
+
+    with (
+        caplog.at_level("INFO", logger="anonymizer.controller.ai.embedded_phi.ner.engine"),
+        patch("anonymizer.controller.ai.embedded_phi.ner.engine.ner_ready", return_value=True),
+        patch("anonymizer.controller.ai.embedded_phi.ner.engine._run_pipeline", side_effect=fake_run),
+    ):
+        without = detect_entities(text, locale="en_US")
+        with_time = detect_entities(text, locale="en_US", include_time=True)
+
+    assert [(e.label, e.text_of(text)) for e in without] == [("DATE", "10:00")]
+    assert [(e.label, e.text_of(text)) for e in with_time] == [("TIME", "10:00")]
+    assert "entity_group=ipv4" in caplog.text
+    assert "no product label for raw label 'ipv4'" not in caplog.text
+
+
+def test_detect_entities_drops_unmapped_label_that_is_not_a_date() -> None:
+    """A non-date span with no product label is still dropped."""
+    text = "EVANS"
+
+    def fake_run(_text: str, *, locale: str = "en_US"):
+        return [{"entity_group": "ipv4", "start": 0, "end": 5, "score": 0.8}]
+
+    with (
+        patch("anonymizer.controller.ai.embedded_phi.ner.engine.ner_ready", return_value=True),
+        patch("anonymizer.controller.ai.embedded_phi.ner.engine._run_pipeline", side_effect=fake_run),
+    ):
+        ents = detect_entities(text, locale="en_US")
+
+    assert ents == []
+
+
 def test_detect_entities_dob_dotted_date_raw_model_output_when_model_ready() -> None:
-    """Documented raw behaviour (davidson_cxr): used as-is, the model may
-    fragment ``DOB: 06.16.1976`` (the middle token can win ipv4, which has
-    no product label and is dropped). No suppression or merging corrects it;
-    the pixel path relies on whole-frame context instead (fixture gate)."""
+    """Live model: a dotted DOB stays a product label (DATE when the model
+    calls it ipv4). Exact fragmentation is the model's own call."""
     if not ner_ready():
         pytest.skip("PHI NER model not downloaded")
     text = "DOB: 06.16.1976"

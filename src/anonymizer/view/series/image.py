@@ -11,6 +11,7 @@ from PIL import Image, ImageTk
 
 from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import (
     PhiMatchMode,
+    accepted_phi_entities,
     effective_phi_label,
 )
 from anonymizer.controller.ai.tseg.config import segmentation_mode_display
@@ -1217,6 +1218,17 @@ class ImageViewer(ctk.CTkFrame):
         if ndx is None:
             return None
         hit = texts[ndx]
+        accepted = accepted_phi_entities(hit, self._ocr_match_mode)
+        detailed = [row for row in hit.ner.entities if len(row) > 2]
+        if accepted and detailed:
+            text = " · ".join(f"{label}: {fragment}" if fragment else label for label, fragment in accepted)
+            chip = effective_phi_label(hit, self._ocr_match_mode) or accepted[0][0]
+            return TooltipContent(
+                text=text,
+                bg=entity_color_hex(chip),
+                fg="#ffffff",
+                bold=True,
+            )
         label = effective_phi_label(hit, self._ocr_match_mode)
         if label:
             return TooltipContent(

@@ -60,7 +60,7 @@ class NerEvidence:
     """NER annotate result; score None means annotate not run yet."""
 
     label: str | None = None
-    entities: tuple[tuple[str, str], ...] = ()
+    entities: tuple[tuple[str, str, float], ...] = ()
     score: float | None = None
 
 

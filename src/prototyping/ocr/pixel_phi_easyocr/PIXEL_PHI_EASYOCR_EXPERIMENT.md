@@ -327,3 +327,29 @@ failures (showing 12 of 25):
 - validation/3056777156 CR: miss=['CMS'] raw=['8']
 - validation/3615823051 DX: miss=['JGR'] raw=['BEMIL-ERECT', 'PORTABLE']
 
+## banner line 7590034066 2026-11-05
+
+Gold line: `JOHNSON MICHELLE [F] 02.10.2012` (CR, 3480×4240). Detail: `out/banner_line_7590034066.json`.
+
+Product defaults (`rotation_info=[90, 270]`, canvas 1200, `width_ths=0.1`) miss the rest of the line. The detector still finds that crop; 90/270 recognition scores `|` at 0.8 and replaces the upright read `MICHELLE [F] 02.10.2012` at 0.7 (`set_result_with_confidence`).
+
+Turning `rotation_info` off, with every other product knob unchanged, returns the full line. Canvas, `text_threshold`, `mag_ratio`, and contrast did not need to move. Those later rows also hit only because they kept rotation off.
+
+## eval 2026-11-05T10:02:41.841686+00:00
+
+### `product_baseline` → **FAIL** (case_acc=80.6% 50/62; box_recall=80.6% 50/62; rel_cost=3.00)
+overrides={}
+failures (showing 12 of 12):
+- validation/5155749005 DX: miss=['JT'] raw=['UPRIGHT', 'PORTABLE', 'REIT', '14']
+- validation/5220588395 DX: miss=['MWF'] raw=['OEA', 'ERECT', 'NRUYNH', 'POPTABLE', '3', '2']
+- validation/2051580196 CR: miss=['NKF'] raw=['7M']
+- validation/2051580196 CR: miss=['NKF'] raw=['7XM', '2']
+- validation/3056777156 CR: miss=['CMS'] raw=['EVA', '8']
+- validation/3056777156 CR: miss=['CMS'] raw=['2VJ', '8']
+- validation/3615823051 DX: miss=['JGR'] raw=['BEMIL-ERECT', 'PORTABLE']
+- validation/6208874732 DX: miss=['ROC'] raw=['R8C']
+- validation/6208874732 DX: miss=['ROC'] raw=['RQC', '8']
+- test/8225398083 DX: miss=['RCN'] raw=['UPRIGH', '242', 'PORTABLE', 'UPRIGHT']
+- test/8225398083 DX: miss=['RCN'] raw=['UPRIGHT', '142', 'PORTABLE', '1']
+- test/113575183 CR: miss=['FTA'] raw=['PORTABLE', 'SEMI-ERECT', 'UOD', '7 33', '8', '8']
+

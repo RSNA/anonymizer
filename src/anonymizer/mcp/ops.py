@@ -31,8 +31,9 @@ from anonymizer.controller.dicom.requests import MoveStudiesRequest
 from anonymizer.controller.jobs.runner import RemovePixelPhiRunner
 from anonymizer.controller.project import ProjectController
 from anonymizer.controller.script.options import (
-    apply_option_modality_effects,
+    assign_confidentiality_options,
     enable_clean_structured_for_report_modalities,
+    resolve_deidentification_choices,
 )
 from anonymizer.controller.script.paths import packaged_default_script_path
 from anonymizer.controller.series.series_io import load_series_frames
@@ -43,6 +44,8 @@ from anonymizer.mcp.session import (
 )
 from anonymizer.mcp.snapshots import (
     abridged_path,
+    deidentification_option_choices,
+    deidentification_options_view,
     serialize_dicom_node,
     serialize_find_study,
     serialize_inventory_series,
@@ -56,7 +59,6 @@ from anonymizer.model.project import DICOMNode, ProjectModel
 from anonymizer.model.settings_validate import (
     SettingsValidationError,
     settings_defaults_payload,
-    validate_confidentiality_options,
     validate_language_code,
     validate_local_scp,
     validate_network_timeouts,
@@ -66,12 +68,19 @@ from anonymizer.model.settings_validate import (
     validate_transfer_syntaxes,
     validate_uid_root,
 )
-from anonymizer.utils.dicom import DeidMethodCode
 from anonymizer.utils.storage.dicom_tree import ImportPathsError, expand_import_directory, get_dcm_files
 from anonymizer.utils.translate import _
 from anonymizer.utils.windowing import apply_windowing
 
 logger = logging.getLogger(__name__)
+
+_DEIDENTIFICATION_PROMPT = (
+    "Choose de-identification options, or accept the Basic Application "
+    "Confidentiality Profile. Say Basic to accept the default. Say Retain for "
+    "Basic plus Modified Dates, Patient Characteristics, and Retain Safe Private. "
+    "Retain TCIA Research Attributes is not a DICOM PS 3.15 option. You can also "
+    "name any option in deidentification_choices."
+)
 
 # Cap on per-item failure details in batch results (import, harmonize):
 # counts always describe the whole batch; detail entries are a sample.
@@ -190,9 +199,7 @@ def list_projects() -> dict[str, Any]:
 def _load_mcp_setup_help() -> dict[str, Any]:
     """MCP-owned clinician help merged into project_settings_defaults."""
     try:
-        raw = resources.files("anonymizer.mcp.assets").joinpath("setup_help.json").read_text(
-            encoding="utf-8"
-        )
+        raw = resources.files("anonymizer.mcp.assets").joinpath("setup_help.json").read_text(encoding="utf-8")
     except (FileNotFoundError, ModuleNotFoundError, TypeError, AttributeError):
         path = Path(__file__).resolve().parent / "assets" / "setup_help.json"
         raw = path.read_text(encoding="utf-8")
@@ -215,9 +222,11 @@ def _set_model_modalities(
     Raises:
         SettingsValidationError: If a modality cannot be resolved.
     """
-    if modalities is None or (
-        isinstance(modalities, str) and not modalities.strip()
-    ) or (isinstance(modalities, list) and not modalities):
+    if (
+        modalities is None
+        or (isinstance(modalities, str) and not modalities.strip())
+        or (isinstance(modalities, list) and not modalities)
+    ):
         return
     try:
         resolved = resolve_project_modalities(
@@ -237,18 +246,15 @@ def _apply_options_to_model(
     confidentiality_options: object,
 ) -> None:
     """
-    Assign de-identification options and their model-level modality effects.
+    Store de-identification options on an unsaved project model.
 
     Args:
         model: Project model to update.
-        confidentiality_options: De-identification option code values, or None for no change.
+        confidentiality_options: Option names or codes, or None for no change.
     """
     if confidentiality_options is None:
         return
-    codes = validate_confidentiality_options(confidentiality_options)
-    options = frozenset(DeidMethodCode(code) for code in codes)
-    model.confidentiality_options = options
-    apply_option_modality_effects(model, options)
+    assign_confidentiality_options(model, resolve_deidentification_choices(confidentiality_options))
 
 
 def _build_project_model(
@@ -279,7 +285,7 @@ def _build_project_model(
         transfer_syntaxes: Optional transfer-syntax UID list.
         scp: Optional partial local SCP fields.
         network_timeouts: Optional partial timeout fields.
-        confidentiality_options: Optional CID 7050 option code values.
+        confidentiality_options: Optional option names or codes.
 
     Returns:
         A validated, unsaved core ProjectModel.
@@ -332,9 +338,7 @@ def _pending_warnings(
     destination = Path(model.storage_dir) / ProjectController.PROJECT_MODEL_FILENAME_JSON
     if destination.is_file():
         if overwrite:
-            warnings.append(
-                "An existing project is at the destination; confirmation will replace it."
-            )
+            warnings.append("An existing project is at the destination; confirmation will replace it.")
         else:
             warnings.append(
                 "An existing project is at the destination; confirmation will not replace "
@@ -368,11 +372,7 @@ def _confirmation_payload(
     """
     configuration = serialize_project_configuration(model)
     supplied = set(session.pending_supplied_fields)
-    using_defaults = [
-        name
-        for name in configuration
-        if name not in supplied and name != "remote_scps"
-    ]
+    using_defaults = [name for name in configuration if name not in supplied and name != "remote_scps"]
     warnings = _pending_warnings(
         session,
         model,
@@ -380,21 +380,35 @@ def _confirmation_payload(
     )
     if warning:
         warnings.insert(0, warning)
-    return {
+    options_chosen = "confidentiality_options" in supplied
+    payload: dict[str, Any] = {
         "status": "confirmation_required",
         "created": False,
         "revision": revision,
         "configuration": configuration,
+        "deidentification_options": deidentification_options_view(model.confidentiality_options),
+        "deidentification_choice_required": not options_chosen,
         "supplied_by_user": sorted(supplied),
         "using_defaults": using_defaults,
         "overwrite": session.pending_overwrite,
         "warnings": warnings,
-        "next_action": (
-            "Present this configuration to the user, identifying supplied values and "
-            "defaults. Do not create the project until the user explicitly confirms "
-            "this revision in a later message."
-        ),
     }
+    if options_chosen:
+        payload["next_action"] = (
+            "Present this configuration to the user, including deidentification_options, "
+            "and identify supplied values and defaults. Do not create the project until "
+            "the user explicitly confirms this revision in a later message."
+        )
+    else:
+        payload["deidentification_choices"] = deidentification_option_choices()
+        payload["deidentification_prompt"] = _DEIDENTIFICATION_PROMPT
+        payload["next_action"] = (
+            "The user has not chosen de-identification options. Show "
+            "deidentification_prompt and deidentification_choices, and ask them to "
+            "choose options or accept the Basic Application Confidentiality Profile. "
+            "Do not create the project until a later revision includes that choice."
+        )
+    return payload
 
 
 def _confirm_pending_project(
@@ -435,7 +449,8 @@ def create_project(
     transfer_syntaxes: list[str] | None = None,
     scp: dict[str, Any] | None = None,
     network_timeouts: dict[str, Any] | None = None,
-    confidentiality_options: list[int] | None = None,
+    confidentiality_options: list[int] | list[str] | list[int | str] | None = None,
+    accept_basic_profile: bool = False,
     confirm: bool = False,
     revision: int | None = None,
 ) -> dict[str, Any]:
@@ -460,7 +475,9 @@ def create_project(
         transfer_syntaxes: Optional transfer-syntax UID list.
         scp: Optional partial local SCP fields.
         network_timeouts: Optional partial network timeout fields.
-        confidentiality_options: Optional CID 7050 option code values.
+        confidentiality_options: Optional option names or codes.
+        accept_basic_profile: True when the user accepts the default Basic
+            Application Confidentiality Profile and did not name other options.
         confirm: Whether this call is the later confirmation call.
         revision: Pending revision being confirmed.
 
@@ -477,6 +494,9 @@ def create_project(
         if raw_name in {".", ".."} or "/" in raw_name or "\\" in raw_name:
             raise HeadlessOpsError("project_name must be a single path segment (no slashes)")
         name = validate_project_name(raw_name)
+        chosen_options = confidentiality_options
+        if accept_basic_profile and chosen_options is None:
+            chosen_options = ["Basic"]
 
         configuration_supplied = any(
             value is not None
@@ -489,12 +509,23 @@ def create_project(
                 transfer_syntaxes,
                 scp,
                 network_timeouts,
-                confidentiality_options,
+                chosen_options,
             )
         )
         pending = session.pending_project
         if confirm and pending is not None and pending.project_name == name and not configuration_supplied:
             if revision is not None and revision == session.pending_revision:
+                if "confidentiality_options" not in session.pending_supplied_fields:
+                    return _confirmation_payload(
+                        session,
+                        pending,
+                        int(session.pending_revision or 0),
+                        warning=(
+                            "Confirmation was not accepted because de-identification "
+                            "options were not chosen. Ask the user to choose options or "
+                            "accept the Basic Application Confidentiality Profile."
+                        ),
+                    )
                 return _confirm_pending_project(session, revision)
             return _confirmation_payload(
                 session,
@@ -518,11 +549,9 @@ def create_project(
             transfer_syntaxes=transfer_syntaxes,
             scp=scp,
             network_timeouts=network_timeouts,
-            confidentiality_options=confidentiality_options,
+            confidentiality_options=chosen_options,
         )
-        supplied: set[str] = (
-            set(session.pending_supplied_fields) if same_pending else set()
-        )
+        supplied: set[str] = set(session.pending_supplied_fields) if same_pending else set()
         supplied.add("project_name")
         for field_name, value in (
             ("storage_dir", storage_dir),
@@ -533,7 +562,7 @@ def create_project(
             ("transfer_syntaxes", transfer_syntaxes),
             ("scp", scp),
             ("network_timeouts", network_timeouts),
-            ("confidentiality_options", confidentiality_options),
+            ("confidentiality_options", chosen_options),
         ):
             if value is not None:
                 supplied.add(field_name)
@@ -567,6 +596,7 @@ def project_settings_defaults() -> dict[str, Any]:
     help_block = dict(payload.get("help") or {})
     help_block.update(_load_mcp_setup_help())
     payload["help"] = help_block
+    payload["deidentification_option_choices"] = deidentification_option_choices()
     return payload
 
 
@@ -598,7 +628,7 @@ def update_project_settings(
     transfer_syntaxes: list[str] | None = None,
     scp: dict[str, Any] | None = None,
     network_timeouts: dict[str, Any] | None = None,
-    confidentiality_options: list[int] | None = None,
+    confidentiality_options: list[int] | list[str] | list[int | str] | None = None,
 ) -> dict[str, Any]:
     """
     Update mutable settings on an open project.
@@ -609,7 +639,7 @@ def update_project_settings(
         transfer_syntaxes: Optional transfer-syntax UID list.
         scp: Optional partial local SCP fields.
         network_timeouts: Optional partial network timeout fields.
-        confidentiality_options: Optional CID 7050 option code values.
+        confidentiality_options: Optional option names or codes.
 
     Returns:
         Updated-project response. Identity fields are not accepted here.
@@ -638,10 +668,7 @@ def update_project_settings(
             mirror_scp_to_scu=True,
         )
         if confidentiality_options is not None:
-            codes = validate_confidentiality_options(confidentiality_options)
-            controller.apply_confidentiality_options(
-                frozenset(DeidMethodCode(code) for code in codes)
-            )
+            controller.apply_confidentiality_options(resolve_deidentification_choices(confidentiality_options))
             controller.save_model()
     except SettingsValidationError as exc:
         raise HeadlessOpsError(str(exc)) from exc
@@ -716,9 +743,9 @@ def _apply_non_modality_settings_to_model(
         kwargs = _scp_kwargs(scp)
         # Treat empty dict as "no change"; require at least one field when provided.
         if any(v is not None and str(v).strip() != "" for v in kwargs.values()):
-            node = validate_local_scp(base=model.scp, **{
-                k: v for k, v in kwargs.items() if v is not None and str(v).strip() != ""
-            })
+            node = validate_local_scp(
+                base=model.scp, **{k: v for k, v in kwargs.items() if v is not None and str(v).strip() != ""}
+            )
             model.scp = node
             if mirror_scp_to_scu:
                 model.scu = DICOMNode(node.ip, node.port, node.aet, True)
@@ -758,8 +785,7 @@ def _apply_mutable_settings(
     # Modalities persist via apply_project_modalities (save_model); do after other fields
     # so a restart path still includes modality changes when update_model saves.
     if modalities is not None and (
-        (isinstance(modalities, str) and modalities.strip())
-        or (isinstance(modalities, list) and len(modalities) > 0)
+        (isinstance(modalities, str) and modalities.strip()) or (isinstance(modalities, list) and len(modalities) > 0)
     ):
         apply_project_modalities(controller, modalities)
         # apply_project_modalities already saved; still need update_model if SCP changed
@@ -769,9 +795,7 @@ def _apply_mutable_settings(
 
     if restart_scp:
         controller.update_model()
-    elif any(
-        x is not None for x in (transfer_syntaxes, scp, network_timeouts)
-    ):
+    elif any(x is not None for x in (transfer_syntaxes, scp, network_timeouts)):
         if not controller.save_model():
             raise HeadlessOpsError("Failed to save ProjectModel.json")
 
@@ -852,7 +876,9 @@ def _study_description(study) -> str:
     return _orm_description(study)
 
 
-def _lookup_series_meta(controller: ProjectController, anon_series_uid: str, series_path: Path | None = None) -> dict[str, str]:
+def _lookup_series_meta(
+    controller: ProjectController, anon_series_uid: str, series_path: Path | None = None
+) -> dict[str, str]:
     anon_model = controller.anonymizer.model
     for phi in anon_model.load_phi_with_studies_series_no_instances():
         if phi.patient_id == AnonymizerModel.DEFAULT_PHI_PATIENT_ID_PK_VALUE:
@@ -922,12 +948,8 @@ def list_inventory(controller: ProjectController) -> dict[str, Any]:
                         pixel_phi_scanned=bool(series.embedded_phi_scanned),
                         study_description=_study_description(study),
                         series_description=_series_description(series),
-                        series_harmonized=bool(
-                            str(getattr(series, "harmonized_description", None) or "").strip()
-                        ),
-                        study_harmonized=bool(
-                            str(getattr(study, "harmonized_description", None) or "").strip()
-                        ),
+                        series_harmonized=bool(str(getattr(series, "harmonized_description", None) or "").strip()),
+                        study_harmonized=bool(str(getattr(study, "harmonized_description", None) or "").strip()),
                         patient_index=patient_index,
                         study_index=study_index,
                         series_index=series_index,
@@ -1020,8 +1042,7 @@ def _looks_like_filesystem_path(value: str) -> bool:
 def _reject_path_selector(label: str, value: str) -> None:
     if _looks_like_filesystem_path(value):
         raise HeadlessOpsError(
-            f"{label} must not be a filesystem path. "
-            'Use list_inventory selectors (patient="1", series="1"|cxr).'
+            f"{label} must not be a filesystem path. " 'Use list_inventory selectors (patient="1", series="1"|cxr).'
         )
 
 
@@ -1029,7 +1050,7 @@ def _reject_relative_selector(label: str, value: str) -> None:
     key = value.strip().lower().replace(" ", "").replace("-", "")
     if key in _RELATIVE_LAST or key in _RELATIVE_FIRST:
         raise HeadlessOpsError(
-            f'{label}={value!r} relative selectors (first|last|latest) are not supported. '
+            f"{label}={value!r} relative selectors (first|last|latest) are not supported. "
             f'Use a 1-based index from list_inventory (e.g. {label}="1").'
         )
 
@@ -1092,11 +1113,7 @@ def _filter_series_rows(
         if matched:
             return matched
     needle = key.lower()
-    matched = [
-        r
-        for r in rows
-        if needle in str(r.get("series_description") or "").lower()
-    ]
+    matched = [r for r in rows if needle in str(r.get("series_description") or "").lower()]
     if matched:
         return matched
     raise HeadlessOpsError(
@@ -1122,24 +1139,16 @@ def resolve_series(
     series:  <series_index> | cxr | unscanned | modality | description substring
     """
     if series_path is not None and str(series_path).strip():
-        raise HeadlessOpsError(
-            "series_path is not supported. "
-            'Use list_inventory indices: patient="1", series="1".'
-        )
+        raise HeadlessOpsError("series_path is not supported. " 'Use list_inventory indices: patient="1", series="1".')
 
     uid = (anon_series_uid or "").strip()
     if uid:
         if _looks_like_filesystem_path(uid):
             raise HeadlessOpsError(
-                "anon_series_uid must not be a filesystem path. "
-                "Use patient=/series= selectors from list_inventory."
+                "anon_series_uid must not be a filesystem path. " "Use patient=/series= selectors from list_inventory."
             )
         images_dir = controller.model.images_dir().resolve()
-        matches = [
-            p
-            for p in images_dir.rglob(uid)
-            if p.is_dir() and p.name == uid and images_dir in p.parents
-        ]
+        matches = [p for p in images_dir.rglob(uid) if p.is_dir() and p.name == uid and images_dir in p.parents]
         matches = sorted(matches, key=lambda p: len(p.relative_to(images_dir).parts))
         if not matches:
             raise HeadlessOpsError(f"No series directory found for anon_series_uid={uid}")
@@ -1199,9 +1208,7 @@ def resolve_series(
             if len(exact) == 1:
                 target_patient = exact[0]
             elif len(exact) > 1:
-                raise HeadlessOpsError(
-                    f"Ambiguous patient={patient_sel!r}; matches: {', '.join(exact[:5])}"
-                )
+                raise HeadlessOpsError(f"Ambiguous patient={patient_sel!r}; matches: {', '.join(exact[:5])}")
             else:
                 raise HeadlessOpsError(
                     f"Unknown patient={patient_sel!r}. "
@@ -1214,9 +1221,7 @@ def resolve_series(
 
     if study_sel:
         # Prefer inventory study_index when present; else 1-based order of distinct studies.
-        by_study_index = [
-            r for r in filtered if str(r.get("study_index") or "") == study_sel
-        ]
+        by_study_index = [r for r in filtered if str(r.get("study_index") or "") == study_sel]
         if study_sel.isdigit() and by_study_index:
             filtered = by_study_index
         else:
@@ -1265,9 +1270,7 @@ def resolve_series(
     path = _series_disk_path(controller, pick_row)
     patient_id = str(pick_row.get("anon_patient_id") or "").strip() or "Patient"
     desc = (
-        str(pick_row.get("series_description") or "").strip()
-        or str(pick_row.get("modality") or "").strip()
-        or "Series"
+        str(pick_row.get("series_description") or "").strip() or str(pick_row.get("modality") or "").strip() or "Series"
     )
     return {
         "anon_patient_id": pick_row.get("anon_patient_id") or None,
@@ -1365,10 +1368,7 @@ def remove_pixel_phi(
             _notify(progress, index, total_rows, f"Processed series {index} of {total_rows}")
         return {
             "status": "ok" if failed == 0 else "partial",
-            "detail": (
-                f"Pixel PHI processed for {len(results)} series"
-                + (f" ({failed} failed)." if failed else ".")
-            ),
+            "detail": (f"Pixel PHI processed for {len(results)} series" + (f" ({failed} failed)." if failed else ".")),
             "series_count": len(results),
             "failed": failed,
             "results": results,
@@ -1422,11 +1422,7 @@ def remove_pixel_phi(
 
     meta = _lookup_series_meta(controller, anon_uid, series_path=path)
     patient_id = str(meta.get("anon_patient_id") or "").strip() or "Patient"
-    desc = (
-        str(meta.get("series_description") or "").strip()
-        or str(meta.get("modality") or "").strip()
-        or "Series"
-    )
+    desc = str(meta.get("series_description") or "").strip() or str(meta.get("modality") or "").strip() or "Series"
     return {
         "status": outcome.status,
         "detail": safe_detail,
@@ -1483,9 +1479,7 @@ def export_series_preview(
     try:
         fmt = PreviewImageFormat(fmt).value
     except ValueError as exc:
-        raise HeadlessOpsError(
-            f"Unsupported image_format={image_format!r} (use png or jpeg)"
-        ) from exc
+        raise HeadlessOpsError(f"Unsupported image_format={image_format!r} (use png or jpeg)") from exc
 
     try:
         out_size = int(size)
@@ -1516,13 +1510,11 @@ def export_series_preview(
     if idx < 0 or idx >= len(frames):
         raise HeadlessOpsError(f"frame_index {idx} out of range (0..{len(frames) - 1})")
 
-
     frame = frames[idx]
     wl, ww = loaded.default_window
     try:
         bgr = apply_windowing(float(wl), float(ww), frame)
     except Exception:
-
         gray = uint8_grayscale_from_array(np.asarray(frame))
         bgr = np.stack([gray, gray, gray], axis=-1)
 
@@ -1542,10 +1534,7 @@ def export_series_preview(
 
     modality = getattr(loaded.metadata, "Modality", None)
     meta = _lookup_series_meta(controller, anon_uid, series_path=path)
-    patient_id = (
-        str(resolved.get("anon_patient_id") or meta.get("anon_patient_id") or "").strip()
-        or "Patient"
-    )
+    patient_id = str(resolved.get("anon_patient_id") or meta.get("anon_patient_id") or "").strip() or "Patient"
     desc = (
         str(resolved.get("series_description") or meta.get("series_description") or "").strip()
         or str(modality or resolved.get("modality") or meta.get("modality") or "").strip()
@@ -1569,9 +1558,7 @@ def export_series_preview(
         "study_index": resolved.get("study_index"),
         "series_index": resolved.get("series_index"),
         "row_index": resolved.get("row_index"),
-        "series_description": resolved.get("series_description")
-        or meta.get("series_description")
-        or None,
+        "series_description": resolved.get("series_description") or meta.get("series_description") or None,
         "caption": str(resolved.get("caption") or f"{patient_id} — {desc}"),
         "preview_base64": b64,
         "mime_type": mime,
@@ -1667,9 +1654,7 @@ def harmonize_studies(
                 if len(exact) == 1:
                     target_patient = exact[0]
                 elif len(exact) > 1:
-                    raise HeadlessOpsError(
-                        f"Ambiguous patient={patient_sel!r}; matches: {', '.join(exact[:5])}"
-                    )
+                    raise HeadlessOpsError(f"Ambiguous patient={patient_sel!r}; matches: {', '.join(exact[:5])}")
                 else:
                     raise HeadlessOpsError(
                         f"Unknown patient={patient_sel!r}. "
@@ -1707,9 +1692,7 @@ def harmonize_studies(
         raise HeadlessOpsError("No matching studies to harmonize.")
 
     # Study labels for failure reporting (modality / original description).
-    label_source = (
-        list(list_inventory(controller).get("series") or []) if wanted_uids else rows
-    )
+    label_source = list(list_inventory(controller).get("series") or []) if wanted_uids else rows
     study_labels: dict[tuple[str, str], dict[str, str]] = {}
     for row in label_source:
         key = (
@@ -1732,17 +1715,13 @@ def harmonize_studies(
     for index, study_key in enumerate(studies, start=1):
         failed_messages: list[str] = []
 
-        def _capture_outcome(
-            outcome: Any, _sink: list[str] = failed_messages
-        ) -> None:
+        def _capture_outcome(outcome: Any, _sink: list[str] = failed_messages) -> None:
             if getattr(outcome, "status", "") == "failed":
                 message = str(getattr(outcome, "message", "") or "").strip()
                 _sink.append(message or "failed")
 
         try:
-            summary = controller.harmonize_studies(
-                [study_key], on_outcome=_capture_outcome
-            )
+            summary = controller.harmonize_studies([study_key], on_outcome=_capture_outcome)
         except Exception as exc:
             logger.exception("harmonize_studies failed")
             raise HeadlessOpsError(str(exc)) from exc
@@ -1829,10 +1808,7 @@ def _import_paths(
         "skipped": result.skipped,
         "failed": result.failed,
         "anon_patient_ids": result.anon_patient_ids,
-        "failures": [
-            {"path": abridged_path(item["path"]), "error": item["error"]}
-            for item in result.failures
-        ],
+        "failures": [{"path": abridged_path(item["path"]), "error": item["error"]} for item in result.failures],
         "project": serialize_project_import_summary(controller),
     }
 
@@ -1845,9 +1821,7 @@ def import_directory(
 ) -> dict[str, Any]:
     root = Path(directory).expanduser().resolve()
     if not root.is_dir():
-        raise HeadlessOpsError(
-            f"Not a directory: {root}. For a single DICOM file use import_file instead."
-        )
+        raise HeadlessOpsError(f"Not a directory: {root}. For a single DICOM file use import_file instead.")
     try:
         paths = expand_import_directory(root)
     except ImportPathsError as exc:
@@ -1863,9 +1837,7 @@ def import_file(
 ) -> dict[str, Any]:
     path = Path(file_path).expanduser().resolve()
     if not path.is_file():
-        raise HeadlessOpsError(
-            f"Not a file: {path}. For a folder of DICOM files use import_directory instead."
-        )
+        raise HeadlessOpsError(f"Not a file: {path}. For a folder of DICOM files use import_directory instead.")
     return _import_paths(controller, [str(path)], source=str(path), progress=progress)
 
 
@@ -1887,9 +1859,7 @@ def configure_remote(
     try:
         role_enum = role if isinstance(role, RemoteScpRole) else RemoteScpRole(str(role).strip().upper())
     except ValueError as exc:
-        raise HeadlessOpsError(
-            f"role must be {RemoteScpRole.QUERY.value} or {RemoteScpRole.EXPORT.value}"
-        ) from exc
+        raise HeadlessOpsError(f"role must be {RemoteScpRole.QUERY.value} or {RemoteScpRole.EXPORT.value}") from exc
     scp_key = _query_scp_key() if role_enum is RemoteScpRole.QUERY else _export_scp_key()
 
     try:

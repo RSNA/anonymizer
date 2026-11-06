@@ -200,7 +200,8 @@ def create_project(
     transfer_syntaxes: list[str] | None = None,
     scp: dict[str, Any] | None = None,
     network_timeouts: dict[str, Any] | None = None,
-    confidentiality_options: list[int] | None = None,
+    confidentiality_options: list[int | str] | None = None,
+    accept_basic_profile: bool = False,
     confirm: bool = False,
     revision: int | None = None,
 ) -> dict[str, Any]:
@@ -218,6 +219,7 @@ def create_project(
             "scp": scp,
             "network_timeouts": network_timeouts,
             "confidentiality_options": confidentiality_options,
+            "accept_basic_profile": accept_basic_profile,
             "confirm": confirm,
             "revision": revision,
         },
@@ -246,6 +248,7 @@ def create_project(
                     scp=scp_dict,
                     network_timeouts=timeouts_dict,
                     confidentiality_options=args.confidentiality_options,
+                    accept_basic_profile=args.accept_basic_profile,
                     confirm=args.confirm,
                     revision=args.revision,
                 )
@@ -295,7 +298,7 @@ def update_project_settings(
     transfer_syntaxes: list[str] | None = None,
     scp: dict[str, Any] | None = None,
     network_timeouts: dict[str, Any] | None = None,
-    confidentiality_options: list[int] | None = None,
+    confidentiality_options: list[int | str] | None = None,
 ) -> dict[str, Any]:
     args, err = _parse(
         UpdateProjectSettingsArgs,

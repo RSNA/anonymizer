@@ -26,6 +26,9 @@ modalities_in_selected_studies(images_dir: Path, studies: Sequence[tuple[str, st
 effective_modality_whitelists(project_dir: Path | None, modalities: Sequence[str]) -> dict[str, list[str]]
     Return effective whitelist terms per modality (same as batch OCR uses).
 
+modalities_with_whitelist_terms(project_dir: Path | None, modalities: Sequence[str]) -> tuple[str, ...]
+    Modalities from the input that have at least one whitelist term, in that order.
+
 effective_modality_phi_match_modes(project_dir: Path | None, modalities: Sequence[str]) -> dict[str, PhiMatchMode]
     Return per-modality PhiMatchMode (project sidecar or STANDARD default).
 
@@ -222,7 +225,7 @@ from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
 )
 from anonymizer.controller.ai.embedded_phi.report.process_report_text import (
     apply_project_uids_to_sr,
-    detect_phi,
+    detect_report_text_phi,
     remove_phi,
     write_report_text,
 )
@@ -340,6 +343,24 @@ def effective_modality_whitelists(
 ) -> dict[str, list[str]]:
     """Return effective whitelist terms per modality (same as batch OCR uses)."""
     return {modality: load_modality_whitelist(project_dir, modality) for modality in modalities}
+
+
+def modalities_with_whitelist_terms(
+    project_dir: Path | None,
+    modalities: Sequence[str],
+) -> tuple[str, ...]:
+    """
+    Modalities from the input that have at least one whitelist term.
+
+    Args:
+        project_dir: Project storage directory, or None for bundled lists.
+        modalities: Modality codes in display order.
+
+    Returns:
+        Codes that load a non-empty whitelist, in the same order.
+    """
+    loaded = effective_modality_whitelists(project_dir, modalities)
+    return tuple(code for code in modalities if loaded.get(code))
 
 
 def effective_modality_phi_match_modes(
@@ -1166,6 +1187,7 @@ def _apply_report_text_phi_series(
     on_log_detail: Callable[[str], None] | None = None,
     synthetic: bool = False,
     mark_scanned: bool = True,
+    project_dir: Path | None = None,
 ) -> AiBatchOutcome:
     """
     De-identify native SR / Encapsulated PDF series via process_report_text.
@@ -1176,6 +1198,7 @@ def _apply_report_text_phi_series(
         on_log_detail: Optional per-instance log callback.
         synthetic: If True, synthetic replacements; else blank.
         mark_scanned: When False, caller stamps series_embedded_phi_scanned.
+        project_dir: Project storage directory passed through to detect_report_text_phi.
 
     Returns:
         Batch outcome for the series.
@@ -1215,7 +1238,12 @@ def _apply_report_text_phi_series(
             if study_uid:
                 with contextlib.suppress(Exception):
                     phi_header = anon_model.get_study_phi_header_by_anon_study_uid(study_uid)
-            text, entities = detect_phi(ds, phi_header=phi_header)
+            text, entities = detect_report_text_phi(
+                ds,
+                phi_header=phi_header,
+                project_dir=project_dir,
+                series_dir=series_path,
+            )
             if not entities:
                 continue
             removed_texts = [text[e.start : e.end] for e in entities if text[e.start : e.end].strip()]
@@ -1345,6 +1373,7 @@ def _apply_remove_pixel_phi_series(
                 on_log_detail=on_log_detail,
                 synthetic=str(reports_replace_mode).strip().lower() == "synth",
                 mark_scanned=False,
+                project_dir=project_dir,
             )
             if report_outcome.status == "failed":
                 return report_outcome

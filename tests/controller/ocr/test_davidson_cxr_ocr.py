@@ -71,10 +71,10 @@ def test_davidson_cxr_ocr_finds_burned_in_text(davidson_loaded) -> None:
             f"DOB box must be DATE-labelled, got {[(t.text, t.ner.label) for t in ws.result[0]]}"
         )
         assert dob_box.ner.entities, "DOB box must record its detected entities for hover"
-        assert all(label == "DATE" for label, _text in dob_box.ner.entities)
+        assert all(row[0] == "DATE" for row in dob_box.ner.entities)
         # The model may fragment this date (e.g. '.' + '.1976'); the box is
         # still DATE-labelled/removed whole, and the date must be among them.
-        assert any("1976" in text or "06" in text for _label, text in dob_box.ner.entities)
+        assert any("1976" in row[1] or "06" in row[1] for row in dob_box.ner.entities)
         name_boxes = [t for t in ws.result[0] if "DAVIDSON" in t.text or "DOUGLAS" in t.text]
         assert name_boxes and all(
             t.ner.label == "NAME" for t in name_boxes

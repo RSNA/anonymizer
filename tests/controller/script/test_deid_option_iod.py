@@ -140,7 +140,7 @@ def test_clean_structured_content_on_sr_series(tmp_path: Path) -> None:
     text = "Patient John Doe seen for follow-up"
     with patch.object(
         batch_process,
-        "detect_phi",
+        "detect_report_text_phi",
         return_value=(text, [Entity(label="NAME", start=8, end=16)]),
     ):
         outcome = batch_process._apply_report_text_phi_series(

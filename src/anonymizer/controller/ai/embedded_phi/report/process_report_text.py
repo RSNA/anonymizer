@@ -14,11 +14,23 @@ METADATA_LABEL_SCORED_FAMILY
 BASIC_TEXT_SR_SOP_CLASS_UID
     Basic text sr sop class uid.
 
-detect_phi_in_text(text: str, ds: Dataset, *, locale: str='en_US', phi_header: object | None=None, whitelist: Sequence[str] | None=None) -> list[Entity]
-    Report View PHI pipeline on arbitrary unicode (source text unchanged).
+is_report_dataset(ds: Dataset) -> bool
+    True for a Structured Report or an encapsulated PDF.
 
-detect_phi(ds: Dataset, *, locale: str='en_US', phi_header: object | None=None, whitelist: Sequence[str] | None=None) -> tuple[str, list[Entity]]
-    Extract report unicode from ds and find PHI spans (text unchanged).
+ReportWhitelist
+    Terms, similarity floor, modality codes, and source for one report detect.
+
+resolve_report_whitelist(project_dir: Path | None, series_dir: Path | None, whitelist: Sequence[str] | None) -> ReportWhitelist
+    Series modalities when the series has several files; parent study when it has one.
+
+resolve_dataset_whitelist(project_dir: Path | None, ds: Dataset, series_dir: Path | None, whitelist: Sequence[str] | None=None, *, modality: str | None=None) -> ReportWhitelist
+    Report series or parent study for a report; the dataset Modality for any other file.
+
+detect_report_text_phi_in_text(text: str, ds: Dataset, *, locale: str='en_US', phi_header: object | None=None, whitelist: Sequence[str] | None=None, project_dir: Path | None=None, series_dir: Path | None=None) -> list[Entity]
+    Report text PHI on unicode. Masks the series or study modality whitelist.
+
+detect_report_text_phi(ds: Dataset, *, locale: str='en_US', phi_header: object | None=None, whitelist: Sequence[str] | None=None, project_dir: Path | None=None, series_dir: Path | None=None) -> tuple[str, list[Entity]]
+    Extract report text from ds and find PHI spans (text unchanged).
 
 entities_from_study_phi(text: str, ds: Dataset, phi_header: object | None) -> list[Entity]
     Metadata PHI spans: original study/patient PHI strings found in report text.
@@ -52,16 +64,30 @@ import io
 import logging
 import re
 from collections.abc import Callable, Iterator, Sequence
+from dataclasses import dataclass
+from pathlib import Path
 
 from PIL import Image
-from pydicom import Dataset
+from pydicom import Dataset, dcmread
 from pydicom.dataset import FileMetaDataset
+from pydicom.errors import InvalidDicomError
 from pydicom.sequence import Sequence as DicomSequence
 from pydicom.uid import ExplicitVRLittleEndian, generate_uid
 
 from anonymizer.controller.ai.embedded_phi.classify_series import ENCAPSULATED_PDF_SOP_CLASS_UID, SR_SOP_CLASS_PREFIX
 from anonymizer.controller.ai.embedded_phi.ner.engine import Entity, detect_entities, replace_entities
-from anonymizer.controller.ai.embedded_phi.ner.radiology_filters import collect_anonymized_values, mask_text_for_ner
+from anonymizer.controller.ai.embedded_phi.ner.radiology_filters import (
+    DEFAULT_WHITELIST_SIMILARITY,
+    FilterHit,
+    collect_anonymized_values,
+    mask_text_for_ner,
+)
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import thresholds_for
+from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
+    load_modality_phi_match_mode,
+    load_modality_whitelist,
+)
+from anonymizer.utils.storage.dicom_tree import get_dcm_files
 
 try:
     import pypdfium2 as pdfium
@@ -122,6 +148,17 @@ _CHARS_PER_LINE = 90
 _LINES_PER_PAGE = 48
 
 _LABEL_VALUE = re.compile(r"^(.+?:)\s*$")
+_WHITELIST_DETAIL_RE = re.compile(r"term=(?P<term>'.*?') sim=(?P<sim>[0-9.]+)")
+
+
+@dataclass(frozen=True)
+class ReportWhitelist:
+    """Terms and similarity floor for one report detect."""
+
+    terms: tuple[str, ...]
+    similarity: float
+    modalities: tuple[str, ...]
+    source: str
 
 
 # ---------------------------------------------------------------------------
@@ -129,16 +166,18 @@ _LABEL_VALUE = re.compile(r"^(.+?:)\s*$")
 # ---------------------------------------------------------------------------
 
 
-def detect_phi_in_text(
+def detect_report_text_phi_in_text(
     text: str,
     ds: Dataset,
     *,
     locale: str = "en_US",
     phi_header: object | None = None,
     whitelist: Sequence[str] | None = None,
+    project_dir: Path | None = None,
+    series_dir: Path | None = None,
 ) -> list[Entity]:
     """
-    Report View PHI pipeline on arbitrary unicode (source text unchanged).
+    Report PHI pipeline on arbitrary unicode (source text unchanged).
 
     1. Metadata: match original PHI strings from phi_header; each hit is
        labeled with the DICOM keyword and carries replacement = anonymized
@@ -146,44 +185,70 @@ def detect_phi_in_text(
     2. Radiology pre-NER mask (anon surfaces / UIDs / compact dates / whitelist).
     3. NER on the masked unicode (same length → offsets still match text);
        spans overlapping metadata are dropped.
+
+    Args:
+        text: Report unicode. Offsets in the result index this string.
+        ds: Dataset whose anonymized header values must not be re-scored.
+        locale: NER locale pack (default en_US).
+        phi_header: StudyPhiHeader (or duck-type) with original PHI field strings.
+        whitelist: Radiology terms masked before NER. None loads the series
+            or parent-study modality whitelist when series_dir is set.
+        project_dir: Project storage directory for modality whitelist files.
+        series_dir: Report series directory. More than one DICOM file uses
+            that series' modalities; one file uses the parent study.
+
+    Returns:
+        PHI spans into text. Empty when text is blank.
     """
     body = str(text or "")
     if not body.strip():
         return []
+    resolved = resolve_dataset_whitelist(
+        project_dir,
+        ds,
+        series_dir,
+        whitelist,
+    )
+    logger.info(_format_report_whitelist_log(resolved))
     meta_ents = entities_from_study_phi(body, ds, phi_header)
     anon_values = collect_anonymized_values(ds)
     masked = mask_text_for_ner(
         body,
-        whitelist=whitelist or (),
+        whitelist=resolved.terms,
         anon_values=anon_values,
+        similarity=resolved.similarity,
         log_context="report",
     )
+    logger.info(_format_report_mask_log(masked.hits))
     ner_ents = detect_entities(masked.text, locale=locale)
     entities, ner_dropped = merge_phi_entities(meta_ents, ner_ents)
+    ner_kept = len(ner_ents) - ner_dropped
     logger.info(
-        "report: detect_phi_in_text entities=%d "
-        "(metadata=%d ner_kept=%d ner_dropped_overlap=%d masked=%d chars=%d)",
-        len(entities),
-        len(meta_ents),
-        len(ner_ents) - ner_dropped,
-        ner_dropped,
-        len(masked.hits),
-        len(body),
+        _format_report_phi_log(
+            body,
+            entities,
+            metadata=len(meta_ents),
+            ner_kept=ner_kept,
+            dropped_overlap=ner_dropped,
+        )
     )
     return entities
 
 
-def detect_phi(
+def detect_report_text_phi(
     ds: Dataset,
     *,
     locale: str = "en_US",
     phi_header: object | None = None,
     whitelist: Sequence[str] | None = None,
+    project_dir: Path | None = None,
+    series_dir: Path | None = None,
 ) -> tuple[str, list[Entity]]:
     """
     Extract report unicode from ds and find PHI spans (text unchanged).
 
-    Delegates scoring to detect_phi_in_text (study-PHI match then filtered NER).
+    Delegates scoring to detect_report_text_phi_in_text (study-PHI match then filtered NER).
+    Report Viewer and AI batch both call this function for detection.
 
     SR: Modality SR or SOP Class 1.2.840.10008.5.1.4.1.1.88.*.
     DOC/PDF: Modality DOC|PDF or Encapsulated PDF SOP …104.1.
@@ -192,7 +257,10 @@ def detect_phi(
         ds: DICOM dataset (SR or Encapsulated PDF / DOC); headers already anonymized.
         locale: NER locale pack (default en_US).
         phi_header: StudyPhiHeader (or duck-type) with original PHI field strings.
-        whitelist: Optional radiology terms masked before NER.
+        whitelist: Radiology terms masked before NER. None loads the series
+            or parent-study modality whitelist when series_dir is set.
+        project_dir: Project storage directory for modality whitelist files.
+        series_dir: Report series directory used to choose modalities.
 
     Returns:
         (text, entities) with entity offsets into text.
@@ -217,16 +285,14 @@ def detect_phi(
         )
         return text, []
 
-    entities = detect_phi_in_text(
+    entities = detect_report_text_phi_in_text(
         text,
         ds,
         locale=locale,
         phi_header=phi_header,
         whitelist=whitelist,
-    )
-    logger.info(
-        "report: detect done text_unchanged=1 entities=%d",
-        len(entities),
+        project_dir=project_dir,
+        series_dir=series_dir,
     )
     return text, entities
 
@@ -307,6 +373,243 @@ def entities_from_study_phi(
             ent.replacement,
         )
     return accepted
+
+
+def _modality_code(path: Path) -> str:
+    """
+    Read the Modality code from one DICOM file.
+
+    Args:
+        path: DICOM file path.
+
+    Returns:
+        Uppercase modality code, or empty when the file cannot be read.
+    """
+    try:
+        ds = dcmread(str(path), stop_before_pixels=True, force=True)
+    except (OSError, InvalidDicomError, AttributeError, ValueError):
+        return ""
+    return str(getattr(ds, "Modality", "") or "").strip().upper()
+
+
+def _distinct_modalities(paths: Sequence[Path]) -> tuple[str, ...]:
+    """
+    Distinct Modality codes in path order.
+
+    Args:
+        paths: DICOM files to read.
+
+    Returns:
+        Codes with the first occurrence kept.
+    """
+    found: list[str] = []
+    seen: set[str] = set()
+    for path in paths:
+        code = _modality_code(path)
+        if code and code not in seen:
+            seen.add(code)
+            found.append(code)
+    return tuple(found)
+
+
+def _study_series_modalities(series_dir: Path) -> tuple[str, ...]:
+    """
+    Modalities of the other series in the parent study.
+
+    Args:
+        series_dir: Report series directory.
+
+    Returns:
+        One modality per sibling series, in directory name order.
+    """
+    study = series_dir.parent
+    if not study.is_dir():
+        return ()
+    codes: list[str] = []
+    seen: set[str] = set()
+    siblings = sorted(
+        (path for path in study.iterdir() if path.is_dir() and not path.name.startswith(".")),
+        key=lambda path: path.name,
+    )
+    for child in siblings:
+        if child.resolve() == series_dir.resolve():
+            continue
+        files = sorted(get_dcm_files(child))
+        if not files:
+            continue
+        code = _modality_code(files[0])
+        if code and code not in seen:
+            seen.add(code)
+            codes.append(code)
+    return tuple(codes)
+
+
+def resolve_report_whitelist(
+    project_dir: Path | None,
+    series_dir: Path | None,
+    whitelist: Sequence[str] | None,
+) -> ReportWhitelist:
+    """
+    Terms and similarity floor for one report detect.
+
+    An explicit whitelist is used as given. Otherwise more than one DICOM
+    file in series_dir selects that series' modalities, and a single file
+    selects the parent study. The floor is the highest whitelist similarity
+    among modalities that returned at least one term.
+
+    Args:
+        project_dir: Project storage directory, or None.
+        series_dir: Report series directory, or None.
+        whitelist: Caller terms. None loads modality files.
+
+    Returns:
+        Terms, similarity floor, modality codes, and source label.
+    """
+    if whitelist is not None:
+        terms = tuple(str(term).strip() for term in whitelist if str(term).strip())
+        return ReportWhitelist(terms, DEFAULT_WHITELIST_SIMILARITY, (), "given")
+    if series_dir is None:
+        return ReportWhitelist((), DEFAULT_WHITELIST_SIMILARITY, (), "none")
+    files = sorted(get_dcm_files(series_dir))
+    if len(files) > 1:
+        modalities = _distinct_modalities(files)
+        source = "series"
+    else:
+        modalities = _study_series_modalities(series_dir)
+        source = "study"
+    merged: list[str] = []
+    seen_terms: set[str] = set()
+    floors: list[float] = []
+    for code in modalities:
+        loaded = load_modality_whitelist(project_dir, code)
+        if not loaded:
+            continue
+        mode = load_modality_phi_match_mode(project_dir, code)
+        floors.append(thresholds_for(mode).whitelist_similarity)
+        for term in loaded:
+            key = term.strip().upper()
+            if key and key not in seen_terms:
+                seen_terms.add(key)
+                merged.append(term.strip())
+    similarity = max(floors) if floors else DEFAULT_WHITELIST_SIMILARITY
+    return ReportWhitelist(tuple(merged), similarity, modalities, source)
+
+
+def resolve_dataset_whitelist(
+    project_dir: Path | None,
+    ds: Dataset,
+    series_dir: Path | None,
+    whitelist: Sequence[str] | None = None,
+    *,
+    modality: str | None = None,
+) -> ReportWhitelist:
+    """
+    Modality whitelist for one dataset.
+
+    A report uses resolve_report_whitelist: several files in the series
+    contribute those modalities, and one file contributes the parent study.
+    Any other dataset uses one modality file. An explicit modality argument
+    selects that file; otherwise the dataset Modality is used.
+
+    Args:
+        project_dir: Project storage directory, or None.
+        ds: Dataset whose Modality and SOP Class choose the rule.
+        series_dir: Series directory. Used for a report.
+        whitelist: Caller terms. None loads modality files.
+        modality: Imaging modality code. Overrides ds.Modality for a non-report.
+
+    Returns:
+        Terms, similarity floor, modality codes, and source label.
+    """
+    if is_report_dataset(ds):
+        return resolve_report_whitelist(project_dir, series_dir, whitelist)
+    if whitelist is not None:
+        terms = tuple(str(term).strip() for term in whitelist if str(term).strip())
+        return ReportWhitelist(terms, DEFAULT_WHITELIST_SIMILARITY, (), "given")
+    code = str(modality or ds.get("Modality", "") or "").strip().upper()
+    loaded = load_modality_whitelist(project_dir, code or None)
+    mode = load_modality_phi_match_mode(project_dir, code or None)
+    return ReportWhitelist(
+        tuple(str(term).strip() for term in loaded if str(term).strip()),
+        thresholds_for(mode).whitelist_similarity,
+        (code,) if code else (),
+        "modality",
+    )
+
+
+def _format_report_whitelist_log(resolved: ReportWhitelist) -> str:
+    """
+    One-line whitelist stage header.
+
+    Args:
+        resolved: Terms, floor, modalities, and source for this detect.
+
+    Returns:
+        Header matching the pixel PHI stage style.
+    """
+    modalities = ",".join(resolved.modalities) if resolved.modalities else "—"
+    floor = f"  wl>={resolved.similarity:.2f}" if resolved.terms else ""
+    return (
+        f"=== report whitelist  source={resolved.source}  "
+        f"modalities={modalities}  terms={len(resolved.terms)}{floor} ==="
+    )
+
+
+def _format_report_mask_log(hits: Sequence[FilterHit]) -> str:
+    """
+    Compact pre-NER mask block.
+
+    Args:
+        hits: Spans blanked before the model run.
+
+    Returns:
+        Header plus one line per span.
+    """
+    lines = [f"=== report mask  {len(hits)} spans ==="]
+    for hit in hits:
+        if hit.reason == "whitelist":
+            match = _WHITELIST_DETAIL_RE.search(hit.detail)
+            if match is not None:
+                score = float(match.group("sim"))
+                lines.append(
+                    f"  {hit.text!r} | whitelist | term={match.group('term')} | {score:.2f}"
+                )
+                continue
+        if hit.detail:
+            lines.append(f"  {hit.text!r} | {hit.reason} | {hit.detail}")
+        else:
+            lines.append(f"  {hit.text!r} | {hit.reason}")
+    return "\n".join(lines)
+
+
+def _format_report_phi_log(
+    text: str,
+    entities: Sequence[Entity],
+    *,
+    metadata: int,
+    ner_kept: int,
+    dropped_overlap: int,
+) -> str:
+    """
+    Compact kept-PHI block.
+
+    Args:
+        text: Original report unicode.
+        entities: Spans returned to the caller.
+        metadata: Study-PHI span count before the overlap merge.
+        ner_kept: NER spans that did not overlap study PHI.
+        dropped_overlap: NER spans dropped because they overlap study PHI.
+
+    Returns:
+        Header plus one line per kept span.
+    """
+    lines = [
+        f"=== report phi  {len(entities)} spans "
+        f"(metadata={metadata} ner_kept={ner_kept} dropped_overlap={dropped_overlap}) ==="
+    ]
+    for ent in entities:
+        lines.append(f"  {text[ent.start : ent.end]!r} | {ent.label}")
+    return "\n".join(lines)
 
 
 def _phi_string_variants(value: str, *, family: str) -> list[str]:
@@ -423,7 +726,7 @@ def remove_phi(
     anonymized DICOM value. NER entities blank or synthesize per synthetic.
 
     Args:
-        text: Report unicode from detect_phi.
+        text: Report unicode from detect_report_text_phi.
         entities: Spans with offsets into text (metadata + NER, merged).
         synthetic: If False, blank NER spans; if True, synthetic NER replacements.
         log: When False, skip per-field INFO traces (Clean Descriptors consolidates).
@@ -671,6 +974,23 @@ def _code(value: str, scheme: str, meaning: str) -> Dataset:
     return item
 
 
+def is_report_dataset(ds: Dataset) -> bool:
+    """
+    True when ds is a Structured Report or an encapsulated PDF.
+
+    Args:
+        ds: DICOM dataset.
+
+    Returns:
+        True for Modality SR, DOC, or PDF, or the matching SOP Class.
+    """
+    mod = str(ds.get("Modality", "") or "").strip().upper()
+    sop = str(ds.get("SOPClassUID", "") or "")
+    if sop.startswith(SR_SOP_CLASS_PREFIX) or mod == "SR":
+        return True
+    return sop == ENCAPSULATED_PDF_SOP_CLASS_UID or mod in {"DOC", "PDF"}
+
+
 def _report_kind(ds: Dataset) -> str:
     """
     Classify ds as "sr" or "pdf".
@@ -684,13 +1004,15 @@ def _report_kind(ds: Dataset) -> str:
     Raises:
         ValueError: if the dataset is not a supported report modality.
     """
+    if not is_report_dataset(ds):
+        mod = str(ds.get("Modality", "") or "").strip().upper()
+        sop = str(ds.get("SOPClassUID", "") or "")
+        raise ValueError(f"Unsupported report dataset: Modality={mod!r} SOPClassUID={sop!r}")
     mod = str(ds.get("Modality", "") or "").strip().upper()
     sop = str(ds.get("SOPClassUID", "") or "")
     if sop.startswith(SR_SOP_CLASS_PREFIX) or mod == "SR":
         return "sr"
-    if sop == ENCAPSULATED_PDF_SOP_CLASS_UID or mod in {"DOC", "PDF"}:
-        return "pdf"
-    raise ValueError(f"Unsupported report dataset: Modality={mod!r} SOPClassUID={sop!r}")
+    return "pdf"
 
 
 def _sr_slot_attr(item: Dataset) -> str | None:

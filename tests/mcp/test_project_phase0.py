@@ -65,7 +65,11 @@ def test_create_project_requires_overwrite_to_replace():
     assert first["ok"] is True
     SESSION.close()
 
-    prepared = mcp_tools.create_project(project_name="One", overwrite=False)
+    prepared = mcp_tools.create_project(
+        project_name="One",
+        overwrite=False,
+        accept_basic_profile=True,
+    )
     assert prepared["status"] == "confirmation_required"
     assert any("existing project" in warning.lower() for warning in prepared["warnings"])
     blocked = mcp_tools.create_project(
@@ -76,9 +80,7 @@ def test_create_project_requires_overwrite_to_replace():
     assert blocked["ok"] is False
     assert "overwrite" in blocked["error"].lower()
 
-    overwritten = confirm_create(
-        mcp_tools.create_project, project_name="One", overwrite=True
-    )
+    overwritten = confirm_create(mcp_tools.create_project, project_name="One", overwrite=True)
     assert overwritten["ok"] is True
     assert overwritten["project"]["project_name"] == "One"
 
@@ -86,9 +88,7 @@ def test_create_project_requires_overwrite_to_replace():
 def test_create_project_with_existing_storage_dir(tmp_path: Path):
     custom = tmp_path / "custom_store" / "MyProj"
     custom.mkdir(parents=True)
-    result = confirm_create(
-        mcp_tools.create_project, project_name="MyProj", storage_dir=str(custom)
-    )
+    result = confirm_create(mcp_tools.create_project, project_name="MyProj", storage_dir=str(custom))
     assert result["ok"] is True
     assert result["project"]["project_name"] == "MyProj"
     assert "storage_dir" not in result["project"]
@@ -115,9 +115,7 @@ def test_project_open_by_name():
 def test_project_open_by_storage_dir(tmp_path: Path):
     custom = tmp_path / "open_by_path"
     custom.mkdir()
-    assert confirm_create(
-        mcp_tools.create_project, project_name="PathOpen", storage_dir=str(custom)
-    )["ok"]
+    assert confirm_create(mcp_tools.create_project, project_name="PathOpen", storage_dir=str(custom))["ok"]
     SESSION.close()
 
     opened = mcp_tools.project_open(storage_dir=str(custom))
@@ -253,10 +251,8 @@ def test_mcp_call_logging_logs_tools_list(caplog: pytest.LogCaptureFixture):
     assert "Project display name" in text
     assert "inputSchema" in text
     assert "no tools" not in text
-    assert any(
-        r.levelname == "DEBUG" and "tools/list API definitions" in r.message
-        for r in caplog.records
-    )
+    assert any(r.levelname == "DEBUG" and "tools/list API definitions" in r.message for r in caplog.records)
+
 
 def test_resolve_missing_path_raises(tmp_path: Path):
     session = ProjectSession()

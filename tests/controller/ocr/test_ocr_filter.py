@@ -49,6 +49,21 @@ def _detect_with_noise_filter(
     return filter_ocr_noise(detect_text(pixels, reader, modality=modality), modality=modality)
 
 
+def test_detect_text_reads_upright_only() -> None:
+    """One EasyOCR call, no rotation angles, including on CR."""
+    johnson = ([[31, 0], [427, 0], [427, 108], [31, 108]], "JOHNSON", 1.0)
+    name_box = [[429, 5], [1330, 5], [1330, 115], [429, 115]]
+    reader = MagicMock()
+    reader.readtext.side_effect = [
+        [johnson, (name_box, "MICHELLE [F] 02.10.2012", 0.726)],
+        [johnson, (name_box, "|", 0.773)],
+    ]
+    results = detect_text(np.zeros((400, 1500, 3), dtype=np.uint8), reader, modality="CR")
+    assert [item.text for item in results] == ["JOHNSON", "MICHELLE [F] 02.10.2012"]
+    assert reader.readtext.call_count == 1
+    assert reader.readtext.call_args.kwargs["rotation_info"] == []
+
+
 def test_detect_text_tilted_quad_uses_aabb() -> None:
     """Free-form / diagonal EasyOCR quads must not assume corner 0/2 are TL/BR."""
     tilted = (
@@ -221,6 +236,38 @@ def test_annotate_ner_skips_clock_normalize_for_ct(
     assert out[0].text == "20:28.31"
 
 
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_locale_supported", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.ner_ready", return_value=True)
+def test_annotate_ner_skips_short_boxes_and_comma_after_separator(
+    _mock_ready: MagicMock,
+    _mock_locale: MagicMock,
+) -> None:
+    """Text of 2 characters or fewer is omitted; a trailing separator takes no comma."""
+    seen: list[str] = []
+
+    def detect(body: str):
+        seen.append(body)
+        return []
+
+    out = annotate_ner(
+        [
+            _ocr("1o"),
+            _ocr("2"),
+            _ocr("L"),
+            _ocr("DOB:"),
+            _ocr("01.30.1968"),
+            _ocr("12-"),
+            _ocr("Mar"),
+        ],
+        detect_fn=detect,
+    )
+    assert seen == ["DOB: 01.30.1968, 12- Mar"]
+    by_text = {t.text: t.ner.label for t in out}
+    assert by_text["1o"] is None
+    assert by_text["2"] is None
+    assert by_text["L"] is None
+
+
 def test_is_whitelisted_table_does_not_match_portable() -> None:
     """TABLE fuzzy-similarity to PORTABLE must not hide Portable when PORTABLE is removed."""
     detections = [_ocr("Portable"), _ocr("DAVIDSON")]
@@ -253,12 +300,14 @@ def test_load_modality_whitelist_cr_includes_portable(monkeypatch: pytest.Monkey
 def test_load_modality_whitelist_mg_includes_view_abbreviations(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """MG has its own list (not DX); burnt-in views like LMCC must be whitelisted."""
+    """MG has its own list (not DX); common burnt-in views must be whitelisted."""
     pkg_dir = Path(__file__).resolve().parents[3] / "src" / "anonymizer"
     monkeypatch.chdir(pkg_dir)
     whitelist = load_modality_whitelist(None, "MG")
-    for term in ("CC", "MLO", "LMCC", "RMLO", "XCCL", "L", "R", "M", "S"):
+    for term in ("CC", "MLO", "LCC", "RMLO", "XCCL", "L", "R", "M", "S"):
         assert term in whitelist
+    for term in ("LM", "LML", "RXCCM", "LMCC"):
+        assert term not in whitelist
 
 
 def test_load_modality_whitelist_uses_project_file_when_present(
@@ -559,7 +608,7 @@ def test_overlay_filter_excludes_portable_when_on_whitelist() -> None:
 def test_thresholds_for_standard_preset() -> None:
     preset = thresholds_for(PhiMatchMode.STANDARD)
     assert preset.whitelist_similarity == 0.85
-    assert preset.ner_score == 0.50
+    assert preset.ner_score == 0.30
 
 
 def test_lenient_match_mode_table_can_hide_portable() -> None:

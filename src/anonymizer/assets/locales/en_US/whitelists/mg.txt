@@ -16,16 +16,7 @@ BILAT
 CC # Craniocaudal
 MLO # Mediolateral oblique
 ML # Mediolateral
-LM # Lateromedial
 XCCL # Exaggerated CC lateral
-XCCM # Exaggerated CC medial
-FB # From below
-SIO # Superior inferior oblique
-ISO
-LMO
-AT # Axillary tail
-CV # Cleavage view
-TAN # Tangential
 SPOT
 MAG # Magnification
 ID # Implant displaced
@@ -35,16 +26,6 @@ LCC
 RCC
 LMLO
 RMLO
-LMCC
-RMCC
-LML
-RML
-LLM
-RLM
-LXCCL
-RXCCL
-LXCCM
-RXCCM
 
 # --- Marker letters (burnt-in position markers) ---
 M

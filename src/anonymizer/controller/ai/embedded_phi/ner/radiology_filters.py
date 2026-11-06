@@ -51,7 +51,7 @@ remap_ner_entities_to_original(entities: Sequence[Entity], prepared: PreparedMet
     Keep NER spans fully inside the value region; remap to original_text.
 
 date_time_pattern_entities(text: str) -> list[Entity]
-    DATE entities for compact DA / TM / colon clock times in text (OpenMed gap-fill).
+    DATE entities for compact DA / TM, punctuated numeric dates, and colon clocks.
 
 CLINICAL_KEEP_TERMS
     Trial / anatomy tokens for post-NER whitelist and false-positive ID drop.
@@ -92,7 +92,7 @@ from anonymizer.controller.ai.embedded_phi.metadata.extract import (
     digits_only,
     is_pure_numeric_string_value,
 )
-from anonymizer.controller.ai.embedded_phi.ner.engine import Entity
+from anonymizer.controller.ai.embedded_phi.ner.entity import Entity
 from anonymizer.controller.ai.embedded_phi.term_similarity import similarity_term_match
 from anonymizer.controller.script.operands import is_safe_operation
 
@@ -152,6 +152,14 @@ _NON_PROSE_VR_CORE = frozenset(
 
 _UID_RE = re.compile(r"\b(?:0|[1-9][0-9]*)(?:\.(?:0|[1-9][0-9]*)){3,}\b")
 _COMPACT_DATE_RE = re.compile(r"\b(?:19|20)\d{6}\b")
+# Numeric dates with separators (04.25.1937, 2010/04/16, 1937-04-25).
+_PUNCTUATED_DATE_RE = re.compile(
+    r"\b(?:"
+    r"(?P<y>(?:19|20)\d{2})(?P<sep>[./-])(?P<m>\d{1,2})(?P=sep)(?P<d>\d{1,2})"
+    r"|"
+    r"(?P<p1>\d{1,2})(?P<sep2>[./-])(?P<p2>\d{1,2})(?P=sep2)(?P<y2>(?:19|20)\d{2})"
+    r")\b"
+)
 # Compact TM (HHMMSS[.frac]). Do not start after '.' — fractional digits of a
 # decimal measurement (e.g. 0.096000) are not DICOM times.
 _COMPACT_TIME_RE = re.compile(r"(?<!\.)\b\d{6}(?:\.\d{1,6})?\b")
@@ -539,16 +547,36 @@ def remap_ner_entities_to_original(
     return out
 
 
+def _punctuated_date_ok(match: re.Match[str]) -> bool:
+    """
+    True when a punctuated numeric match has a valid month and day.
+
+    Args:
+        match: Match from _PUNCTUATED_DATE_RE (year-first or year-last).
+
+    Returns:
+        True when one ordering has month 1–12 and day 1–31.
+    """
+    if match.group("y") is not None:
+        month, day = int(match.group("m")), int(match.group("d"))
+        return 1 <= month <= 12 and 1 <= day <= 31
+    first, second = int(match.group("p1")), int(match.group("p2"))
+    return (1 <= first <= 12 and 1 <= second <= 31) or (
+        1 <= second <= 12 and 1 <= first <= 31
+    )
+
+
 def date_time_pattern_entities(text: str) -> list[Entity]:
     """
     DATE entities for compact DICOM dates/times embedded in free text.
 
-    Special case (metadata Clean Descriptors / Detect):
-    OpenMed reliably tags punctuated or word dates (2010/12/03, 12/03/2010,
-    "December 3, 2010") but often misses bare YYYYMMDD after radiology prose
-    (e.g. "PET-CT SERIES 20101203"). Those compact DA/TM forms are still PHI
-    for text_removed. This helper claims them as product DATE on the original
-    Content so they merge with NER spans and go through the same remove path.
+    Special case (metadata Clean Descriptors / Detect, and NER label drops):
+    OpenMed often misses bare YYYYMMDD after radiology prose (e.g. "PET-CT
+    SERIES 20101203") and sometimes labels a dotted date such as 04.25.1937
+    as a non-PHI class. Compact DA/TM, colon clocks, and punctuated numeric
+    dates are still PHI. This helper claims them as product DATE on the
+    original text so they merge with NER spans and a mislabeled span can be
+    kept instead of dropped.
 
     Do not use this as a pre-NER mask — masking hid the digits from the model
     and from scrub. Call after NER remap; callers skip overlaps with NER.
@@ -560,7 +588,7 @@ def date_time_pattern_entities(text: str) -> list[Entity]:
         text: Original Content cell (or any unicode to scan).
 
     Returns:
-        Non-overlapping DATE entities (DA first, then colon times, then TM).
+        Non-overlapping DATE entities (punctuated dates, then DA, colon times, TM).
     """
     body = str(text or "")
     if not body:
@@ -589,6 +617,17 @@ def date_time_pattern_entities(text: str) -> list[Entity]:
     lead = len(body) - len(body.lstrip())
     trail = lead + len(stripped)
     whole_pure = bool(stripped) and is_pure_numeric_string_value(stripped)
+    uid_spans = [(m.start(), m.end()) for m in _UID_RE.finditer(body)]
+
+    # Punctuated dates before decimal occupy: 04.25.1937 contains the float
+    # prefix 04.25, which must not block the date.
+    for match in _PUNCTUATED_DATE_RE.finditer(body):
+        if not _punctuated_date_ok(match):
+            continue
+        start, end = match.start(), match.end()
+        if any(start < b and end > a for a, b in uid_spans):
+            continue
+        _claim(start, end, raw_label="punctuated_date")
 
     # Keep-list first: decimal floats occupy ranges so compact DA/TM cannot
     # claim fractional digit runs (-42.20077515 → not DATE on 20077515).
@@ -964,6 +1003,9 @@ def _find_all(text: str, needle: str) -> list[tuple[int, int]]:
 
 
 def _log_mask_hits(context: str, hits: Sequence[FilterHit]) -> None:
+    # Report detect logs one compact block from MaskResult.hits instead.
+    if context == "report":
+        return
     prefix = f"radiology_filter[{context}]"
     if not hits:
         logger.info("%s: no pre-NER masks", prefix)

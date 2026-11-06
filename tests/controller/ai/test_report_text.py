@@ -1,7 +1,8 @@
 """process_report_text: SR/PDF extract, detect, remove, write (Basic Text SR)."""
 
+import inspect
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pydicom import Dataset, dcmread
@@ -9,6 +10,7 @@ from pydicom.dataset import FileMetaDataset
 from pydicom.sequence import Sequence as DicomSequence
 from pydicom.uid import ExplicitVRLittleEndian, generate_uid
 
+from anonymizer.controller.ai.batch_process import _apply_report_text_phi_series
 from anonymizer.controller.ai.embedded_phi.classify_series import (
     ENCAPSULATED_PDF_SOP_CLASS_UID,
     SeriesKind,
@@ -23,11 +25,12 @@ from anonymizer.controller.ai.embedded_phi.report.process_report_text import (
     BASIC_TEXT_SR_SOP_CLASS_UID,
     _render_plain_text_pdf,
     build_basic_text_sr,
-    detect_phi,
+    detect_report_text_phi,
     encapsulated_pdf_bytes,
     entities_from_study_phi,
     extract_report_text,
     remove_phi,
+    resolve_dataset_whitelist,
     write_report_text,
 )
 from anonymizer.model.anonymizer import StudyPhiHeader
@@ -137,7 +140,7 @@ def test_remove_phi_metadata_always_writes_anon_values() -> None:
         assert "DT2455" not in replaced
 
 
-def test_detect_phi_metadata_precedes_ner(tmp_path: Path) -> None:
+def test_detect_report_text_phi_metadata_precedes_ner(tmp_path: Path) -> None:
     path = tmp_path / "meta.dcm"
     body = "Patient ID MRN998877 called (404) 555-0162."
     _make_sr(path, [body])
@@ -158,7 +161,7 @@ def test_detect_phi_metadata_precedes_ner(tmp_path: Path) -> None:
         "anonymizer.controller.ai.embedded_phi.report.process_report_text.detect_entities",
         side_effect=_fake_detect_overlap,
     ):
-        text, ents = detect_phi(ds, phi_header=header)
+        text, ents = detect_report_text_phi(ds, phi_header=header)
     assert "MRN998877" in text  # detect does not rewrite
     by_frag = {text[e.start : e.end]: e for e in ents}
     assert by_frag["MRN998877"].label == "PatientID"
@@ -230,7 +233,7 @@ def test_detect_remove_write_sr_roundtrip(sr_series: Path) -> None:
         "anonymizer.controller.ai.embedded_phi.report.process_report_text.detect_entities",
         side_effect=_fake_detect,
     ):
-        text, entities = detect_phi(ds)
+        text, entities = detect_report_text_phi(ds)
     assert any(e.label == "PHONE" for e in entities)
     assert any(e.label == "EMAIL" for e in entities)
 
@@ -272,7 +275,7 @@ def test_pdf_detect_remove_write_keeps_text_layer(tmp_path: Path) -> None:
         "anonymizer.controller.ai.embedded_phi.report.process_report_text.detect_entities",
         side_effect=_fake_detect,
     ):
-        text, entities = detect_phi(ds)
+        text, entities = detect_report_text_phi(ds)
     assert any(e.label == "PHONE" for e in entities)
     cleaned = remove_phi(text, entities, synthetic=False)
     sr = write_report_text(ds, cleaned)
@@ -284,7 +287,7 @@ def test_pdf_detect_remove_write_keeps_text_layer(tmp_path: Path) -> None:
     assert after.strip()  # still extractable text
 
 
-def test_detect_phi_image_only_pdf_empty(tmp_path: Path) -> None:
+def test_detect_report_text_phi_image_only_pdf_empty(tmp_path: Path) -> None:
     # Minimal PDF with no text operators (empty content stream page).
     empty_pdf = (
         b"%PDF-1.4\n"
@@ -301,17 +304,17 @@ def test_detect_phi_image_only_pdf_empty(tmp_path: Path) -> None:
     ds.SOPClassUID = ENCAPSULATED_PDF_SOP_CLASS_UID
     ds.MIMETypeOfEncapsulatedDocument = "application/pdf"
     ds.EncapsulatedDocument = empty_pdf
-    text, ents = detect_phi(ds)
+    text, ents = detect_report_text_phi(ds)
     assert text == ""
     assert ents == []
 
 
-def test_detect_phi_unsupported_modality() -> None:
+def test_detect_report_text_phi_unsupported_modality() -> None:
     ds = Dataset()
     ds.Modality = "CT"
     ds.SOPClassUID = "1.2.840.10008.5.1.4.1.1.2"
     with pytest.raises(ValueError, match="Unsupported"):
-        detect_phi(ds)
+        detect_report_text_phi(ds)
 
 
 def test_build_basic_text_sr_from_ocr_lines() -> None:
@@ -384,3 +387,191 @@ def test_classify_series_sop_class_and_text_report(tmp_path: Path, sr_series: Pa
     ds.SeriesDescription = "Dose Report"
     ds.save_as(d / "x.dcm", enforce_file_format=True)
     assert classify_series(d) == SeriesKind.PIXEL_TEXT_REPORT
+
+
+def _modality_file(path: Path, modality: str) -> None:
+    ds = Dataset()
+    ds.file_meta = FileMetaDataset()
+    ds.file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
+    ds.SOPClassUID = "1.2.840.10008.5.1.4.1.1.7"
+    ds.SOPInstanceUID = generate_uid()
+    ds.file_meta.MediaStorageSOPClassUID = ds.SOPClassUID
+    ds.file_meta.MediaStorageSOPInstanceUID = ds.SOPInstanceUID
+    ds.Modality = modality
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ds.save_as(path, enforce_file_format=True)
+
+
+def _capture_ner_text() -> tuple[list[str], object]:
+    seen: list[str] = []
+
+    def _fake(text: str, *, locale: str = "en_US") -> list[Entity]:
+        del locale
+        seen.append(text)
+        return []
+
+    return seen, _fake
+
+
+def test_detect_report_text_phi_uses_study_whitelist_when_series_has_one_file(tmp_path: Path, caplog) -> None:
+    """A lone report takes the parent study's imaging whitelist."""
+    project = tmp_path / "project"
+    (project / "whitelists").mkdir(parents=True)
+    (project / "whitelists" / "us.txt").write_text("AXILLA\n", encoding="utf-8")
+    study = tmp_path / "study"
+    report = study / "sr" / "report.dcm"
+    report.parent.mkdir(parents=True)
+    _make_sr(report, ["AXILLA is clear."])
+    _modality_file(study / "us" / "image.dcm", "US")
+    seen, fake = _capture_ner_text()
+    with (
+        caplog.at_level("INFO", logger="anonymizer.controller.ai.embedded_phi.report.process_report_text"),
+        patch(
+            "anonymizer.controller.ai.embedded_phi.report.process_report_text.detect_entities",
+            side_effect=fake,
+        ),
+    ):
+        detect_report_text_phi(dcmread(report), project_dir=project, series_dir=report.parent)
+    assert seen and "AXILLA" not in seen[0]
+    assert "=== report whitelist  source=study  modalities=US  terms=1  wl>=0.85 ===" in caplog.text
+    assert "=== report mask" in caplog.text
+    assert "whitelist | term='AXILLA'" in caplog.text
+
+
+def test_detect_report_text_phi_series_modalities_ignore_sibling_study(tmp_path: Path, caplog) -> None:
+    """Two instances stay on the series and do not load a sibling modality."""
+    project = tmp_path / "project"
+    (project / "whitelists").mkdir(parents=True)
+    (project / "whitelists" / "us.txt").write_text("AXILLA\n", encoding="utf-8")
+    study = tmp_path / "study"
+    series = study / "sr"
+    series.mkdir(parents=True)
+    first = series / "a.dcm"
+    _make_sr(first, ["AXILLA is clear."])
+    _make_sr(series / "b.dcm", ["Second report."])
+    _modality_file(study / "us" / "image.dcm", "US")
+    seen, fake = _capture_ner_text()
+    with (
+        caplog.at_level("INFO", logger="anonymizer.controller.ai.embedded_phi.report.process_report_text"),
+        patch(
+            "anonymizer.controller.ai.embedded_phi.report.process_report_text.detect_entities",
+            side_effect=fake,
+        ),
+    ):
+        detect_report_text_phi(dcmread(first), project_dir=project, series_dir=series)
+    assert seen and "AXILLA" in seen[0]
+    assert "source=series  modalities=SR  terms=0 ===" in caplog.text
+
+
+def test_detect_report_text_phi_explicit_whitelist_skips_modality_load(tmp_path: Path, caplog) -> None:
+    """A caller-supplied list is masked and the study whitelist is not loaded."""
+    project = tmp_path / "project"
+    (project / "whitelists").mkdir(parents=True)
+    (project / "whitelists" / "us.txt").write_text("AXILLA\n", encoding="utf-8")
+    study = tmp_path / "study"
+    report = study / "sr" / "report.dcm"
+    report.parent.mkdir(parents=True)
+    _make_sr(report, ["AXILLA PORTABLE"])
+    _modality_file(study / "us" / "image.dcm", "US")
+    seen, fake = _capture_ner_text()
+    with (
+        caplog.at_level("INFO", logger="anonymizer.controller.ai.embedded_phi.report.process_report_text"),
+        patch(
+            "anonymizer.controller.ai.embedded_phi.report.process_report_text.detect_entities",
+            side_effect=fake,
+        ),
+    ):
+        detect_report_text_phi(
+            dcmread(report),
+            whitelist=["PORTABLE"],
+            project_dir=project,
+            series_dir=report.parent,
+        )
+    assert seen and "AXILLA" in seen[0] and "PORTABLE" not in seen[0]
+    assert "source=given" in caplog.text
+    assert "=== report phi" in caplog.text
+
+
+def test_batch_calls_detect_report_text_phi() -> None:
+    """AI batch report text detect goes through detect_report_text_phi."""
+    src = inspect.getsource(_apply_report_text_phi_series)
+    assert "detect_report_text_phi(" in src
+    assert "series_dir=" in src
+    assert "project_dir=" in src
+    assert "load_modality_whitelist" not in src
+
+
+def _anon_model() -> MagicMock:
+    model = MagicMock()
+    model.series_embedded_phi_scanned.return_value = False
+    model.get_study_phi_header_by_anon_study_uid.return_value = None
+    model.get_or_create_anon_uid.side_effect = (
+        lambda key: f"1.2.840.113619.2.55.{abs(hash(str(key))) % 10_000_000}"
+    )
+    return model
+
+
+def test_resolve_dataset_whitelist_report_uses_parent_study(tmp_path: Path) -> None:
+    """A one-file report resolves the parent study modalities."""
+    project = tmp_path / "project"
+    (project / "whitelists").mkdir(parents=True)
+    (project / "whitelists" / "us.txt").write_text("AXILLA\n", encoding="utf-8")
+    study = tmp_path / "study"
+    report = study / "sr" / "report.dcm"
+    report.parent.mkdir(parents=True)
+    _make_sr(report, ["Findings."])
+    _modality_file(study / "us" / "image.dcm", "US")
+    resolved = resolve_dataset_whitelist(project, dcmread(report), report.parent)
+    assert resolved.source == "study"
+    assert resolved.modalities == ("US",)
+    assert "AXILLA" in resolved.terms
+
+
+def test_resolve_dataset_whitelist_imaging_uses_own_modality(tmp_path: Path) -> None:
+    """An imaging file keeps its own modality file when a sibling series exists."""
+    project = tmp_path / "project"
+    (project / "whitelists").mkdir(parents=True)
+    (project / "whitelists" / "us.txt").write_text("AXILLA\n", encoding="utf-8")
+    (project / "whitelists" / "ct.txt").write_text("AXIAL\n", encoding="utf-8")
+    study = tmp_path / "study"
+    ct = study / "ct" / "image.dcm"
+    _modality_file(ct, "CT")
+    _modality_file(study / "us" / "image.dcm", "US")
+    resolved = resolve_dataset_whitelist(project, dcmread(ct), ct.parent)
+    assert resolved.source == "modality"
+    assert resolved.modalities == ("CT",)
+    assert "AXIAL" in resolved.terms
+    assert "AXILLA" not in resolved.terms
+
+
+def test_batch_report_text_keeps_study_whitelist_term(tmp_path: Path) -> None:
+    """AI batch report text keeps a parent-study whitelist term and removes other PHI."""
+    project = tmp_path / "project"
+    (project / "whitelists").mkdir(parents=True)
+    (project / "whitelists" / "us.txt").write_text("AXILLA\n", encoding="utf-8")
+    study = tmp_path / "study"
+    report = study / "sr" / "report.dcm"
+    report.parent.mkdir(parents=True)
+    _make_sr(report, ["Jane Doe. AXILLA is clear."])
+    _modality_file(study / "us" / "image.dcm", "US")
+
+    def _fake(text: str, *, locale: str = "en_US") -> list[Entity]:
+        del locale
+        if "Jane" not in text:
+            return []
+        start = text.index("Jane")
+        return [Entity(label="FIRST_NAME", start=start, end=start + len("Jane Doe"))]
+
+    with patch(
+        "anonymizer.controller.ai.embedded_phi.report.process_report_text.detect_entities",
+        side_effect=_fake,
+    ):
+        outcome = _apply_report_text_phi_series(
+            report.parent,
+            anon_model=_anon_model(),
+            project_dir=project,
+        )
+    assert outcome.status == "ok"
+    saved = extract_report_text(dcmread(report))
+    assert "Jane" not in saved
+    assert "AXILLA" in saved

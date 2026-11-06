@@ -134,6 +134,7 @@ async def _mvp(url: str, storage_dir: Path, *, skip_ocr: bool, dcm: Path) -> dic
                         "storage_dir": str(storage_dir),
                         "overwrite": True,
                         "confirm": False,
+                        "accept_basic_profile": True,
                     },
                 )
             )

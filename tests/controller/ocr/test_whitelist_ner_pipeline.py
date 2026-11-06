@@ -8,8 +8,10 @@ from anonymizer.controller.ai.embedded_phi.ner.engine import Entity
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import build_series_view_ocr_pixels
 from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import (
     PhiMatchMode,
+    accepted_phi_entities,
     annotate_ner,
     detect_text,
+    effective_phi_label,
     filter_ocr_noise,
     make_annotate_whitelist,
     pipe,
@@ -124,6 +126,32 @@ def test_annotate_labels_phi_without_dropping_overlay(
     assert by_text["Semi-Upright"] is None
 
 
+def test_one_box_keeps_each_ner_entity_for_hover() -> None:
+    """NAME and DATE inside one OCR string stay separate entities."""
+
+    def detect(body: str, *, locale: str = "en_US", include_time: bool = False) -> list[Entity]:
+        del locale, include_time
+        name_at = body.index("MICHELLE")
+        date_at = body.index("02.10.2012")
+        return [
+            Entity("FIRST_NAME", name_at, name_at + len("MICHELLE"), score=0.96),
+            Entity("DATE", date_at, date_at + len("02.10.2012"), score=0.80),
+        ]
+
+    out = annotate_ner([_ocr("MICHELLE [F] 02.10.2012")], detect_fn=detect)
+    box = out[0]
+    assert box.ner.entities == (
+        ("NAME", "MICHELLE", 0.96),
+        ("DATE", "02.10.2012", 0.80),
+    )
+    assert accepted_phi_entities(box, PhiMatchMode.STANDARD) == (
+        ("NAME", "MICHELLE"),
+        ("DATE", "02.10.2012"),
+    )
+    assert effective_phi_label(box, PhiMatchMode.STANDARD) == "NAME"
+    assert accepted_phi_entities(box, PhiMatchMode.EXACT) == (("NAME", "MICHELLE"),)
+
+
 @patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.detect_locale_supported", return_value=True)
 @patch("anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline.ner_ready", return_value=True)
 def test_annotate_one_contextual_call_and_box_entities(
@@ -143,9 +171,9 @@ def test_annotate_one_contextual_call_and_box_entities(
     assert seen == ["DAVIDSON, DOB: 06.16.1976, Portable"]
     by_text = {t.text: t for t in out}
     assert by_text["DAVIDSON"].ner.label == "NAME"
-    assert by_text["DAVIDSON"].ner.entities == (("NAME", "DAVIDSON"),)
+    assert by_text["DAVIDSON"].ner.entities == (("NAME", "DAVIDSON", 0.99),)
     assert by_text["DOB: 06.16.1976"].ner.label == "DATE"
-    assert by_text["DOB: 06.16.1976"].ner.entities == (("DATE", "06.16.1976"),)
+    assert by_text["DOB: 06.16.1976"].ner.entities == (("DATE", "06.16.1976", 0.95),)
     assert by_text["Portable"].ner.label is None
     assert by_text["Portable"].ner.entities == ()
 
@@ -163,8 +191,8 @@ def test_annotate_entity_spanning_two_boxes_labels_both(
     right = _ocr("Diaz")
     out = annotate_ner([left, right], detect_fn=detect)
     assert [t.ner.label for t in out] == ["NAME", "NAME"]
-    assert out[0].ner.entities == (("NAME", "Olivia"),)
-    assert out[1].ner.entities == (("NAME", "Diaz"),)
+    assert out[0].ner.entities == (("NAME", "Olivia", 0.9),)
+    assert out[1].ner.entities == (("NAME", "Diaz", 0.9),)
 
 
 def _name_split_detect_phi(

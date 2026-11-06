@@ -90,6 +90,7 @@ from anonymizer.controller.ai.embedded_phi.pixel.exclude_zones import (
 )
 from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import PhiMatchMode as PhiMatchMode
 from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import (
+    accepted_phi_entities,
     annotate_ner,
     detect_text,
     effective_phi_label,
@@ -331,6 +332,11 @@ def format_ocr_detection_complete_status(
     unlabeled = 0
     for item in active:
         if is_whitelisted(item, match_mode) and not phi_accepted(item, match_mode):
+            continue
+        accepted = accepted_phi_entities(item, match_mode)
+        if accepted:
+            for label in dict.fromkeys(lab.strip().upper() for lab, _text in accepted if lab.strip()):
+                ner_counts[label] += 1
             continue
         label = (effective_phi_label(item, match_mode) or "").strip().upper()
         if label:

@@ -263,11 +263,22 @@ def fit_toplevel_to_content(
     min_height: int = 0,
     place: bool = False,
     offset: int = 30,
+    apply: bool = True,
 ) -> tuple[int, int]:
     """Size a dialog to its widgets (and title), optionally placing it near parent.
 
     Tk/CTk winfo_reqwidth on the toplevel often follows a progress bar default
     (~200px) rather than the longest label. Walk descendants and the caption.
+
+    Args:
+        window: Toplevel to measure.
+        parent: Host used when place is True.
+        pad: Extra width beyond the widest descendant.
+        min_width: Floor width in pixels.
+        min_height: Floor height in pixels.
+        place: When True, position near parent instead of keeping the current origin.
+        offset: Pixel offset used with place.
+        apply: When False, return the size and do not write geometry.
     """
     try:
         window.update_idletasks()
@@ -280,6 +291,8 @@ def fit_toplevel_to_content(
         return (0, 0)
     width = max(req_w, _max_descendant_reqwidth(window) + pad, _title_bar_min_width(window), min_width)
     height = max(req_h, min_height)
+    if not apply:
+        return width, height
     if place:
         position_toplevel_near_parent(window, parent, width=width, height=height, offset=offset)
     else:

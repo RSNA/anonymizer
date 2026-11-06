@@ -95,14 +95,16 @@ def test_detect_text_us_passes_no_rotation_to_easyocr() -> None:
     reader = MagicMock()
     reader.readtext.return_value = []
     detect_text(np.zeros((10, 10), dtype=np.uint8), reader, modality="US")
+    assert reader.readtext.call_count == 1
     assert reader.readtext.call_args.kwargs["rotation_info"] == []
 
 
-def test_detect_text_ct_passes_tta_rotations_to_easyocr() -> None:
+def test_detect_text_ct_passes_no_rotation_to_easyocr() -> None:
     reader = MagicMock()
     reader.readtext.return_value = []
     detect_text(np.zeros((10, 10), dtype=np.uint8), reader, modality="CT")
-    assert reader.readtext.call_args.kwargs["rotation_info"] == [90, 270]
+    assert reader.readtext.call_count == 1
+    assert reader.readtext.call_args.kwargs["rotation_info"] == []
 
 
 def test_ocr_image_for_frame_rgb_uint8_returns_bgr(us_rgb_loaded) -> None:

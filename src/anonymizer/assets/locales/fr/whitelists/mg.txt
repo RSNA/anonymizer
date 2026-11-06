@@ -17,16 +17,7 @@ BILAT
 CC # Craniocaudal
 MLO # Mediolateral oblique
 ML # Mediolateral
-LM # Lateromedial
 XCCL
-XCCM
-FB
-SIO
-ISO
-LMO
-AT
-CV
-TAN
 SPOT
 MAG
 ID
@@ -36,16 +27,6 @@ LCC
 RCC
 LMLO
 RMLO
-LMCC
-RMCC
-LML
-RML
-LLM
-RLM
-LXCCL
-RXCCL
-LXCCM
-RXCCM
 
 # --- Lettres de marqueur ---
 M

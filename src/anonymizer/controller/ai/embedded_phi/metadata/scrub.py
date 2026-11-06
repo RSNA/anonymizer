@@ -12,11 +12,11 @@ Same Content on multiple tags: detect once; write cleaned text to every match.
 
 Public API
 ----------
-scrub_dataset_descriptors(ds, *, replace_mode='blank', project_dir=None, script_operations=None) -> tuple[bool, list[str]]
+scrub_dataset_descriptors(ds, *, replace_mode='blank', project_dir=None, script_operations=None, series_dir=None) -> tuple[bool, list[str]]
     Detect PHI in free-text tags, blank/synth replace, stamp Clean Descriptors.
 
 scrub_file_descriptors(dcm_path, *, replace_mode='blank', project_dir=None, script_operations=None) -> tuple[bool, list[str]]
-    Load one DICOM file, scrub_dataset_descriptors, save when changed.
+    Load one DICOM file, run Clean Descriptors, save when changed.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ from typing import Literal
 from pydicom import dcmread
 from pydicom.dataset import Dataset
 
-from anonymizer.controller.ai.embedded_phi.metadata.detect import detect_phi_in_texts
+from anonymizer.controller.ai.embedded_phi.metadata.detect import detect_metadata_phi
 from anonymizer.controller.ai.embedded_phi.metadata.extract import (
     apply_text_at_path,
     extract_metadata_phi_rows,
@@ -57,6 +57,7 @@ def scrub_dataset_descriptors(
     replace_mode: ReplaceMode = "blank",
     project_dir: Path | None = None,
     script_operations: Mapping[str, str] | None = None,
+    series_dir: Path | None = None,
 ) -> tuple[bool, list[str]]:
     """Detect PHI in free-text tags, blank/synth replace, stamp Clean Descriptors.
 
@@ -71,6 +72,7 @@ def scrub_dataset_descriptors(
         project_dir: Project dir for modality whitelist and compiled script.
         script_operations: Optional tag→operand map (tests); else loaded from
             project_dir's *-anonymizer.script.
+        series_dir: Series directory passed to resolve_dataset_whitelist.
 
     Returns:
         (changed, removed_span_texts).
@@ -118,11 +120,12 @@ def scrub_dataset_descriptors(
         return False, []
 
     modality = str(ds.get("Modality", "") or "").strip() or None
-    entities_by_content = detect_phi_in_texts(
+    entities_by_content = detect_metadata_phi(
         ds=ds,
         items=items,
         project_dir=project_dir,
         modality=modality,
+        series_dir=series_dir,
         script_operations=ops,
     )
 
@@ -192,7 +195,7 @@ def scrub_file_descriptors(
     project_dir: Path | None = None,
     script_operations: Mapping[str, str] | None = None,
 ) -> tuple[bool, list[str]]:
-    """Load one DICOM file, scrub_dataset_descriptors, save when changed.
+    """Load one DICOM file, run Clean Descriptors, save when changed.
 
     Args:
         dcm_path: Path to a DICOM instance.
@@ -209,6 +212,7 @@ def scrub_file_descriptors(
         replace_mode=replace_mode,
         project_dir=project_dir,
         script_operations=script_operations,
+        series_dir=Path(dcm_path).parent,
     )
     if changed:
         ds.save_as(str(dcm_path), enforce_file_format=True)

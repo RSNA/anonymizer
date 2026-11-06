@@ -1627,16 +1627,12 @@ class SeriesView(AppCTkToplevel):
         if ds is None:
             return
         project_dir = self._controller.model.storage_dir
-        whitelist: list[str] = []
-        if hasattr(self, "whitelist"):
-            whitelist = [str(t) for t in self.whitelist.get(0, tk.END)]
         MetadataAssessmentDialog(
             self,
             dataset=ds,
             dataset_path=path,
             project_dir=project_dir,
             modality=str(getattr(ds, "Modality", "") or "") or None,
-            whitelist=whitelist,
             match_mode=getattr(self, "_match_mode", PhiMatchMode.STANDARD),
         )
 

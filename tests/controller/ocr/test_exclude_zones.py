@@ -123,12 +123,12 @@ def test_filter_ocr_for_remove_mode_phi_only_and_all_text() -> None:
 
 
 def test_filter_phi_only_whitelist_vetoes_labeled_keeper() -> None:
-    """Whitelist overrides NER NAME when ner.score < whitelist.score - 0.1."""
+    """A whitelist score above 0.8 wins even when NER is within 0.1."""
     detections = _with_whitelist(
         [
             _ocr("DAVIDSON", ner_label="NAME", box=(0, 0, 20, 20)),
-            # Exact AXILLA (wl=1.0); NER 0.85 < 0.9 → chrome kept.
-            _ocr("AXILLA", ner_label="NAME", ner_score=0.85, box=(30, 0, 50, 20)),
+            # Exact AXILLA (wl=1.0); NER 0.92 is within 0.1 and still loses.
+            _ocr("AXILLA", ner_label="NAME", ner_score=0.92, box=(30, 0, 50, 20)),
             _ocr("Portable", box=(60, 0, 80, 20)),
         ],
         ["AXILLA"],
