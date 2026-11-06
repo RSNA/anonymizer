@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [19.1.0.dev3]
+- PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)
 - De-identification Options dialog (Basic / Retain presets and plain-language explanations). Retain is Basic plus Modified Dates, Patient Characteristics, and Retain Safe Private, and leaves out Retain TCIA Research Attributes. Anonymizer script compile and the script editor live under ``controller/script/`` (TCIA date operands: hashdate, lookup dateoffset, DATEINC, rebasedate)
 - DICOM PS 3.15 § E.1.3 conformance statement and HIPAA Safe Harbor wording in the clinician manual. Table E.1-1 compile stays aligned with the Basic Profile and TCIA research operands
 - Clean Structured Content keeps Encapsulated PDF / SR text at import for Report Text Review; enabling SR or PDF modalities auto-enables Clean Structured Content when it is off
