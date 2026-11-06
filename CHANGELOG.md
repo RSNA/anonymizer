@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [19.1.0.dev4]
+- PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)
+- PyPI source archive and wheel ship the installable packages. Pixel PHI experiment output is no longer stored in the repository. Help-site screenshots and the curated DICOM fixtures stay in git.
+
 ## [19.1.0.dev3]
 - PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)
 - De-identification Options dialog (Basic / Retain presets and plain-language explanations). Retain is Basic plus Modified Dates, Patient Characteristics, and Retain Safe Private, and leaves out Retain TCIA Research Attributes. Anonymizer script compile and the script editor live under ``controller/script/`` (TCIA date operands: hashdate, lookup dateoffset, DATEINC, rebasedate)
