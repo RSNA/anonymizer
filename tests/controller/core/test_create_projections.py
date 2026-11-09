@@ -268,6 +268,18 @@ class TestCreateProjectionFromSingleFrame:
         assert resize_call_args.args[0] == (120, 120)
         assert resize_call_args.args[1] == PILImageModule.Resampling.NEAREST
 
+    def test_pet_modality_lut_float_frame_is_not_black(self):
+        """PET after RescaleSlope has span << 1; WW floor of 1.0 must not blank thumbnails."""
+        ds = create_basic_dataset()
+        frame = np.linspace(0.0, 9.7e-4, 40 * 50, dtype=np.float32).reshape(40, 50)
+
+        projection = create_projection_from_single_frame(ds, frame)
+
+        assert projection.proj_images is not None
+        mean_thumb = np.asarray(projection.proj_images[0])
+        assert mean_thumb.max() > 200
+        assert len(np.unique(mean_thumb)) > 50
+
     def test_rgb_ultrasound_frame_runs_clahe(self):
         """Color US frames are HxWx3; CLAHE requires single-channel uint8."""
         ds = create_basic_dataset()

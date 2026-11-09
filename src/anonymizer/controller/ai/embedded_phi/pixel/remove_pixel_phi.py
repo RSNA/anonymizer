@@ -20,11 +20,11 @@ blackout_rectangular_areas(pixels: ndarray, user_rects: list[UserRectangle]) -> 
 remove_pixel_phi(dcm_path: Path, ocr_reader: Reader, downscale_dimension_threshold: int=800, border_size: int=20, *, removal_mode: PixelPhiRemovalMode=..., remove_mode: OcrRemoveMode=..., project_dir: Path | None=None, modality: str | None=None, whitelist: Sequence[str] | None=None, match_mode: PhiMatchMode=..., exclude_rects: Sequence[UserRectangle] | None=None, use_exclude_areas: bool=False) -> tuple[bool, list[str], int]
     Detect→annotate via ocr_pipeline; select by Remove Scope; blackout/inpaint.
 
-apply_instance_embedded_phi(anon_model: AnonymizerModel, anon_sop_instance_uid: str, texts: Sequence[str]) -> bool
-    Persist instance embedded PHI text list.
+apply_instance_embedded_phi(anon_model: AnonymizerModel, anon_sop_instance_uid: str, texts: Sequence[str], *, merge: bool=False) -> bool
+    Persist instance Embedded PHI texts (replace, or merge when merge=True).
 
-apply_instance_embedded_phi_for_dcm(anon_model: AnonymizerModel, dcm_path: Path, texts: Sequence[str]) -> bool
-    Persist embedded PHI for a DICOM path.
+apply_instance_embedded_phi_for_dcm(anon_model: AnonymizerModel, dcm_path: Path, texts: Sequence[str], *, merge: bool=False) -> bool
+    Persist Embedded PHI for a DICOM path (replace, or merge when merge=True).
 
 apply_series_view_embedded_phi(anon_model: AnonymizerModel, slice_paths: Sequence[Path], texts_by_frame: Mapping[int, Sequence[str]], *, projection_frame_count: int=0, anon_series_uid: str | None=None) -> int
     Persist pixel PHI metadata for series slices that have overlay OCR text.
@@ -733,7 +733,23 @@ def apply_instance_embedded_phi(
     anon_model: AnonymizerModel,
     anon_sop_instance_uid: str,
     texts: Sequence[str],
+    *,
+    merge: bool = False,
 ) -> bool:
+    """Persist Embedded PHI texts for one instance.
+
+    Args:
+        anon_model: Anonymizer ORM model.
+        anon_sop_instance_uid: Anonymized SOP Instance UID.
+        texts: Removed PHI spans to record.
+        merge: When True, merge into any existing Embedded PHI digest (metadata
+            after pixel); when False, replace (pixel / report save).
+
+    Returns:
+        True when the instance row was updated.
+    """
+    if merge:
+        return anon_model.append_instance_embedded_phi(anon_sop_instance_uid, texts)
     return anon_model.set_instance_embedded_phi(anon_sop_instance_uid, texts)
 
 
@@ -741,9 +757,14 @@ def apply_instance_embedded_phi_for_dcm(
     anon_model: AnonymizerModel,
     dcm_path: Path,
     texts: Sequence[str],
+    *,
+    merge: bool = False,
 ) -> bool:
+    """Persist Embedded PHI for the SOP Instance UID in dcm_path."""
     ds = dcmread(dcm_path, stop_before_pixels=True)
-    return apply_instance_embedded_phi(anon_model, str(ds.SOPInstanceUID), texts)
+    return apply_instance_embedded_phi(
+        anon_model, str(ds.SOPInstanceUID), texts, merge=merge
+    )
 
 
 def apply_series_view_embedded_phi(

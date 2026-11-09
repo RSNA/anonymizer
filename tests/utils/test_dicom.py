@@ -7,7 +7,7 @@ from pydicom import Dataset, multival
 from pydicom.dataset import FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian
 
-from anonymizer.utils.dicom import get_wl_ww
+from anonymizer.utils.dicom import get_wl_ww, has_voi_window
 
 
 def create_basic_dataset() -> Dataset:
@@ -22,6 +22,14 @@ def create_basic_dataset() -> Dataset:
 
 
 class TestGetWlWw:
+    def test_has_voi_window(self):
+        ds = create_basic_dataset()
+        assert has_voi_window(ds) is False
+        ds.WindowCenter = 100
+        assert has_voi_window(ds) is False
+        ds.WindowWidth = 200
+        assert has_voi_window(ds) is True
+
     def test_get_wl_ww_present_single_value(self):
         ds = create_basic_dataset()
         ds.WindowCenter = 100
@@ -38,15 +46,24 @@ class TestGetWlWw:
         assert wl == 50.5
         assert ww == 150.0
 
-    def test_get_wl_ww_width_less_than_1(self, caplog: pytest.LogCaptureFixture):
+    def test_get_wl_ww_width_sub_unit_kept(self):
+        """PET-style WindowWidth << 1 must not be forced up to 1.0."""
+        ds = create_basic_dataset()
+        ds.WindowCenter = 0.0004
+        ds.WindowWidth = 0.0008
+        wl, ww = get_wl_ww(ds)
+        assert wl == 0.0004
+        assert ww == 0.0008
+
+    def test_get_wl_ww_width_non_positive(self, caplog: pytest.LogCaptureFixture):
         ds = create_basic_dataset()
         ds.WindowCenter = 100
-        ds.WindowWidth = 0.5
+        ds.WindowWidth = 0.0
         with caplog.at_level(logging.WARNING):
             wl, ww = get_wl_ww(ds)
         assert wl == 100.0
-        assert ww == 1.0
-        assert "DICOM WindowWidth (0.5) is less than 1. Setting to 1." in caplog.text
+        assert ww == 1e-12
+        assert "not positive" in caplog.text
 
     @pytest.mark.parametrize(
         "bits_allocated, expected_wl, expected_ww",

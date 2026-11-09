@@ -65,12 +65,11 @@ from anonymizer.controller.series.workspace import (
     save_project_whitelist,
     stackable_dicom_paths,
 )
-from anonymizer.utils.dicom import get_wl_ww
 from anonymizer.utils.memory import collect_garbage_safe, log_process_memory
 from anonymizer.utils.modalities import Modality
 from anonymizer.utils.storage.dicom_tree import get_dcm_files
 from anonymizer.utils.translate import _
-from anonymizer.utils.windowing import apply_windowing
+from anonymizer.utils.windowing import apply_windowing, resolve_default_window
 from anonymizer.view.ai.blur_face_results import face_blur_mode_from_menu_label, face_blur_mode_menu_values
 from anonymizer.view.ai.face_blur_review_dialog import show_face_blur_review_dialog
 from anonymizer.view.ai.harmonize_description import (
@@ -513,7 +512,7 @@ class SeriesView(AppCTkToplevel):
         self._present_series_view()
 
     def _remember_dicom_wl_ww(self, ds: Dataset | None = None) -> tuple[float, float]:
-        """Read and cache WL/WW from DICOM headers (not viewer-adjusted values)."""
+        """Cache default WL/WW from VOI tags, else loaded pixels, else BitsAllocated."""
         source: Dataset | None = ds if ds is not None else self._ds
         if source is None and self._slice_paths:
             try:
@@ -523,7 +522,7 @@ class SeriesView(AppCTkToplevel):
         if source is None:
             self._dicom_wl, self._dicom_ww = 127.5, 255.0
             return self._dicom_wl, self._dicom_ww
-        wl, ww = get_wl_ww(source)
+        wl, ww = resolve_default_window(source, self._frames)
         self._dicom_wl, self._dicom_ww = wl, ww
         return wl, ww
 
@@ -1634,6 +1633,7 @@ class SeriesView(AppCTkToplevel):
             project_dir=project_dir,
             modality=str(getattr(ds, "Modality", "") or "") or None,
             match_mode=getattr(self, "_match_mode", PhiMatchMode.STANDARD),
+            anon_model=self._controller.anonymizer.model,
         )
 
     def _current_slice_path(self) -> Path | None:
@@ -2201,9 +2201,7 @@ class SeriesView(AppCTkToplevel):
             return
         edit_context = self._resolve_edit_context()
         logger.info("Series View starting OCR background job edit_context=%s", edit_context)
-        wl, ww = self._dicom_wl or 0.0, self._dicom_ww or 0.0
-        if self._ds is not None:
-            wl, ww = get_wl_ww(self._ds)
+        wl, ww = self._dicom_wl_ww()
         frame_index = self.image_viewer.current_image_index if hasattr(self, "image_viewer") else 0
         ocr_source = self.image_viewer.images if hasattr(self, "image_viewer") else None
         options = self._workspace.prepare_ocr_job(

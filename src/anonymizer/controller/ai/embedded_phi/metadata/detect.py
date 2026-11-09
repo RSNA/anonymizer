@@ -6,8 +6,9 @@ Explicit workflow (steps 1–5; apply continues 6–7)
 2. Compile NER input (Tag Name: value + separators) — see ner_compile.py.
 3. OpenMed on that string (chunk with optional overlap when over char cap).
 4. Remap spans via the compile offset map onto original Content.
-5. Post-NER: whitelist drop (always includes DICOM VR codes), anon drop,
-   drop whole-cell pure-numeric false IDs, for/caret/Dr. expand, date +
+5. Post-NER: pixel decide on each span (NER score floor + whitelist-vs-NER
+   contest; DICOM VR codes and clinical keep terms in the keep list), anon
+   drop, drop whole-cell pure-numeric false IDs, for/caret/Dr. expand, date +
    descriptor PHI pattern fill (IDs, SSN-like, at/by sites, phone, Dr.).
 
 Public API
@@ -60,7 +61,11 @@ from anonymizer.controller.ai.embedded_phi.ner.radiology_filters import (
     drop_measurement_digit_id_entities,
     is_anon_identity_tag,
 )
-from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import PhiMatchMode, thresholds_for
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import (
+    PhiMatchMode,
+    phi_accepted_scores,
+    thresholds_for,
+)
 from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_modality_phi_match_mode
 from anonymizer.controller.ai.embedded_phi.report.process_report_text import resolve_dataset_whitelist
 from anonymizer.controller.ai.embedded_phi.term_similarity import similarity_term_match
@@ -121,9 +126,9 @@ def detect_metadata_phi(
         locale: NER locale pack.
         whitelist: Terms masked after NER. None loads resolve_dataset_whitelist.
             An explicit list (including empty) is used as given.
-        match_mode: PhiMatchMode for whitelist similarity on an imaging file.
-            None keeps the floor from resolve_dataset_whitelist. A report
-            keeps the floor from that resolver.
+        match_mode: PhiMatchMode for whitelist similarity and NER score floors
+            on an imaging file. None loads the modality preset (STANDARD when
+            unset).
         project_dir: Project storage dir holding per-modality whitelists
             and the compiled *-anonymizer.script (@safe skip).
         modality: Imaging modality code passed to resolve_dataset_whitelist.
@@ -144,7 +149,6 @@ def detect_metadata_phi(
     if whitelist is not None:
         base_terms = list(whitelist)
         effective_match = match_mode or load_modality_phi_match_mode(project_dir, modality)
-        similarity = thresholds_for(effective_match).whitelist_similarity
     else:
         resolved = resolve_dataset_whitelist(
             project_dir,
@@ -154,17 +158,20 @@ def detect_metadata_phi(
             modality=modality,
         )
         base_terms = list(resolved.terms)
-        similarity = resolved.similarity
-        if resolved.source == "modality" and match_mode is not None:
-            similarity = thresholds_for(match_mode).whitelist_similarity
+        if match_mode is not None:
+            effective_match = match_mode
+        else:
+            code = modality or (resolved.modalities[0] if resolved.modalities else None)
+            effective_match = load_modality_phi_match_mode(project_dir, code)
         logger.info(
-            "Clean Descriptors whitelist source=%s modalities=%s terms=%d similarity=%.2f",
+            "Clean Descriptors whitelist source=%s modalities=%s terms=%d mode=%s",
             resolved.source,
             ",".join(resolved.modalities) if resolved.modalities else "—",
             len(resolved.terms),
-            similarity,
+            effective_match.value,
         )
     effective_whitelist = _with_dicom_vr_allow_terms(base_terms)
+    similarity = thresholds_for(effective_match).whitelist_similarity
     min_length_ratio = 0.70
 
     ops = (
@@ -263,7 +270,7 @@ def detect_metadata_phi(
             ents,
             whitelist=effective_whitelist,
             anon_values=anon,
-            similarity=similarity,
+            match_mode=effective_match,
             min_length_ratio=min_length_ratio,
         )
         whitelist_dropped += w_drop
@@ -306,9 +313,9 @@ def detect_metadata_phi(
         out[text] = tuple(pattern)
 
     logger.info(
-        "Clean Descriptors step 5/7 post-NER whitelist_drop=%d anon_drop=%d "
+        "Clean Descriptors step 5/7 post-NER decide_drop=%d anon_drop=%d "
         "pure_numeric_whole_cell_drop=%d expand=%d pattern_fills=%d "
-        "with_phi=%d whitelist_terms=%d similarity=%.2f",
+        "with_phi=%d whitelist_terms=%d mode=%s wl>=%.2f ner>=%.2f",
         whitelist_dropped,
         anon_dropped,
         numeric_dropped,
@@ -316,7 +323,9 @@ def detect_metadata_phi(
         pattern_added,
         len(out),
         len(effective_whitelist),
+        effective_match.value,
         similarity,
+        thresholds_for(effective_match).ner_score,
     )
     return out
 
@@ -504,14 +513,15 @@ def _drop_whitelist_and_anon(
     *,
     whitelist: Sequence[str],
     anon_values: Sequence[str] | set[str] | frozenset[str],
-    similarity: float,
+    match_mode: PhiMatchMode,
     min_length_ratio: float,
 ) -> tuple[list[Entity], int, int]:
-    """Drop post-NER spans that match whitelist terms or anon header surfaces."""
+    """Drop post-NER spans via pixel decide (NER floor + whitelist contest) or anon."""
     anon = frozenset(str(v).strip() for v in anon_values if str(v).strip())
     terms = [str(t).strip() for t in whitelist if str(t).strip()]
+    thr = thresholds_for(match_mode)
     kept: list[Entity] = []
-    w_drop = 0
+    decide_drop = 0
     a_drop = 0
     for ent in ents:
         span = text[ent.start : ent.end].strip()
@@ -524,23 +534,38 @@ def _drop_whitelist_and_anon(
                 span[:60],
             )
             continue
+        wl_score: float | None = None
+        wl_term: str | None = None
         if terms:
             hit = similarity_term_match(
                 span,
                 terms,
-                threshold=similarity,
+                threshold=thr.whitelist_similarity,
                 min_length_ratio=min_length_ratio,
             )
-            if hit.matched:
-                w_drop += 1
-                logger.info(
-                    "Clean Descriptors step 5/7 drop whitelist span=%r term=%r",
-                    span[:60],
-                    hit.term,
-                )
-                continue
+            if hit.term is not None:
+                wl_score = float(hit.similarity)
+                wl_term = hit.term
+        if not phi_accepted_scores(
+            float(ent.score),
+            has_label=bool(str(ent.label or "").strip()),
+            whitelist_score=wl_score,
+            mode=match_mode,
+        ):
+            decide_drop += 1
+            logger.info(
+                "Clean Descriptors step 5/7 drop decide span=%r label=%s "
+                "ner=%.3f wl=%s term=%r mode=%s",
+                span[:60],
+                ent.label,
+                float(ent.score),
+                f"{wl_score:.3f}" if wl_score is not None else "—",
+                wl_term,
+                match_mode.value,
+            )
+            continue
         kept.append(ent)
-    return kept, w_drop, a_drop
+    return kept, decide_drop, a_drop
 
 
 def _post_ner_pattern_entities(text: str) -> list[Entity]:

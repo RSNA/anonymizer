@@ -1,5 +1,6 @@
 """Algorithm selection dialog for PHI Index AI batch processing."""
 
+import contextlib
 import re
 import tkinter as tk
 from collections.abc import Callable, Sequence
@@ -172,18 +173,64 @@ class AiBatchProcessOptionsDialog(AppToplevel):
         """
         Embedded PHI controls in decision order.
 
-        The description stays full width. Everything under it is one two-column
-        grid: labels and the modality list in column 0, controls in column 1.
-        Column 0 grows with the longer of those labels so the list does not
-        run into the controls.
+        Path checkboxes (Pixel PHI / Metadata / Reports) choose what runs. Match
+        strictness and Whitelist stay visible; Pixel PHI / Metadata+Reports detail
+        controls appear only for the selected paths. Shared two-column grids keep
+        labels aligned with Harmonize and Face De-identify.
 
         Args:
             parent: Frame under the Embedded PHI description.
         """
+        parent.grid_columnconfigure(0, weight=0)
         parent.grid_columnconfigure(1, weight=1)
-        row = 0
         modalities = modalities_in_selected_studies(self._images_dir, self._studies)
 
+        paths = ctk.CTkFrame(parent, fg_color="transparent")
+        paths.grid(row=0, column=0, columnspan=2, sticky="nw", pady=(self.SECTION_PAD, 0))
+        self._embedded_phi_pixel_var = tk.IntVar(value=1)
+        self._embedded_phi_metadata_var = tk.IntVar(value=1)
+        self._embedded_phi_reports_var = tk.IntVar(value=1)
+        for var, text in (
+            (self._embedded_phi_pixel_var, _("Pixel PHI")),
+            (self._embedded_phi_metadata_var, _("Metadata")),
+            (self._embedded_phi_reports_var, _("Reports")),
+        ):
+            ctk.CTkCheckBox(
+                paths,
+                text=text,
+                variable=var,
+                command=self._on_embedded_phi_path_changed,
+            ).pack(side="left", padx=(0, self.PAD))
+
+        # Match strictness + Whitelist stay visible for any Embedded PHI path.
+        shared = ctk.CTkFrame(parent, fg_color="transparent")
+        shared.grid(row=1, column=0, columnspan=2, sticky="nw")
+        shared.grid_columnconfigure(0, weight=0)
+        shared.grid_columnconfigure(1, weight=1)
+        self._option_grids.append(shared)
+        self._build_embedded_phi_shared_options(shared, modalities)
+
+        self._pixel_phi_detail = ctk.CTkFrame(parent, fg_color="transparent")
+        self._pixel_phi_detail.grid(row=2, column=0, columnspan=2, sticky="nw")
+        self._pixel_phi_detail.grid_columnconfigure(0, weight=0)
+        self._pixel_phi_detail.grid_columnconfigure(1, weight=1)
+        self._option_grids.append(self._pixel_phi_detail)
+        self._build_pixel_phi_detail_options(self._pixel_phi_detail, modalities)
+
+        self._text_phi_detail = ctk.CTkFrame(parent, fg_color="transparent")
+        self._text_phi_detail.grid(row=3, column=0, columnspan=2, sticky="nw")
+        self._text_phi_detail.grid_columnconfigure(0, weight=0)
+        self._text_phi_detail.grid_columnconfigure(1, weight=1)
+        self._option_grids.append(self._text_phi_detail)
+        self._build_text_phi_detail_options(self._text_phi_detail)
+
+        self._update_embedded_phi_detail_visibility()
+
+    def _build_embedded_phi_shared_options(
+        self, parent: ctk.CTkFrame, modalities: Sequence[str]
+    ) -> None:
+        """Match strictness and Whitelist (always shown with Embedded PHI)."""
+        row = 0
         self._match_mode_labels = match_mode_menu_labels()
         match_labels = list(self._match_mode_labels.keys())
         self._phi_match_mode_var = tk.StringVar(value=match_mode_menu_label(PhiMatchMode.STANDARD))
@@ -227,8 +274,12 @@ class AiBatchProcessOptionsDialog(AppToplevel):
             command=self._view_whitelist_button_clicked,
         )
         self._view_whitelist_button.grid(row=row, column=1, pady=(self.SECTION_PAD, 0), sticky="nw")
-        row += 1
 
+    def _build_pixel_phi_detail_options(
+        self, parent: ctk.CTkFrame, modalities: Sequence[str]
+    ) -> None:
+        """Remove Scope, removal method, and exclude areas (Pixel PHI only)."""
+        row = 0
         remove_labels = list(ocr_remove_mode_menu_labels())
         self._ocr_remove_mode_var = tk.StringVar(
             value=ocr_remove_mode_display_label(OcrRemoveMode.NON_WHITELISTED)
@@ -276,24 +327,6 @@ class AiBatchProcessOptionsDialog(AppToplevel):
         ).grid(row=row, column=1, sticky="nw", pady=(4, 0))
         row += 1
 
-        self._phi_entity_removal_labels = replace_mode_labels()
-        entity_labels = list(self._phi_entity_removal_labels)
-        self._phi_entity_removal_var = tk.StringVar(value=entity_labels[0])
-        row = self._option_label(parent, row, _("Metadata & Report PHI entity removal") + ":")
-        self._phi_entity_removal_menu = ctk.CTkOptionMenu(
-            parent,
-            variable=self._phi_entity_removal_var,
-            values=entity_labels,
-            dynamic_resizing=False,
-            width=option_menu_width_for_labels(entity_labels),
-        )
-        self._phi_entity_removal_menu.grid(row=row - 1, column=1, pady=(self.SECTION_PAD, 0), sticky="nw")
-        self._detail_label(
-            parent,
-            _("Blank removes the text. Synthetic replaces it with a realistic fake of the same type."),
-        ).grid(row=row, column=1, sticky="nw", pady=(4, 0))
-        row += 1
-
         self._ocr_use_exclude_areas_var = tk.IntVar(value=0)
         exclude_count = sum(
             len(rects) for rects in collect_exclude_areas_by_modality(self._project_dir, modalities).values()
@@ -314,6 +347,25 @@ class AiBatchProcessOptionsDialog(AppToplevel):
                 parent,
                 _("Uses exclude areas saved in Series View."),
             ).grid(row=row, column=1, sticky="nw", pady=(4, 0))
+
+    def _build_text_phi_detail_options(self, parent: ctk.CTkFrame) -> None:
+        """Blank / synthetic replace mode for Metadata and Reports."""
+        self._phi_entity_removal_labels = replace_mode_labels()
+        entity_labels = list(self._phi_entity_removal_labels)
+        self._phi_entity_removal_var = tk.StringVar(value=entity_labels[0])
+        row = self._option_label(parent, 0, _("Metadata & Report PHI entity removal") + ":")
+        self._phi_entity_removal_menu = ctk.CTkOptionMenu(
+            parent,
+            variable=self._phi_entity_removal_var,
+            values=entity_labels,
+            dynamic_resizing=False,
+            width=option_menu_width_for_labels(entity_labels),
+        )
+        self._phi_entity_removal_menu.grid(row=row - 1, column=1, pady=(self.SECTION_PAD, 0), sticky="nw")
+        self._detail_label(
+            parent,
+            _("Blank removes the text. Synthetic replaces it with a realistic fake of the same type."),
+        ).grid(row=row, column=1, sticky="nw", pady=(4, 0))
 
     def _option_label(self, parent: ctk.CTkFrame, row: int, text: str) -> int:
         """
@@ -553,19 +605,64 @@ class AiBatchProcessOptionsDialog(AppToplevel):
     def _update_option_visibility(self, *_args) -> None:
         for algorithm, var in self._vars.items():
             self._set_section_body_visible(algorithm, visible=var.get() == 1)
+        self._update_embedded_phi_detail_visibility()
         self._update_pixel_phi_whitelist_controls()
+        # Immediate + idle: CTk finishes nested option layout after this callback.
         self._resize_to_content_in_place()
+        with contextlib.suppress(tk.TclError):
+            self.after_idle(self._resize_to_content_in_place)
+
+    def _embedded_phi_pixel_selected(self) -> bool:
+        return bool(
+            hasattr(self, "_embedded_phi_pixel_var") and self._embedded_phi_pixel_var.get() == 1
+        )
+
+    def _embedded_phi_text_selected(self) -> bool:
+        metadata = bool(
+            hasattr(self, "_embedded_phi_metadata_var") and self._embedded_phi_metadata_var.get() == 1
+        )
+        reports = bool(
+            hasattr(self, "_embedded_phi_reports_var") and self._embedded_phi_reports_var.get() == 1
+        )
+        return metadata or reports
+
+    def _embedded_phi_paths_selected(self) -> bool:
+        return self._embedded_phi_pixel_selected() or self._embedded_phi_text_selected()
+
+    def _update_embedded_phi_detail_visibility(self) -> None:
+        """Show Pixel / Metadata+Reports detail grids only for checked paths."""
+        embedded_selected = (
+            AiBatchAlgorithm.REMOVE_PIXEL_PHI in self._vars
+            and self._vars[AiBatchAlgorithm.REMOVE_PIXEL_PHI].get() == 1
+        )
+        if hasattr(self, "_pixel_phi_detail"):
+            if embedded_selected and self._embedded_phi_pixel_selected():
+                self._pixel_phi_detail.grid()
+            else:
+                self._pixel_phi_detail.grid_remove()
+        if hasattr(self, "_text_phi_detail"):
+            if embedded_selected and self._embedded_phi_text_selected():
+                self._text_phi_detail.grid()
+            else:
+                self._text_phi_detail.grid_remove()
+
+    def _on_embedded_phi_path_changed(self) -> None:
+        self._validate_selection()
 
     def _resize_to_content_in_place(self) -> None:
         """
         Grow or shrink the dialog to its content without moving its top-left corner.
 
         One geometry write. Recentering on each checkbox click jumps the window.
+        Keeps OK/Cancel on-screen when Embedded PHI (or other) options expand.
         """
         try:
+            if not self.winfo_exists():
+                return
             if not self.winfo_viewable():
                 return
             origin_x, origin_y = _toplevel_origin(self)
+            self.update_idletasks()
         except tk.TclError:
             return
         width, height = fit_toplevel_to_content(
@@ -603,13 +700,21 @@ class AiBatchProcessOptionsDialog(AppToplevel):
 
     def _on_ocr_remove_mode_changed(self, _choice: str | None = None) -> None:
         self._update_pixel_phi_whitelist_controls()
+        self._resize_to_content_in_place()
+        with contextlib.suppress(tk.TclError):
+            self.after_idle(self._resize_to_content_in_place)
 
     def _update_pixel_phi_whitelist_controls(self, *_args) -> None:
-        pixel_phi_selected = (
+        embedded_selected = (
             AiBatchAlgorithm.REMOVE_PIXEL_PHI in self._vars
             and self._vars[AiBatchAlgorithm.REMOVE_PIXEL_PHI].get() == 1
         )
-        if not pixel_phi_selected or not hasattr(self, "_view_whitelist_button"):
+        if not embedded_selected or not hasattr(self, "_view_whitelist_button"):
+            return
+        # Remove Scope only exists while Pixel PHI is selected; otherwise keep
+        # Match strictness / Whitelist fully usable.
+        if not self._embedded_phi_pixel_selected():
+            self._view_whitelist_button.configure(state="normal")
             return
         mode = self._selected_ocr_remove_mode()
         # Whitelist is a veto in every scope except All text.
@@ -639,19 +744,26 @@ class AiBatchProcessOptionsDialog(AppToplevel):
         selected = [algo for algo, var in self._vars.items() if var.get() == 1]
         return normalize_selected_algorithms(selected)
 
+    def _selection_ready(self) -> bool:
+        algorithms = self._selected_algorithms()
+        return bool(algorithms) and (
+            AiBatchAlgorithm.REMOVE_PIXEL_PHI not in algorithms
+            or self._embedded_phi_paths_selected()
+        )
+
     def _validate_selection(self) -> None:
         if hasattr(self, "_ok_button"):
-            self._ok_button.configure(state="normal" if self._selected_algorithms() else "disabled")
+            self._ok_button.configure(state="normal" if self._selection_ready() else "disabled")
         self._update_option_visibility()
 
     def _enter_keypress(self, _event) -> None:
-        if self._selected_algorithms():
+        if self._selection_ready():
             self._on_ok()
 
     def _on_ok(self) -> None:
-        algorithms = self._selected_algorithms()
-        if not algorithms:
+        if not self._selection_ready():
             return
+        algorithms = self._selected_algorithms()
         blur_mode = FaceBlurMode.GAUSSIAN
         if hasattr(self, "_blur_mode_var"):
             blur_mode = face_blur_mode_from_menu_label(self._blur_mode_var.get())
@@ -675,6 +787,13 @@ class AiBatchProcessOptionsDialog(AppToplevel):
         mappings_dir = Path(self._project_dir) / "mappings"
         series_overrides = load_series_overrides(mappings_dir) if prefer_mappings else {}
         study_overrides = load_study_loinc_overrides(mappings_dir) if prefer_mappings else {}
+        pixel_enabled = self._embedded_phi_pixel_selected()
+        metadata_enabled = bool(
+            hasattr(self, "_embedded_phi_metadata_var") and self._embedded_phi_metadata_var.get() == 1
+        )
+        reports_enabled = bool(
+            hasattr(self, "_embedded_phi_reports_var") and self._embedded_phi_reports_var.get() == 1
+        )
         self._result = AiBatchProcessOptionsResult(
             confirmed=True,
             options=AiBatchProcessOptions(
@@ -688,6 +807,9 @@ class AiBatchProcessOptionsDialog(AppToplevel):
                 prefer_description_mappings=prefer_mappings,
                 series_description_overrides=series_overrides,
                 study_loinc_overrides=study_overrides,
+                embedded_phi_pixel_enabled=pixel_enabled,
+                embedded_phi_metadata_enabled=metadata_enabled,
+                embedded_phi_reports_enabled=reports_enabled,
                 metadata_replace_mode=entity_removal,
                 reports_replace_mode=entity_removal,
             ),

@@ -87,12 +87,17 @@ class PHI_SeriesIndexRecord:
     face_blur_algorithm: str
     embedded_phi_removed: bool
     embedded_phi: str
+    cleaned_description: str = ""
 
     def tree_label(self) -> str:
         description = (self.harmonized_description or "").strip()
         return description or "(no description)"
 
     def original_display(self) -> str:
+        """Dataset Original Description: cleaned after Clean Descriptors, else sticky intake."""
+        cleaned = (self.cleaned_description or "").strip()
+        if cleaned:
+            return cleaned
         return (self.description or "").strip()
 
     def harmonized_display(self) -> str:
@@ -122,6 +127,7 @@ class PHI_IndexRecord:
     phi_study_uid: str
     modality: str = ""
     study_description: str = ""  # sticky intake original
+    cleaned_study_description: str = ""  # after Clean Descriptors
     harmonized_description: str = ""
     num_series: int = 0
     num_instances: int = 0
@@ -130,6 +136,13 @@ class PHI_IndexRecord:
     embedded_phi_removed: bool = False
     embedded_phi: str = ""
     series: list[PHI_SeriesIndexRecord] = field(default_factory=list)
+
+    def original_study_display(self) -> str:
+        """Dataset Original Description for the study row."""
+        cleaned = (self.cleaned_study_description or "").strip()
+        if cleaned:
+            return cleaned
+        return (self.study_description or "").strip()
 
     _NESTED_FIELD_NAMES: ClassVar[frozenset[str]] = frozenset({"series"})
 
@@ -163,6 +176,7 @@ class PHI_IndexRecord:
         "phi_study_uid": "PHI-StudyUID",
         "modality": "Modality",
         "study_description": "StudyDescription",
+        "cleaned_study_description": "CleanedStudyDescription",
         "harmonized_description": "StudyHarmonizedDescription",
         "num_series": "Series",
         "num_instances": "Instances",
@@ -239,7 +253,7 @@ class PHI_IndexRecord:
     def tree_values(self) -> tuple:
         """Study-level values for Dataset View Treeview display columns."""
         values: dict[str, object] = {
-            "original_description": (self.study_description or "").strip(),
+            "original_description": self.original_study_display(),
             "phi_patient_id": self.phi_patient_id,
             "anon_patient_id": self.anon_patient_id,
             "phi_accession": self.phi_accession,
@@ -288,10 +302,12 @@ class PHI_IndexRecord:
         "Series",
         "StudyInstances",
         "StudyDescription",
+        "CleanedStudyDescription",
         "StudyHarmonizedDescription",
         "ANON-SeriesUID",
         "Modality",
         "SeriesDescription",
+        "CleanedSeriesDescription",
         "SeriesHarmonizedDescription",
         "SeriesHarmonized",
         "Instances",
@@ -315,17 +331,19 @@ class PHI_IndexRecord:
             self.num_series,
             self.num_instances,
             (self.study_description or "").strip(),
+            (self.cleaned_study_description or "").strip(),
             (self.harmonized_description or "").strip(),
         )
 
     def _lookup_csv_series_suffix(self, series: PHI_SeriesIndexRecord | None) -> tuple[object, ...]:
         if series is None:
-            return ("", "", "", "", "No", "", "No", "No", "")
+            return ("", "", "", "", "", "No", "", "No", "No", "")
         series_harmonized = bool((series.harmonized_description or "").strip())
         return (
             series.anon_series_uid,
             series.modality,
             (series.description or "").strip(),
+            (series.cleaned_description or "").strip(),
             (series.harmonized_description or "").strip(),
             self._display_value(series_harmonized),
             series.instance_count,
@@ -414,6 +432,7 @@ def _phi_series_index_record(series: Series) -> PHI_SeriesIndexRecord:
         anon_series_uid=series.anon_series_uid,
         modality=str(series.modality or ""),
         description=str(series.description or ""),
+        cleaned_description=str(getattr(series, "cleaned_description", None) or ""),
         harmonized_description=str(series.harmonized_description or ""),
         instance_count=len(series.instances or []),
         face_blur_algorithm=str(series.face_blur_algorithm_applied or ""),
@@ -448,6 +467,7 @@ def _phi_index_record_from_orm(phi: PHI, study: Study) -> PHI_IndexRecord:
         anon_study_uid=study.anon_study_uid,
         phi_study_uid=study.study_uid,
         study_description=str(study.description or ""),
+        cleaned_study_description=str(getattr(study, "cleaned_description", None) or ""),
         harmonized_description=str(study.harmonized_description or ""),
         num_series=num_series,
         num_instances=num_instances,

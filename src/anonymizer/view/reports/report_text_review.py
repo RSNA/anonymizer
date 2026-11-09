@@ -13,6 +13,7 @@ import customtkinter as ctk
 from pydicom import Dataset, dcmread
 
 from anonymizer.controller.ai.embedded_phi.ner.engine import REPLACE_MODE_VALUES, Entity, ReplaceMode
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import apply_instance_embedded_phi
 from anonymizer.controller.ai.embedded_phi.report.process_report_text import (
     _SLOT_SEP,
     detect_report_text_phi,
@@ -404,6 +405,7 @@ class ReportTextReview(AppCTkToplevel):
             dataset_path=self._dcm_path,
             project_dir=self._controller.model.storage_dir,
             modality=str(getattr(ds, "Modality", "") or "") or None,
+            anon_model=self._controller.anonymizer.model,
         )
 
     def _on_series_description_updated(self) -> None:
@@ -571,8 +573,12 @@ class ReportTextReview(AppCTkToplevel):
         anon_model = self._controller.anonymizer.model
         if self._removed_since_save and self._removed_phi_texts:
             with contextlib.suppress(Exception):
-                anon_model.set_instance_embedded_phi(str(self._ds.SOPInstanceUID), self._removed_phi_texts)
-                anon_model.set_series_embedded_phi_scanned(str(self._ds.SeriesInstanceUID), scanned=True)
+                apply_instance_embedded_phi(
+                    anon_model, str(self._ds.SOPInstanceUID), self._removed_phi_texts
+                )
+                anon_model.set_series_embedded_phi_scanned(
+                    str(self._ds.SeriesInstanceUID), scanned=True
+                )
         self._removed_phi_texts.clear()
         self._removed_since_save = False
         self._dirty = False

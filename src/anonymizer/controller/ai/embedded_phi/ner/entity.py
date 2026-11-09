@@ -15,8 +15,9 @@ class Entity:
     """One PHI span: product label plus character offsets into the source string.
 
     score is the model's softmax confidence for raw_label (fine-grained HF
-    class), not for the mapped product label. No score threshold is applied —
-    see module README. UI hover shows label only.
+    class), not for the mapped product label. The NER engine keeps every mapped
+    span; pixel Embedded PHI and Clean Descriptors decide apply PhiMatchMode
+    floors and the whitelist-vs-NER contest. UI hover shows label only.
 
     replacement: when set (metadata PHI tagged with a DICOM keyword as
     label), replace_entities always writes this string — the anonymized

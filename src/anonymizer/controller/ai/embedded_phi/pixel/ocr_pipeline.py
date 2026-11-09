@@ -13,8 +13,23 @@ PhiMatchMode
 PhiMatchThresholds
     whitelist_similarity and ner_score for one mode.
 
+WHITELIST_CONFIDENT_SCORE
+    Whitelist similarity above this always wins over NER (0.8).
+
+WHITELIST_OVER_NER_MARGIN
+    Weaker whitelist wins when ner.score < whitelist.score - this margin (0.1).
+
 thresholds_for(mode: PhiMatchMode) -> PhiMatchThresholds
     Preset floors for a match mode.
+
+whitelist_score_meets_floor(whitelist_score: float | None, mode: PhiMatchMode) -> bool
+    True when whitelist_score meets the mode similarity floor.
+
+whitelist_overrides_ner_scores(ner_score: float | None, whitelist_score: float | None, mode: PhiMatchMode) -> bool
+    Pixel/metadata decide: confident whitelist wins, or weaker hit with margin.
+
+phi_accepted_scores(ner_score: float | None, *, has_label: bool, whitelist_score: float | None, mode: PhiMatchMode) -> bool
+    True when NER meets the mode floor and whitelist does not override.
 
 is_whitelisted(t: OCRText, mode: PhiMatchMode) -> bool
     True when whitelist.score is set and meets the mode similarity floor.
@@ -108,9 +123,9 @@ _NER_JOIN_MAX_SKIP_CHARS = 2
 _NER_TRAILING_SEPARATORS = frozenset(":-/\\|;,.")
 _PIXEL_NAME_LABELS = frozenset({"FIRST_NAME", "LAST_NAME"})
 # A whitelist score above this always wins over NER.
-_WHITELIST_CONFIDENT_SCORE = 0.8
+WHITELIST_CONFIDENT_SCORE = 0.8
 # Weaker hits override NER only when ner.score < whitelist.score - this margin.
-_WHITELIST_OVER_NER_MARGIN = 0.1
+WHITELIST_OVER_NER_MARGIN = 0.1
 # XR (CR/DX) and US burn-in clocks: any separators → HH:MM:SS for NER.
 _CLOCK_NORMALIZE_MODALITIES = frozenset({*XR_MODALITIES, Modality.US})
 # Separators: non-digits and/or digit 8 (EasyOCR often reads ':' as '8'), mixed ok.
@@ -152,37 +167,81 @@ def thresholds_for(mode: PhiMatchMode) -> PhiMatchThresholds:
     return _MATCH_PRESETS[mode]
 
 
-def is_whitelisted(t: OCRText, mode: PhiMatchMode) -> bool:
-    """True when whitelist.score is set and score >= mode.whitelist_similarity."""
-    thr = thresholds_for(mode)
-    return t.whitelist.score is not None and t.whitelist.score >= thr.whitelist_similarity
+def whitelist_score_meets_floor(
+    whitelist_score: float | None, mode: PhiMatchMode
+) -> bool:
+    """True when whitelist_score meets the mode similarity floor."""
+    if whitelist_score is None:
+        return False
+    return float(whitelist_score) >= thresholds_for(mode).whitelist_similarity
 
 
-def _whitelist_overrides_ner(t: OCRText, mode: PhiMatchMode) -> bool:
+def whitelist_overrides_ner_scores(
+    ner_score: float | None,
+    whitelist_score: float | None,
+    mode: PhiMatchMode,
+) -> bool:
     """
-    True when the box meets the whitelist floor and whitelist wins.
+    True when whitelist meets the mode floor and wins over NER.
 
     A whitelist score above 0.8 always wins. A weaker hit wins when NER is
     absent or ner.score < whitelist.score - 0.1. Close scores on a fuzzy
     resemblance stay PHI.
 
     Args:
-        t: Annotated OCR box.
+        ner_score: Model confidence for the PHI span, or None when unlabeled.
+        whitelist_score: Best keep-term similarity for the span, or None.
         mode: Current PhiMatchMode floors.
 
     Returns:
-        True when callers should treat the box as whitelist chrome, not PHI.
+        True when callers should treat the span as keep-list chrome, not PHI.
     """
-    if not is_whitelisted(t, mode):
+    if not whitelist_score_meets_floor(whitelist_score, mode):
         return False
-    wl_score = t.whitelist.score
-    if wl_score is None:
+    assert whitelist_score is not None
+    if float(whitelist_score) > WHITELIST_CONFIDENT_SCORE:
+        return True
+    if ner_score is None:
+        return True
+    return float(ner_score) < float(whitelist_score) - WHITELIST_OVER_NER_MARGIN
+
+
+def phi_accepted_scores(
+    ner_score: float | None,
+    *,
+    has_label: bool,
+    whitelist_score: float | None,
+    mode: PhiMatchMode,
+) -> bool:
+    """
+    True when NER meets the mode floor and whitelist does not override.
+
+    Shared by pixel boxes and Clean Descriptors metadata spans.
+
+    Args:
+        ner_score: Model confidence for the PHI span, or None.
+        has_label: True when a product PHI label is set.
+        whitelist_score: Best keep-term similarity for the span, or None.
+        mode: Current PhiMatchMode floors.
+
+    Returns:
+        True when callers should treat the span as Embedded PHI.
+    """
+    thr = thresholds_for(mode)
+    if not has_label or ner_score is None or float(ner_score) < thr.ner_score:
         return False
-    if float(wl_score) > _WHITELIST_CONFIDENT_SCORE:
-        return True
-    if t.ner.label is None or t.ner.score is None:
-        return True
-    return float(t.ner.score) < float(wl_score) - _WHITELIST_OVER_NER_MARGIN
+    return not whitelist_overrides_ner_scores(ner_score, whitelist_score, mode)
+
+
+def is_whitelisted(t: OCRText, mode: PhiMatchMode) -> bool:
+    """True when whitelist.score is set and score >= mode.whitelist_similarity."""
+    return whitelist_score_meets_floor(t.whitelist.score, mode)
+
+
+def _whitelist_overrides_ner(t: OCRText, mode: PhiMatchMode) -> bool:
+    """OCRText wrapper for whitelist_overrides_ner_scores."""
+    ner_score = None if t.ner.label is None else t.ner.score
+    return whitelist_overrides_ner_scores(ner_score, t.whitelist.score, mode)
 
 
 def phi_accepted(t: OCRText, mode: PhiMatchMode) -> bool:
@@ -198,14 +257,12 @@ def phi_accepted(t: OCRText, mode: PhiMatchMode) -> bool:
     Returns:
         True when callers should treat the box as Embedded PHI.
     """
-    thr = thresholds_for(mode)
-    if (
-        t.ner.label is None
-        or t.ner.score is None
-        or t.ner.score < thr.ner_score
-    ):
-        return False
-    return not _whitelist_overrides_ner(t, mode)
+    return phi_accepted_scores(
+        t.ner.score,
+        has_label=t.ner.label is not None,
+        whitelist_score=t.whitelist.score,
+        mode=mode,
+    )
 
 
 def accepted_phi_entities(t: OCRText, mode: PhiMatchMode) -> tuple[tuple[str, str], ...]:

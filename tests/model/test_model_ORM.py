@@ -345,6 +345,35 @@ def test_update_series_description_by_anon_uid(anonymizer_model: AnonymizerModel
     assert anonymizer_model.update_series_description_by_anon_uid("nonexistent-anon-uid", "x") is False
 
 
+def test_sync_descriptions_from_dataset_after_metadata_phi(
+    anonymizer_model: AnonymizerModel, mock_dataset1: Dataset
+):
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_delta=0)
+    phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
+    assert phi is not None
+    study = phi.studies[0]
+    series = study.series[0]
+    sticky_study = study.description
+    sticky_series = series.description
+
+    cleaned = mock_dataset1.copy()
+    cleaned.StudyInstanceUID = study.anon_study_uid
+    cleaned.SeriesInstanceUID = series.anon_series_uid
+    cleaned.StudyDescription = "Chest CT"
+    cleaned.SeriesDescription = "Axial"
+
+    assert anonymizer_model.sync_descriptions_from_dataset(cleaned) is True
+
+    phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
+    assert phi is not None
+    assert phi.studies[0].description == sticky_study
+    assert phi.studies[0].series[0].description == sticky_series
+    assert phi.studies[0].cleaned_description == "Chest CT"
+    assert phi.studies[0].series[0].cleaned_description == "Axial"
+    assert anonymizer_model.get_study_description(study.anon_study_uid) == sticky_study
+    assert anonymizer_model.get_series_description(series.anon_series_uid) == sticky_series
+
+
 def test_set_series_harmonized_description(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):
     anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_delta=0)
     phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
@@ -512,6 +541,17 @@ def test_set_instance_pixel_phi(anonymizer_model: AnonymizerModel, mock_dataset1
         row = session.get(Instance, instance.sop_instance_uid)
         assert row is not None
         assert row.embedded_phi == "Patient, Name"
+
+    assert (
+        anonymizer_model.append_instance_embedded_phi(
+            instance.anon_sop_instance_uid, ["Name", "Protocol"]
+        )
+        is True
+    )
+    with anonymizer_model._get_session(read_only=True) as session:
+        row = session.get(Instance, instance.sop_instance_uid)
+        assert row is not None
+        assert row.embedded_phi == "Patient, Name, Protocol"
 
 
 def test_clear_series_tseg_metadata(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):

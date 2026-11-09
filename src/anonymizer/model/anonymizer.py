@@ -72,6 +72,7 @@ class Series(Base):
     study: Mapped["Study"] = relationship(back_populates="series", init=False)
     modality: Mapped[str | None] = mapped_column(String)
     description: Mapped[str | None] = mapped_column(String, default=None)
+    cleaned_description: Mapped[str | None] = mapped_column(String, default=None)
     harmonized_description: Mapped[str | None] = mapped_column(String, default=None)
     face_blur_algorithm_applied: Mapped[str | None] = mapped_column(String, default=None)
     embedded_phi_scanned: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -98,6 +99,7 @@ class Study(Base):
     accession_number: Mapped[str | None] = mapped_column(String, index=True)
     anon_accession_number: Mapped[str | None] = mapped_column(String, index=True)
     description: Mapped[str | None] = mapped_column(String, default=None)
+    cleaned_description: Mapped[str | None] = mapped_column(String, default=None)
     harmonized_description: Mapped[str | None] = mapped_column(String, default=None)
     target_instance_count: Mapped[int] = mapped_column(Integer, default=0)
 
@@ -1095,6 +1097,84 @@ class AnonymizerModel:
         return True
 
     @use_session()
+    def update_study_description_by_anon_uid(self, anon_study_uid: str, description: str) -> bool:
+        """
+        Update the stored study description for the study matching an anonymized StudyInstanceUID.
+
+        Args:
+            anon_study_uid: Anonymized StudyInstanceUID (directory name under public storage).
+            description: New study description text.
+
+        Returns:
+            True if a study row was found and updated, False otherwise.
+        """
+        stmt = select(Study).where(Study.anon_study_uid == anon_study_uid)
+        study = self.session.execute(stmt).scalar_one_or_none()
+        if study is None:
+            logger.error("Study with anon_study_uid '%s' not found.", anon_study_uid)
+            return False
+        study.description = description
+        return True
+
+    @use_session()
+    def update_series_cleaned_description_by_anon_uid(
+        self, anon_series_uid: str, description: str
+    ) -> bool:
+        """Store Clean Descriptors SeriesDescription for Dataset / lookup CSV."""
+        stmt = select(Series).where(Series.anon_series_uid == anon_series_uid)
+        series = self.session.execute(stmt).scalar_one_or_none()
+        if series is None:
+            logger.error("Series with anon_series_uid '%s' not found.", anon_series_uid)
+            return False
+        series.cleaned_description = description
+        return True
+
+    @use_session()
+    def update_study_cleaned_description_by_anon_uid(
+        self, anon_study_uid: str, description: str
+    ) -> bool:
+        """Store Clean Descriptors StudyDescription for Dataset / lookup CSV."""
+        stmt = select(Study).where(Study.anon_study_uid == anon_study_uid)
+        study = self.session.execute(stmt).scalar_one_or_none()
+        if study is None:
+            logger.error("Study with anon_study_uid '%s' not found.", anon_study_uid)
+            return False
+        study.cleaned_description = description
+        return True
+
+    def sync_descriptions_from_dataset(self, ds: Dataset) -> bool:
+        """
+        Copy StudyDescription / SeriesDescription from ds into cleaned_description.
+
+        Keeps sticky intake description (Dataset Original / lookup StudyDescription
+        and SeriesDescription) unchanged. Used after Clean Descriptors.
+
+        Args:
+            ds: Anonymized dataset whose description tags are source of truth.
+
+        Returns:
+            True when a study and/or series cleaned_description was updated.
+        """
+        updated = False
+        study_uid = str(getattr(ds, "StudyInstanceUID", "") or "").strip()
+        series_uid = str(getattr(ds, "SeriesInstanceUID", "") or "").strip()
+        if study_uid and hasattr(ds, "StudyDescription"):
+            updated = (
+                self.update_study_cleaned_description_by_anon_uid(
+                    study_uid, str(ds.StudyDescription or "")
+                )
+                or updated
+            )
+        if series_uid and hasattr(ds, "SeriesDescription"):
+            updated = (
+                self.update_series_cleaned_description_by_anon_uid(
+                    series_uid, str(ds.SeriesDescription or "")
+                )
+                or updated
+            )
+        return updated
+
+    @use_session()
     def set_series_harmonized_description(self, anon_series_uid: str, description: str) -> bool:
         stmt = select(Series).where(Series.anon_series_uid == anon_series_uid)
         series = self.session.execute(stmt).scalar_one_or_none()
@@ -1123,6 +1203,36 @@ class AnonymizerModel:
         instance = self.session.execute(stmt).scalar_one_or_none()
         if instance is None:
             logger.error("Instance with anon_sop_instance_uid '%s' not found.", anon_sop_instance_uid)
+            return False
+        instance.embedded_phi = formatted
+        return True
+
+    @use_session()
+    def append_instance_embedded_phi(self, anon_sop_instance_uid: str, texts: Sequence[str]) -> bool:
+        """Merge removed PHI strings into instance.embedded_phi (pixel + metadata + report).
+
+        Args:
+            anon_sop_instance_uid: Anonymized SOP Instance UID.
+            texts: Newly removed PHI spans to record.
+
+        Returns:
+            True when the instance row was found and updated with a non-empty digest.
+        """
+        additions = [str(t).strip() for t in texts if str(t).strip()]
+        if not additions:
+            return False
+        stmt = select(Instance).where(Instance.anon_sop_instance_uid == anon_sop_instance_uid)
+        instance = self.session.execute(stmt).scalar_one_or_none()
+        if instance is None:
+            logger.error("Instance with anon_sop_instance_uid '%s' not found.", anon_sop_instance_uid)
+            return False
+        existing = [
+            part.strip()
+            for part in str(instance.embedded_phi or "").split(",")
+            if part.strip()
+        ]
+        formatted = format_embedded_phi_texts([*existing, *additions])
+        if not formatted:
             return False
         instance.embedded_phi = formatted
         return True

@@ -238,6 +238,26 @@ def _max_descendant_reqwidth(widget: tk.Misc) -> int:
     return widest
 
 
+def _content_reqheight(window: tk.Misc) -> int:
+    """Natural content height when toplevel geometry is already fixed.
+
+    After geometry(WxH) is applied, window.winfo_reqheight() often sticks at H
+    even when nested frames grow (e.g. expanding Embedded PHI options). Direct
+    children's reqheight still reflects the laid-out content.
+    """
+    tallest = 0
+    try:
+        children = window.winfo_children()
+    except tk.TclError:
+        return 0
+    for child in children:
+        try:
+            tallest = max(tallest, int(child.winfo_reqheight()))
+        except tk.TclError:
+            continue
+    return tallest
+
+
 def _title_bar_min_width(window: tk.Misc) -> int:
     """Caption text is not a widget; include it so titles are not clipped."""
     try:
@@ -269,6 +289,8 @@ def fit_toplevel_to_content(
 
     Tk/CTk winfo_reqwidth on the toplevel often follows a progress bar default
     (~200px) rather than the longest label. Walk descendants and the caption.
+    Height uses content children reqheight so expanding sections are not clipped
+    after a prior fixed geometry.
 
     Args:
         window: Toplevel to measure.
@@ -290,7 +312,7 @@ def fit_toplevel_to_content(
     except tk.TclError:
         return (0, 0)
     width = max(req_w, _max_descendant_reqwidth(window) + pad, _title_bar_min_width(window), min_width)
-    height = max(req_h, min_height)
+    height = max(req_h, _content_reqheight(window), min_height)
     if not apply:
         return width, height
     if place:

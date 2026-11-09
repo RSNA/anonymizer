@@ -61,10 +61,11 @@ from anonymizer.controller.ai.embedded_phi.metadata.series_index import (
     unique_metadata_texts,
 )
 from anonymizer.controller.ai.tseg.dicom_geometry import list_dicom_paths, stackable_dicom_paths
-from anonymizer.utils.dicom import SUPPORTED_PHOTOMETRIC_INTERPRETATIONS, get_wl_ww
+from anonymizer.utils.dicom import SUPPORTED_PHOTOMETRIC_INTERPRETATIONS
 from anonymizer.utils.memory import log_process_memory
 from anonymizer.utils.storage.dicom_tree import get_dcm_files
 from anonymizer.utils.version import get_version
+from anonymizer.utils.windowing import resolve_default_window
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +147,7 @@ def load_series_frames(
     metadata, frames, slice_paths, sop_uids, metadata_by_sop = _load_series_frames(
         series_path, dcm_paths=dcm_paths
     )
-    default_window = get_wl_ww(metadata)
+    default_window = resolve_default_window(metadata, frames)
     return LoadedSeries(
         metadata=metadata,
         frames=frames,

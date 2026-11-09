@@ -36,9 +36,11 @@ from anonymizer.controller.ai.embedded_phi.metadata.viewer_tree import (
 from anonymizer.controller.ai.embedded_phi.ner.engine import REPLACE_MODE_VALUES, SCORED_LABELS, Entity, ReplaceMode
 from anonymizer.controller.ai.embedded_phi.ner.radiology_filters import MetadataNerItem
 from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import PhiMatchMode
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import apply_instance_embedded_phi
 from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_modality_phi_match_mode
 from anonymizer.controller.ai.embedded_phi.report.process_report_text import remove_phi
 from anonymizer.controller.ai.feature_availability import report_text_phi_ready
+from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.utils.dicom import DeidMethodCode, record_deid_method_codes
 from anonymizer.utils.translate import _
 from anonymizer.view.common.app_window import (
@@ -48,6 +50,7 @@ from anonymizer.view.common.app_window import (
 )
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import char_width_px
+from anonymizer.view.common.navigation import find_dataset_view_parent
 from anonymizer.view.common.phi_action_labels import (
     detect_phi_button_label,
     remove_phi_button_label,
@@ -704,12 +707,16 @@ class MetadataAssessmentDialog(AppCTkToplevel):
         whitelist: Sequence[str] | None = None,
         match_mode: PhiMatchMode | None = None,
         dataset_path: Path | None = None,
+        anon_model: AnonymizerModel | None = None,
     ) -> None:
         super().__init__(master=parent)
         self._parent = parent
         self._dataset = dataset
         self._dataset_path = Path(dataset_path) if dataset_path is not None else None
+        self._anon_model = anon_model
         self._dirty = False
+        self._removed_phi_texts: list[str] = []
+        self._removed_since_save = False
         self._mode_labels = replace_mode_labels()
         self._project_dir = project_dir
         self._modality = modality or str(getattr(dataset, "Modality", "") or "") or None
@@ -976,6 +983,11 @@ class MetadataAssessmentDialog(AppCTkToplevel):
         active = self._panel.active_entities_by_content()
         if not active:
             return
+        for text, ents in active.items():
+            for ent in ents:
+                frag = text[ent.start : ent.end]
+                if frag.strip() and frag not in self._removed_phi_texts:
+                    self._removed_phi_texts.append(frag)
         synthetic = self._selected_mode() == "synth"
         cleaned = {
             text: remove_phi(text, list(ents), synthetic=synthetic)
@@ -984,6 +996,7 @@ class MetadataAssessmentDialog(AppCTkToplevel):
         removed = sum(len(ents) for ents in active.values())
         self._panel.apply_cleaned_texts(cleaned)
         self._dirty = True
+        self._removed_since_save = True
         self._refresh_state()
         self._set_status(
             _("Removed Embedded PHI") + f" ({removed}). " + _("Save to write changes.")
@@ -1004,6 +1017,34 @@ class MetadataAssessmentDialog(AppCTkToplevel):
             logger.exception("Metadata Save failed for %s", self._dataset_path)
             self._set_status(_("Save failed") + f": {self._dataset_path}")
             return
+
+        if self._anon_model is not None:
+            with contextlib.suppress(Exception):
+                if self._removed_since_save and self._removed_phi_texts:
+                    apply_instance_embedded_phi(
+                        self._anon_model,
+                        str(full.SOPInstanceUID),
+                        self._removed_phi_texts,
+                        merge=True,
+                    )
+                    series_uid = str(getattr(full, "SeriesInstanceUID", "") or "")
+                    if series_uid:
+                        self._anon_model.set_series_embedded_phi_scanned(
+                            series_uid, scanned=True
+                        )
+                # Dataset Original Description columns follow cleaned Study/Series Description.
+                self._anon_model.sync_descriptions_from_dataset(full)
+            self._removed_phi_texts.clear()
+            self._removed_since_save = False
+            dataset = find_dataset_view_parent(self)
+            if dataset is not None:
+                with contextlib.suppress(tk.TclError):
+                    dataset._update_tree_from_phi_index()
+            refresh_status = getattr(self._parent, "_refresh_series_processing_status", None)
+            if callable(refresh_status):
+                with contextlib.suppress(Exception):
+                    refresh_status()
+
         self._panel.clear_pending_cleaned()
         self._dirty = False
         self._refresh_state()

@@ -62,8 +62,11 @@ from pydicom import Dataset
 
 from anonymizer.controller.series.series_io import LoadedSeries, load_series_frames
 from anonymizer.controller.series.series_overlay import OCRText
-from anonymizer.utils.dicom import get_wl_ww
-from anonymizer.utils.windowing import apply_windowing
+from anonymizer.utils.windowing import (
+    apply_windowing,
+    resolve_default_window,
+    safe_window_width,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -204,11 +207,12 @@ def _single_frame_to_uint8_gray(frame: ndarray) -> ndarray:
     """Window a single frame to uint8 grayscale for CLAHE / Canny.
 
     Color ultrasound frames from load_series_frames are RGB (H, W, 3);
-    OpenCV CLAHE requires CV_8UC1 or CV_16UC1.
+    OpenCV CLAHE requires CV_8UC1 or CV_16UC1. PET after modality LUT often
+    has span << 1 — must not floor WW to 1.0 or the thumbnail is all black.
     """
     frame_float = frame.astype(np.float32)
     min_val, max_val = float(np.min(frame_float)), float(np.max(frame_float))
-    ww_safe = max(1.0, max_val - min_val)
+    ww_safe = safe_window_width(max_val - min_val)
     windowed = np.clip(((frame_float - min_val) / ww_safe) * 255.0, 0, 255).astype(np.uint8)
 
     if windowed.ndim == 2:
@@ -302,7 +306,7 @@ def create_projection_from_series(series_path: Path) -> Projection:
     mean_projection = np.mean(all_series_frames, axis=0).astype(all_series_frames.dtype)
     max_projection = np.max(all_series_frames, axis=0)
 
-    wl, ww = get_wl_ww(ds1)
+    wl, ww = resolve_default_window(ds1, all_series_frames)
 
     projection_images = [
         Image.fromarray(apply_windowing(wl, ww, img)).resize(

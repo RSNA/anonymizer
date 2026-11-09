@@ -12,6 +12,7 @@ from anonymizer.view.common.app_window import (
     AppToplevel,
     attach_menubar_to_toplevels,
     find_app_menu_host,
+    fit_toplevel_to_content,
     focus_app_window,
     place_toplevel_centered_on_parent,
     position_toplevel_near_parent,
@@ -187,3 +188,27 @@ def test_place_toplevel_centered_on_parent_centers_on_parent(menu_host: _MenuHos
     finally:
         child.destroy()
         parent.destroy()
+
+
+def test_fit_toplevel_to_content_grows_height_after_fixed_geometry(menu_host: _MenuHost) -> None:
+    """Expanding nested content must raise height even after geometry WxH was applied."""
+    win = tk.Toplevel(menu_host)
+    try:
+        frame = tk.Frame(win)
+        frame.pack(fill="both", expand=True)
+        tk.Label(frame, text="short").pack()
+        win.update_idletasks()
+        _, short_h = fit_toplevel_to_content(win, pad=8, apply=True)
+        win.update_idletasks()
+        assert short_h >= 1
+
+        # Fixed geometry often freezes toplevel winfo_reqheight at the set size.
+        win.geometry(f"320x{short_h}+40+40")
+        win.update_idletasks()
+        for i in range(12):
+            tk.Label(frame, text=f"option row {i} " + ("x" * 20)).pack(anchor="w")
+        win.update_idletasks()
+        _, tall_h = fit_toplevel_to_content(win, pad=8, apply=False)
+        assert tall_h > short_h
+    finally:
+        win.destroy()

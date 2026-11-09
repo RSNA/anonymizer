@@ -528,6 +528,7 @@ def test_phi_index_keeps_original_and_harmonized_study_descriptions() -> None:
         anon_study_uid="anon",
         study_uid="phi",
         description="Original",
+        cleaned_description="Original cleaned",
         harmonized_description="XR Chest 2 Views",
     )
     phi = SimpleNamespace(
@@ -547,5 +548,7 @@ def test_phi_index_keeps_original_and_harmonized_study_descriptions() -> None:
 
     assert isinstance(record, PHI_IndexRecord)
     assert record.study_description == "Original"
+    assert record.cleaned_study_description == "Original cleaned"
     assert record.harmonized_description == "XR Chest 2 Views"
     assert record.tree_label() == "XR Chest 2 Views"
+    assert record.original_study_display() == "Original cleaned"

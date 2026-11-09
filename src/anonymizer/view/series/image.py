@@ -18,7 +18,13 @@ from anonymizer.controller.ai.tseg.config import segmentation_mode_display
 from anonymizer.controller.series.series_io import SeriesProjections
 from anonymizer.controller.series.series_overlay import LayerType, OCRText, OverlayData, Segmentation, UserRectangle
 from anonymizer.utils.translate import _
-from anonymizer.utils.windowing import apply_windowing
+from anonymizer.utils.windowing import (
+    WLWW_DRAG_REFERENCE_PIXELS,
+    apply_windowing,
+    auto_window_from_pixels,
+    safe_window_width,
+    wl_ww_drag_units_per_pixel,
+)
 from anonymizer.view.common.ctk_safe import dispose_photo_image
 from anonymizer.view.common.tk_mouse import pointer_buttons
 from anonymizer.view.common.tooltip import MotionTooltipController, TooltipContent
@@ -61,8 +67,6 @@ class ImageViewer(ctk.CTkFrame):
     SEGMENTATION_COLOR_BGR = (0, 0, 255)  # red for OpenCV BGR overlays
     EXCLUDE_RECT_DASH = 8  # segment length (px) for dotted exclude outlines
     EXCLUDE_RECT_GAP = 6
-    DEFAULT_WL_SENSITIVITY = 0.75  # Pixels moved per unit change in WL (affects Beta)
-    DEFAULT_WW_SENSITIVITY = 0.75  # Pixels moved per unit change in WW (affects Alpha)
     ZOOM_MIN = 0.25
     ZOOM_MAX = 8.0
     ZOOM_WHEEL_FACTOR = 1.15
@@ -307,6 +311,7 @@ class ImageViewer(ctk.CTkFrame):
             self.histogram = Histogram(
                 self.data_frame,
                 update_callback=self._handle_histogram_update,
+                on_auto_window=self.apply_auto_window,
             )
             self.histogram.set_wlww(self.current_wl, self.current_ww, redraw=False)
             self.histogram.canvas.configure(
@@ -512,6 +517,7 @@ class ImageViewer(ctk.CTkFrame):
         self.canvas.bind(ptr.right_press, self._start_adjust_display)
         self.canvas.bind(ptr.right_motion, self._adjust_display)
         self.canvas.bind(ptr.right_release, self._end_adjust_display)
+        self.canvas.bind(ptr.right_double, self._on_auto_window_double_click)
         if self.num_images > 1 and self.control_frame is not None:
             self.control_frame.bind("<MouseWheel>", self.on_mousewheel)
             self.control_frame.bind("<Control-MouseWheel>", self._on_zoom_wheel)
@@ -647,7 +653,7 @@ class ImageViewer(ctk.CTkFrame):
         self._suppress_callbacks = True
         try:
             self.current_wl = wl
-            self.current_ww = max(1.0, ww)
+            self.current_ww = safe_window_width(ww)
             self._update_derived_alpha_beta()
             if self.histogram is not None:
                 self.histogram.set_wlww(self.current_wl, self.current_ww)
@@ -655,6 +661,28 @@ class ImageViewer(ctk.CTkFrame):
             self.refresh_current_image()
         finally:
             self._suppress_callbacks = False
+
+    def apply_auto_window(self) -> None:
+        """Set WL/WW from intensity percentiles of the current display frame."""
+        if not self._interaction_allowed():
+            return
+        pixels = self._display_pixels(self.current_image_index)
+        wl, ww = auto_window_from_pixels(pixels)
+        self.current_wl = wl
+        self.current_ww = safe_window_width(ww)
+        self._update_derived_alpha_beta()
+        if self.histogram is not None:
+            self.histogram.set_wlww(self.current_wl, self.current_ww)
+        self._companion_cache.clear()
+        self.refresh_current_image()
+        if not self._suppress_callbacks and self.on_wlww_changed is not None:
+            self.on_wlww_changed(self.current_wl, self.current_ww)
+
+    def _on_auto_window_double_click(self, event=None):
+        """Right double-click: Auto window from the current frame."""
+        del event
+        self.apply_auto_window()
+        return "break"
 
     @property
     def companion_attached(self) -> bool:
@@ -710,6 +738,7 @@ class ImageViewer(ctk.CTkFrame):
         self.companion_canvas.bind(ptr.pan_motion, self._pan_motion)
         self.companion_canvas.bind(ptr.pan_release, self._end_pan)
         self.companion_canvas.bind(ptr.pan_double, self._on_fit_double_click)
+        self.companion_canvas.bind(ptr.right_double, self._on_auto_window_double_click)
 
         scroll_row = canvas_row + 1
         if self.num_images > 1:
@@ -1913,9 +1942,11 @@ class ImageViewer(ctk.CTkFrame):
     def _handle_histogram_update(self, wl: float, ww: float):
         """Callback function called by Histogram widget when WL/WW changes interactively."""
         logger.debug(f"Received WL/WW update from histogram: WL={wl:.1f}, WW={ww:.1f}")
-        wl_changed = abs(wl - self.current_wl) > 0.01
-        ww_clamped = max(1.0, ww)
-        ww_changed = abs(ww_clamped - self.current_ww) > 0.01
+        ww_clamped = safe_window_width(ww)
+        # Relative epsilon so PET modality-LUT windows (WW << 1) still refresh.
+        eps = max(1e-12, abs(self.current_ww) * 1e-4)
+        wl_changed = abs(wl - self.current_wl) > eps
+        ww_changed = abs(ww_clamped - self.current_ww) > eps
 
         if wl_changed or ww_changed:
             self.current_wl = wl
@@ -2685,8 +2716,7 @@ class ImageViewer(ctk.CTkFrame):
         Calculates the internal alpha and beta values used by cv2.convertScaleAbs
         based on the current user-facing self.current_ww and self.current_wl.
         """
-        # Ensure WW is at least 1 to avoid division by zero and extreme alpha
-        ww_safe = max(1.0, self.current_ww)
+        ww_safe = safe_window_width(self.current_ww)
         self._derived_alpha = 255.0 / ww_safe
         # Calculate beta so that the pixel value 'wl' maps to the middle
         # of the output range (127.5 for 0-255)
@@ -2717,21 +2747,17 @@ class ImageViewer(ctk.CTkFrame):
         delta_x = current_x - self.adjust_start_x
         delta_y = current_y - self.adjust_start_y  # Down = Positive Delta Y
 
-        # --- Calculate New WW/WL based on Mouse Mapping ---
-        # Adjust sensitivity based on data range? For now, use defaults.
-        wl_sensitivity = self.DEFAULT_WL_SENSITIVITY
-        ww_sensitivity = self.DEFAULT_WW_SENSITIVITY
+        # Scale by current WW so large PET/16-bit windows remain mouse-adjustable.
+        units_per_pixel = wl_ww_drag_units_per_pixel(
+            self.initial_ww,
+            reference_pixels=WLWW_DRAG_REFERENCE_PIXELS,
+        )
 
         # WL (Brightness): Up/Down drag -> Up = Brighter (Higher WL)
-        self.current_wl = self.initial_wl + (-delta_y / wl_sensitivity)
+        self.current_wl = self.initial_wl + (-delta_y * units_per_pixel)
 
         # WW (Contrast): Left/Right drag -> Left = Less contrast (Higher WW)
-        self.current_ww = self.initial_ww + (delta_x / ww_sensitivity)
-
-        # Clamp WW (must be > 0)
-        self.current_ww = max(1.0, self.current_ww)
-        # Optional: Clamp WL based on data range if known, otherwise allow free range
-        # self.current_wl = max(some_min, min(some_max, self.current_wl))
+        self.current_ww = safe_window_width(self.initial_ww + (delta_x * units_per_pixel))
 
         logger.debug(f"Adjusting Display: WL={self.current_wl:.1f}, WW={self.current_ww:.1f}")
 

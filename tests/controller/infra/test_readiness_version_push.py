@@ -246,4 +246,4 @@ def test_xp_download_file_mocked(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert ww2 == pytest.approx(400.0)
 
     ds.WindowWidth = 0.5
-    assert get_wl_ww(ds)[1] == pytest.approx(1.0)
+    assert get_wl_ww(ds)[1] == pytest.approx(0.5)

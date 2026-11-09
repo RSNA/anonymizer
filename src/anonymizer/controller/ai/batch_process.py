@@ -1298,9 +1298,15 @@ def _scrub_series_descriptors(
     dcm_paths: Sequence[Path],
     replace_mode: str = "blank",
     project_dir: Path | None = None,
+    anon_model: AnonymizerModel | None = None,
     on_log_detail: Callable[[str], None] | None = None,
 ) -> tuple[int, list[str]]:
-    """Run Clean Descriptors on each instance; return (modified_count, removed texts)."""
+    """Run Clean Descriptors on each instance; return (modified_count, removed texts).
+
+    When anon_model is set, removed spans are merged into Instance.embedded_phi so
+    the Dataset series row Embedded PHI column updates after the batch refresh.
+    """
+    del series_path  # retained for call-site clarity / future series-level hooks
     mode = "synth" if str(replace_mode).strip().lower() == "synth" else "blank"
     modified_count = 0
     all_removed: list[str] = []
@@ -1317,6 +1323,20 @@ def _scrub_series_descriptors(
         if changed:
             modified_count += 1
             all_removed.extend(removed)
+            if anon_model is not None:
+                if removed:
+                    apply_instance_embedded_phi_for_dcm(
+                        anon_model, dcm_path, removed, merge=True
+                    )
+                # Keep Dataset Original Description in sync with cleaned tags.
+                try:
+                    ds = dcmread(str(dcm_path), stop_before_pixels=True, force=True)
+                    anon_model.sync_descriptions_from_dataset(ds)
+                except Exception:
+                    logger.exception(
+                        "Failed to sync Dataset descriptions after Clean Descriptors for %s",
+                        dcm_path,
+                    )
             if on_log_detail is not None and removed:
                 on_log_detail(f"{dcm_path.name}: " + ", ".join(removed[:8]))
     return modified_count, all_removed
@@ -1386,6 +1406,7 @@ def _apply_remove_pixel_phi_series(
                     dcm_paths=sorted(get_dcm_files(series_path)),
                     replace_mode=metadata_replace_mode,
                     project_dir=project_dir,
+                    anon_model=anon_model,
                     on_log_detail=on_log_detail,
                 )
             except Exception as exc:  # noqa: BLE001
@@ -1540,6 +1561,7 @@ def _apply_remove_pixel_phi_series(
                 dcm_paths=dcm_paths,
                 replace_mode=metadata_replace_mode,
                 project_dir=project_dir,
+                anon_model=anon_model,
                 on_log_detail=on_log_detail,
             )
             all_removed_texts.extend(meta_removed)

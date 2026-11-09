@@ -15,6 +15,8 @@ from anonymizer.controller.ai.embedded_phi.metadata.detect import (
 from anonymizer.controller.ai.embedded_phi.metadata.ner_compile import NerCompileOptions
 from anonymizer.controller.ai.embedded_phi.ner.engine import Entity
 from anonymizer.controller.ai.embedded_phi.ner.radiology_filters import MetadataNerItem
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_pipeline import PhiMatchMode
+from anonymizer.controller.ai.embedded_phi.term_similarity import SimilarityMatchResult
 
 
 def test_detect_compile_one_openmed_call() -> None:
@@ -99,7 +101,7 @@ def test_detect_whitelist_drops_after_ner_not_before() -> None:
         for needle, label in (("US", "LOCATION"), ("Biopsy", "LOCATION"), ("Axilla", "LOCATION")):
             if needle in text:
                 i = text.index(needle)
-                out.append(Entity(label=label, start=i, end=i + len(needle)))
+                out.append(Entity(label=label, start=i, end=i + len(needle), score=0.95))
         return out
 
     items = [
@@ -113,6 +115,85 @@ def test_detect_whitelist_drops_after_ner_not_before() -> None:
     assert seen and "Axilla" in seen[0]
     frags = ["US Biopsy Axilla"[e.start : e.end] for e in out["US Biopsy Axilla"]]
     assert frags == ["Biopsy"]
+
+
+def test_detect_drops_span_below_ner_score_floor() -> None:
+    """Pixel STANDARD floor (0.30): low-confidence clinical-as-name spans are dropped."""
+    ds = Dataset()
+    body = "CT CHEST axial"
+
+    def _fake_detect(text: str, *, locale: str = "en_US") -> list[Entity]:
+        del locale
+        i = text.index("axial")
+        return [Entity(label="FIRST_NAME", start=i, end=i + len("axial"), score=0.12)]
+
+    items = [MetadataNerItem(text=body, field_name="Study Description", vr="LO")]
+    with patch(
+        "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
+        side_effect=_fake_detect,
+    ):
+        out = detect_metadata_phi(
+            ds=ds,
+            items=items,
+            whitelist=[],
+            match_mode=PhiMatchMode.STANDARD,
+        )
+    assert body not in out
+
+
+def test_detect_confident_whitelist_overrides_high_ner() -> None:
+    """Whitelist score above 0.8 wins even when NER confidence is high."""
+    ds = Dataset()
+    body = "AXILLA"
+
+    def _fake_detect(text: str, *, locale: str = "en_US") -> list[Entity]:
+        del locale
+        i = text.index("AXILLA")
+        return [Entity(label="LAST_NAME", start=i, end=i + len("AXILLA"), score=0.92)]
+
+    items = [MetadataNerItem(text=body, field_name="Series Description", vr="LO")]
+    with patch(
+        "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
+        side_effect=_fake_detect,
+    ):
+        out = detect_metadata_phi(
+            ds=ds,
+            items=items,
+            whitelist=["AXILLA"],
+            match_mode=PhiMatchMode.STANDARD,
+        )
+    assert body not in out
+
+
+def test_detect_fuzzy_whitelist_does_not_override_close_ner() -> None:
+    """Weaker whitelist within 0.1 of NER leaves the span as PHI (pixel margin)."""
+    ds = Dataset()
+    body = "Bailey"
+
+    def _fake_detect(text: str, *, locale: str = "en_US") -> list[Entity]:
+        del locale
+        i = text.index("Bailey")
+        return [Entity(label="LAST_NAME", start=i, end=i + len("Bailey"), score=0.80)]
+
+    items = [MetadataNerItem(text=body, field_name="Series Description", vr="LO")]
+    with (
+        patch(
+            "anonymizer.controller.ai.embedded_phi.metadata.detect.detect_entities",
+            side_effect=_fake_detect,
+        ),
+        patch(
+            "anonymizer.controller.ai.embedded_phi.metadata.detect.similarity_term_match",
+            return_value=SimilarityMatchResult(matched=True, term="BILAT", similarity=0.70),
+        ),
+    ):
+        out = detect_metadata_phi(
+            ds=ds,
+            items=items,
+            whitelist=["BILAT"],
+            match_mode=PhiMatchMode.LENIENT,
+        )
+    assert body in out
+    assert out[body][0].label == "LAST_NAME"
 
 
 def test_detect_always_allows_dicom_vr_code_spans() -> None:
@@ -440,7 +521,7 @@ def test_report_metadata_uses_study_whitelist(tmp_path: Path, caplog) -> None:
             series_dir=series,
         )
     assert out == {}
-    assert "Clean Descriptors whitelist source=study modalities=US terms=1 similarity=0.85" in caplog.text
+    assert "Clean Descriptors whitelist source=study modalities=US terms=1 mode=standard" in caplog.text
 
 
 def test_imaging_metadata_uses_own_modality_whitelist(tmp_path: Path, caplog) -> None:
@@ -491,4 +572,4 @@ def test_imaging_metadata_uses_own_modality_whitelist(tmp_path: Path, caplog) ->
     text = "Clinic AXILLA"
     spans = [text[e.start : e.end] for e in out.get(text, ())]
     assert "AXILLA" in spans
-    assert "Clean Descriptors whitelist source=modality modalities=CT terms=1 similarity=0.85" in caplog.text
+    assert "Clean Descriptors whitelist source=modality modalities=CT terms=1 mode=standard" in caplog.text

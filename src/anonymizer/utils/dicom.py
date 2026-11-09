@@ -67,6 +67,9 @@ record_deid_method_codes(ds: Dataset, codes: Iterable[DeidMethodCode]) -> tuple[
 
 get_wl_ww(ds: Dataset) -> tuple[float, float]
     Read WindowCenter / WindowWidth from ds, with defaults from BitsAllocated.
+
+has_voi_window(ds: Dataset) -> bool
+    True when ds has both WindowCenter and WindowWidth.
 """
 
 import logging
@@ -250,6 +253,18 @@ def record_deid_method_codes(ds: Dataset, codes: Iterable[DeidMethodCode]) -> tu
     return tuple(present)
 
 
+def has_voi_window(ds: Dataset) -> bool:
+    """True when ds has both WindowCenter and WindowWidth.
+
+    Args:
+        ds: DICOM dataset.
+
+    Returns:
+        True when both VOI window tags are present (values may still be invalid).
+    """
+    return ds.get("WindowCenter", None) is not None and ds.get("WindowWidth", None) is not None
+
+
 def get_wl_ww(ds: Dataset) -> tuple[float, float]:
     """Read WindowCenter / WindowWidth from ds, with defaults from BitsAllocated."""
     wl_from_ds = ds.get("WindowCenter", None)
@@ -290,8 +305,9 @@ def get_wl_ww(ds: Dataset) -> tuple[float, float]:
     else:
         ww_float = float(ww_from_ds)
 
-    if ww_float < 1.0:
-        logger.warning("DICOM WindowWidth (%s) is less than 1. Setting to 1.", ww_from_ds)
-        ww_float = 1.0
+    if ww_float <= 0.0:
+        # Epsilon only (not 1.0): modality-LUT PET windows may be << 1.
+        logger.warning("DICOM WindowWidth (%s) is not positive. Using epsilon floor.", ww_from_ds)
+        ww_float = 1e-12
 
     return wl_float, ww_float

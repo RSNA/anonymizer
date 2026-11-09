@@ -6,6 +6,8 @@ from typing import Callable
 import customtkinter as ctk
 import numpy as np
 
+from anonymizer.utils.translate import _
+from anonymizer.utils.windowing import safe_window_width
 from anonymizer.view.common.fonts import canvas_label_font
 from anonymizer.view.common.tk_mouse import pointer_buttons
 
@@ -21,17 +23,21 @@ class Histogram(ctk.CTkFrame):
 
     DEFAULT_NUM_BINS = 256
     Y_AXIS_PERCENTILE = 99.5  # Percentile for Y-axis scaling
+    AUTO_BUTTON_WIDTH = 48
+    AUTO_BUTTON_HEIGHT = 22
 
     def __init__(
         self,
         master,
         num_bins=DEFAULT_NUM_BINS,
         update_callback: Callable[[float, float], None] | None = None,  # Function to call with (wl, ww) when updated
+        on_auto_window: Callable[[], None] | None = None,
     ):
         super().__init__(master)
         self.master = master
         self.num_bins = num_bins
         self.update_callback = update_callback
+        self.on_auto_window = on_auto_window
 
         self.HISTOGRAM_BACKGROUND_COLOR = ctk.ThemeManager.theme["Histogram"]["fg_color"]
         self.HISTOGRAM_BAR_COLOR = ctk.ThemeManager.theme["Histogram"]["bar_color"]
@@ -77,18 +83,30 @@ class Histogram(ctk.CTkFrame):
 
         self.label_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.label_frame.grid(row=1, column=0, padx=6, pady=(0, 4), sticky="ew")
-        self.label_frame.grid_columnconfigure((0, 1), weight=1)
+        self.label_frame.grid_columnconfigure(0, weight=1)
+        self.label_frame.grid_columnconfigure(1, weight=0)
+        self.label_frame.grid_columnconfigure(2, weight=1)
 
         self.wl_label = ctk.CTkLabel(self.label_frame, text="WL: ---", anchor="w")
         self.wl_label.grid(row=0, column=0, sticky="w")
 
+        self.auto_button = ctk.CTkButton(
+            self.label_frame,
+            text=_("Auto"),
+            width=self.AUTO_BUTTON_WIDTH,
+            height=self.AUTO_BUTTON_HEIGHT,
+            command=self._on_auto_clicked,
+        )
+        self.auto_button.grid(row=0, column=1, padx=4)
+
         self.ww_label = ctk.CTkLabel(self.label_frame, text="WW: ---", anchor="e")
-        self.ww_label.grid(row=0, column=1, sticky="e")
+        self.ww_label.grid(row=0, column=2, sticky="e")
 
         # --- Bind Mouse Events ---
         self.canvas.bind("<ButtonPress-1>", self._on_left_press)
         self.canvas.bind("<B1-Motion>", self._on_left_drag)
         self.canvas.bind("<ButtonRelease-1>", self._on_left_release)
+        self.canvas.bind("<Double-Button-1>", self._on_auto_double_click)
         ptr = pointer_buttons(self)
         self._right_press_seq = ptr.right_press
         self._right_motion_seq = ptr.right_motion
@@ -112,6 +130,7 @@ class Histogram(ctk.CTkFrame):
             return
         self._teardown = True
         self.update_callback = None
+        self.on_auto_window = None
         canvas = getattr(self, "canvas", None)
         with contextlib.suppress(tk.TclError, AttributeError):
             if canvas is not None:
@@ -119,6 +138,7 @@ class Histogram(ctk.CTkFrame):
                 canvas.unbind("<ButtonPress-1>")
                 canvas.unbind("<B1-Motion>")
                 canvas.unbind("<ButtonRelease-1>")
+                canvas.unbind("<Double-Button-1>")
                 canvas.unbind(self._right_press_seq)
                 canvas.unbind(self._right_motion_seq)
                 canvas.unbind(self._right_release_seq)
@@ -154,9 +174,10 @@ class Histogram(ctk.CTkFrame):
         if not self._is_active():
             return
         logger.debug(f"Setting WL: {wl}, WW: {ww}")
-        wl_changed = abs(wl - self._current_wl.get()) > 0.01
-        ww_changed = abs(ww - self._current_ww.get()) > 0.01
-        ww_clamped = max(1.0, ww)
+        ww_clamped = safe_window_width(ww)
+        eps = max(1e-12, abs(self._current_ww.get()) * 1e-4)
+        wl_changed = abs(wl - self._current_wl.get()) > eps
+        ww_changed = abs(ww_clamped - self._current_ww.get()) > eps
 
         if wl_changed or ww_changed:
             self._current_wl.set(wl)
@@ -388,6 +409,17 @@ class Histogram(ctk.CTkFrame):
             return
         self._redraw()
 
+    def _on_auto_clicked(self) -> None:
+        """Auto button: recompute WL/WW from the current frame percentiles."""
+        if self.on_auto_window is not None:
+            self.on_auto_window()
+
+    def _on_auto_double_click(self, event=None):
+        """Double-click histogram: same as Auto button."""
+        del event
+        self._on_auto_clicked()
+        return "break"
+
     def _on_left_press(self, event):
         self._is_left_dragging = True
         self._drag_start_x = event.x
@@ -433,9 +465,9 @@ class Histogram(ctk.CTkFrame):
             return
         sensitivity_factor = 1.5
         delta_ww = (delta_x / canvas_width) * intensity_range * sensitivity_factor
-        new_ww = self._drag_start_ww + delta_ww
-        new_ww = max(1.0, new_ww)
-        if abs(new_ww - self._current_ww.get()) > 0.01:
+        new_ww = safe_window_width(self._drag_start_ww + delta_ww)
+        eps = max(1e-12, abs(self._current_ww.get()) * 1e-4)
+        if abs(new_ww - self._current_ww.get()) > eps:
             self._current_ww.set(new_ww)
             self._redraw()
             self._update_labels()

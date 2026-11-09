@@ -51,9 +51,15 @@ def similarity_term_match(
         if length_ratio < min_length_ratio:
             continue
         similarity = difflib.SequenceMatcher(None, processed, candidate).ratio()
-        if similarity > threshold and similarity > best_similarity:
+        if similarity > best_similarity:
             best_similarity = similarity
             best_term = candidate
-    if best_term is not None:
-        return SimilarityMatchResult(matched=True, term=best_term, similarity=best_similarity)
-    return SimilarityMatchResult(matched=False)
+    if best_term is None:
+        return SimilarityMatchResult(matched=False)
+    # Always expose the best score so pixel/metadata decide can run the
+    # whitelist-vs-NER contest; matched still means above the caller's floor.
+    return SimilarityMatchResult(
+        matched=best_similarity > threshold,
+        term=best_term,
+        similarity=best_similarity,
+    )

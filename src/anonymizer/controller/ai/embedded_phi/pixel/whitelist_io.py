@@ -102,7 +102,8 @@ def load_default_whitelist(modality_code: str) -> list[str]:
     """
     Load the bundled default whitelist for a modality.
 
-    CR shares the DX default list. MG has its own mammography view list.
+    CR shares the DX default list. PT shares the CT default list. MG has its
+    own mammography view list.
 
     Args:
         modality_code: DICOM modality code.
@@ -113,6 +114,8 @@ def load_default_whitelist(modality_code: str) -> list[str]:
     code = modality_code
     if code == "CR":
         code = "DX"
+    elif code == "PT":
+        code = "CT"
     return _load_whitelist_from_txt(_default_whitelist_path(code))
 
 

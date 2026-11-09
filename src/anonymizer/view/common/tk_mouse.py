@@ -54,6 +54,10 @@ class PointerButtons:
     def right_release(self) -> str:
         return f"<ButtonRelease-{self.right}>"
 
+    @property
+    def right_double(self) -> str:
+        return f"<Double-Button-{self.right}>"
+
 
 def _tk_major_version(widget: tk.Misc) -> int:
     patchlevel = str(widget.tk.call("info", "patchlevel"))
