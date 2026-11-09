@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [19.1.0.dev5]
+- PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)
+- After metadata PHI removal (Series View Metadata Save and AI Batch), Dataset Original Description and Embedded PHI columns refresh from cleaned Study/Series Description and removed spans; lookup CSV adds CleanedStudyDescription and CleanedSeriesDescription after the sticky Study/Series Description columns
+- AI Batch Embedded PHI: Pixel PHI / Metadata / Reports path checkboxes; Match strictness and Whitelist stay visible when Pixel PHI is off
+- Series View windowing keeps PET window widths below one, with shared auto-window helpers and projection/default-window alignment
+
 ## [19.1.0.dev4]
 - PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)
 - PyPI source archive and wheel ship the installable packages. Pixel PHI experiment output is no longer stored in the repository. Help-site screenshots and the curated DICOM fixtures stay in git.

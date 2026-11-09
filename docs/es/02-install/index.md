@@ -1,6 +1,6 @@
 # Instalación y primer inicio
 
-**La versión 19.1.0.dev4** es la prelanzamiento de desarrollo 19.1 actual en la rama `dev` (`uv pip install --pre rsna-anonymizer`). La estable **19.0.10** permanece en `master`. Necesita **Python 3.11–3.14** con **tkinter**, instalado mediante **uv**. Se recomienda **3.12**; evite **3.14.1** (torchvision excluye ese parche).
+**La versión 19.1.0.dev5** es la prelanzamiento de desarrollo 19.1 actual en la rama `dev` (`uv pip install --pre rsna-anonymizer`). La estable **19.0.10** permanece en `master`. Necesita **Python 3.11–3.14** con **tkinter**, instalado mediante **uv**. Se recomienda **3.12**; evite **3.14.1** (torchvision excluye ese parche).
 
 ## Instalar con uv y tkinter
 
@@ -26,7 +26,7 @@ uv --version
 
 ### 2. Instalar Python con tkinter y la aplicación
 
-La ventana de escritorio necesita **tkinter**. Instale un Python que lo incluya, cree el venv e instale **19.1.0.dev4** (`--pre`):
+La ventana de escritorio necesita **tkinter**. Instale un Python que lo incluya, cree el venv e instale **19.1.0.dev5** (`--pre`):
 
 
 | Plataforma | Asegurar tkinter |
@@ -41,7 +41,7 @@ uv python install 3.12
 uv venv rsna-anonymizer --python 3.12
 source rsna-anonymizer/bin/activate   # Windows: rsna-anonymizer\Scripts\activate
 
-uv pip install --pre rsna-anonymizer  # version 19.1.0.dev4
+uv pip install --pre rsna-anonymizer  # version 19.1.0.dev5
 ```
 
 ### 3. Verificar la instalación
@@ -49,7 +49,7 @@ uv pip install --pre rsna-anonymizer  # version 19.1.0.dev4
 ```bash
 python --version          # 3.11.x–3.14.x
 python -m tkinter         # a small Tk window must open — required for the UI
-rsna-anonymizer --version # should report 19.1.0.dev4
+rsna-anonymizer --version # should report 19.1.0.dev5
 ```
 
 Si `python -m tkinter` falla, recree el venv con un Python que incluya Tk (tabla anterior) y reinstale.
@@ -92,7 +92,7 @@ Las instalaciones estables usan `uv pip install rsna-anonymizer` (sin `--pre`). 
 ```bash
 source rsna-anonymizer/bin/activate
 uv pip install --upgrade --pre rsna-anonymizer
-rsna-anonymizer --version   # p. ej. 19.1.0.dev4
+rsna-anonymizer --version   # p. ej. 19.1.0.dev5
 ```
 
 Notas de versión: [CHANGELOG](https://github.com/RSNA/anonymizer/blob/master/CHANGELOG.md).
