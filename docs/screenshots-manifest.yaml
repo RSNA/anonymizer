@@ -152,13 +152,14 @@ workflows:
         severity: required
         deps: [language, temp_storage]
         recipe:
-          options: retain
+          options: basic
         ux_elements:
           - Basic / Retain presets
-          - Option checkboxes (Basic Profile, Modified Dates, cleaning options)
+          - DICOM option checkboxes (Basic Profile selected)
+          - TCIA Archive Attributes (Retain TCIA Research Attributes)
           - Plain-language explanation panel
           - OK / Cancel
-        caption: "De-identification Options — Basic preset; RHS help shows Basic Application Confidentiality Profile."
+        caption: "De-identification Options — Basic preset; TCIA Archive Attributes section; RHS help shows Basic Application Confidentiality Profile."
       - id: AnonymizerScriptEditor
         file: AnonymizerScriptEditor.png
         window: AnonymizerScriptDialog
@@ -301,7 +302,7 @@ workflows:
           - Refresh
           - Demographic tiles (sex age modality ethnicity AI)
           - Organ volume histograms (≥10 board widgets total)
-        caption: "Dashboard Analytics expanded with demographic tiles and multiple organ-volume charts (≥10 widgets)."
+        caption: "Dashboard Analytics expanded — sex tile, Harmonize coverage, age histogram, and organ-volume charts (brain, skull, lobes)."
       - id: ViewProjections
         file: ViewProjections.png
         window: ProjectionView
@@ -314,8 +315,17 @@ workflows:
         window: ProjectionView
         severity: required
         deps: [project, imported, fixture:davidson_cxr, fixture:CT_Head_With_Contrast, fixture:us_rgb_single_frame]
-        ux_elements: [Multiple study title, Projection thumbnails for several series, S M L, Page label]
-        caption: "View Projections after multi-selecting studies — stacked tiles, title shows study/series counts, S selected."
+        recipe:
+          selection: all_studies
+          size: S
+          column_layout: true
+          purpose: pixel_phi_triage
+        ux_elements:
+          - Multiple study title (N Studies / M Series)
+          - Projection thumbnails for every selected series
+          - S M L (S selected for cohort density)
+          - CLAHE / edge or min/mean/max strips for burned-in text triage
+        caption: "Full-dataset View Projections (Select All demos) — stacked S tiles to visually scan for burned-in pixel PHI before Series View Detect."
       - id: SeriesView_Review
         file: SeriesView_Review.png
         window: SeriesView
@@ -387,6 +397,19 @@ workflows:
           - Save enabled
           - Private tags
         caption: "Metadata after Replace PHI (Synthetic) — Study Description uses fake name spans; Save writes cleaned tags to the current image."
+      - id: Dataset_AfterMetadataPHI
+        file: Dataset_AfterMetadataPHI.png
+        window: DatasetView
+        severity: soft
+        deps: [project, fixture:davidson_cxr, ocr_models]
+        recipe:
+          mode: after_metadata_save
+          replace: synthetic
+        ux_elements:
+          - Original Description refreshed after Metadata Save
+          - Embedded PHI column updated
+          - davidson_cxr study/series rows
+        caption: "Dataset after Metadata Replace PHI + Save — Original Description and Embedded PHI columns refresh from cleaned tags."
       - id: DescriptionMappings
         file: DescriptionMappings.png
         window: DescriptionMappingsDialog
@@ -399,18 +422,32 @@ workflows:
         caption: "Description Mappings — project Series (RadLex) corrections from Dataset Set description / Harmonize."
       - id: Dataset_EditDescription
         file: Dataset_EditDescription.png
-        window: DatasetView
+        window: SetDescriptionDialog
         severity: required
         deps: [project, imported, fixture:davidson_cxr]
-        ux_elements: [Harmonized series row, Inline description Combobox, RadLex alternatives]
-        caption: "Dataset — click a harmonized series description to choose a RadLex alternative (XR views)."
+        recipe:
+          mode: compose_radlex
+        ux_elements:
+          - Set CR series description title
+          - Compose CR RadLex · closest codes per field
+          - Preview (e.g. Chest AP)
+          - Field pickers (Anatomy, View, Laterality, Mode)
+          - Show all codes / Cancel / Apply
+        caption: "Set series description — Compose RadLex field-by-field (opened from a harmonized davidson_cxr series via Compose RadLex…)."
       - id: Dataset_EditStudyDescription
         file: Dataset_EditStudyDescription.png
-        window: DatasetView
+        window: SetDescriptionDialog
         severity: required
         deps: [project, imported, fixture:davidson_cxr]
-        ux_elements: [Harmonized study row, Inline description Combobox, LOINC Long Common Name options]
-        caption: "Dataset — click a harmonized study description to choose a LOINC Long Common Name for that modality."
+        recipe:
+          mode: loinc_closest
+        ux_elements:
+          - Set XR study description title
+          - Closest LOINC list with Long Common Name (code)
+          - Filter
+          - Show full LOINC catalog…
+          - Apply / Cancel
+        caption: "Set study description — closest LOINC matches with Show full LOINC catalog… (davidson_cxr after series Harmonize)."
       - id: Dataset_CreatePatientLookup
         file: Dataset_CreatePatientLookup.png
         window: DatasetView

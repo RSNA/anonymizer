@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- Dataset Set description: PT/NM-only studies (no CT/MR Harmonize path) can double-click series or study descriptions and pick names from the LOINC table (`PET+CT` when the study wording looks like PET-CT); AI Harmonize for CT/MR studies is unchanged
+- Projection View: loading shell while projections build, then size the window to the tile grid (fixes empty/clipped multi-study opens)
+- AI Batch Embedded PHI logs: series and instance lines use counts only (no OCR/descriptor/report PHI text in the batch log)
+- Docs: refresh Dashboard Analytics, De-identification Options, and related View/Process help screenshots; add Dataset after Metadata Replace PHI + Save shot
 
 ## [19.1.0.dev5]
 - PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)

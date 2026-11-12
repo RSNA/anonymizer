@@ -22,6 +22,8 @@ from anonymizer.controller.ai.harmonize import (
     find_similar_series_uids,
     find_similar_study_uids,
     format_series_playbook_fields,
+    is_nuclear_description_edit_modality,
+    nuclear_loinc_prefix_for_edit,
     series_description_cohort_key,
     series_description_edit_choices,
     series_description_group_choices,
@@ -508,7 +510,7 @@ class DatasetView(AppToplevel):
 
         def _prefix_from_record(record: PHI_IndexRecord) -> str | None:
             mod = str(record.modality or "").strip().upper()
-            if mod in {"CT", "MR", "US", "MG"}:
+            if mod in {"CT", "MR", "US", "MG", "PT", "NM"}:
                 return f"{mod} "
             if mod in {"CR", "DX"}:
                 return "XR "
@@ -651,7 +653,12 @@ class DatasetView(AppToplevel):
         loader: ExpandCatalogLoader | None = expand_loader
         spec: RadLexComposeSpec | None = compose_spec
         choice_list = list(choices) if choices else []
-        kind: CatalogKind = "series" if catalog_kind == "series" else "radlex"
+        if catalog_kind == "loinc":
+            kind: CatalogKind = "loinc"
+        elif catalog_kind == "series":
+            kind = "series"
+        else:
+            kind = "radlex"
         result = show_set_description_dialog(
             self,
             title=title,
@@ -1220,6 +1227,11 @@ class DatasetView(AppToplevel):
             row_mod = Modality.from_code(pair[1].modality)
             if row_mod is not None and get_modality_catalog()[row_mod].content_class is ContentClass.TEXT:
                 return _("Double-click description to set series description · Right-click opens Report View")
+            if is_nuclear_description_edit_modality(pair[1].modality):
+                return _(
+                    "Double-click description to choose a LOINC name "
+                    "(expand to full catalog if needed) · Right-click opens Series View"
+                )
             return _(
                 "Double-click description to choose a RadLex name "
                 "(expand to full catalog if needed) · Right-click opens Series View"
@@ -1583,6 +1595,7 @@ class DatasetView(AppToplevel):
         if cohort is None:
             return
         is_report = cohort == ContentClass.TEXT.value
+        is_nuclear = is_nuclear_description_edit_modality(series.modality)
         harmonized = (series.harmonized_description or "").strip()
         original = (series.description or "").strip()
         current = harmonized or original
@@ -1612,7 +1625,7 @@ class DatasetView(AppToplevel):
                 series_dirs.append(series_path_for_record(images_dir, st, ser))
             unharmonized = bool(unharm_flags) and all(unharm_flags)
             blank_compose = bool(blank_flags) and all(blank_flags)
-            # Report series: no RadLex compose — always offer current description text.
+            # Report / PT/NM: no RadLex compose — always offer table choices (or current text).
             choices = (
                 series_description_group_choices(
                     modalities=modalities,
@@ -1620,7 +1633,7 @@ class DatasetView(AppToplevel):
                     anatomy_hint=study_hint,
                     full_catalog=False,
                 )
-                if is_report or not unharmonized
+                if is_report or is_nuclear or not unharmonized
                 else []
             )
         else:
@@ -1633,12 +1646,12 @@ class DatasetView(AppToplevel):
                     full_catalog=False,
                     anatomy_hint=study_hint,
                 )
-                if is_report or not unharmonized
+                if is_report or is_nuclear or not unharmonized
                 else []
             )
             series_dirs = [series_path_for_record(images_dir, study, series)]
 
-        if not choices and not (unharmonized and not is_report):
+        if not choices and not (unharmonized and not is_report and not is_nuclear):
             return
         if any(not path.is_dir() for path in series_dirs):
             messagebox.showerror(
@@ -1671,6 +1684,48 @@ class DatasetView(AppToplevel):
                 compose_full_vocab=False,
                 blank_compose=False,
                 catalog_kind="series",
+            )
+            return
+
+        if is_nuclear:
+            loinc_modality = (
+                (nuclear_loinc_prefix_for_edit(series.modality, hint=study_hint or current) or modality)
+                .strip()
+            )
+            if n > 1:
+                title = _("Set {modality} series description ({n})").format(modality=loinc_modality, n=n)
+                hint = _(
+                    "Applies to all {n} selected {modality} series · Expand to the full LOINC catalog if needed"
+                ).format(n=n, modality=loinc_modality)
+            else:
+                title = _("Set {modality} series description").format(modality=loinc_modality)
+                hint = _(
+                    "Closest LOINC names for this series · Expand to the full {modality} catalog if needed"
+                ).format(modality=loinc_modality)
+
+            def expand_loader() -> tuple[list[str], dict[str, str | None]]:
+                full = series_description_edit_choices(
+                    modality=series.modality,
+                    current_description=current,
+                    full_catalog=True,
+                    anatomy_hint=study_hint,
+                )
+                return full, {name: None for name in full}
+
+            self._apply_series_description_dialog(
+                series_dirs=series_dirs,
+                choices=choices or ([current] if current else []),
+                initial=initial or current,
+                title=title,
+                hint=hint,
+                modality=loinc_modality,
+                compose_spec=None,
+                expand_loader=expand_loader,
+                showing_full_catalog=False,
+                start_in_compose=False,
+                compose_full_vocab=False,
+                blank_compose=False,
+                catalog_kind="loinc",
             )
             return
 

@@ -117,7 +117,13 @@ ensure_min_description_choices(choices: list[str], extras: list[str], *, minimum
     Append unique extras until minimum choices, preserving order.
 
 series_description_edit_choices(*, modality: object | None, current_description: str, minimum: int=MIN_DESCRIPTION_CHOICES, full_catalog: bool=False, anatomy_hint: str | None=None) -> list[str]
-    RadLex Playbook series description menu for Dataset edit.
+    Series description menu for Dataset edit (RadLex Playbook, or LOINC for PT/NM).
+
+is_nuclear_description_edit_modality(modality: object | None) -> bool
+    True when modality uses manual LOINC Set description (PT/NM; no AI Harmonize).
+
+nuclear_loinc_prefix_for_edit(modality: object | None, *, hint: str='') -> str | None
+    LOINC LongCommonName prefix for a PT/NM series or study hint (PT / PET+CT / NM).
 
 study_loinc_prefix_for_edit(anon_model: AnonymizerModel, anon_study_uid: str) -> str | None
     Return LOINC LongCommonName prefix for a study, or None when unknown/mixed.
@@ -132,10 +138,10 @@ DescriptionEditSelection
     Validated Dataset selection for group description edit.
 
 series_description_cohort_key(modality: object | None) -> str | None
-    Return cohort key for series group edit (3D / XR / US / MG / TEXT).
+    Return cohort key for series group edit (3D / XR / US / MG / TEXT / PT / NM).
 
 study_ready_for_description_edit(anon_model: AnonymizerModel, anon_study_uid: str) -> bool
-    True when Dataset may open Set description for a study.
+    True when Dataset may open Set description for a study (AI Harmonize done, or PT/NM-only).
 
 classify_description_edit_selection(*, series_cohort_keys: Sequence[str | None] | None=None, study_loinc_prefixes: Sequence[str | None] | None=None) -> DescriptionEditSelection
     Validate a Dataset multi-select for Set description….
@@ -307,6 +313,8 @@ from anonymizer.utils.translate import _
 logger = logging.getLogger(__name__)
 
 _TSEG_EXEC_MODALITIES = frozenset({Modality.CT, Modality.MR})
+# Manual Set description from LOINC tables (no TotalSegmentator Harmonize path).
+_NUCLEAR_DESCRIPTION_EDIT_MODALITIES = frozenset({Modality.PT, Modality.NM})
 
 
 class HarmonizeProgressStage(StrEnum):
@@ -334,6 +342,35 @@ def _modality_executes_tseg(value: object | None) -> bool:
     """True when TotalSegmentator / geometry Harmonize runs for this modality."""
     modality = value if isinstance(value, Modality) else Modality.from_code(value if isinstance(value, str) else None)
     return modality in _TSEG_EXEC_MODALITIES
+
+
+def _resolve_modality(value: object | None) -> Modality | None:
+    """Normalize a modality code or enum to Modality."""
+    if isinstance(value, Modality):
+        return value
+    return Modality.from_code(value if isinstance(value, str) else None)
+
+
+def is_nuclear_description_edit_modality(modality: object | None) -> bool:
+    """True when modality uses manual LOINC Set description (PT/NM; no AI Harmonize)."""
+    return _resolve_modality(modality) in _NUCLEAR_DESCRIPTION_EDIT_MODALITIES
+
+
+def nuclear_loinc_prefix_for_edit(modality: object | None, *, hint: str = "") -> str | None:
+    """
+    LOINC LongCommonName prefix for a PT/NM series or study hint.
+
+    PET+CT fusion wording in the hint selects the PET+CT catalog; otherwise PT or NM.
+    """
+    resolved = _resolve_modality(modality)
+    if resolved is Modality.NM:
+        return "NM "
+    if resolved is not Modality.PT:
+        return None
+    text = (hint or "").upper()
+    if "PET" in text and "CT" in text:
+        return "PET+CT "
+    return "PT "
 
 
 def _2d_cohort_label(value: object | None) -> str | None:
@@ -1372,7 +1409,12 @@ def maybe_offer_study_description_harmonize(
 
 def _looks_like_loinc_study_description(name: str) -> bool:
     """True when name looks like a LOINC LongCommonName (modality-prefixed)."""
-    return bool(re.match(r"(?i)^(CT|MR|XR|US|MG)\b", (name or "").strip()))
+    return bool(
+        re.match(
+            r"(?i)^(CT|MR|XR|US|MG|PT|NM|PET\+CT|SPECT|SPECT\+CT)\b",
+            (name or "").strip(),
+        )
+    )
 
 
 def study_description_edit_offer(
@@ -1849,6 +1891,46 @@ def _planar_radlex_series_edit_choices(
     return choices
 
 
+def _nuclear_loinc_description_edit_choices(
+    *,
+    loinc_prefix: str,
+    current_description: str,
+    hint: str,
+    minimum: int,
+    full_catalog: bool,
+) -> list[str]:
+    """LOINC LongCommonName list for PT/NM manual Set description."""
+
+    current = (current_description or "").strip()
+    results: list[str] = []
+    seen: set[str] = set()
+
+    def _add(name: str) -> None:
+        text = (name or "").strip()
+        if text and text not in seen:
+            seen.add(text)
+            results.append(text)
+
+    if current:
+        _add(current)
+
+    for match in rank_loinc_study_descriptions_from_hint(
+        hint or current,
+        loinc_prefix=loinc_prefix,
+        top_n=max(minimum, NEAREST_DESCRIPTION_CHOICES) if not full_catalog else 80,
+    ):
+        _add(match.long_common_name)
+        if not full_catalog and len(results) >= max(minimum, NEAREST_DESCRIPTION_CHOICES):
+            return results
+
+    if full_catalog:
+        for _code, name in load_loinc_study_descriptions_for_prefix(loinc_prefix):
+            _add(name)
+        return results
+
+    return results
+
+
 def series_description_edit_choices(
     *,
     modality: object | None,
@@ -1858,12 +1940,12 @@ def series_description_edit_choices(
     anatomy_hint: str | None = None,
 ) -> list[str]:
     """
-    RadLex Playbook series description menu for Dataset edit.
+    Series description menu for Dataset edit.
 
-    Current value first, then modality-appropriate Playbook alternatives.
-    Unrecognized PHI does not invent anatomy. full_catalog expands the
-    modality-relevant Playbook catalog (filterable scroll dialog). anatomy_hint
-    (usually the parent study description) prioritizes matching body parts.
+    CT/MR and planar modalities use RadLex Playbook. PT/NM (no AI Harmonize)
+    use the LOINC study-description table filtered by modality prefix so users
+    can still set a standard name manually. anatomy_hint (usually the parent
+    study description) ranks nearest matches.
     """
 
     current = (current_description or "").strip()
@@ -1897,6 +1979,15 @@ def series_description_edit_choices(
             minimum=minimum,
             full_catalog=full_catalog,
         )
+    nuclear_prefix = nuclear_loinc_prefix_for_edit(modality, hint=hint or current)
+    if nuclear_prefix:
+        return _nuclear_loinc_description_edit_choices(
+            loinc_prefix=nuclear_prefix,
+            current_description=current,
+            hint=hint or current,
+            minimum=minimum,
+            full_catalog=full_catalog,
+        )
     return [current] if current else []
 
 
@@ -1920,7 +2011,20 @@ def study_loinc_prefix_for_edit(anon_model: AnonymizerModel, anon_study_uid: str
         cohort = next(iter(cohorts))
         assert cohort is not None
         return planar_loinc_prefix_for_series_descriptions(cohort, descriptions)
-    return None
+
+    # PT/NM-only studies: manual LOINC Set description (no AI Harmonize children).
+    modalities = anon_model.get_series_modalities(anon_study_uid)
+    nuclear = [m for m in modalities if is_nuclear_description_edit_modality(m)]
+    if not nuclear:
+        return None
+    keys = {series_description_cohort_key(m) for m in nuclear}
+    if len(keys) != 1 or None in keys:
+        return None
+    hint = (
+        (anon_model.get_study_harmonized_description(anon_study_uid) or "").strip()
+        or (anon_model.get_study_description(anon_study_uid) or "").strip()
+    )
+    return nuclear_loinc_prefix_for_edit(nuclear[0], hint=hint)
 
 
 def study_description_edit_choices(
@@ -2015,16 +2119,16 @@ class DescriptionEditSelection:
 
 
 def series_description_cohort_key(modality: object | None) -> str | None:
-    """Return cohort key for series group edit (3D / XR / US / MG / TEXT)."""
+    """Return cohort key for series group edit (3D / XR / US / MG / TEXT / PT / NM)."""
 
-    resolved = (
-        modality if isinstance(modality, Modality) else Modality.from_code(modality if isinstance(modality, str) else None)
-    )
+    resolved = _resolve_modality(modality)
     if resolved is None:
         return None
     cls = get_modality_catalog()[resolved].content_class
     if cls is ContentClass.D3 and _modality_executes_tseg(modality):
         return ContentClass.D3.value
+    if is_nuclear_description_edit_modality(resolved):
+        return resolved.value
     if cls is ContentClass.TEXT:
         return ContentClass.TEXT.value
     if is_2d_harmonize_modality(modality):
@@ -2036,11 +2140,14 @@ def study_ready_for_description_edit(anon_model: AnonymizerModel, anon_study_uid
     """
     True when Dataset may open Set description for a study.
 
-    Requires every tseg ∪ planar Harmonize child series to already be marked
-    harmonized — same readiness as maybe_offer_study_description_harmonize.
-    Report-only studies are not study-LOINC editable (anomaly / parent imaging study).
+    CT/MR/planar studies require every Harmonize-eligible child series to already
+    be marked harmonized. PT/NM-only studies (no AI Harmonize path) are ready
+    immediately for manual LOINC Set description. Report-only studies stay blocked.
     """
-    return anon_model.study_all_series_harmonized(anon_study_uid)
+    composition = _study_harmonize_composition(anon_model, anon_study_uid)
+    if composition is not StudyImagingComposition.NONE:
+        return anon_model.study_all_series_harmonized(anon_study_uid)
+    return study_loinc_prefix_for_edit(anon_model, anon_study_uid) is not None
 
 
 def classify_description_edit_selection(

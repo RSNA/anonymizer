@@ -54,6 +54,9 @@ Soft shots for clinician UX also include:
 - `MetadataAssessment` / `MetadataAssessment_DetectPHI` / `MetadataAssessment_RemovePHI` —
   Series View Metadata on `davidson_cxr` (Detect/Remove soft-fail when Embedded PHI
   models are missing; force-recapture after UI changes with `--force-shot`)
+- `Dataset_AfterMetadataPHI` — Metadata Replace PHI (Synthetic) + Save, then Dataset
+  showing refreshed Original Description / Embedded PHI columns
+- `ViewProjections_Multi` — Select All demo studies, S tiles, cohort burned-in text triage
 - `ReportTextReview` / `ReportTextReview_Metadata` — Encapsulated PDF
   `demo_report_pdf` (needs Clean Structured Content at import; soft-fail if text empty)
 

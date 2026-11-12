@@ -120,30 +120,42 @@ Tras [Armonizar](../08-process/03-harmonize-names/index.md) (Vista de Series o [
 
 Las sugerencias al pasar el ratón explican qué hará un clic o una acción de la barra (incluido por qué un botón está desactivado).
 
-**Clic simple** selecciona una fila. **Doble clic** en una descripción de estudio o serie (armonizada o no) abre **Establecer descripción**. **Esc** o clic fuera cancela un menú en línea abierto. **Shift+Clic** y **Cmd/Ctrl+Clic** solo cambian la selección — no abren el editor. Con varias series o estudios seleccionados (misma modalidad), **clic derecho** en la selección abre **Establecer descripción**.
+**Clic simple** selecciona una fila. **Doble clic** en una descripción de estudio o serie (armonizada o no) abre el diálogo **Establecer descripción**. **Esc** o **Cancelar** cierra el diálogo sin guardar. **Shift+Clic** y **Cmd/Ctrl+Clic** solo cambian la selección — no abren el editor. Con varias series o estudios seleccionados (misma modalidad), **clic derecho** en la selección abre el mismo diálogo para aplicar en grupo.
+
+### Diálogo Establecer descripción
+
+Es una ventana modal (no un menú en línea). Tiene una pista breve arriba, **Aplicar** / **Cancelar**, y uno de dos modos:
+
+| Modo | Cuándo | Qué hace |
+| --- | --- | --- |
+| **Lista de más cercanos** | Serie/estudio armonizado, o tras Expandir en LOINC | Filtre la lista, elija un nombre, **Aplicar** |
+| **Compose RadLex** | Solo series — **Compose RadLex…**, o apertura automática en series no armonizadas / en blanco | Elija campos Playbook de izquierda a derecha; la vista previa se actualiza; **Aplicar** |
 
 ### Descripción de serie (RadLex)
 
-1. Expanda el estudio y haga **doble clic** en la descripción de la **serie** en la primera columna (una fila seleccionada).
-2. Elija un nombre estilo RadLex / Playbook para **esa modalidad** (por ejemplo vistas XR: Chest AP → PA / Lat / Obl / 2V; CT/MR: plano o cambios de contraste).
-3. El árbol se actualiza al elegir un valor.
+1. Expanda el estudio y haga **doble clic** en la descripción armonizada de la **serie** (una fila seleccionada).
+2. En una serie **armonizada** verá la lista de coincidencias más cercanas para esa modalidad. Use el filtro si la lista es larga.
+3. Si la lista no encaja, pulse **Compose RadLex…** para construir el nombre campo a campo. Use **Show all codes** / **Closest codes** cuando el diálogo ofrezca ese conmutador.
+4. Una serie **no armonizada** o en blanco abre Compose directamente.
+5. **Aplicar** escribe Series Description, marca la fila armonizada y guarda un mapeo del proyecto cuando había un original.
 
-![Desplegable de descripción de serie del Conjunto de datos (RadLex)](shots/macos/Dataset_EditDescription.png)
+![Establecer descripción de serie — Compose RadLex](shots/macos/Dataset_EditDescription.png)
 
 ### Descripción de estudio (LOINC)
 
-1. Haga **doble clic** en la descripción del **estudio** en la primera columna (la fila padre).
-2. Elija un Long Common Name **LOINC** para **ese prefijo de modalidad** (XR / US / MG / CT / MR). Cada opción se muestra como `Long Common Name  (LoincNumber)`.
-3. La lista se ordena a partir de los nombres de serie armonizados del estudio cuando están disponibles (y conteo de vistas para CXR cuando se conoce), luego se completa con el catálogo LOINC de la misma modalidad.
-4. Aplicar una elección actualiza Study Description (y Procedure Code Sequence cuando hay un número LOINC).
+1. Armonice **todas** las series elegibles del estudio primero. El Conjunto de datos bloquea **Establecer descripción** del estudio hasta entonces.
+2. **Doble clic** en la descripción armonizada del **estudio** en la primera columna (la fila padre).
+3. El diálogo lista Long Common Names **LOINC** más cercanos para ese prefijo de modalidad (XR / US / MG / CT / MR), como `Long Common Name  (LoincNumber)`.
+4. Si la categoría es incorrecta, pulse **Show full LOINC catalog…** para cargar el catálogo completo de la modalidad (sigue siendo filtrable).
+5. **Aplicar** actualiza Study Description (y Procedure Code Sequence), marca el estudio armonizado y guarda un mapeo original→armonizado (con LOINC) para este proyecto.
 
-![Desplegable de descripción de estudio del Conjunto de datos (LOINC)](shots/macos/Dataset_EditStudyDescription.png)
+![Establecer descripción de estudio — coincidencias LOINC más cercanas](shots/macos/Dataset_EditStudyDescription.png)
 
 ### Establecer descripción (edición en grupo)
 
 1. Seleccione **solo series** o **solo estudios**, todos con la misma cohorte de modalidad.
-2. **Clic derecho** en cualquier fila seleccionada y elija un valor RadLex (serie) o LOINC (estudio).
-3. Esa cadena exacta se aplica a cada fila seleccionada. Las sugerencias al pasar el ratón cambian en modo de selección múltiple para indicarlo.
+2. **Clic derecho** en cualquier fila seleccionada para abrir **Establecer descripción** para todo el grupo (mismo diálogo que una sola fila).
+3. La cadena elegida se aplica a cada fila seleccionada. Las sugerencias al pasar el ratón cambian en modo de selección múltiple para indicarlo.
 
 ### Seleccionar similares
 
@@ -236,7 +248,7 @@ Use el Conjunto de datos para exportar una hoja que mapea identificadores PHI a 
 
 - El árbol anidado estudio → serie coincide con lo importado (`davidson_cxr`, `CT_Head_With_Contrast`, `us_rgb_single_frame`).
 - Clic derecho en estudio abre proyecciones; selección múltiple + **Ver Proyecciones** abre todos los estudios seleccionados; clic derecho en serie abre Vista de Series; selección múltiple + clic derecho abre **Establecer descripción**.
-- Doble clic en una descripción de **serie** o **estudio** (selección simple) abre RadLex / LOINC **Establecer descripción**; clic simple solo selecciona la fila; clics con modificador mantienen la selección múltiple.
+- Doble clic en una descripción de **serie** o **estudio** (selección simple) abre el diálogo **Establecer descripción** (lista RadLex / Compose, o lista LOINC / catálogo completo); clic simple solo selecciona la fila; clics con modificador mantienen la selección múltiple.
 - **S / M / L** cambia el tamaño del mosaico; la primera apertura puede construir `Projection.pkl` bajo cada serie.
 - `davidson_cxr` carga y se desplaza en Vista de Series.
 - Las columnas de IA se actualizan tras las herramientas de Procesar.

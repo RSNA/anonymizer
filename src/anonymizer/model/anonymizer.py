@@ -1367,6 +1367,15 @@ class AnonymizerModel:
         return [str(series.modality or "").strip().upper() for series in study.harmonizeable_series(ContentClass.D3)]
 
     @use_session(is_read_only_operation=True)
+    def get_series_modalities(self, anon_study_uid: str) -> list[str]:
+        """Return modality codes for every series in a study (including non-Harmonize)."""
+        stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
+        study = self.session.execute(stmt).scalar_one_or_none()
+        if study is None:
+            return []
+        return [str(series.modality or "").strip().upper() for series in (study.series or [])]
+
+    @use_session(is_read_only_operation=True)
     def get_2d_series_instance_count(self, anon_study_uid: str) -> int:
         """Sum instance counts for D2 Harmonize series (CXR view estimate from ORM)."""
         stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(

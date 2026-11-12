@@ -109,7 +109,7 @@ CR/DX, ultrasound, and mammography use a **separate** Harmonize path from CT/MR:
 - CT: SeriesDescription looks consistent for this head CT; Dataset **Harmonized** updates; after brain Yes, latch overlays draw on the middle slice.
 - CXR: Playbook **Source** names **Xp-Bodypart** / **CXp-Projection-Rotation** (or DICOM) with readable confidence evidence.
 - US: Playbook rows cite **DICOM metadata** / **RadLex Playbook**; suggested name matches ultrasound anatomy/mode.
-- After CT/MR Harmonize, Dashboard [Analytics](../../07-view/index.md#analytics) **Volumes** histograms fill for organs in the cohort (empty charts → Harmonize more series or **Refresh**).
+- After CT/MR Harmonize, Dashboard [Analytics](../../07-view/index.md#analytics) **Volumes** histograms fill for organs in the cohort (empty charts → Harmonize more series or **Refresh**). Use the normative band and [near / extreme outlier bars](../../07-view/index.md#analytics-outliers); [click a bar](../../07-view/index.md#analytics-click-to-dataset) to jump to those studies in Dataset.
 
 ## If it fails
 

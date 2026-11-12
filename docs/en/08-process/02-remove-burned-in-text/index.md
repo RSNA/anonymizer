@@ -43,6 +43,12 @@ Repository folder: `tests/controller/assets/test_dcm_files/` ([GitHub](https://g
 
 Import each folder into your project, then open the series in **Series View** from [Dataset](../../07-view/index.md).
 
+### Before Series View — triage with View Projections {#triage-with-projections}
+
+On a real cohort (not only the two demos), use Dataset **View Projections** on **Select All** or a multi-study selection to **see burned-in text across the full dataset** before you Detect one series at a time. CLAHE / edge tiles (planar) and max/mean strips (volumes) make overlays easy to spot; click a tile to open Series View. Full steps: [View — Scan a full dataset for burned-in (pixel) PHI](../../07-view/index.md#scan-pixel-phi-with-projections).
+
+Projections do not run OCR. They only help you decide **which** series need Pixel Detect / Remove or [AI Batch](../05-run-on-many-studies/index.md).
+
 ### Goal
 
 1. On `davidson_cxr`, detect burned-in text and **black out** PHI while keeping useful markers via the default whitelist.
@@ -105,6 +111,17 @@ On `davidson_cxr` with the default whitelist and **Remove Scope: Non-whitelisted
 | **Lenient** | Most forgiving — noisy text and short markers |
 
 Use a stricter setting if too much text is skipped; looser if useful markers keep getting boxed.
+
+#### How Detect decides (pixel) {#how-detect-decides-pixel}
+
+Detect runs OCR once with the image upright, then scores each box:
+
+1. **Whitelist** — a keeper match with score **above 0.8** always keeps the box. A weaker whitelist hit can still win when NER is less confident (about a **0.1** margin).
+2. **Match strictness floors** — Standard uses a NER floor of **0.30**; Lenient uses **0.20** (Strict/Exact stay tighter). Below the floor, NER labels are ignored for PHI-only scoping.
+3. **Clocks and dates** — on XR (CR/DX) and US, loose burn-in clocks such as `12 30 05` are normalized to `12:30:05` before NER so TIME entities score correctly. Separators that look like digit **8** are cleaned the same way. A string that already matches a known date or time pattern is kept when the model mislabels it.
+4. **Mammography** — the MG default whitelist keeps common view symbols so Detect does not treat them as PHI.
+
+You do not set these numbers in the UI; change behaviour with **Remove Scope**, **Whitelist match**, and keepers.
 
 #### 3. Review and whitelist keepers
 
@@ -209,6 +226,8 @@ Full steps (tree browse, **Detect PHI**, Blank vs Synthetic, **Remove PHI** / **
 
 ![Metadata after Replace PHI (Synthetic)](../../07-view/shots/macos/MetadataAssessment_RemovePHI.png)
 
+5. After **Save**, return to Dataset: **Original Description** and **Embedded PHI** refresh from the cleaned tags (see [View — Metadata](../../07-view/index.md#metadata-dicom-tags) and the Dataset-after-Save shot).
+
 The same Metadata dialog opens from Report Text Review (**Metadata** in the report toolbar) for the current report file.
 
 !!! note "Current image / file only"
@@ -230,6 +249,8 @@ Demo fixture: **`demo_report_pdf`** (synthetic radiology report) at `tests/contr
 6. Optional — click **Metadata** in the Report toolbar for tag cleanup on this file ([Metadata](#metadata) above).
 
 ![Report Text Review — Detect PHI on synthetic report](shots/macos/ReportTextReview.png)
+
+![Metadata opened from Report Text Review](shots/macos/ReportTextReview_Metadata.png)
 
 Synthetic values are derived deterministically from the project and the anonymized patient ID. Pixel removal always uses Black out / Blend; **Synthetic** applies to text only.
 

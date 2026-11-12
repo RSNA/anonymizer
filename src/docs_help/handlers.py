@@ -565,6 +565,129 @@ def shot_metadata_assessment(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
         close_toplevel(view)
 
 
+def shot_dataset_after_metadata_phi(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
+    """Metadata Replace PHI + Save on davidson_cxr, then Dataset with refreshed columns."""
+    import time
+    import tkinter as tk
+
+    from anonymizer.controller.ai.feature_availability import report_text_phi_ready
+    from anonymizer.view.project.dataset import parse_study_tree_iid
+    from anonymizer.view.series.metadata_assessment_dialog import MetadataAssessmentDialog
+
+    fixture = _fixture_from_deps(shot.deps) or "davidson_cxr"
+    # Dedicated project so Original Description / Embedded PHI show post-Save state clearly.
+    _open_clean_demo_project(ctx, dirname="project_view_after_metadata_phi")
+    view, _series = _series_view_for_fixture(ctx, fixture, clear_tseg=True)
+    dlg: Any = None
+    try:
+        settle(view, max(ctx.settle_ms, 1000))
+        ds = view._current_slice_dataset()
+        if ds is None:
+            raise RuntimeError("No slice dataset for Metadata Save → Dataset")
+        if not report_text_phi_ready():
+            if shot.soft:
+                return ShotResult(shot.id, "soft_fail", "ner_models_missing")
+            raise RuntimeError("Embedded PHI models not ready for Metadata Save → Dataset")
+        dataset_path = None
+        with contextlib.suppress(Exception):
+            dataset_path = view._current_slice_path()
+        project_dir = ctx.app.controller.model.storage_dir
+        whitelist: list[str] = []
+        if hasattr(view, "whitelist"):
+            with contextlib.suppress(Exception):
+                whitelist = [str(t) for t in view.whitelist.get(0, tk.END)]
+        dlg = MetadataAssessmentDialog(
+            view,
+            dataset=ds,
+            dataset_path=dataset_path,
+            project_dir=project_dir,
+            modality=str(getattr(ds, "Modality", "") or "") or None,
+            whitelist=whitelist,
+            match_mode=getattr(view, "_match_mode", None),
+        )
+        settle(dlg, max(ctx.settle_ms, 800))
+        wait_mapped(dlg)
+        with contextlib.suppress(Exception):
+            dlg._panel._show_private_var.set(True)
+        dlg._on_detect()
+        deadline = time.monotonic() + 180.0
+        while time.monotonic() < deadline:
+            settle(dlg, 200)
+            if not getattr(dlg, "_detecting", False):
+                break
+        else:
+            if shot.soft:
+                return ShotResult(shot.id, "soft_fail", "detect_timeout")
+            raise RuntimeError("Timed out waiting for Metadata Detect PHI")
+        settle(dlg, max(ctx.settle_ms, 400))
+        if not dlg._panel.has_phi():
+            if shot.soft:
+                return ShotResult(shot.id, "soft_fail", "no_phi_for_save")
+            raise RuntimeError("Metadata Detect PHI found nothing to save")
+        with contextlib.suppress(Exception):
+            labels = list(dlg._mode_labels)
+            if len(labels) >= 2:
+                dlg.mode_var.set(labels[1])
+                dlg._refresh_remove_label()
+        dlg._on_remove()
+        settle(dlg, max(ctx.settle_ms, 400))
+        dlg._on_save()
+        settle(dlg, max(ctx.settle_ms, 500))
+        with contextlib.suppress(Exception):
+            dlg._dirty = False
+        close_toplevel(dlg)
+        dlg = None
+        close_toplevel(view)
+        view = None
+        settle(ctx.app, max(ctx.settle_ms, 400))
+        if ctx.app.dataset_view is None or not ctx.app.dataset_view.winfo_exists():
+            ctx.app.view()
+            settle(ctx.app, max(ctx.settle_ms, 800))
+        dataset = ctx.app.dataset_view
+        if dataset is None:
+            raise RuntimeError("DatasetView failed after Metadata Save")
+        tree = dataset._tree
+        dataset._update_tree_from_phi_index()
+        settle(dataset, max(ctx.settle_ms, 400))
+        study_count = 0
+        series_count = 0
+        for iid in tree.get_children(""):
+            if parse_study_tree_iid(str(iid)) is None:
+                continue
+            study_count += 1
+            tree.item(iid, open=True)
+            for child in tree.get_children(iid):
+                series_count += 1
+                tree.item(child, open=True)
+        # Prefer davidson so Original Description / Embedded PHI are visible.
+        with contextlib.suppress(Exception):
+            _select_dataset_study(dataset, "davidson", "CXR", "CHEST")
+        # Widen Original Description so cleaned Study Description text is readable in docs.
+        with contextlib.suppress(Exception):
+            tree.column("original_description", width=360, minwidth=240)
+        geometry = _fit_dataset_view_for_capture(
+            dataset, study_count=max(study_count, 1), series_count=max(series_count, 1)
+        )
+        with contextlib.suppress(Exception):
+            dataset.geometry(geometry)
+        settle(dataset, max(ctx.settle_ms, 400))
+        dest = ctx.grab(dataset, shot, geometry=geometry, settle_ms=max(ctx.settle_ms, 700))
+        _trim_docs_png_bottom_chrome(dest, pad=8)
+        return ShotResult(
+            shot.id,
+            "ok",
+            f"after_metadata_save:{fixture}:{study_count} studies",
+            dest,
+        )
+    finally:
+        if dlg is not None:
+            with contextlib.suppress(Exception):
+                dlg._dirty = False
+            close_toplevel(dlg)
+        if view is not None:
+            close_toplevel(view)
+
+
 def shot_description_mappings(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     """Dataset Description Mappings dialog with seeded Series / Study rows."""
     from anonymizer.controller.ai.harmonize.description_mapping_store import (
@@ -1709,55 +1832,44 @@ def _prepare_davidson_edit_dataset(
     return view, anon_study_uid, series_path.name, series_path
 
 
-def _place_docs_description_dropdown(
-    view: Any,
-    *,
-    iid: str,
-    choices: list[str],
-    geometry: str,
-    list_width: int | None = None,
-) -> tuple[Any, Any]:
-    """Place Combobox + Listbox over a Dataset tree cell (no ttk::Post — avoids settle hangs)."""
-    import tkinter as tk
-    from tkinter import ttk
+def _open_set_description_without_wait(view: Any, open_fn: Any) -> Any:
+    """Run Dataset Set-description opener but keep the dialog open for capture.
 
-    tree = view._tree
-    tree.see(iid)
-    settle(view, 150)
-    bbox = tree.bbox(iid, "#0")
-    if not bbox:
-        raise RuntimeError(f"No bbox for tree row {iid}")
-    parent = tree.master
-    x, y, width, height = bbox
-    place_x = int(tree.winfo_x() + x)
-    place_y = int(tree.winfo_y() + y)
-    place_w = max(int(width), list_width or 180)
-    place_h = max(int(height), 22)
-    combo = ttk.Combobox(parent, values=choices, state="readonly", font=view._fonts.mono)
-    combo.set(choices[0])
-    combo.place(x=place_x, y=place_y, width=place_w, height=place_h)
-    combo.lift()
-    list_h = min(22 * len(choices), 176)
-    listbox = tk.Listbox(
-        parent,
-        height=max(1, min(len(choices), 8)),
-        font=view._fonts.mono,
-        activestyle="dotbox",
-        exportselection=False,
+    ``show_set_description_dialog`` normally blocks on ``wait_window``. Patch the
+    name Dataset imported (and the defining module) so capture can grab the live
+    ``SetDescriptionDialog``, then Cancel.
+    """
+    import anonymizer.view.project.dataset as dataset_mod
+    from anonymizer.view.ai import set_description_dialog as sdd
+    from anonymizer.view.ai.set_description_dialog import (
+        SetDescriptionDialog,
+        SetDescriptionDialogResult,
     )
-    for label in choices:
-        listbox.insert("end", label)
-    listbox.selection_set(0)
-    listbox.activate(0)
-    listbox.place(x=place_x, y=place_y + place_h, width=place_w, height=list_h)
-    listbox.lift()
-    settle(view, max(400, 200))
-    return combo, listbox
+
+    holder: list[Any] = []
+    original_sdd = sdd.show_set_description_dialog
+    original_dataset = dataset_mod.show_set_description_dialog
+
+    def _patched(*args: Any, **kwargs: Any) -> SetDescriptionDialogResult:
+        dialog = SetDescriptionDialog(*args, **kwargs)
+        holder.append(dialog)
+        settle(dialog, 400)
+        return SetDescriptionDialogResult()
+
+    sdd.show_set_description_dialog = _patched  # type: ignore[assignment]
+    dataset_mod.show_set_description_dialog = _patched  # type: ignore[assignment]
+    try:
+        open_fn()
+        if not holder:
+            raise RuntimeError("Set description dialog did not open")
+        return holder[0]
+    finally:
+        sdd.show_set_description_dialog = original_sdd  # type: ignore[assignment]
+        dataset_mod.show_set_description_dialog = original_dataset  # type: ignore[assignment]
 
 
 def shot_dataset_edit_description(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
-    """Dataset with inline RadLex series-description Combobox open on davidson CXR."""
-    from anonymizer.controller.ai.harmonize import series_description_edit_choices
+    """Set description dialog — Compose RadLex on a harmonized davidson CXR series."""
     from anonymizer.view.project.dataset import parse_series_tree_iid, series_tree_iid
 
     view, anon_study_uid, series_uid, _series_path = _prepare_davidson_edit_dataset(
@@ -1787,42 +1899,40 @@ def shot_dataset_edit_description(ctx: CaptureContext, shot: ShotSpec) -> ShotRe
     view._expanded_study_uids.add(anon_study_uid)
     view._update_tree_from_phi_index()
     tree.item(study_iid, open=True)
+    tree.selection_set(series_iid)
+    tree.focus(series_iid)
     settle(view, max(ctx.settle_ms, 300))
 
-    study_count = len(tree.get_children(""))
-    series_count = sum(len(tree.get_children(iid)) for iid in tree.get_children(""))
-    geometry = _fit_dataset_view_for_capture(view, study_count=study_count, series_count=max(series_count, 6))
-    try:
-        view.geometry(geometry)
-    except Exception:
-        pass
-    settle(view, max(ctx.settle_ms, 300))
-
-    pair = view._series_by_uid.get(series_uid)
-    modality = pair[1].modality if pair is not None else "CR"
-    choices = series_description_edit_choices(modality=modality, current_description="Chest AP")
-    if not choices:
-        raise RuntimeError("No RadLex series description choices for capture")
-    logger.info("Dataset_EditDescription: placing Combobox with %d choices", len(choices))
-
-    combo, listbox = _place_docs_description_dropdown(
+    dlg = _open_set_description_without_wait(
         view,
-        iid=series_iid,
-        choices=choices,
-        geometry=geometry,
+        lambda: view._edit_series_description(series_iid, series_uid),
     )
-    logger.info("Dataset_EditDescription: grabbing")
-    dest = ctx.grab(view, shot, geometry=geometry, settle_ms=max(ctx.settle_ms, 700))
-    with contextlib.suppress(Exception):
-        listbox.destroy()
-    with contextlib.suppress(Exception):
-        combo.destroy()
-    return ShotResult(shot.id, "ok", "RadLex series description dropdown on davidson_cxr", dest)
+    try:
+        wait_mapped(dlg)
+        # Harmonized series starts on the closest list — enter Compose for the docs shot.
+        if hasattr(dlg, "_enter_compose_mode") and not getattr(dlg, "_compose_mode", False):
+            with contextlib.suppress(Exception):
+                dlg._enter_compose_mode(full_vocab=False)
+            settle(dlg, max(ctx.settle_ms, 500))
+        try:
+            dlg.lift()
+            dlg.attributes("-topmost", True)
+        except Exception:
+            pass
+        settle(dlg, 300)
+        dest = ctx.grab(dlg, shot, settle_ms=max(ctx.settle_ms, 700))
+        try:
+            dlg.attributes("-topmost", False)
+        except Exception:
+            pass
+        return ShotResult(shot.id, "ok", "SetDescription Compose RadLex on davidson_cxr", dest)
+    finally:
+        with contextlib.suppress(Exception):
+            dlg._on_cancel()
 
 
 def shot_dataset_edit_study_description(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
-    """Dataset with inline LOINC study-description Combobox open on davidson CXR."""
-    from anonymizer.controller.ai.harmonize import study_description_edit_choices
+    """Set description dialog — closest LOINC list on a harmonized davidson CXR study."""
     from anonymizer.view.project.dataset import parse_study_tree_iid, study_tree_iid
 
     view, anon_study_uid, _series_uid, _series_path = _prepare_davidson_edit_dataset(
@@ -1849,47 +1959,31 @@ def shot_dataset_edit_study_description(ctx: CaptureContext, shot: ShotSpec) -> 
     view._expanded_study_uids.add(anon_study_uid)
     view._update_tree_from_phi_index()
     tree.item(study_iid, open=True)
+    tree.selection_set(study_iid)
+    tree.focus(study_iid)
     settle(view, max(ctx.settle_ms, 300))
 
-    study_count = len(tree.get_children(""))
-    series_count = sum(len(tree.get_children(iid)) for iid in tree.get_children(""))
-    geometry = _fit_dataset_view_for_capture(view, study_count=study_count, series_count=max(series_count, 8))
-    try:
-        view.geometry(geometry)
-    except Exception:
-        pass
-    settle(view, max(ctx.settle_ms, 300))
-
-    anon_model = ctx.app.controller.anonymizer.model  # type: ignore[union-attr]
-    pairs = study_description_edit_choices(anon_model, anon_study_uid, minimum=6, top_n=8)
-    if not pairs:
-        raise RuntimeError("No LOINC study description choices for capture")
-    labels: list[str] = []
-    for name, code in pairs:
-        label = f"{name}  ({code})" if code else name
-        if label not in labels:
-            labels.append(label)
-    # Prefer current XR Chest AP first if present.
-    current_label = next((label for label in labels if label.startswith("XR Chest AP")), labels[0])
-    labels = [current_label] + [label for label in labels if label != current_label]
-    # Keep the shot readable — show a short LOINC menu, not the full CSV pad.
-    labels = labels[:8]
-    logger.info("Dataset_EditStudyDescription: placing Combobox with %d LOINC choices", len(labels))
-
-    combo, listbox = _place_docs_description_dropdown(
+    dlg = _open_set_description_without_wait(
         view,
-        iid=study_iid,
-        choices=labels,
-        geometry=geometry,
-        list_width=420,
+        lambda: view._edit_study_description(study_iid, anon_study_uid),
     )
-    logger.info("Dataset_EditStudyDescription: grabbing")
-    dest = ctx.grab(view, shot, geometry=geometry, settle_ms=max(ctx.settle_ms, 700))
-    with contextlib.suppress(Exception):
-        listbox.destroy()
-    with contextlib.suppress(Exception):
-        combo.destroy()
-    return ShotResult(shot.id, "ok", "LOINC study description dropdown on davidson_cxr", dest)
+    try:
+        wait_mapped(dlg)
+        try:
+            dlg.lift()
+            dlg.attributes("-topmost", True)
+        except Exception:
+            pass
+        settle(dlg, 300)
+        dest = ctx.grab(dlg, shot, settle_ms=max(ctx.settle_ms, 700))
+        try:
+            dlg.attributes("-topmost", False)
+        except Exception:
+            pass
+        return ShotResult(shot.id, "ok", "SetDescription LOINC closest on davidson_cxr", dest)
+    finally:
+        with contextlib.suppress(Exception):
+            dlg._on_cancel()
 
 
 def _find_projection_view(ctx: CaptureContext, dataset_view: Any) -> Any:
@@ -1908,8 +2002,8 @@ def _find_projection_view(ctx: CaptureContext, dataset_view: Any) -> Any:
 
 
 def _open_dataset_for_projections(ctx: CaptureContext) -> Any:
-    _import_fixtures(ctx, "davidson_cxr", "CT_Head_With_Contrast", "us_rgb_single_frame")
-    _ensure_project(ctx)
+    """Open the clean View demos project (davidson + CT head + US) for Projection shots."""
+    _open_clean_demo_project(ctx, dirname="project_view_projections")
     if ctx.app.dataset_view is None or not ctx.app.dataset_view.winfo_exists():
         ctx.app.view()
         settle(ctx.app, max(ctx.settle_ms, 800))
@@ -2017,7 +2111,7 @@ def shot_view_projections(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
 
 
 def shot_view_projections_multi(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
-    """Dataset → multi-select all demo studies → View Projections (S tiles)."""
+    """Dataset → Select All demo studies → View Projections (S tiles) for pixel-PHI triage."""
     from anonymizer.view.project.dataset import parse_study_tree_iid
 
     view = _open_dataset_for_projections(ctx)
@@ -2025,6 +2119,7 @@ def shot_view_projections_multi(ctx: CaptureContext, shot: ShotSpec) -> ShotResu
     study_iids = [iid for iid in tree.get_children("") if parse_study_tree_iid(str(iid)) is not None]
     if len(study_iids) < 2:
         raise RuntimeError(f"Need ≥2 Dataset studies for multi projections, got {len(study_iids)}")
+    # Select All studies — same path clinicians use for full-dataset burned-in text scan.
     tree.selection_set(*study_iids)
     for iid in study_iids:
         tree.see(iid)
@@ -3207,6 +3302,7 @@ SHOT_HANDLERS: dict[str, Callable[[CaptureContext, ShotSpec], ShotResult]] = {
     "MetadataAssessment": shot_metadata_assessment,
     "MetadataAssessment_DetectPHI": shot_metadata_assessment,
     "MetadataAssessment_RemovePHI": shot_metadata_assessment,
+    "Dataset_AfterMetadataPHI": shot_dataset_after_metadata_phi,
     "DescriptionMappings": shot_description_mappings,
     "ReportTextReview": shot_report_text_review,
     "ReportTextReview_Metadata": shot_report_text_review,

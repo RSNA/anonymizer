@@ -120,30 +120,42 @@ Après [Harmoniser](../08-process/03-harmonize-names/index.md) (Vue des séries 
 
 Les info-bulles expliquent ce qu’un clic ou une action de barre d’outils fera (y compris pourquoi un bouton est désactivé).
 
-**Clic simple** sélectionne une ligne. **Double-clic** sur une description d’étude ou de série (harmonisée ou non) pour ouvrir **Définir la description**. **Esc** ou un clic ailleurs annule un menu inline ouvert. **Shift+Click** et **Cmd/Ctrl+Click** ne changent que la sélection — ils n’ouvrent pas l’éditeur. Avec plusieurs séries ou études sélectionnées (même modalité), **clic droit** sur la sélection pour ouvrir **Définir la description**.
+**Clic simple** sélectionne une ligne. **Double-clic** sur une description d’étude ou de série (harmonisée ou non) ouvre le dialogue **Définir la description**. **Esc** ou **Cancel** ferme le dialogue sans enregistrer. **Shift+Click** et **Cmd/Ctrl+Click** ne changent que la sélection — ils n’ouvrent pas l’éditeur. Avec plusieurs séries ou études sélectionnées (même modalité), **clic droit** sur la sélection pour ouvrir le même dialogue en application de groupe.
+
+### Dialogue Définir la description
+
+Le dialogue est une fenêtre modale (pas un menu inline). Il a toujours une courte indication en haut, **Apply** / **Cancel**, et l’un de deux modes :
+
+| Mode | Quand | Ce que vous faites |
+| --- | --- | --- |
+| **Liste des plus proches** | Série/étude harmonisée, ou après Expand sur LOINC | Filtrez la liste, choisissez un nom, **Apply** |
+| **Compose RadLex** | Séries seulement — **Compose RadLex…**, ou ouverture auto sur série non harmonisée / vide | Choisissez les champs Playbook de gauche à droite ; l’aperçu se met à jour ; **Apply** |
 
 ### Description de série (RadLex)
 
-1. Développez l’étude et **double-cliquez** la description de **série** dans la première colonne (une ligne sélectionnée).
-2. Choisissez un nom style RadLex / Playbook pour **cette modalité** (par exemple vues XR : Chest AP → PA / Lat / Obl / 2V ; CT/MR : plans ou échanges de contraste).
-3. L’arbre se rafraîchit lorsque vous choisissez une valeur.
+1. Développez l’étude et **double-cliquez** la description harmonisée de **série** (une ligne sélectionnée).
+2. Pour une série **harmonisée**, vous obtenez la liste des correspondances les plus proches pour cette modalité. Utilisez le filtre si la liste est longue.
+3. Si la liste est incorrecte, cliquez **Compose RadLex…** pour construire le nom champ par champ. Utilisez **Show all codes** / **Closest codes** lorsque le dialogue propose ce basculeur.
+4. Une série **non harmonisée** ou vide ouvre Compose directement.
+5. **Apply** écrit Series Description, marque la ligne harmonisée, et enregistre un mapping du projet s’il y avait un original.
 
-![Liste déroulante description de série Jeu de données (RadLex)](shots/macos/Dataset_EditDescription.png)
+![Définir la description de série — Compose RadLex](shots/macos/Dataset_EditDescription.png)
 
 ### Description d’étude (LOINC)
 
-1. **Double-cliquez** la description **étude** dans la première colonne (la ligne parente).
-2. Choisissez un Long Common Name **LOINC** pour **ce préfixe de modalité** (XR / US / MG / CT / MR). Chaque option s’affiche comme `Long Common Name  (LoincNumber)`.
-3. La liste est classée à partir des noms de séries harmonisés de l’étude lorsque disponibles (et du nombre de vues pour CXR lorsque connu), puis complétée depuis le catalogue LOINC de la même modalité.
-4. Appliquer un choix met à jour Study Description (et Procedure Code Sequence lorsqu’un numéro LOINC est présent).
+1. Harmonisez d’abord **toutes** les séries éligibles de l’étude. Jeu de données bloque **Définir la description** de l’étude tant que ce n’est pas fait.
+2. **Double-cliquez** la description harmonisée **étude** dans la première colonne (ligne parente).
+3. Le dialogue liste les Long Common Names **LOINC** les plus proches pour ce préfixe de modalité (XR / US / MG / CT / MR), sous la forme `Long Common Name  (LoincNumber)`.
+4. Si la catégorie est incorrecte, cliquez **Show full LOINC catalog…** pour charger le catalogue complet de la modalité (toujours filtrable).
+5. **Apply** met à jour Study Description (et Procedure Code Sequence), marque l’étude harmonisée, et enregistre un mapping original→harmonisé (avec LOINC) pour ce projet.
 
-![Liste déroulante description d’étude Jeu de données (LOINC)](shots/macos/Dataset_EditStudyDescription.png)
+![Définir la description d’étude — correspondances LOINC les plus proches](shots/macos/Dataset_EditStudyDescription.png)
 
 ### Définir la description (édition de groupe)
 
 1. Sélectionnez **uniquement des séries** ou **uniquement des études**, toutes avec la même cohorte de modalité.
-2. **Clic droit** sur n’importe quelle ligne sélectionnée et choisissez une valeur RadLex (série) ou LOINC (étude).
-3. Cette chaîne exacte est appliquée à chaque ligne sélectionnée. Les info-bulles changent en mode multi-sélection pour le dire.
+2. **Clic droit** sur n’importe quelle ligne sélectionnée pour ouvrir **Définir la description** pour tout le groupe (même dialogue qu’une seule ligne).
+3. La chaîne choisie est appliquée à chaque ligne sélectionnée. Les info-bulles changent en mode multi-sélection pour le dire.
 
 ### Sélectionner similaires
 
@@ -236,7 +248,7 @@ Utilisez Jeu de données pour exporter un tableur qui mappe les identifiants PHI
 
 - L’arbre imbriqué étude → série correspond à ce que vous avez importé (`davidson_cxr`, `CT_Head_With_Contrast`, `us_rgb_single_frame`).
 - Clic droit étude ouvre les projections ; multi-sélection + **Afficher les projections** ouvre toutes les études sélectionnées ; clic droit série ouvre Vue des séries ; multi-sélection + clic droit ouvre **Définir la description**.
-- Double-cliquer une description **série** ou **étude** (sélection unique) ouvre RadLex / LOINC **Définir la description** ; un clic simple sélectionne seulement la ligne ; les clics avec modificateur gardent la multi-sélection.
+- Double-cliquer une description **série** ou **étude** (sélection unique) ouvre le dialogue **Définir la description** (liste RadLex / Compose, ou liste LOINC / catalogue complet) ; un clic simple sélectionne seulement la ligne ; les clics avec modificateur gardent la multi-sélection.
 - **S / M / L** change la taille des tuiles ; la première ouverture peut construire `Projection.pkl` sous chaque série.
 - `davidson_cxr` se charge et défile dans Vue des séries.
 - Les colonnes IA se mettent à jour après les outils Traiter.

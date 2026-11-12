@@ -52,6 +52,34 @@ Analytics is for **review inside this project**. It does not change pixels or wh
 
 To **create or edit** segment labels on a series (latch TotalSegmentator chips, **New Segment**, Brush / Erase — **2D** on planar frames or **3D** on CT/MR), use Series View [Annotation](#annotation). Those labels are for review and export (NIfTI / DICOM-SEG), not for filling Analytics volume charts.
 
+### Normative ranges on volume histograms {#analytics-normative-ranges}
+
+Each organ volume chart is built against a **healthy-adult normative range** (millilitres) for that TotalSegmentator latch group — for example lungs, liver, or frontal lobe — not against the min–max of whatever is in your project.
+
+- A shaded band marks the normative window; dashed lines mark its low and high bounds (hover empty band area for **Norm: [lo..hi]**).
+- **Bin width** is a percentage of that stable normative span (plus a small pad). Extreme volumes do **not** stretch every bar thinner — the axis stays readable.
+- Head-limited series skip truncal / whole-column organs (spine, cord, chest/abdomen soft tissue) so whole-body norms are not applied to a partial FOV.
+- Custom user organs without a published range show **No normative range** and use a data-driven axis instead.
+
+### Two kinds of outliers {#analytics-outliers}
+
+Volumes outside the normative band are still plotted. The chart distinguishes:
+
+| Type | Where it appears | Colour cue | Meaning |
+| --- | --- | --- | --- |
+| **Near outlier** | Main axis, just outside the normative band (within a few bin widths of the padded span) | Muted / distinct bar colour (not the normal accent) | Mildly low or high vs the healthy band — still on the same scale as the cohort |
+| **Extreme outlier** | Separate **underflow** (far left) or **overflow** (far right) sentinel bin, with a small axis-break mark | Stronger (red) bar | Far outside the main axis — does not stretch the chart; hover shows the true ml values |
+
+Use near outliers to spot subtle cohort skew; use extreme bars to find rare or suspicious volumes (mask error, wrong FOV, or a true clinical extreme) without flattening the rest of the histogram.
+
+### Click a bar to open the outlier studies {#analytics-click-to-dataset}
+
+1. Hover a histogram bar — the tip shows count / ml (and for extreme bins, the true volumes). When the bar is clickable it also says **Click to select these patients in View Dataset**.
+2. **Click the bar.** Dashboard opens **View** (Dataset) if needed and selects the studies for every patient in that bin.
+3. From Dataset, open [View Projections](#view-projections-full-dataset) or Series View on the highlighted rows to inspect anatomy, Harmonize status, or re-run Process tools.
+
+This is the intended QA loop: spot an outlier band → jump to those studies → decide whether the volume is real, a FOV/mask issue, or needs Harmonize / Annotation review.
+
 ## Right-click in Dataset (most important)
 
 Hover tips on the tree say what a right-click will do. Selection follows the row under the pointer.
@@ -67,16 +95,36 @@ Right-click a **study** row (not a nested series) to open **Projection View** fo
 
 ![View Projections for a selected study](shots/macos/ViewProjections.png)
 
-### Multiple studies → View Projections
+### Multiple studies → View Projections {#view-projections-full-dataset}
 
-To browse several exams at once:
+To browse several exams at once — including the **whole project** when you need a cohort overview:
 
-1. In Dataset, select two or more **study** rows (Shift+Click and/or Cmd/Ctrl+Click), or use **Select All**.
+1. In Dataset, select two or more **study** rows (Shift+Click and/or Cmd/Ctrl+Click), or use **Select All** for every study in the project.
 2. Click **View Projections** in the Dataset toolbar.
 
 The window title becomes **View N Studies with M Series** (and **over P Pages** when the grid needs paging). Each series still gets one projection tile.
 
 ![View Projections for multiple selected studies](shots/macos/ViewProjections_Multi.png)
+
+#### Scan a full dataset for burned-in (pixel) PHI {#scan-pixel-phi-with-projections}
+
+**View Projections** on a large selection is the fastest way to **spot burned-in text before** you open Series View Detect or run [AI Batch Embedded PHI](../08-process/05-run-on-many-studies/index.md).
+
+Why it works for pixel PHI:
+
+- Each tile shows a compact **min / mean / max** (volumes) or **grayscale / CLAHE / edge** (single-frame) strip built from the series pixels — text overlays often stand out in CLAHE or edge panels, and bright labels show on max/mean strips.
+- You can page through **all series in the selection** without opening each study one by one.
+- Click a suspicious tile to jump straight into **Series View**, then run [Embedded PHI — Pixel](../08-process/02-remove-burned-in-text/index.md#pixel) Detect → Remove on that series.
+
+Suggested cohort pass:
+
+1. Import the cohort ([Search](../06-search/index.md)).
+2. Open **Dataset** → **Select All** (or select the studies you care about).
+3. Click **View Projections**. Use **S** if the grid is huge; use **M** or **L** when a tile looks suspicious.
+4. Mark or note series with visible names, dates, IDs, or site logos on the pixels.
+5. Open those series in Series View (or include them in AI Batch) for Detect / Remove.
+
+Projections are a **visual triage** — they do not run OCR or update the Embedded PHI column. Confirm and clean with Series View or batch.
 
 ### Projection tiles, S / M / L, and how they are built
 
@@ -114,7 +162,7 @@ This Dataset **View Projections** window is separate from the slice / min / mean
 
 That is the main way to open a series for review and for Process tools (Embedded PHI, Harmonize, Face blur).
 
-![Series View on davidson_cxr](../../08-process/02-remove-burned-in-text/shots/macos/Process_RemovePixel_Whitelist.png)
+![Series View reviewing davidson_cxr](shots/macos/SeriesView_Review.png)
 
 ### Which window opens?
 
@@ -132,31 +180,42 @@ After [Harmonize](../08-process/03-harmonize-names/index.md) (Series View or [AI
 
 Hover tooltips explain what a click or toolbar action will do (including why a button is disabled).
 
-**Single-click** selects a row. **Double-click** a study or series description (harmonized or not) to open **Set description**. **Esc** or click away cancels an open inline menu. **Shift+Click** and **Cmd/Ctrl+Click** only change selection — they do not open the editor. With several series or studies selected (same modality), **right-click** the selection to open **Set description**.
+**Single-click** selects a row. **Double-click** a study or series description (harmonized or not) to open the **Set description** dialog. **Esc** or **Cancel** closes the dialog without saving. **Shift+Click** and **Cmd/Ctrl+Click** only change selection — they do not open the editor. With several series or studies selected (same modality), **right-click** the selection to open the same dialog for a group apply.
+
+### Set description dialog
+
+The dialog is a modal window (not an inline menu). It always has a short hint at the top, **Apply** / **Cancel**, and one of two work modes:
+
+| Mode | When you see it | What you do |
+| --- | --- | --- |
+| **Closest list** | Harmonized series/study, or after Expand on LOINC | Filter the list, pick one name, **Apply** |
+| **Compose RadLex** | Series only — **Compose RadLex…**, or auto-open on unharmonized / blank series | Pick modality-specific Playbook fields left to right (for example Anatomy / View on XR, or body part / plane / contrast on CT/MR); preview updates; **Apply** |
 
 ### Series description (RadLex)
 
-1. Expand the study and **double-click** the **series** description in the first column (one row selected).
-2. Choose a RadLex / Playbook-style name for **that modality** (for example XR views: Chest AP → PA / Lat / Obl / 2V; CT/MR: plane or contrast swaps).
-3. The tree refreshes when you pick a value.
+1. Expand the study and **double-click** the **series** Harmonized Description (one row selected).
+2. For a **harmonized** series you get a **closest-matches** list for that modality (for example XR views). Use the filter box if the list is long.
+3. If the closest list is wrong, click **Compose RadLex…** to build the name field-by-field. Use **Show all codes** / **Closest codes** when the dialog offers that toggle.
+4. An **unharmonized** or blank series opens Compose directly so you pick each RadLex field instead of inventing free text.
+5. **Apply** writes Series Description, marks the row harmonized, and saves a project mapping when there was an original.
 
-![Dataset series description dropdown (RadLex)](shots/macos/Dataset_EditDescription.png)
+![Set series description — Compose RadLex](shots/macos/Dataset_EditDescription.png)
 
 ### Study description (LOINC)
 
 1. Harmonize **all** Harmonize-eligible series in the study first (CT/MR and planar cohorts as applicable). Dataset blocks study **Set description** until that is done.
 2. **Double-click** the **study** Harmonized Description in the first column (the parent row).
-3. Choose a **LOINC** Long Common Name for **that modality prefix** (XR / US / MG / CT / MR). Each option is shown as `Long Common Name  (LoincNumber)`.
-4. The list is ranked from the study’s sticky original / series context when available, then padded from the same modality’s LOINC catalog.
-5. Applying a choice updates Study Description (and Procedure Code Sequence), marks the study harmonized, and saves an original→harmonized mapping (with LOINC) for this project.
+3. The dialog lists **closest LOINC** Long Common Names for that modality prefix (XR / US / MG / CT / MR). Each option is shown as `Long Common Name  (LoincNumber)`.
+4. If the category is wrong, click **Show full LOINC catalog…** to load the full modality catalog (still filterable).
+5. **Apply** updates Study Description (and Procedure Code Sequence), marks the study harmonized, and saves an original→harmonized mapping (with LOINC) for this project.
 
-![Dataset study description dropdown (LOINC)](shots/macos/Dataset_EditStudyDescription.png)
+![Set study description — LOINC closest matches](shots/macos/Dataset_EditStudyDescription.png)
 
 ### Set description (group edit)
 
 1. Select **only series** or **only studies**, all with the same modality cohort.
-2. **Right-click** any selected row and pick one RadLex (series) or LOINC (study) value.
-3. That exact string is applied to every selected row. Hover tips change in multi-select mode to say so.
+2. **Right-click** any selected row to open **Set description** for the whole group (same dialog as a single row).
+3. The chosen string is applied to every selected row. Hover tips change in multi-select mode to say so.
 
 ### Select Similar
 
@@ -198,7 +257,10 @@ This is **not** the same as burned-in text on the picture. Pixel cleanup is [Emb
 3. Browse the tree (**Field Name**, **Tag**, **Content**). Use **Search** to narrow by field name; **Expand** / **Collapse** to open or close branches.
 4. Optional — click **Detect PHI** (needs [Embedded PHI](../03-ai-features-setup/index.md) models). The dialog opens centered on Series View, sized so field names are fully visible (up to 85% of the screen height when the tag list is long). On `davidson_cxr`, **Study Description** still holds free-text PHI such as `… for Douglas Davidson` — Detect colours those spans as **First name** / **Last name**. Highlighted rows use the entity color (same highlight style as Dataset View) and show their category in the Content cell; hovering Content with detected PHI shows the entity color chip (fields without PHI have no hover tooltip). Entity colours match Report Text Review ([OpenMed types](../08-process/02-remove-burned-in-text/index.md#named-entities-openmed)). The status line summarizes counts. Detection uses the same effective modality whitelist as burned-in text: whitelisted words, DICOM code values, UIDs, and dates are not sent to the model. The dialog title names the series it belongs to, and the completion status also reports private-tag UID/date fields: those are handled at import (UID remapping / date shift), not changed by Remove / Replace PHI.
 5. Optional — like Report Text Review: click a highlighted field to exclude it from cleanup, choose **Blank** or **Synthetic**, then click **Remove PHI** / **Replace PHI**. The tree updates; click **Save** to write the cleaned tags back to the current image file.
-6. Click **Close** when finished (you will be asked about unsaved changes).
+6. After **Save**, Dataset refreshes: **Original Description** shows the cleaned Study/Series Description text, and the **Embedded PHI** column updates from removed spans. Patient Lookup CSV adds **CleanedStudyDescription** / **CleanedSeriesDescription** after the sticky description columns (see [Create Patient Lookup CSV](#create-patient-lookup-csv)).
+7. Click **Close** when finished (you will be asked about unsaved changes).
+
+![Dataset after Metadata Save — Original Description refreshed](shots/macos/Dataset_AfterMetadataPHI.png)
 
 ![Metadata tree](shots/macos/MetadataAssessment.png)
 
@@ -220,6 +282,7 @@ The demo below uses **Synthetic**: set the menu to **Synthetic**, click **Replac
 
 - The tree shows the current slice’s tags without crashing on large sequences.
 - After Detect PHI, colored cells and a status rollup appear when leftover identifiers are found; **No PHI detected** is also a valid result on a clean demo.
+- After **Save**, Dataset **Original Description** and **Embedded PHI** refresh; Patient Lookup CSV can include CleanedStudyDescription / CleanedSeriesDescription.
 
 ### Mouse and keyboard (viewport) {#mouse-and-keyboard-viewport}
 
@@ -364,19 +427,20 @@ Use Dataset to export a spreadsheet that maps PHI identifiers to anonymized IDs 
 | PHI counterparts | `PHI-PatientName`, `PHI-PatientID`, `PHI-StudyDate`, `PHI-StudyUID`, `PHI-AccNo` |
 | Study / series | `DateOffset`, `Series`, `StudyInstances`, `StudyDescription`, `StudyHarmonizedDescription`, `Modality`, `SeriesDescription`, `SeriesHarmonizedDescription`, `Instances` |
 | AI status | `SeriesHarmonized`, `FaceBlurred`, `PixelPHIRemoved`, `PixelPHI` |
+| Cleaned descriptions (after metadata PHI removal) | `CleanedStudyDescription`, `CleanedSeriesDescription` (after the sticky Study/Series Description columns) |
 
 ## What good looks like
 
 - Nested study → series tree matches what you imported (`davidson_cxr`, `CT_Head_With_Contrast`, `us_rgb_single_frame`).
-- Right-click study opens projections; multi-select + **View Projections** opens all selected studies; right-click series opens Series View; multi-select + right-click opens **Set description**.
-- Double-clicking a **series** or **study** description (single selection) opens RadLex / LOINC **Set description**; single-click only selects the row; modifier clicks keep multi-select.
+- Right-click study opens projections; multi-select or **Select All** + **View Projections** opens the cohort grid (use it to [scan for burned-in pixel PHI](#scan-pixel-phi-with-projections)); right-click series opens Series View; multi-select + right-click opens **Set description**.
+- Double-clicking a **series** or **study** description (single selection) opens the **Set description** dialog (RadLex list / Compose, or LOINC list / full catalog); single-click only selects the row; modifier clicks keep multi-select.
 - **S / M / L** changes tile size; first open may build `Projection.pkl` under each series.
 - `davidson_cxr` loads and scrolls in Series View; Ctrl/Cmd+wheel zooms, middle-mouse or Shift+left-drag pans, **F** / **Fit** resets.
 - **Metadata** opens the tag tree; **Detect PHI** highlights leftover identifiers when Embedded PHI models are ready.
 - After Harmonize on CT/MR, **View** multi-latches overlays and **Annotate** paints one selected segment (Brush / Erase, wheel for size). On CR/DX/US/MG, **Annotate** is available without Harmonize (pixel-space ROIs).
 - AI columns update after Process tools.
 - **Create Patient Lookup** writes a CSV under `private/phi_export/` that opens with the expected columns.
-- Dashboard **Analytics** expands when the project has studies (organ volumes after Harmonize — see [Analytics](#analytics)).
+- Dashboard **Analytics** expands when the project has studies (organ volumes after Harmonize — see [Analytics](#analytics)). Volume charts show a normative band; near outliers sit on the main axis and extreme outliers in underflow/overflow bins; clicking a bar selects those patients in Dataset.
 
 ## If it fails
 

@@ -9,6 +9,15 @@ TRACE_PREFIX = "ProjectionView startup: "
 
 STARTUP_STEPS = (
     "widgets_done",
+    "loading_shell",
+    "populate_start",
+    "populate_done",
+    "deiconify",
+)
+
+# Sync path (few series + Projection.pkl cache) skips the loading shell.
+STARTUP_STEPS_SYNC = (
+    "widgets_done",
     "populate_start",
     "populate_done",
     "deiconify",
@@ -47,15 +56,22 @@ def parse_projection_view_startup_trace(caplog) -> list[TraceStep]:
 
 def assert_projection_startup_trace(records: list[TraceStep]) -> None:
     steps = [record.step for record in records]
-    for index in range(len(steps) - len(STARTUP_STEPS) + 1):
-        if steps[index : index + len(STARTUP_STEPS)] == list(STARTUP_STEPS):
-            matched = records[index : index + len(STARTUP_STEPS)]
+    matched: list[TraceStep] | None = None
+    for candidate in (STARTUP_STEPS, STARTUP_STEPS_SYNC):
+        for index in range(len(steps) - len(candidate) + 1):
+            if steps[index : index + len(candidate)] == list(candidate):
+                matched = records[index : index + len(candidate)]
+                break
+        if matched is not None:
             break
     else:
-        pytest.fail(f"projection startup trace missing ordered steps {STARTUP_STEPS}; got {steps}")
+        pytest.fail(
+            f"projection startup trace missing ordered steps {STARTUP_STEPS} "
+            f"or {STARTUP_STEPS_SYNC}; got {steps}"
+        )
 
-    for record in matched[:-1]:
-        if "viewable" in record.fields:
+    for record in matched:
+        if record.step in {"populate_start", "populate_done"} and "viewable" in record.fields:
             assert record.fields["viewable"] == "0", record.step
 
     deiconify = matched[-1]

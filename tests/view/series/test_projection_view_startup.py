@@ -2,6 +2,7 @@
 
 import contextlib
 import logging
+import time
 import tkinter as tk
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -48,6 +49,22 @@ def _build_projection_fixture(tmp_path: Path) -> tuple[Path, list[PHI_IndexRecor
     return base_dir, [_study_record()]
 
 
+def _wait_projection_ready(view: ProjectionView, tk_root, *, timeout_s: float = 60.0) -> None:
+    """Pump the UI until ProjectionView finishes its async loading shell (if any)."""
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if not getattr(view, "_loading", False) and view.winfo_viewable():
+            pump(view, steps=2)
+            if not getattr(view, "_loading", False):
+                return
+        pump(view, steps=5)
+        pump(tk_root, steps=2)
+        time.sleep(0.02)
+    raise AssertionError(
+        f"ProjectionView did not finish loading in time (loading={getattr(view, '_loading', None)})"
+    )
+
+
 def _open_projection_view(
     tk_root,
     mock_controller: MagicMock,
@@ -67,7 +84,7 @@ def _open_projection_view(
             base_dir=base_dir,
             phi_records=phi_records,
         )
-        pump(view, steps=20)
+        _wait_projection_ready(view, tk_root)
     return view
 
 
@@ -112,7 +129,7 @@ def test_projection_view_populates_while_hidden(
         base_dir=base_dir,
         phi_records=phi_records,
     )
-    pump(view, steps=20)
+    _wait_projection_ready(view, tk_root)
 
     assert visible_during_populate
     assert all(value == 0 for value in visible_during_populate)
@@ -143,7 +160,7 @@ def test_projection_view_populates_once_on_open(
         base_dir=base_dir,
         phi_records=phi_records,
     )
-    pump(view, steps=20)
+    _wait_projection_ready(view, tk_root)
 
     assert populate_calls == [1]
     view.destroy()
@@ -178,11 +195,11 @@ def test_projection_view_deiconify_after_populate(
         base_dir=base_dir,
         phi_records=phi_records,
     )
-    pump(view, steps=20)
+    _wait_projection_ready(view, tk_root)
 
+    # Loading shell may deiconify first; grid populate must still precede final show.
     populate_index = events.index("populate")
-    deiconify_index = events.index("deiconify")
-    assert populate_index < deiconify_index
+    assert "deiconify" in events[populate_index:]
     view.destroy()
     pump(tk_root)
 
@@ -208,7 +225,35 @@ def test_dataset_open_projection_view_opens_hidden_then_visible(
     DatasetView._open_projection_view(parent, phi_records)
 
     view = parent._projection_views[(STUDY_UID,)]
+    _wait_projection_ready(view, tk_root)
     assert view.winfo_viewable()
     assert len(view._pv_frame.winfo_children()) > 0
+    view.destroy()
+    pump(tk_root)
+
+
+def test_projection_view_loading_shell_restores_content_geometry(
+    tk_root,
+    mock_controller: MagicMock,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """After the loading shell, the window must grow past the shell size so thumbnails show."""
+    base_dir, phi_records = _build_projection_fixture(tmp_path)
+    monkeypatch.setattr(ProjectionView, "PROGRESS_SERIES_THRESHOLD", 1)
+
+    view = ProjectionView(
+        tk_root,
+        controller=mock_controller,
+        base_dir=base_dir,
+        phi_records=phi_records,
+    )
+    _wait_projection_ready(view, tk_root)
+
+    assert not view._loading
+    assert view._loading_shell is None
+    assert len(view._pv_frame.winfo_children()) > 0
+    assert view.winfo_width() > ProjectionView.LOADING_SHELL_WIDTH
+    assert view.winfo_height() > ProjectionView.LOADING_SHELL_HEIGHT
     view.destroy()
     pump(tk_root)

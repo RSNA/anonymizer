@@ -30,8 +30,10 @@ from anonymizer.controller.ai.batch_process import (
     format_batch_workflow_log_line,
     format_exclude_areas_modality_detail,
     format_modality_whitelist_preview,
+    format_clean_descriptors_series_message,
     format_remove_pixel_phi_instance_detail,
     format_remove_pixel_phi_series_message,
+    format_report_phi_series_message,
     harmonize_skip_counts_as_complete,
     modalities_in_selected_studies,
     modalities_with_whitelist_terms,
@@ -345,6 +347,42 @@ def test_format_remove_pixel_phi_series_message_uses_counts_not_phi_text() -> No
     assert "pixels" not in message
     assert "Name" not in message
     assert "ID" not in message
+
+
+def test_format_remove_pixel_phi_series_message_no_detections() -> None:
+    message = format_remove_pixel_phi_series_message(
+        modified_count=0,
+        total=667,
+        texts_removed=[],
+        removal_mode=PixelPhiRemovalMode.BLACKOUT,
+        ocr_remove_mode=OcrRemoveMode.NON_WHITELISTED,
+    )
+    assert message == "No burnt-in text detected (667 instances scanned)"
+
+
+def test_format_clean_descriptors_series_message_counts_only() -> None:
+    message = format_clean_descriptors_series_message(
+        modified_count=638,
+        total=667,
+        texts_removed=["_", "_", "_00002", "_00002"],
+    )
+    assert message.startswith("Clean Descriptors")
+    assert "638/667 instance(s)" in message
+    assert "2 PHI removed" in message
+    assert "_" not in message
+    assert ".dcm" not in message
+
+
+def test_format_report_phi_series_message_counts_only() -> None:
+    message = format_report_phi_series_message(
+        modified_count=1,
+        total=1,
+        texts_removed=["John Doe", "John Doe"],
+    )
+    assert "Report PHI removed" in message
+    assert "1/1 instance(s)" in message
+    assert "1 PHI removed" in message
+    assert "John" not in message
 
 
 def test_format_remove_pixel_phi_instance_detail_inpainted() -> None:
@@ -1216,6 +1254,63 @@ def test_apply_remove_pixel_phi_series_phi_only_and_named_zones(
     assert mock_remove.call_args.kwargs["use_exclude_areas"] is True
     assert details
     assert details[0] == "US: 1 exclude area"
+    assert any("instances scanned" in line for line in details)
+
+
+@patch("anonymizer.controller.ai.batch_process.apply_instance_embedded_phi_for_dcm")
+@patch("anonymizer.controller.ai.batch_process._scrub_series_descriptors")
+@patch("anonymizer.controller.ai.batch_process.remove_pixel_phi")
+@patch("anonymizer.controller.ai.batch_process.stackable_dicom_paths")
+@patch("anonymizer.controller.ai.batch_process._load_series_dataset")
+def test_apply_remove_pixel_phi_series_logs_detections_and_series_summary_only(
+    mock_load: MagicMock,
+    mock_stackable: MagicMock,
+    mock_remove: MagicMock,
+    mock_scrub: MagicMock,
+    _mock_embed: MagicMock,
+) -> None:
+    """Quiet slices stay out of the log; detections + one series summary are logged."""
+    ds = _batch_test_dataset(modality="CT")
+    mock_load.return_value = ds
+    paths = [Path(f"/tmp/slice_{i}.dcm") for i in range(1, 6)]
+    mock_stackable.return_value = paths
+    mock_remove.side_effect = [
+        (False, [], 0),
+        (True, ["Name", "ID"], 120),
+        (False, [], 0),
+        (True, ["Name"], 40),
+        (False, [], 0),
+    ]
+    def _scrub_side_effect(*_args, **kwargs):
+        on_log = kwargs.get("on_log_detail")
+        if on_log is not None:
+            on_log(
+                format_clean_descriptors_series_message(
+                    modified_count=3,
+                    total=5,
+                    texts_removed=["_", "_", "_00002"],
+                )
+            )
+        return 3, ["_", "_", "_00002"]
+
+    mock_scrub.side_effect = _scrub_side_effect
+    details: list[str] = []
+
+    outcome = _apply_remove_pixel_phi_series(
+        Path("/tmp/series"),
+        anon_model=_pending_anon_model(),
+        ocr_reader=MagicMock(),
+        on_log_detail=details.append,
+        metadata_enabled=True,
+    )
+
+    assert outcome.status == "ok"
+    assert "2/5 instance(s)" in outcome.message
+    assert "2 PHI removed" in outcome.message
+    assert not any(".dcm" in line for line in details)
+    assert sum(1 for line in details if line.startswith("Instance ")) == 2
+    assert any(line.startswith("PHI removed") and "2/5 instance(s)" in line for line in details)
+    assert any(line.startswith("Clean Descriptors") and "3/5 instance(s)" in line for line in details)
 
 
 @patch("anonymizer.controller.ai.batch_process._load_harmonize_series_dataset")

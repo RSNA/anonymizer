@@ -128,6 +128,8 @@ def test_classify_and_group_series_choices() -> None:
     assert series_description_cohort_key("SR") == "TEXT"
     assert series_description_cohort_key("DOC") == "TEXT"
     assert series_description_cohort_key("PDF") == "TEXT"
+    assert series_description_cohort_key("PT") == "PT"
+    assert series_description_cohort_key("NM") == "NM"
     info = classify_description_edit_selection(series_cohort_keys=["XR", "XR"])
     assert info.kind == "series"
     mixed = classify_description_edit_selection(series_cohort_keys=["XR", "US"])
@@ -298,10 +300,45 @@ def test_report_only_study_skips_study_loinc_path() -> None:
     model.study_harmonize_composition.return_value = StudyImagingComposition.NONE
     model.study_all_series_harmonized.return_value = False
     model.get_study_harmonized_description.return_value = None
+    model.get_series_modalities.return_value = ["SR"]
 
     assert study_ready_for_description_edit(model, "study-sr") is False
     assert study_loinc_prefix_for_edit(model, "study-sr") is None
     assert maybe_offer_study_description_harmonize(model, "study-sr") is None
+
+
+def test_pt_only_study_manual_loinc_description_edit() -> None:
+    """PT-only studies (no CT Harmonize) open Set description from the LOINC table."""
+    from anonymizer.controller.ai.harmonize.pipeline import (
+        nuclear_loinc_prefix_for_edit,
+        series_description_cohort_key,
+        series_description_edit_choices,
+        study_loinc_prefix_for_edit,
+        study_ready_for_description_edit,
+    )
+
+    assert series_description_cohort_key("PT") == "PT"
+    assert nuclear_loinc_prefix_for_edit("PT", hint="PET-CT STUDY for Shelly Wallace") == "PET+CT "
+    assert nuclear_loinc_prefix_for_edit("PT", hint="Whole body PET") == "PT "
+
+    model = MagicMock()
+    model.study_harmonize_composition.return_value = StudyImagingComposition.NONE
+    model.study_all_series_harmonized.return_value = False
+    model.get_series_modalities.return_value = ["PT"]
+    model.get_study_harmonized_description.return_value = None
+    model.get_study_description.return_value = "PET-CT STUDY for Shelly Wallace"
+
+    assert study_ready_for_description_edit(model, "study-pt") is True
+    assert study_loinc_prefix_for_edit(model, "study-pt") == "PET+CT "
+
+    choices = series_description_edit_choices(
+        modality="PT",
+        current_description="PET-CT SERIES",
+        anatomy_hint="PET-CT STUDY for Shelly Wallace",
+        full_catalog=False,
+    )
+    assert choices
+    assert any(name.startswith("PET+CT") or name.startswith("PT ") for name in choices)
 
 
 def test_series_description_edit_choices_raw_mr_not_in_options() -> None:

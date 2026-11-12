@@ -32,6 +32,7 @@ Use the top tabs: **Setup** (chapters 1–5), **Use** (6–9), **Headless** (10)
 | Download AI models | [AI Features setup](03-ai-features-setup/index.md) |
 | Import a folder or search PACS | [Search](06-search/index.md) |
 | Browse Dataset / open a series | [View](07-view/index.md) |
+| Scan a full Dataset for burned-in text via projections | [View — Scan for pixel PHI](07-view/index.md#scan-pixel-phi-with-projections) |
 | Clean burned-in text / Harmonize / Face blur | [Process](08-process/index.md) |
 | Send studies out | [Send](09-send/index.md) |
 | Review DICOM Basic Profile / E.1.3 claims | [DICOM Conformance Statement](dicom-conformance-statement.md) |

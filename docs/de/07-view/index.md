@@ -120,30 +120,42 @@ Nach [Harmonisieren](../08-process/03-harmonize-names/index.md) (Serienansicht o
 
 Hover-Tooltips erklären, was ein Klick oder eine Symbolleistenaktion tut (einschließlich warum eine Schaltfläche deaktiviert ist).
 
-**Einfachklick** wählt eine Zeile. **Doppelklick** auf eine Studien- oder Serienbeschreibung (harmonisiert oder nicht) öffnet **Set description**. **Esc** oder Wegklicken bricht ein offenes Inline-Menü ab. **Shift+Klick** und **Cmd/Ctrl+Klick** ändern nur die Auswahl — sie öffnen den Editor nicht. Bei mehreren ausgewählten Serien oder Studien (gleiche Modalität) **Rechtsklick** auf die Auswahl, um **Set description** zu öffnen.
+**Einfachklick** wählt eine Zeile. **Doppelklick** auf eine Studien- oder Serienbeschreibung (harmonisiert oder nicht) öffnet den Dialog **Set description**. **Esc** oder **Cancel** schließt den Dialog ohne Speichern. **Shift+Klick** und **Cmd/Ctrl+Klick** ändern nur die Auswahl — sie öffnen den Editor nicht. Bei mehreren ausgewählten Serien oder Studien (gleiche Modalität) **Rechtsklick** auf die Auswahl, um denselben Dialog für eine Gruppenanwendung zu öffnen.
+
+### Dialog Set description
+
+Der Dialog ist ein Modal-Fenster (kein Inline-Menü). Oben steht ein kurzer Hinweis, dazu **Apply** / **Cancel**, und einer von zwei Arbeitsmodi:
+
+| Modus | Wann | Was Sie tun |
+| --- | --- | --- |
+| **Nächstliegende Liste** | Harmonisierte Serie/Studie, oder nach Expand bei LOINC | Liste filtern, einen Namen wählen, **Apply** |
+| **Compose RadLex** | Nur Serien — **Compose RadLex…**, oder Auto-Öffnen bei unharmonisierten / leeren Serien | Playbook-Felder von links nach rechts wählen; Vorschau aktualisiert sich; **Apply** |
 
 ### Serienbeschreibung (RadLex)
 
-1. Studie aufklappen und **Doppelklick** auf die **Serien**-Beschreibung in der ersten Spalte (eine Zeile ausgewählt).
-2. Einen RadLex-/Playbook-Stil-Namen für **diese Modalität** wählen (z. B. XR-Ansichten: Chest AP → PA / Lat / Obl / 2V; CT/MR: Ebene oder Kontrastwechsel).
-3. Der Baum aktualisiert sich, wenn Sie einen Wert wählen.
+1. Studie aufklappen und **Doppelklick** auf die **Serien**-Harmonized Description (eine Zeile ausgewählt).
+2. Bei einer **harmonisierten** Serie erscheint die Liste der nächsten Treffer für diese Modalität. Bei langen Listen den Filter nutzen.
+3. Passt die Liste nicht, **Compose RadLex…** tippen und den Namen feldweise bauen. **Show all codes** / **Closest codes**, wenn der Dialog den Umschalter anbietet.
+4. Eine **unharmonisierte** oder leere Serie öffnet Compose direkt.
+5. **Apply** schreibt Series Description, markiert die Zeile als harmonisiert und speichert ein Projekt-Mapping, wenn es ein Original gab.
 
-![Datensatz-Dropdown Serienbeschreibung (RadLex)](shots/macos/Dataset_EditDescription.png)
+![Serienbeschreibung setzen — Compose RadLex](shots/macos/Dataset_EditDescription.png)
 
 ### Studienbeschreibung (LOINC)
 
-1. **Doppelklick** auf die **Studien**-Beschreibung in der ersten Spalte (die Elternzeile).
-2. Einen **LOINC** Long Common Name für **dieses Modalitätspräfix** wählen (XR / US / MG / CT / MR). Jede Option erscheint als `Long Common Name  (LoincNumber)`.
-3. Die Liste wird aus den harmonisierten Seriennamen der Studie gerankt, wenn verfügbar (und Ansichtsanzahl für CXR, wenn bekannt), dann aus dem LOINC-Katalog derselben Modalität aufgefüllt.
-4. Das Anwenden einer Wahl aktualisiert Study Description (und Procedure Code Sequence, wenn eine LOINC-Nummer vorhanden ist).
+1. Zuerst **alle** Harmonize-fähigen Serien der Studie harmonisieren. Der Datensatz blockiert Studien-**Set description**, bis das erledigt ist.
+2. **Doppelklick** auf die **Studien**-Harmonized Description in der ersten Spalte (Elternzeile).
+3. Der Dialog listet die nächsten **LOINC** Long Common Names für dieses Modalitätspräfix (XR / US / MG / CT / MR) als `Long Common Name  (LoincNumber)`.
+4. Ist die Kategorie falsch, **Show full LOINC catalog…** tippen, um den vollständigen Modalitätskatalog zu laden (weiterhin filterbar).
+5. **Apply** aktualisiert Study Description (und Procedure Code Sequence), markiert die Studie als harmonisiert und speichert ein Original→harmonisiert-Mapping (mit LOINC) für dieses Projekt.
 
-![Datensatz-Dropdown Studienbeschreibung (LOINC)](shots/macos/Dataset_EditStudyDescription.png)
+![Studienbeschreibung setzen — nächste LOINC-Treffer](shots/macos/Dataset_EditStudyDescription.png)
 
 ### Set description (Gruppenbearbeitung)
 
 1. **Nur Serien** oder **nur Studien** auswählen, alle mit derselben Modalitätskohorte.
-2. **Rechtsklick** auf eine ausgewählte Zeile und einen RadLex- (Serie) oder LOINC-Wert (Studie) wählen.
-3. Genau dieser String wird auf jede ausgewählte Zeile angewendet. Hover-Tipps ändern sich im Mehrfachauswahlmodus entsprechend.
+2. **Rechtsklick** auf eine ausgewählte Zeile, um **Set description** für die ganze Gruppe zu öffnen (derselbe Dialog wie bei einer Einzelzeile).
+3. Der gewählte String wird auf jede ausgewählte Zeile angewendet. Hover-Tipps ändern sich im Mehrfachauswahlmodus entsprechend.
 
 ### Select Similar
 
@@ -236,7 +248,7 @@ Nutzen Sie den Datensatz, um eine Tabelle zu exportieren, die PHI-Kennungen auf 
 
 - Der verschachtelte Studien → Serien-Baum entspricht dem Importierten (`davidson_cxr`, `CT_Head_With_Contrast`, `us_rgb_single_frame`).
 - Rechtsklick auf Studie öffnet Projektionen; Mehrfachauswahl + **Projektionen anzeigen** öffnet alle ausgewählten Studien; Rechtsklick auf Serie öffnet Serienansicht; Mehrfachauswahl + Rechtsklick öffnet **Set description**.
-- Doppelklick auf eine **Serien**- oder **Studien**-Beschreibung (Einzelauswahl) öffnet RadLex-/LOINC-**Set description**; Einfachklick wählt nur die Zeile; Modifier-Klicks behalten die Mehrfachauswahl.
+- Doppelklick auf eine **Serien**- oder **Studien**-Beschreibung (Einzelauswahl) öffnet den Dialog **Set description** (RadLex-Liste / Compose, oder LOINC-Liste / voller Katalog); Einfachklick wählt nur die Zeile; Modifier-Klicks behalten die Mehrfachauswahl.
 - **S / M / L** ändert die Kachelgröße; beim ersten Öffnen kann `Projection.pkl` unter jeder Serie entstehen.
 - `davidson_cxr` lädt und scrollt in der Serienansicht.
 - KI-Spalten aktualisieren sich nach Verarbeiten-Werkzeugen.

@@ -57,8 +57,10 @@ uv run python -m docs_help --language en_US --force --only Welcome
   - **8.4** Batch → options + running dialog with both fixtures selected in Dataset
 - Soft View / Dashboard demos:
   - **Metadata** → `davidson_cxr` Series View → Metadata tree / Detect PHI / Remove PHI (`MetadataAssessment`, `MetadataAssessment_DetectPHI`, `MetadataAssessment_RemovePHI`); Detect/Remove need Embedded PHI models
+  - **Dataset after Metadata Save** → Replace PHI (Synthetic) + Save, then Dataset with refreshed Original Description / Embedded PHI (`Dataset_AfterMetadataPHI`)
   - **Description Mappings** → Dataset toolbar dialog with seeded Series/Study rows (`DescriptionMappings`)
   - **Analytics** → after import; Dashboard expand Analytics board (`Dashboard_Analytics` under View); organ-volume tiles fill after Harmonize on CT/MR
+  - **View Projections (multi)** → Select All demo studies → S tiles for cohort burned-in text triage (`ViewProjections_Multi`)
   - Create project:
   - **De-identification Options** → New Project Settings → options dialog with Basic preset + Basic Profile help (`DeidentificationOptions`)
 - Soft Process report demo:
@@ -70,4 +72,4 @@ uv run python -m docs_help --language en_US --force --only Welcome
 
 ## Priority shots (V19)
 
-Welcome; AI Features; Create project (File → New Project menu on Welcome + settings + De-identification Options + Anonymizer Script Editor + Lookup Table); Dashboard; Search (File → Import menu on Dashboard is manual, like New Project menu); View (Dataset + Analytics after import + Description Mappings + series/study description edit + Projections + Series + Metadata Detect/Remove + Patient Lookup CSV); Process (Remove Pixel PHI, Report Text Review, Harmonize, Face, batch); Send (initial → selection → sending → sent).
+Welcome; AI Features; Create project (File → New Project menu on Welcome + settings + De-identification Options + Anonymizer Script Editor + Lookup Table); Dashboard; Search (File → Import menu on Dashboard is manual, like New Project menu); View (Dataset + Analytics after import + Description Mappings + Set description dialog for RadLex Compose / LOINC catalog + Projections including full-dataset pixel-PHI triage + Series + Metadata Detect/Remove/Save→Dataset + Patient Lookup CSV); Process (Remove Pixel PHI, Report Text Review, Harmonize, Face, batch); Send (initial → selection → sending → sent).

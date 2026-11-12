@@ -129,7 +129,13 @@ format_remove_pixel_phi_series_message(*, modified_count: int, total: int, texts
     Series outcome line: Series View wording, counts only (never OCR/PHI strings).
 
 format_remove_pixel_phi_instance_detail(*, instance_index: int, instance_total: int, modified: bool, texts: Sequence[str], removal_mode: PixelPhiRemovalMode=PixelPhiRemovalMode.BLACKOUT, pixels_changed: int=0, ocr_remove_mode: OcrRemoveMode=...) -> str
-    Per-instance detail: Series View wording, counts only (never OCR/PHI strings).
+    Per-instance detail for detections only: Series View wording, counts only (never OCR/PHI strings).
+
+format_clean_descriptors_series_message(*, modified_count: int, total: int, texts_removed: Sequence[str]=()) -> str
+    Series Clean Descriptors summary: counts only (never descriptor/PHI strings).
+
+format_report_phi_series_message(*, modified_count: int, total: int, texts_removed: Sequence[str]=()) -> str
+    Series report-text PHI summary: counts only (never report/PHI strings).
 
 normalize_selected_algorithms(algorithms: Sequence[AiBatchAlgorithm]) -> tuple[AiBatchAlgorithm, ...]
     Return selected algorithms in fixed execution order.
@@ -907,6 +913,8 @@ def format_remove_pixel_phi_series_message(
 ) -> str:
     """Series outcome line: Series View wording, counts only (never OCR/PHI strings)."""
     del pixels_changed  # Kept for call-site compatibility; not logged.
+    if modified_count <= 0:
+        return _("No burnt-in text detected") + f" ({total} " + _("instances scanned") + ")"
     parts = [
         _("PHI removed"),
         f"{modified_count}/{total} " + _("instance(s)"),
@@ -929,7 +937,7 @@ def format_remove_pixel_phi_instance_detail(
     pixels_changed: int = 0,
     ocr_remove_mode: OcrRemoveMode = OcrRemoveMode.NON_WHITELISTED,
 ) -> str:
-    """Per-instance detail: Series View wording, counts only (never OCR/PHI strings)."""
+    """Per-instance detail for detections only: counts only (never OCR/PHI strings)."""
     del pixels_changed  # Kept for call-site compatibility; not logged.
     position = _("Instance") + f" {instance_index}/{instance_total}"
     region_count = _ocr_text_region_count(texts)
@@ -944,6 +952,44 @@ def format_remove_pixel_phi_instance_detail(
     if region_count:
         return f"{position}: {_('Detect Text')} · {_format_phi_removed_count(region_count)} ({_('unchanged')})"
     return f"{position}: {_('no burnt-in text detected')}"
+
+
+def format_clean_descriptors_series_message(
+    *,
+    modified_count: int,
+    total: int,
+    texts_removed: Sequence[str] = (),
+) -> str:
+    """Series Clean Descriptors summary: counts only (never descriptor/PHI strings)."""
+    if modified_count <= 0:
+        return _("Clean Descriptors") + ": " + _("no changes") + f" ({total} " + _("instances scanned") + ")"
+    parts = [
+        _("Clean Descriptors"),
+        f"{modified_count}/{total} " + _("instance(s)"),
+    ]
+    region_count = _ocr_text_region_count(texts_removed)
+    if region_count:
+        parts.append(_format_phi_removed_count(region_count))
+    return " · ".join(parts)
+
+
+def format_report_phi_series_message(
+    *,
+    modified_count: int,
+    total: int,
+    texts_removed: Sequence[str] = (),
+) -> str:
+    """Series report-text PHI summary: counts only (never report/PHI strings)."""
+    if modified_count <= 0:
+        return _("No report PHI detected") + f" ({total} " + _("instances scanned") + ")"
+    parts = [
+        _("Report PHI removed"),
+        f"{modified_count}/{total} " + _("instance(s)"),
+    ]
+    region_count = _ocr_text_region_count(texts_removed)
+    if region_count:
+        parts.append(_format_phi_removed_count(region_count))
+    return " · ".join(parts)
 
 
 def _log_workflow_progress_step(
@@ -1229,7 +1275,8 @@ def _apply_report_text_phi_series(
 
     modified_count = 0
     all_removed: list[str] = []
-    for dcm_path in dcm_paths:
+    instance_total = len(dcm_paths)
+    for instance_index, dcm_path in enumerate(dcm_paths, start=1):
         try:
 
             ds = dcmread(dcm_path)
@@ -1265,7 +1312,13 @@ def _apply_report_text_phi_series(
             all_removed.extend(removed_texts)
             modified_count += 1
             if on_log_detail is not None and removed_texts:
-                on_log_detail(f"{dcm_path.name}: " + ", ".join(removed_texts[:8]))
+                region_count = _ocr_text_region_count(removed_texts)
+                on_log_detail(
+                    _("Instance")
+                    + f" {instance_index}/{instance_total}: "
+                    + _("Report PHI removed")
+                    + f" · {_format_phi_removed_count(region_count)}"
+                )
         except Exception as exc:  # noqa: BLE001
             logger.error("Report text PHI failed for %s: %s", dcm_path, exc)
             return AiBatchOutcome(
@@ -1275,6 +1328,13 @@ def _apply_report_text_phi_series(
                 str(exc),
             )
 
+    series_message = format_report_phi_series_message(
+        modified_count=modified_count,
+        total=instance_total,
+        texts_removed=all_removed,
+    )
+    if on_log_detail is not None:
+        on_log_detail(series_message)
     if mark_scanned:
         anon_model.set_series_embedded_phi_scanned(series_uid, scanned=True)
     if modified_count == 0:
@@ -1282,13 +1342,13 @@ def _apply_report_text_phi_series(
             series_path,
             AiBatchAlgorithm.REMOVE_PIXEL_PHI,
             "complete",
-            _("No report PHI detected"),
+            series_message,
         )
     return AiBatchOutcome(
         series_path,
         AiBatchAlgorithm.REMOVE_PIXEL_PHI,
         "ok",
-        _("Report PHI removed") + f" ({modified_count})",
+        series_message,
     )
 
 
@@ -1310,6 +1370,7 @@ def _scrub_series_descriptors(
     mode = "synth" if str(replace_mode).strip().lower() == "synth" else "blank"
     modified_count = 0
     all_removed: list[str] = []
+    instance_total = len(dcm_paths)
     for dcm_path in dcm_paths:
         try:
             changed, removed = scrub_file_descriptors(
@@ -1337,8 +1398,14 @@ def _scrub_series_descriptors(
                         "Failed to sync Dataset descriptions after Clean Descriptors for %s",
                         dcm_path,
                     )
-            if on_log_detail is not None and removed:
-                on_log_detail(f"{dcm_path.name}: " + ", ".join(removed[:8]))
+    if on_log_detail is not None and modified_count > 0:
+        on_log_detail(
+            format_clean_descriptors_series_message(
+                modified_count=modified_count,
+                total=instance_total,
+                texts_removed=all_removed,
+            )
+        )
     return modified_count, all_removed
 
 
@@ -1463,13 +1530,13 @@ def _apply_remove_pixel_phi_series(
         )
 
     modified_count = 0
-    unchanged_count = 0
-    all_removed_texts: list[str] = []
+    pixel_removed_texts: list[str] = []
     total_pixels_changed = 0
     instance_total = len(dcm_paths)
     ocr_remove_mode = ocr_remove_mode or ocr_remove_mode_from_legacy_whitelist(
         use_modality_whitelist=True if use_modality_whitelist is None else use_modality_whitelist
     )
+    pixel_series_message = ""
     if pixel_enabled:
         ocr_whitelist = whitelist_arg_for_ocr_remove_mode(ocr_remove_mode)
         series_match_mode = phi_match_mode or load_modality_phi_match_mode(
@@ -1504,9 +1571,10 @@ def _apply_remove_pixel_phi_series(
                     "failed",
                     str(exc),
                 )
+            # Log only instances with detections; quiet files stay out of the workflow log.
             if modified and pixels_changed > 0:
                 apply_instance_embedded_phi_for_dcm(anon_model, dcm_path, texts)
-                all_removed_texts.extend(texts)
+                pixel_removed_texts.extend(texts)
                 modified_count += 1
                 total_pixels_changed += pixels_changed
                 if on_log_detail is not None and texts:
@@ -1522,7 +1590,7 @@ def _apply_remove_pixel_phi_series(
                         )
                     )
             elif texts:
-                all_removed_texts.extend(texts)
+                pixel_removed_texts.extend(texts)
                 if on_log_detail is not None:
                     on_log_detail(
                         format_remove_pixel_phi_instance_detail(
@@ -1534,26 +1602,20 @@ def _apply_remove_pixel_phi_series(
                             ocr_remove_mode=ocr_remove_mode,
                         )
                     )
-            else:
-                unchanged_count += 1
-                if on_log_detail is not None and texts:
-                    on_log_detail(
-                        format_remove_pixel_phi_instance_detail(
-                            instance_index=instance_index,
-                            instance_total=instance_total,
-                            modified=False,
-                            texts=texts,
-                            removal_mode=removal_mode,
-                            ocr_remove_mode=ocr_remove_mode,
-                        )
-                    )
 
-        if on_log_detail is not None and unchanged_count > 0 and modified_count > 0:
-            on_log_detail(
-                f"{unchanged_count}/{instance_total} " + _("instances") + ": " + _("no burnt-in text detected")
-            )
+        pixel_series_message = format_remove_pixel_phi_series_message(
+            modified_count=modified_count,
+            total=instance_total,
+            texts_removed=pixel_removed_texts,
+            pixels_changed=total_pixels_changed,
+            removal_mode=removal_mode,
+            ocr_remove_mode=ocr_remove_mode,
+        )
+        if on_log_detail is not None:
+            on_log_detail(pixel_series_message)
 
     meta_modified = 0
+    meta_removed: list[str] = []
     if metadata_enabled:
         try:
             meta_modified, meta_removed = _scrub_series_descriptors(
@@ -1564,7 +1626,6 @@ def _apply_remove_pixel_phi_series(
                 anon_model=anon_model,
                 on_log_detail=on_log_detail,
             )
-            all_removed_texts.extend(meta_removed)
         except Exception as exc:  # noqa: BLE001
             return AiBatchOutcome(
                 series_path,
@@ -1576,9 +1637,12 @@ def _apply_remove_pixel_phi_series(
     anon_model.set_series_embedded_phi_scanned(series_uid, scanned=True)
 
     if modified_count == 0 and meta_modified == 0:
-        message = _("No burnt-in text detected") if pixel_enabled else _("No Embedded PHI detected")
-        if instance_total > 1:
-            message += f" ({instance_total} " + _("instances scanned") + ")"
+        if pixel_enabled and pixel_series_message:
+            message = pixel_series_message
+        else:
+            message = _("No burnt-in text detected") if pixel_enabled else _("No Embedded PHI detected")
+            if instance_total > 1:
+                message += f" ({instance_total} " + _("instances scanned") + ")"
         return AiBatchOutcome(
             series_path,
             AiBatchAlgorithm.REMOVE_PIXEL_PHI,
@@ -1590,10 +1654,11 @@ def _apply_remove_pixel_phi_series(
             series_path,
             AiBatchAlgorithm.REMOVE_PIXEL_PHI,
             "ok",
-            format_remove_pixel_phi_series_message(
+            pixel_series_message
+            or format_remove_pixel_phi_series_message(
                 modified_count=modified_count,
                 total=instance_total,
-                texts_removed=all_removed_texts,
+                texts_removed=pixel_removed_texts,
                 pixels_changed=total_pixels_changed,
                 removal_mode=removal_mode,
                 ocr_remove_mode=ocr_remove_mode,
@@ -1603,7 +1668,11 @@ def _apply_remove_pixel_phi_series(
         series_path,
         AiBatchAlgorithm.REMOVE_PIXEL_PHI,
         "ok",
-        _("Clean Descriptors") + f" ({meta_modified})",
+        format_clean_descriptors_series_message(
+            modified_count=meta_modified,
+            total=instance_total,
+            texts_removed=meta_removed,
+        ),
     )
 
 

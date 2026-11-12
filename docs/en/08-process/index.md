@@ -11,10 +11,11 @@ Models and licenses are set up once from Welcome — see [AI Features setup](../
 QA a few series in Series View, then scale with AI Batch from Dataset:
 
 1. **Import** via [Search](../06-search/index.md); open samples in [Series View](../07-view/index.md#series-view-what-you-can-do).
-2. **Harmonize** a CT/MR and planar sample; fix names with [Set description](../07-view/index.md#edit-study-and-series-descriptions) and [Description Mappings](../07-view/index.md#description-mappings). Latch or paint in [Annotation](../07-view/index.md#annotation). CT/MR organ volumes: [Analytics](../07-view/index.md#analytics).
-3. **Face blur** on an eligible head series; keep the mode you will batch (demo: Gaussian).
-4. **Embedded PHI** — [8.1](02-remove-burned-in-text/index.md): [Pixel](02-remove-burned-in-text/index.md#pixel), [Metadata](02-remove-burned-in-text/index.md#metadata), and [Reports](02-remove-burned-in-text/index.md#reports) on samples.
-5. **Batch** the same options on the cohort with [AI Batch Process](05-run-on-many-studies/index.md); leave Prefer description mappings on.
+2. **Scan projections for pixel PHI** — in Dataset, **Select All** (or a study cohort) → **View Projections** to visually find burned-in text across the full selection before Detect/batch ([View — Scan a full dataset for burned-in (pixel) PHI](../07-view/index.md#scan-pixel-phi-with-projections)).
+3. **Harmonize** a CT/MR and planar sample; fix names with [Set description](../07-view/index.md#edit-study-and-series-descriptions) and [Description Mappings](../07-view/index.md#description-mappings). Latch or paint in [Annotation](../07-view/index.md#annotation). CT/MR organ volumes: [Analytics](../07-view/index.md#analytics).
+4. **Face blur** on an eligible head series; keep the mode you will batch (demo: Gaussian).
+5. **Embedded PHI** — [8.1](02-remove-burned-in-text/index.md): [Pixel](02-remove-burned-in-text/index.md#pixel), [Metadata](02-remove-burned-in-text/index.md#metadata), and [Reports](02-remove-burned-in-text/index.md#reports) on samples (and on series flagged in the projection scan).
+6. **Batch** the same options on the cohort with [AI Batch Process](05-run-on-many-studies/index.md); leave Prefer description mappings on.
 
 Chapters 8.1–8.3 teach each tool; 8.4 is the cohort step.
 
@@ -32,9 +33,10 @@ Demo series and screenshots come from the source repository folder `tests/contro
 ## Order to learn
 
 1. Finish [AI Features setup](../03-ai-features-setup/index.md) so models are ready.
-2. Walk Embedded PHI [Pixel](02-remove-burned-in-text/index.md#pixel) on `davidson_cxr` / `us_rgb_single_frame`, then [Metadata](02-remove-burned-in-text/index.md#metadata) and [Reports](02-remove-burned-in-text/index.md#reports) on a sample report if available.
-3. Walk Harmonize on `CT_Head_With_Contrast`, then the planar demos on `davidson_cxr` and `us_rgb_single_frame`; review or paint segments in [Annotation](../07-view/index.md#annotation); on CT/MR check Harmonize organ-volume charts in [Analytics](../07-view/index.md#analytics); Face blur on the same CT head series.
-4. Use Run on many studies when you need the same tools on a cohort — see [Site workflow](#recommended-site-workflow) for the intended Series View QA → Dataset batch pattern.
+2. Optional on a larger import: [scan the cohort with View Projections](../07-view/index.md#scan-pixel-phi-with-projections) before Detect.
+3. Walk Embedded PHI [Pixel](02-remove-burned-in-text/index.md#pixel) on `davidson_cxr` / `us_rgb_single_frame`, then [Metadata](02-remove-burned-in-text/index.md#metadata) and [Reports](02-remove-burned-in-text/index.md#reports) on a sample report if available.
+4. Walk Harmonize on `CT_Head_With_Contrast`, then the planar demos on `davidson_cxr` and `us_rgb_single_frame`; review or paint segments in [Annotation](../07-view/index.md#annotation); on CT/MR check Harmonize organ-volume charts in [Analytics](../07-view/index.md#analytics); Face blur on the same CT head series.
+5. Use Run on many studies when you need the same tools on a cohort — see [Site workflow](#recommended-site-workflow) for the intended Series View QA → Dataset batch pattern.
 
 ## Next steps
 

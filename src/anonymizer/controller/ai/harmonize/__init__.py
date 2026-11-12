@@ -151,6 +151,9 @@ from anonymizer.controller.ai.harmonize.pipeline import (
     harmonized_description_from_cache as harmonized_description_from_cache,
 )
 from anonymizer.controller.ai.harmonize.pipeline import (
+    is_nuclear_description_edit_modality as is_nuclear_description_edit_modality,
+)
+from anonymizer.controller.ai.harmonize.pipeline import (
     log_harmonize_playbook_rows as log_harmonize_playbook_rows,
 )
 from anonymizer.controller.ai.harmonize.pipeline import (
@@ -158,6 +161,9 @@ from anonymizer.controller.ai.harmonize.pipeline import (
 )
 from anonymizer.controller.ai.harmonize.pipeline import (
     missing_series_description_label as missing_series_description_label,
+)
+from anonymizer.controller.ai.harmonize.pipeline import (
+    nuclear_loinc_prefix_for_edit as nuclear_loinc_prefix_for_edit,
 )
 from anonymizer.controller.ai.harmonize.pipeline import (
     planar_series_paths_for_study as planar_series_paths_for_study,

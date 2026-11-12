@@ -1,7 +1,11 @@
+import contextlib
 import logging
+import queue
+import threading
 import tkinter as tk
 from math import ceil
 from pathlib import Path
+from tkinter import messagebox
 
 import customtkinter as ctk
 from PIL import Image, ImageDraw, ImageTk
@@ -9,6 +13,7 @@ from PIL import Image, ImageDraw, ImageTk
 from anonymizer.controller.phi.phi_io import PHI_IndexRecord
 from anonymizer.controller.project import ProjectController
 from anonymizer.controller.series.create_projections import (
+    PROJECTION_FILENAME,
     Projection,
     ProjectionImageSize,
     ProjectionImageSizeConfig,
@@ -109,6 +114,13 @@ class ProjectionView(AppToplevel):
         "L": ProjectionImageSize.LARGE,
     }
     DEFAULT_SIZE = "S"
+    # Match Series View: show a loading shell when open will take noticeable time.
+    PROGRESS_SERIES_THRESHOLD = 4
+    LOAD_POLL_MS = 100
+    LOADING_SHELL_WIDTH = 420
+    LOADING_SHELL_HEIGHT = 72
+    LOADING_SHELL_PAD = 12
+    LOAD_PROGRESS_PULSE_MS = 180
 
     @property
     def phi_records(self) -> list[PHI_IndexRecord]:
@@ -136,6 +148,7 @@ class ProjectionView(AppToplevel):
         self._controller = controller
         self._base_dir = base_dir
         self._phi_records = phi_records
+        self._parent = parent
 
         self._series_paths = series_paths_for_phi_records(base_dir, phi_records)
         if not self._series_paths:
@@ -162,6 +175,16 @@ class ProjectionView(AppToplevel):
         self._page_slider = None
         self._loading_page = False
         self._series_view: tk.Misc | None = None
+        self._loading = False
+        self._load_queue: queue.Queue[tuple[str, object]] = queue.Queue()
+        self._load_cancel = threading.Event()
+        self._loading_shell: ctk.CTkFrame | None = None
+        self._load_progress: ctk.CTkProgressBar | None = None
+        self._load_status_label: ctk.CTkLabel | None = None
+        self._load_progress_after_id: str | None = None
+        self._load_progress_value = 0.0
+        self._prefetched_projections: dict[Path, Projection] = {}
+        self._destroyed = False
 
         self._update_title()
         self._create_widgets()
@@ -178,8 +201,10 @@ class ProjectionView(AppToplevel):
         self.bind("<MouseWheel>", self._mouse_wheel)
 
         self._image_size = self.key_to_image_size_mapping[self.DEFAULT_SIZE]
+        self._calc_layout()
+        self._update_title()
         self._trace_startup("widgets_done", viewable=0)
-        self._present_projection_grid()
+        self._begin_projection_load()
 
     def _trace_startup(self, step: str, **fields: object) -> None:
         parts = [f"step={step}"]
@@ -187,8 +212,235 @@ class ProjectionView(AppToplevel):
             parts.append(f"{key}={value}")
         logger.info("ProjectionView startup: %s", " ".join(parts))
 
+    def _widget_alive(self) -> bool:
+        if getattr(self, "_destroyed", False):
+            return False
+        with contextlib.suppress(tk.TclError):
+            return bool(self.winfo_exists())
+        return False
+
+    def _first_page_series_paths(self) -> list[Path]:
+        """Series paths for the current page (layout must already be calculated)."""
+        if self._rows <= 0 or self._cols <= 0:
+            return list(self._series_paths)
+        start = (self._page_number - 1) * self._rows * self._cols
+        end = min(start + self._rows * self._cols, self._total_series)
+        return self._series_paths[start:end]
+
+    def _needs_load_progress(self) -> bool:
+        """True when first-page build is likely slow (many series or missing Projection.pkl)."""
+        page_paths = self._first_page_series_paths()
+        if len(page_paths) >= self.PROGRESS_SERIES_THRESHOLD:
+            return True
+        return any(not (path / PROJECTION_FILENAME).is_file() for path in page_paths)
+
+    def _position_near_parent(self, *, width: int, height: int) -> None:
+        """Place the loading shell near the parent Dataset window."""
+        self.update_idletasks()
+        try:
+            self._parent.update_idletasks()
+            pos_x = self._parent.winfo_rootx() + 30
+            pos_y = self._parent.winfo_rooty() + 30
+        except tk.TclError:
+            pos_x = (self.winfo_screenwidth() - width) // 2
+            pos_y = (self.winfo_screenheight() - height) // 2
+        pos_x = max(0, min(pos_x, self.winfo_screenwidth() - width))
+        pos_y = max(0, min(pos_y, self.winfo_screenheight() - height))
+        self.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
+
+    def _show_loading_shell(self) -> None:
+        """Series View-style status window while projections are built."""
+        # Hide grid content so we can pack the shell (tk forbids pack+grid on same parent).
+        self._pv_frame.grid_remove()
+        self._paging_frame.grid_remove()
+
+        self.title(_("Projection View"))
+        width = self.LOADING_SHELL_WIDTH
+        height = self.LOADING_SHELL_HEIGHT
+        self.geometry(f"{width}x{height}")
+        self.minsize(width, height)
+
+        self._loading_shell = ctk.CTkFrame(self, fg_color="transparent")
+        pad = self.LOADING_SHELL_PAD
+        self._loading_shell.pack(fill="both", expand=True, padx=pad, pady=pad)
+
+        self._load_status_label = ctk.CTkLabel(
+            self._loading_shell,
+            text=f"{_('Building projections')}…",
+            anchor="w",
+        )
+        self._load_status_label.pack(fill="x", pady=(0, 8))
+
+        progress_width = width - (2 * pad)
+        self._load_progress = ctk.CTkProgressBar(self._loading_shell, width=progress_width)
+        self._load_progress.pack(fill="x")
+        self._load_progress_value = 0.0
+        self._load_progress.set(0.0)
+        self._pulse_load_progress()
+        self._position_near_parent(width=width, height=height)
+
+    def _pulse_load_progress(self) -> None:
+        if not self._loading or self._load_progress is None:
+            return
+        self._load_progress_value = min(0.92, self._load_progress_value + 0.035)
+        self._load_progress.set(self._load_progress_value)
+        self._load_progress_after_id = self.after(
+            self.LOAD_PROGRESS_PULSE_MS,
+            self._pulse_load_progress,
+        )
+
+    def _stop_load_progress_pulse(self) -> None:
+        if self._load_progress_after_id is None:
+            return
+        with contextlib.suppress(tk.TclError):
+            self.after_cancel(self._load_progress_after_id)
+        self._load_progress_after_id = None
+
+    def _set_load_status(self, text: str) -> None:
+        if self._load_status_label is None:
+            return
+        with contextlib.suppress(tk.TclError):
+            self._load_status_label.configure(text=text)
+
+    def _begin_projection_load(self) -> None:
+        """Show progress when needed; otherwise populate hidden like before."""
+        page_paths = self._first_page_series_paths()
+        if self._needs_load_progress():
+            self._loading = True
+            self._load_cancel.clear()
+            self._show_loading_shell()
+            self.update_idletasks()
+            self.deiconify()
+            self.lift()
+            self._trace_startup("loading_shell", series=len(page_paths), viewable=1)
+            threading.Thread(
+                target=self._load_worker,
+                args=(tuple(page_paths),),
+                daemon=True,
+                name="ProjectionViewLoad",
+            ).start()
+            self.after(self.LOAD_POLL_MS, self._poll_load_worker)
+            return
+        self._present_projection_grid()
+
+    def _load_worker(self, series_paths: tuple[Path, ...]) -> None:
+        """Build Projection objects off the UI thread (PhotoImage stays on main)."""
+        results: list[tuple[Path, Projection | None, str | None]] = []
+        total = len(series_paths)
+        for index, series_path in enumerate(series_paths, start=1):
+            if self._load_cancel.is_set():
+                self._load_queue.put(("cancelled", None))
+                return
+            self._load_queue.put(
+                (
+                    "progress",
+                    (index, total, series_path.name),
+                )
+            )
+            try:
+                projection = create_projection_from_series(series_path)
+                results.append((series_path, projection, None))
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("Projection build failed for %s", series_path)
+                results.append((series_path, None, str(exc)))
+        if self._load_cancel.is_set():
+            self._load_queue.put(("cancelled", None))
+            return
+        self._load_queue.put(("done", results))
+
+    def _poll_load_worker(self) -> None:
+        if not self._widget_alive() or not self._loading:
+            return
+
+        while True:
+            try:
+                kind, payload = self._load_queue.get_nowait()
+            except queue.Empty:
+                break
+
+            if kind == "progress":
+                index, total, name = payload
+                self._set_load_status(
+                    f"{_('Building projections')}…  {index}/{total}  {name}"
+                )
+                continue
+            if kind == "cancelled":
+                self._loading = False
+                self._stop_load_progress_pulse()
+                return
+            if kind == "done":
+                self.after_idle(lambda results=payload: self._finish_projection_load(results))
+                return
+            if kind == "error":
+                self._loading = False
+                self._stop_load_progress_pulse()
+                messagebox.showerror(
+                    title=_("Projection View"),
+                    message=_("Could not build projections.") + f"\n\n{payload}",
+                    parent=self._parent,
+                )
+                self.destroy()
+                return
+
+        self.after(self.LOAD_POLL_MS, self._poll_load_worker)
+
+    def _finish_projection_load(
+        self,
+        results: list[tuple[Path, Projection | None, str | None]],
+    ) -> None:
+        if not self._widget_alive():
+            return
+        if not self._loading:
+            return
+        self._loading = False
+        self._stop_load_progress_pulse()
+        failures = [f"{path.name}: {error}" for path, _proj, error in results if error]
+        self._prefetched_projections = {
+            path: projection for path, projection, error in results if projection is not None and error is None
+        }
+
+        if self._loading_shell is not None:
+            self.withdraw()
+            self._loading_shell.destroy()
+            self._loading_shell = None
+            self._load_progress = None
+            self._load_status_label = None
+            self.update_idletasks()
+
+        if failures and not self._prefetched_projections:
+            messagebox.showerror(
+                title=_("Projection View"),
+                message=_("Could not build projections.") + "\n\n" + "\n".join(failures[:8]),
+                parent=self._parent,
+            )
+            self.destroy()
+            return
+
+        # Drop the loading-shell size lock so the projection grid can size the window.
+        pad = 10
+        self.minsize(0, 0)
+        self.geometry("")
+        self._pv_frame.grid(row=0, column=0, padx=pad, pady=pad, sticky="nsew")
+        self._paging_frame.grid(row=1, column=0, padx=pad, pady=(0, pad), sticky="ew")
+        self._present_projection_grid()
+
+    def _apply_content_geometry(self) -> None:
+        """Size the non-resizable window to the projection grid (clears loading-shell geometry)."""
+        self.update_idletasks()
+        width = max(int(self.winfo_reqwidth()), 1)
+        height = max(int(self.winfo_reqheight()), 1)
+        try:
+            pos_x = int(self.winfo_x())
+            pos_y = int(self.winfo_y())
+        except tk.TclError:
+            pos_x = max(0, (self.winfo_screenwidth() - width) // 2)
+            pos_y = max(0, (self.winfo_screenheight() - height) // 2)
+        pos_x = max(0, min(pos_x, self.winfo_screenwidth() - width))
+        pos_y = max(0, min(pos_y, self.winfo_screenheight() - height))
+        self.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
+
     def _present_projection_grid(self) -> None:
-        """Linear startup: layout and populate while hidden, then show once."""
+        """Populate while hidden, then show once (Series View finish pattern)."""
         self._calc_layout()
         self._update_title()
         self._trace_startup(
@@ -204,7 +456,7 @@ class ProjectionView(AppToplevel):
             thumbnails=min(self._rows * self._cols, self._total_series),
             viewable=0,
         )
-        self.update_idletasks()
+        self._apply_content_geometry()
         self.deiconify()
         self._trace_startup("deiconify", viewable=1)
 
@@ -218,13 +470,26 @@ class ProjectionView(AppToplevel):
         if projection_study_uids(phi_records) == self.study_uids() and series_paths == self._series_paths:
             return
 
+        if self._loading:
+            self._load_cancel.set()
+            self._loading = False
+            self._stop_load_progress_pulse()
+
         self._phi_records = phi_records
         self._series_paths = series_paths
         self._total_series = len(series_paths)
         self._page_number = 1
+        self._prefetched_projections = {}
 
         self.withdraw()
-        self._present_projection_grid()
+        if self._loading_shell is not None:
+            self._loading_shell.destroy()
+            self._loading_shell = None
+            self._load_progress = None
+            self._load_status_label = None
+        self._calc_layout()
+        self._update_title()
+        self._begin_projection_load()
 
     def _update_title(self):
         title = format_projection_view_title(self._phi_records, self._total_series, self._pages)
@@ -238,11 +503,15 @@ class ProjectionView(AppToplevel):
             widget.destroy()  # this should clean up the associated CTKImage & Tkinter PhotoImage
 
     def _update_image_size(self, value):
+        if self._loading:
+            return
         logger.info(f"Updating image size to {value}")
         self._image_size: ProjectionImageSize = self.key_to_image_size_mapping[value]
         self._page_number = 1  # reset to first page number when image size is changed
         self._calc_layout()
         self._populate_px_frame()  # Redraw the frame with new size
+        self._apply_content_geometry()
+
 
     def _create_widgets(self):
         logger.info("_create_widgets")
@@ -292,6 +561,10 @@ class ProjectionView(AppToplevel):
         logger.info(f"Rows: {self._rows}, Cols: {self._cols}, Pages: {self._pages}")
 
         if self._pages > 1:
+            if self._page_slider is not None:
+                self._page_slider.grid_forget()
+                self._page_slider.destroy()
+                self._page_slider = None
             self._page_slider = ctk.CTkSlider(
                 self._paging_frame,
                 button_length=round(combined_width * self._cols / self._pages),
@@ -303,7 +576,7 @@ class ProjectionView(AppToplevel):
             self._page_slider.grid(row=1, column=0, padx=10, pady=0, sticky="we")
             self._page_slider.set(0)
         else:
-            if self._page_slider:
+            if self._page_slider is not None:
                 self._page_slider.grid_forget()
                 self._page_slider.destroy()
                 self._page_slider = None
@@ -327,7 +600,7 @@ class ProjectionView(AppToplevel):
         self._on_page_slider(next_page_number)
 
     def _on_page_slider(self, value):
-        if self._loading_page or self._pages <= 1:
+        if self._loading or self._loading_page or self._pages <= 1:
             return
 
         logger.debug(f"value: {value}, current_page: {self._page_number}")
@@ -400,11 +673,22 @@ class ProjectionView(AppToplevel):
 
         return bordered_image
 
-    def generate_combined_image(self, series_path) -> tuple[ImageTk.PhotoImage, Projection]:
+    def generate_combined_image(
+        self,
+        series_path: Path,
+        projection: Projection | None = None,
+    ) -> tuple[ImageTk.PhotoImage, Projection]:
         """
         Generate a combined image from the Projection images of series using padding between images.
+
+        Args:
+            series_path: Series directory on disk.
+            projection: Optional prebuilt Projection (worker prefetch); otherwise load/create.
         """
-        projection = create_projection_from_series(series_path)
+        if projection is None:
+            projection = self._prefetched_projections.pop(series_path, None)
+        if projection is None:
+            projection = create_projection_from_series(series_path)
         combined_image = Image.new(
             mode="RGB",
             size=(3 * self._image_size.width(), self._image_size.height()),
@@ -422,7 +706,7 @@ class ProjectionView(AppToplevel):
                     (i * self._image_size.width(), 0),
                 )
 
-        # Convert to PhotoImage
+        # Convert to PhotoImage (must stay on the UI thread).
         photo_image = ImageTk.PhotoImage(combined_image)
 
         return photo_image, projection
@@ -494,8 +778,22 @@ class ProjectionView(AppToplevel):
         logger.info("_escape_pressed")
         self._on_cancel()
 
+    def destroy(self) -> None:
+        if self._destroyed:
+            return
+        self._destroyed = True
+        if self._loading:
+            self._load_cancel.set()
+            self._loading = False
+        self._stop_load_progress_pulse()
+        super().destroy()
+
     def _on_cancel(self):
         logger.info("_on_cancel")
+        if self._loading:
+            self._load_cancel.set()
+            self._loading = False
+            self._stop_load_progress_pulse()
         self._clear_view()
         teardown_ctk_toplevel(self, parent=self.master)
 

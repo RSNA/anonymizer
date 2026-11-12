@@ -15,9 +15,10 @@ Short glossary for clinicians. When IT uses different terms, these are usually t
 | **Blank / Synthetic** | Two ways to remove text PHI: delete it, or replace it with a realistic fake of the same type (“hide in plain sight”). |
 | **De-identification options** | DICOM confidentiality options (Basic Profile, Modified Dates, Retain Safe Private, …). **Basic** and **Retain** are presets that fill the checkbox set. Applying options on an existing project recompiles the project script after you confirm. Set in Project Settings. |
 | **Metadata** | The DICOM tag tree for the current image in Series View. **Detect PHI** highlights leftover identifiers in tag values (separate from burned-in pixel text). |
-| **Analytics** | Dashboard charts of organ volumes after Harmonize on CT/MR (cohort overview after import — see [View](../07-view/index.md#analytics)). |
+| **Analytics** | Dashboard charts of organ volumes after Harmonize on CT/MR. Histograms use healthy-adult **normative ranges**; **near** vs **extreme** outliers are coloured differently; click a bar to select those patients in Dataset — see [View → Analytics](../07-view/index.md#analytics). |
 | **Quarantine** | A holding folder for files that could not be imported (wrong type, missing IDs, lookup miss, etc.). |
 | **Dataset** | The in-app list of patients, studies, and series in your project (formerly called PHI Index). |
+| **View Projections** | Dataset window of one summary tile per series (min/mean/max or grayscale/CLAHE/edge). Use on a multi-study or **Select All** selection to visually scan a cohort for burned-in text before Embedded PHI Detect — see [View](../07-view/index.md#scan-pixel-phi-with-projections). |
 | **Project** | A named workspace with its own settings and storage folder. |
 | **Whitelist (OCR)** | Allowed short labels (for example L/R) that should **not** be removed when cleaning burned-in text. |
 | **Exclude Area** | A region on the image that Detect / Remove Embedded PHI skip (for machine overlays that are not PHI). |
