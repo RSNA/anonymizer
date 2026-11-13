@@ -49,6 +49,7 @@ from anonymizer.controller.script.operands import (
     is_remove_operation,
     lookup_key_from_operation,
     parse_hashname_operation,
+    parse_if_isblank_operation,
     study_year_text,
     truncate_text,
 )
@@ -623,6 +624,13 @@ class AnonymizerController:
         else:
             operation = "@remove()"
 
+        if_arms = parse_if_isblank_operation(operation)
+        if if_arms is not None:
+            value = data_element.value
+            raw = str(value) if value is not None else ""
+            then_op, else_op = if_arms
+            operation = then_op if raw.strip() == "" else else_op
+
         if is_remove_operation(operation):
             del dataset[tag]
             return
@@ -805,7 +813,16 @@ class AnonymizerController:
             if self.model.date_operands_present:
                 stamp_dates_modified(ds)
             if base_date:
-                stamp_rebase_registration(ds, phi_study_date, base_date)
+                event_type = (
+                    always_literal_text(self.model._tag_keep.get("00120053"))
+                    or "REGISTRATION"
+                )
+                stamp_rebase_registration(
+                    ds,
+                    phi_study_date,
+                    base_date,
+                    event_type=event_type,
+                )
 
             # All elements now anonymized according to script, now handle Anonymization specific Tags:
             ds.PatientIdentityRemoved = "YES"  # CS: (0012, 0062)

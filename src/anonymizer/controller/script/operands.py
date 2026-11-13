@@ -44,6 +44,9 @@ validate_operation(operation) -> str | None
 lookup_key_from_operation(operation) -> str | None
     Lookup table key (ptid, cname, …) when operation is @lookup(this,key).
 
+parse_if_isblank_operation(operation) -> tuple[str, str] | None
+    Then/else arms for @if(this,isblank){then}{else}.
+
 parse_hashname_operation(operation) -> tuple[str, int] | None
     Optional literal prefix and width for @hashname(this,n).
 
@@ -83,6 +86,10 @@ _DATEINTERVAL_STUDY_DDATE_RE = re.compile(
     r"^@dateinterval\(\s*StudyDate\s*,\s*ddate\s*,\s*PatientID\s*\)$",
     re.IGNORECASE,
 )
+_IF_ISBLANK_RE = re.compile(
+    r"^@if\(\s*this\s*,\s*isblank\s*\)\{(?P<then>.*)\}\{(?P<else>.*)\}$",
+    re.IGNORECASE | re.DOTALL,
+)
 _DEFAULT_REBASE_ORIGIN = "19600101"
 _ALWAYS_RE = re.compile(r"^@always\(\)\s*(.*)$", re.IGNORECASE | re.DOTALL)
 
@@ -110,6 +117,7 @@ class OperandId(StrEnum):
     TRUNCATE = "truncate"
     HASHNAME = "hashname"
     DATEINTERVAL_STUDY_DDATE = "dateinterval_study_ddate"
+    IF_ISBLANK = "if_isblank"
     ALWAYS = "always"
     PROCESS = "process"
 
@@ -315,6 +323,14 @@ OPERANDS: tuple[OperandSpec, ...] = (
         "Write Longitudinal Temporal Offset From Event as whole days from the "
         "lookup diagnosis/base date (ddate/) to StudyDate (TCIA IncDateAndDiag). "
         "Full @dateinterval(this,ddate,…,@NORMDATE) rebase is a separate form.",
+    ),
+    OperandSpec(
+        OperandId.IF_ISBLANK,
+        "If blank",
+        "@if(this,isblank){then}{else}",
+        "If the current value is blank, apply the then operand; otherwise apply "
+        "the else operand. Only the isblank condition is supported (TCIA "
+        "NormalizedDate scripts).",
     ),
     OperandSpec(
         OperandId.ALWAYS,
@@ -554,6 +570,8 @@ def operand_id_for_operation(operation: str | None) -> OperandId | None:
         return OperandId.HASHNAME
     if _DATEINTERVAL_STUDY_DDATE_RE.match(text):
         return OperandId.DATEINTERVAL_STUDY_DDATE
+    if parse_if_isblank_operation(text) is not None:
+        return OperandId.IF_ISBLANK
     lookup = _LOOKUP_THIS_RE.match(text)
     if lookup is not None:
         key = lookup.group(1).lower()
@@ -583,6 +601,26 @@ def lookup_key_from_operation(operation: str | None) -> str | None:
     if match is None:
         return None
     return match.group(1).lower()
+
+
+def parse_if_isblank_operation(operation: str | None) -> tuple[str, str] | None:
+    """
+    Parse @if(this,isblank){then}{else}.
+
+    Args:
+        operation: Script operation text.
+
+    Returns:
+        (then_operation, else_operation), or None when not this form.
+    """
+    match = _IF_ISBLANK_RE.match(str(operation or "").strip())
+    if match is None:
+        return None
+    then_op = str(match.group("then") or "").strip()
+    else_op = str(match.group("else") or "").strip()
+    if not then_op or not else_op:
+        return None
+    return then_op, else_op
 
 
 def parse_hashname_operation(operation: str | None) -> tuple[str, int] | None:
@@ -668,6 +706,16 @@ def validate_operation(operation: str | None) -> str | None:
     if text.lower() == "@always()":
         return "Unsupported operand: @always() requires a fixed value (e.g. @always()YES)"
     if parse_hashname_operation(text) is not None:
+        return None
+    if_arms = parse_if_isblank_operation(text)
+    if if_arms is not None:
+        then_op, else_op = if_arms
+        then_err = validate_operation(then_op)
+        if then_err is not None:
+            return f"Unsupported @if then-branch: {then_err}"
+        else_err = validate_operation(else_op)
+        if else_err is not None:
+            return f"Unsupported @if else-branch: {else_err}"
         return None
     if not text.startswith("@") and "@" in text:
         return (

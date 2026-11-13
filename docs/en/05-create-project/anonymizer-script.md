@@ -126,6 +126,8 @@ basedate/<PHI-PatientID>=YYYYMMDD
 | `@always()@lookup(PatientID,cname|siteid|ddate)` | `@lookup(this,…)` |
 | `@always()@modifydate(StudyDate,*,1,1)` | `@modifydate(StudyDate,*,1,1)` (StudyYear) |
 | `@always()@dateinterval(StudyDate,ddate,PatientID)` | `@dateinterval(StudyDate,ddate,PatientID)` |
+| `@dateinterval(this,ddate,PatientID,@NORMDATE)` | `@rebasedate(this,{NORMDATE})` from `<p t="NORMDATE">` |
+| `@if(this,isblank){then}{else}` | supported when both arms are valid product operands |
 | `REV-@hashname(this,n)` | catalog `@hashname` (optional literal prefix) |
 | `@round(Element,n)` | `@round(this,n)` (product rounds age down, not CTP group center) |
 

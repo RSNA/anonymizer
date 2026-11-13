@@ -65,6 +65,11 @@ _ALWAYS_DATEINTERVAL_STUDY_DDATE_RE = re.compile(
     r"^@always\(\)\s*@dateinterval\(\s*StudyDate\s*,\s*ddate\s*,\s*PatientID\s*\)$",
     re.IGNORECASE,
 )
+_DATEINTERVAL_NORM_RE = re.compile(
+    r"@dateinterval\(\s*this\s*,\s*ddate\s*,\s*PatientID\s*,\s*@NORMDATE\s*\)",
+    re.IGNORECASE,
+)
+_MANGLED_HASHUID_RE = re.compile(r'^"?@hashuid\s*\(.*\)\s*$', re.IGNORECASE)
 _UNSUPPORTED_OPERAND_RE = re.compile(
     r"^([0-9A-Fa-f]{8}):\s*Unsupported operand:\s*(.+)$"
 )
@@ -101,12 +106,15 @@ def normalize_ctp_document(
     if resolved_dateinc is None:
         resolved_dateinc = _param_int(document.params.get("DATEINC"))
 
+    normdate = str(document.params.get("NORMDATE", "") or "").strip()
+
     for rule in document.rules:
         op = str(rule.operation or "").strip() or "@keep"
         new_op, warn = _normalize_operation(
             op,
             dateinc=resolved_dateinc,
             params=document.params,
+            normdate=normdate,
         )
         if warn:
             _warn(warn)
@@ -219,61 +227,73 @@ def _normalize_operation(
     *,
     dateinc: int | None,
     params: dict[str, str],
+    normdate: str = "",
 ) -> tuple[str, str | None]:
     """Return (product operation, optional warning)."""
     text = str(operation or "").strip() or "@keep"
+    warning: str | None = None
+
+    # Nested dateinterval+@NORMDATE → rebasedate (also inside @if arms).
+    if normdate and _DATEINTERVAL_NORM_RE.search(text):
+        text = _DATEINTERVAL_NORM_RE.sub(f"@rebasedate(this,{normdate})", text)
+        warning = (
+            "@dateinterval(this,ddate,PatientID,@NORMDATE) was rewritten to "
+            f"@rebasedate(this,{normdate})."
+        )
 
     if _KEEP_PARENS_RE.match(text):
-        return "@keep", None
+        return "@keep", warning
 
     if _HASHDATE_PATIENT_ID_RE.match(text):
-        return "@hashdate", None
+        return "@hashdate", warning
 
-    if _HASHUID_RE.match(text):
+    if _MANGLED_HASHUID_RE.match(text) or _HASHUID_RE.match(text):
         return (
             "@uid",
-            "@hashuid was rewritten to @uid (project UID map, not CTP hash+root).",
+            warning
+            or "@hashuid was rewritten to @uid (project UID map, not CTP hash+root).",
         )
 
     if _HASHPTID_RE.match(text):
         return (
             "@ptid",
-            "@hashptid was rewritten to @ptid (project patient-id map).",
+            warning
+            or "@hashptid was rewritten to @ptid (project patient-id map).",
         )
 
     if _LOOKUP_PATIENTID_PTID_RE.match(text):
-        return "@lookup(this,ptid)", None
+        return "@lookup(this,ptid)", warning
 
     if _INCREMENT_DATEINC_RE.match(text):
         if dateinc is None:
-            return text, None
-        return f"@incrementdate(this,{int(dateinc)})", None
+            return text, warning
+        return f"@incrementdate(this,{int(dateinc)})", warning
 
     append_match = _ALWAYS_APPEND_RE.match(text)
     if append_match is not None:
         body = str(append_match.group(1) or "").strip()
         if not body:
-            return text, None
-        return f"@always(){body}", None
+            return text, warning
+        return f"@always(){body}", warning
 
     param_match = _ALWAYS_PARAM_RE.match(text)
     if param_match is not None:
         name = param_match.group(1)
         value = str(params.get(name, "") or "").strip()
         if not value:
-            return text, None
-        return f"@always(){value}", None
+            return text, warning
+        return f"@always(){value}", warning
 
     always_lookup = _ALWAYS_LOOKUP_RE.match(text)
     if always_lookup is not None:
         key = always_lookup.group(1).lower()
-        return f"@lookup(this,{key})", None
+        return f"@lookup(this,{key})", warning
 
     if _ALWAYS_MODIFYDATE_YEAR_RE.match(text):
-        return "@modifydate(StudyDate,*,1,1)", None
+        return "@modifydate(StudyDate,*,1,1)", warning
 
     if _ALWAYS_DATEINTERVAL_STUDY_DDATE_RE.match(text):
-        return "@dateinterval(StudyDate,ddate,PatientID)", None
+        return "@dateinterval(StudyDate,ddate,PatientID)", warning
 
     round_match = _ROUND_ELEMENT_RE.match(text)
     if round_match is not None:
@@ -282,11 +302,15 @@ def _normalize_operation(
         if element.lower() != "this":
             return (
                 f"@round(this,{width})",
-                "@round uses this element only; product rounds age down (not CTP group center).",
+                warning
+                or (
+                    "@round uses this element only; product rounds age down "
+                    "(not CTP group center)."
+                ),
             )
-        return f"@round(this,{width})", None
+        return f"@round(this,{width})", warning
 
-    return text, None
+    return text, warning
 
 
 def _param_int(raw: str | None) -> int | None:

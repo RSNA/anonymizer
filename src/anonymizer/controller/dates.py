@@ -41,8 +41,8 @@ rebase_days(basedate: str | None, origin: str | None) -> int | None
 stamp_dates_modified(ds: Dataset) -> None
     Set LongitudinalTemporalInformationModified to MODIFIED.
 
-stamp_rebase_registration(ds: Dataset, phi_study_date: str | None, basedate: str | None) -> None
-    Stamp TCIA REGISTRATION provenance from StudyDate and lookup basedate.
+stamp_rebase_registration(ds, phi_study_date, basedate, *, event_type="REGISTRATION") -> None
+    Stamp TCIA longitudinal offset/event-type from StudyDate and lookup basedate.
 """
 import hashlib
 import logging
@@ -310,18 +310,21 @@ def stamp_rebase_registration(
     ds: Dataset,
     phi_study_date: str | None,
     basedate: str | None,
+    *,
+    event_type: str = "REGISTRATION",
 ) -> None:
     """
-    Stamp TCIA REGISTRATION provenance from StudyDate and lookup basedate.
+    Stamp TCIA longitudinal provenance from StudyDate and lookup basedate.
 
-    Sets LongitudinalTemporalOffsetFromEvent, LongitudinalTemporalEventType
-    REGISTRATION, and LongitudinalTemporalInformationModified MODIFIED when
-    both dates are valid YYYYMMDD.
+    Sets LongitudinalTemporalOffsetFromEvent, LongitudinalTemporalEventType,
+    and LongitudinalTemporalInformationModified MODIFIED when both dates are
+    valid YYYYMMDD.
 
     Args:
         ds: Dataset to mutate.
         phi_study_date: Pre-anonymization StudyDate, or None.
         basedate: Lookup basedate YYYYMMDD, or None.
+        event_type: Event type code (REGISTRATION, DIAGNOSIS, BASELINE, …).
 
     Returns:
         None.
@@ -338,5 +341,6 @@ def stamp_rebase_registration(
     except ValueError:
         return
     ds.LongitudinalTemporalOffsetFromEvent = float((study_dt - base_dt).days)
-    ds.LongitudinalTemporalEventType = "REGISTRATION"
+    label = str(event_type or "").strip() or "REGISTRATION"
+    ds.LongitudinalTemporalEventType = label
     ds.LongitudinalTemporalInformationModified = "MODIFIED"
