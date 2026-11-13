@@ -17,16 +17,10 @@ from anonymizer.controller.script.operands import (
     is_remove_operation,
     validate_operation,
 )
+from anonymizer.model.project import ProjectModel
 
 _FIXTURES = Path(__file__).resolve().parent / "fixtures" / "tcia"
 _INCDATE_HOLDOUTS = _FIXTURES / "incdate_holdouts.script"
-
-# After Branch A normalize, only these operand families may still fail validate.
-_BRANCH_A_HOLDOUT_MARKERS = (
-    "cname",
-    "modifydate",
-    "hashname",
-)
 
 
 def _rule(tag: str, operation: str) -> ScriptRule:
@@ -46,12 +40,17 @@ def test_is_remove_operation_exact_only() -> None:
 
 
 def test_validate_rejects_literal_containing_at() -> None:
-    """Bare literals that embed @ operands are rejected."""
-    bad = "REV-@hashname(this,4)"
+    """Bare literals that embed unknown @ operands are rejected."""
+    bad = "REV-@notARealOperand(this,4)"
     assert always_literal_text(bad) is None
     err = validate_operation(bad)
     assert err is not None
-    assert "hashname" in err or "@" in err
+    assert "@" in err
+
+
+def test_hashname_with_prefix_is_valid() -> None:
+    """TCIA ReviewerName form REV-@hashname(this,4) is a catalog hashname op."""
+    assert validate_operation("REV-@hashname(this,4)") is None
 
 
 def test_normalize_lookup_patientid_ptid() -> None:
@@ -106,11 +105,13 @@ def test_dedupe_rules_last_wins() -> None:
     assert any("Duplicate" in w for w in warnings)
 
 
-def test_incdate_holdouts_after_branch_a_normalize() -> None:
+def test_incdate_phase1_rewrites_on_holdouts_fixture() -> None:
     """
-    IncDate excerpt after Branch A: only cname / modifydate / hashname fail.
+    IncDate excerpt after normalize: Phase 1 aliases applied.
 
-    Merge gate for tcia-script-import-safety.
+    Branch A historically left cname/modifydate/hashname as holdouts; Branch B
+    clears those. This test only asserts Phase 1 rewrites and that no Phase 1
+    forms remain in any residual errors.
     """
     document = load_script_rules(_INCDATE_HOLDOUTS)
     normalize_ctp_document(document)
@@ -125,14 +126,8 @@ def test_incdate_holdouts_after_branch_a_normalize() -> None:
     assert document.get_rule("0008114A").operation == "@empty()"
 
     errors = validate_document(document)
-    assert errors, "expected remaining Branch B holdouts"
-    joined = "\n".join(errors).lower()
-    for marker in _BRANCH_A_HOLDOUT_MARKERS:
-        assert marker in joined, f"expected holdout marker {marker!r} in {errors}"
-
     for err in errors:
         lower = err.lower()
-        assert any(marker in lower for marker in _BRANCH_A_HOLDOUT_MARKERS), err
         assert "lookup(patientid,ptid)" not in lower
         assert "@param" not in lower
         assert "@append" not in lower
@@ -141,7 +136,5 @@ def test_incdate_holdouts_after_branch_a_normalize() -> None:
 
 def test_packaged_default_still_validates() -> None:
     """Exact-remove change must not break the packaged default script."""
-    from anonymizer.model.project import ProjectModel
-
     document = load_script_rules(ProjectModel.default_anonymizer_script_path())
     assert validate_document(document) == []

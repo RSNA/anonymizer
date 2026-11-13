@@ -40,7 +40,23 @@ operand_id_for_operation(operation) -> OperandId | None
 
 validate_operation(operation) -> str | None
     Error message if invalid, else None.
+
+lookup_key_from_operation(operation) -> str | None
+    Lookup table key (ptid, cname, …) when operation is @lookup(this,key).
+
+parse_hashname_operation(operation) -> tuple[str, int] | None
+    Optional literal prefix and width for @hashname(this,n).
+
+hashname_text(value, width) -> str
+    CTP-style truncated MD5 hex of value.
+
+truncate_text(value, width) -> str
+    Keep the first width characters of value.
+
+study_year_text(study_date) -> str
+    Four-digit year from a DICOM DA StudyDate string.
 """
+import hashlib
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -50,6 +66,23 @@ _REMOVE_RE = re.compile(r"^@remove(\(\s*\))?$", re.IGNORECASE)
 _ROUND_RE = re.compile(r"^@round\(\s*this\s*,\s*(\d+)\s*\)$", re.IGNORECASE)
 _INCREMENTDATE_RE = re.compile(r"^@incrementdate\(\s*this\s*,\s*(-?\d+)\s*\)$", re.IGNORECASE)
 _REBASEDATE_RE = re.compile(r"^@rebasedate\(\s*this\s*,\s*(\d{8})\s*\)$", re.IGNORECASE)
+_LOOKUP_THIS_RE = re.compile(
+    r"^@lookup\(\s*this\s*,\s*(ptid|dateoffset|cname|siteid|ddate)\s*\)$",
+    re.IGNORECASE,
+)
+_TRUNCATE_RE = re.compile(r"^@truncate\(\s*this\s*,\s*(\d+)\s*\)$", re.IGNORECASE)
+_MODIFYDATE_YEAR_RE = re.compile(
+    r"^@modifydate\(\s*StudyDate\s*,\s*\*\s*,\s*1\s*,\s*1\s*\)$",
+    re.IGNORECASE,
+)
+_HASHNAME_RE = re.compile(
+    r"^(?P<prefix>(?:(?!@).)*)@hashname\(\s*this\s*,\s*(?P<n>\d+)\s*\)$",
+    re.IGNORECASE,
+)
+_DATEINTERVAL_STUDY_DDATE_RE = re.compile(
+    r"^@dateinterval\(\s*StudyDate\s*,\s*ddate\s*,\s*PatientID\s*\)$",
+    re.IGNORECASE,
+)
 _DEFAULT_REBASE_ORIGIN = "19600101"
 _ALWAYS_RE = re.compile(r"^@always\(\)\s*(.*)$", re.IGNORECASE | re.DOTALL)
 
@@ -67,9 +100,16 @@ class OperandId(StrEnum):
     HASHDATE = "hashdate"
     LOOKUP_PTID = "lookup_ptid"
     LOOKUP_DATEOFFSET = "lookup_dateoffset"
+    LOOKUP_CNAME = "lookup_cname"
+    LOOKUP_SITEID = "lookup_siteid"
+    LOOKUP_DDATE = "lookup_ddate"
     INCREMENTDATE = "incrementdate"
     REBASEDATE = "rebasedate"
     ROUND = "round"
+    MODIFYDATE_YEAR = "modifydate_year"
+    TRUNCATE = "truncate"
+    HASHNAME = "hashname"
+    DATEINTERVAL_STUDY_DDATE = "dateinterval_study_ddate"
     ALWAYS = "always"
     PROCESS = "process"
 
@@ -170,6 +210,27 @@ OPERANDS: tuple[OperandSpec, ...] = (
         "loaded yet, Apply opens the lookup-table dialog.",
     ),
     OperandSpec(
+        OperandId.LOOKUP_CNAME,
+        "Lookup collection name",
+        "@lookup(this,cname)",
+        "Replace the value with the collection name (cname/) from the project's "
+        "patient lookup table. Used for TCIA private ProjectName / TrialName stamps.",
+    ),
+    OperandSpec(
+        OperandId.LOOKUP_SITEID,
+        "Lookup site id",
+        "@lookup(this,siteid)",
+        "Replace the value with the site id (siteid/) from the project's "
+        "patient lookup table.",
+    ),
+    OperandSpec(
+        OperandId.LOOKUP_DDATE,
+        "Lookup diagnosis date",
+        "@lookup(this,ddate)",
+        "Replace the value with the diagnosis / base date (ddate/ or basedate/) "
+        "from the project's patient lookup table as YYYYMMDD.",
+    ),
+    OperandSpec(
         OperandId.INCREMENTDATE,
         "Increment date",
         "@incrementdate(this,{n})",
@@ -219,6 +280,41 @@ OPERANDS: tuple[OperandSpec, ...] = (
             "Ages are rounded down to the nearest multiple of this width.\n"
             "Example with width 5: age 23 → 20Y, age 29 → 25Y."
         ),
+    ),
+    OperandSpec(
+        OperandId.MODIFYDATE_YEAR,
+        "Study year",
+        "@modifydate(StudyDate,*,1,1)",
+        "Write the four-digit year from StudyDate into this tag (TCIA StudyYear). "
+        "Matches CTP @modifydate(StudyDate,*,1,1).",
+    ),
+    OperandSpec(
+        OperandId.TRUNCATE,
+        "Truncate",
+        "@truncate(this,{n})",
+        "Keep the first n characters of the current value (CTP @truncate).",
+        needs_param=True,
+        param_title_key="Truncate — character count",
+        param_help_key="Enter how many leading characters to keep (integer ≥ 1).",
+    ),
+    OperandSpec(
+        OperandId.HASHNAME,
+        "Hash name",
+        "@hashname(this,{n})",
+        "Replace the value with the first n hex characters of an MD5 of the "
+        "current value (CTP @hashname). A literal prefix may appear before "
+        "@hashname (for example REV-@hashname(this,4)).",
+        needs_param=True,
+        param_title_key="Hash name — hex length",
+        param_help_key="Enter how many hex characters to keep (integer ≥ 1).",
+    ),
+    OperandSpec(
+        OperandId.DATEINTERVAL_STUDY_DDATE,
+        "Offset from diagnosis date",
+        "@dateinterval(StudyDate,ddate,PatientID)",
+        "Write Longitudinal Temporal Offset From Event as whole days from the "
+        "lookup diagnosis/base date (ddate/) to StudyDate (TCIA IncDateAndDiag). "
+        "Full @dateinterval(this,ddate,…,@NORMDATE) rebase is a separate form.",
     ),
     OperandSpec(
         OperandId.ALWAYS,
@@ -450,9 +546,107 @@ def operand_id_for_operation(operation: str | None) -> OperandId | None:
         return OperandId.INCREMENTDATE
     if _REBASEDATE_RE.match(text) or text.lower() == "@rebasedate":
         return OperandId.REBASEDATE
+    if _TRUNCATE_RE.match(text):
+        return OperandId.TRUNCATE
+    if _MODIFYDATE_YEAR_RE.match(text):
+        return OperandId.MODIFYDATE_YEAR
+    if parse_hashname_operation(text) is not None:
+        return OperandId.HASHNAME
+    if _DATEINTERVAL_STUDY_DDATE_RE.match(text):
+        return OperandId.DATEINTERVAL_STUDY_DDATE
+    lookup = _LOOKUP_THIS_RE.match(text)
+    if lookup is not None:
+        key = lookup.group(1).lower()
+        return {
+            "ptid": OperandId.LOOKUP_PTID,
+            "dateoffset": OperandId.LOOKUP_DATEOFFSET,
+            "cname": OperandId.LOOKUP_CNAME,
+            "siteid": OperandId.LOOKUP_SITEID,
+            "ddate": OperandId.LOOKUP_DDATE,
+        }.get(key)
     if always_literal_text(text) is not None:
         return OperandId.ALWAYS
     return None
+
+
+def lookup_key_from_operation(operation: str | None) -> str | None:
+    """
+    Return the lookup table key when operation is @lookup(this,key).
+
+    Args:
+        operation: Script operation text.
+
+    Returns:
+        Lowercase key, or None.
+    """
+    match = _LOOKUP_THIS_RE.match(str(operation or "").strip())
+    if match is None:
+        return None
+    return match.group(1).lower()
+
+
+def parse_hashname_operation(operation: str | None) -> tuple[str, int] | None:
+    """
+    Parse optional prefix and width from @hashname(this,n).
+
+    Args:
+        operation: Script operation text (may include a literal prefix).
+
+    Returns:
+        (prefix, width), or None when not a hashname form.
+    """
+    match = _HASHNAME_RE.match(str(operation or "").strip())
+    if match is None:
+        return None
+    width = int(match.group("n"))
+    if width < 1:
+        return None
+    return str(match.group("prefix") or ""), width
+
+
+def hashname_text(value: str, width: int) -> str:
+    """
+    CTP-style truncated MD5 hex of value.
+
+    Args:
+        value: Source string to hash.
+        width: Number of leading hex characters to keep.
+
+    Returns:
+        Lowercase hex prefix of length width (or shorter if digest is shorter).
+    """
+    digest = hashlib.md5(str(value).encode("utf-8")).hexdigest()
+    return digest[: max(0, int(width))]
+
+
+def truncate_text(value: str, width: int) -> str:
+    """
+    Keep the first width characters of value.
+
+    Args:
+        value: Source string.
+        width: Character count to keep.
+
+    Returns:
+        Truncated string.
+    """
+    return str(value)[: max(0, int(width))]
+
+
+def study_year_text(study_date: str | None) -> str:
+    """
+    Four-digit year from a DICOM DA StudyDate string.
+
+    Args:
+        study_date: DICOM DA text (YYYYMMDD…), or None.
+
+    Returns:
+        YYYY, or empty string when not available.
+    """
+    text = str(study_date or "").strip()
+    if len(text) >= 4 and text[:4].isdigit():
+        return text[:4]
+    return ""
 
 
 def validate_operation(operation: str | None) -> str | None:
@@ -473,6 +667,8 @@ def validate_operation(operation: str | None) -> str | None:
         text = "@keep"
     if text.lower() == "@always()":
         return "Unsupported operand: @always() requires a fixed value (e.g. @always()YES)"
+    if parse_hashname_operation(text) is not None:
+        return None
     if not text.startswith("@") and "@" in text:
         return (
             f"Unsupported operand: {text!r} "

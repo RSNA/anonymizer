@@ -53,6 +53,18 @@ _ALWAYS_APPEND_RE = re.compile(
     r"^@always\(\)\s*@append\(\)\s*\{(.*)\}\s*$",
     re.IGNORECASE | re.DOTALL,
 )
+_ALWAYS_LOOKUP_RE = re.compile(
+    r"^@always\(\)\s*@lookup\(\s*PatientID\s*,\s*(cname|siteid|ddate)\s*\)$",
+    re.IGNORECASE,
+)
+_ALWAYS_MODIFYDATE_YEAR_RE = re.compile(
+    r"^@always\(\)\s*@modifydate\(\s*StudyDate\s*,\s*\*\s*,\s*1\s*,\s*1\s*\)$",
+    re.IGNORECASE,
+)
+_ALWAYS_DATEINTERVAL_STUDY_DDATE_RE = re.compile(
+    r"^@always\(\)\s*@dateinterval\(\s*StudyDate\s*,\s*ddate\s*,\s*PatientID\s*\)$",
+    re.IGNORECASE,
+)
 _UNSUPPORTED_OPERAND_RE = re.compile(
     r"^([0-9A-Fa-f]{8}):\s*Unsupported operand:\s*(.+)$"
 )
@@ -251,6 +263,17 @@ def _normalize_operation(
         if not value:
             return text, None
         return f"@always(){value}", None
+
+    always_lookup = _ALWAYS_LOOKUP_RE.match(text)
+    if always_lookup is not None:
+        key = always_lookup.group(1).lower()
+        return f"@lookup(this,{key})", None
+
+    if _ALWAYS_MODIFYDATE_YEAR_RE.match(text):
+        return "@modifydate(StudyDate,*,1,1)", None
+
+    if _ALWAYS_DATEINTERVAL_STUDY_DDATE_RE.match(text):
+        return "@dateinterval(StudyDate,ddate,PatientID)", None
 
     round_match = _ROUND_ELEMENT_RE.match(text)
     if round_match is not None:

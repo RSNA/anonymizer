@@ -75,6 +75,9 @@ class LookupPatientRow:
     anon_patient_id: str
     date_offset: int | None = None
     base_date: str | None = None
+    collection_name: str | None = None
+    site_name: str | None = None
+    lookup_site_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -249,7 +252,11 @@ def commit_ctp_lookup(
             patient_id=row.patient_id,
             anon_patient_id=row.anon_patient_id,
             date_offset=row.date_offset,
-            base_date=row.base_date)
+            base_date=row.base_date,
+            collection_name=row.collection_name,
+            site_name=row.site_name,
+            lookup_site_id=row.lookup_site_id,
+        )
         for row in preview.rows
     ]
     anonymizer_model.upsert_ctp_lookup_phi(phi_rows)
@@ -324,7 +331,12 @@ def _parse_properties(path: Path) -> list[LookupPatientRow]:
     ptid: dict[str, str] = {}
     dateoffset: dict[str, int] = {}
     basedate: dict[str, str] = {}
+    ddate: dict[str, str] = {}
+    cname: dict[str, str] = {}
+    sname: dict[str, str] = {}
+    siteid: dict[str, str] = {}
     errors: list[str] = []
+    skipped_keys: dict[str, int] = {}
 
     for line_no, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         line = raw_line.strip()
@@ -352,19 +364,41 @@ def _parse_properties(path: Path) -> list[LookupPatientRow]:
             if not patient_id:
                 errors.append(f"Line {line_no}: empty basedate patient id")
                 continue
-            if len(replacement) != 8 or not replacement.isdigit():
+            parsed = _parse_yyyyymmdd(replacement)
+            if parsed is None:
                 errors.append(
                     f"Line {line_no}: basedate must be YYYYMMDD, got {replacement!r}"
                 )
                 continue
-            try:
-                datetime.strptime(replacement, "%Y%m%d")
-            except ValueError:
-                errors.append(f"Line {line_no}: basedate is not a valid date: {replacement!r}")
+            basedate[patient_id] = parsed
+        elif keytype == "ddate":
+            if not patient_id:
+                errors.append(f"Line {line_no}: empty ddate patient id")
                 continue
-            basedate[patient_id] = replacement
+            parsed = _parse_tcia_ddate(replacement)
+            if parsed is None:
+                errors.append(
+                    f"Line {line_no}: ddate must be M/D/YYYY or YYYYMMDD, got {replacement!r}"
+                )
+                continue
+            ddate[patient_id] = parsed
+        elif keytype == "cname":
+            if not patient_id or not replacement:
+                errors.append(f"Line {line_no}: empty cname key or value")
+            else:
+                cname[patient_id] = replacement
+        elif keytype == "sname":
+            if not patient_id or not replacement:
+                errors.append(f"Line {line_no}: empty sname key or value")
+            else:
+                sname[patient_id] = replacement
+        elif keytype == "siteid":
+            if not patient_id or not replacement:
+                errors.append(f"Line {line_no}: empty siteid key or value")
+            else:
+                siteid[patient_id] = replacement
         else:
-            errors.append(f"Line {line_no}: unsupported key type {keytype!r}")
+            skipped_keys[keytype] = skipped_keys.get(keytype, 0) + 1
 
     if errors:
         raise LookupPropertiesError("\n".join(errors))
@@ -372,41 +406,83 @@ def _parse_properties(path: Path) -> list[LookupPatientRow]:
     if not ptid:
         raise LookupPropertiesError("No ptid/ entries found in properties file")
 
+    if skipped_keys:
+        parts = ", ".join(f"{key}×{count}" for key, count in sorted(skipped_keys.items()))
+        logger.warning("CTP lookup skipped unsupported property key types: %s", parts)
+
     if dateoffset:
-        missing = sorted(set(ptid) - set(dateoffset))
-        if missing:
-            raise LookupPropertiesError(
-                "Every ptid patient must have a dateoffset entry. Missing: " + ", ".join(missing)
-            )
-        extra = sorted(set(dateoffset) - set(ptid))
-        if extra:
-            raise LookupPropertiesError(
-                "dateoffset entries without matching ptid: " + ", ".join(extra)
-            )
+        _require_ptid_alignment(ptid, dateoffset, "dateoffset")
 
     if basedate:
-        missing = sorted(set(ptid) - set(basedate))
-        if missing:
-            raise LookupPropertiesError(
-                "Every ptid patient must have a basedate entry. Missing: " + ", ".join(missing)
-            )
-        extra = sorted(set(basedate) - set(ptid))
-        if extra:
-            raise LookupPropertiesError(
-                "basedate entries without matching ptid: " + ", ".join(extra)
-            )
+        _require_ptid_alignment(ptid, basedate, "basedate")
+
+    if ddate:
+        _require_ptid_alignment(ptid, ddate, "ddate")
+
+    if cname:
+        _require_ptid_alignment(ptid, cname, "cname")
+
+    if sname:
+        _require_ptid_alignment(ptid, sname, "sname")
+
+    if siteid:
+        _require_ptid_alignment(ptid, siteid, "siteid")
 
     rows: list[LookupPatientRow] = []
     for patient_id, anon_patient_id in sorted(ptid.items()):
-        offset = dateoffset.get(patient_id)
+        base = basedate.get(patient_id) or ddate.get(patient_id)
         rows.append(
             LookupPatientRow(
                 patient_id=patient_id,
                 anon_patient_id=anon_patient_id,
-                date_offset=offset,
-                base_date=basedate.get(patient_id))
+                date_offset=dateoffset.get(patient_id),
+                base_date=base,
+                collection_name=cname.get(patient_id),
+                site_name=sname.get(patient_id),
+                lookup_site_id=siteid.get(patient_id),
+            )
         )
     return rows
+
+
+def _require_ptid_alignment(ptid: dict[str, str], other: dict[str, object], label: str) -> None:
+    """Raise when other keys are not exactly the ptid patient set."""
+    missing = sorted(set(ptid) - set(other))
+    if missing:
+        raise LookupPropertiesError(
+            f"Every ptid patient must have a {label} entry. Missing: " + ", ".join(missing)
+        )
+    extra = sorted(set(other) - set(ptid))
+    if extra:
+        raise LookupPropertiesError(
+            f"{label} entries without matching ptid: " + ", ".join(extra)
+        )
+
+
+def _parse_yyyyymmdd(raw: str) -> str | None:
+    """Return YYYYMMDD when valid, else None."""
+    text = str(raw or "").strip()
+    if len(text) != 8 or not text.isdigit():
+        return None
+    try:
+        datetime.strptime(text, "%Y%m%d")
+    except ValueError:
+        return None
+    return text
+
+
+def _parse_tcia_ddate(raw: str) -> str | None:
+    """Parse TCIA ddate (M/D/YYYY or YYYYMMDD) to YYYYMMDD."""
+    text = str(raw or "").strip()
+    ymd = _parse_yyyyymmdd(text)
+    if ymd is not None:
+        return ymd
+    for fmt in ("%m/%d/%Y", "%m/%d/%y"):
+        try:
+            return datetime.strptime(text, fmt).strftime("%Y%m%d")
+        except ValueError:
+            continue
+    return None
 
 
 def _build_script_patch_from_path(script_path: Path, has_dateoffset: bool) -> ScriptPatchResult:

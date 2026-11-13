@@ -16,6 +16,7 @@ import os
 import re
 import threading
 import time
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from queue import Queue
@@ -44,7 +45,12 @@ from anonymizer.controller.script.document import (
 )
 from anonymizer.controller.script.operands import (
     always_literal_text,
+    hashname_text,
     is_remove_operation,
+    lookup_key_from_operation,
+    parse_hashname_operation,
+    study_year_text,
+    truncate_text,
 )
 from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.model.project import DICOMNode, ProjectModel
@@ -71,6 +77,25 @@ class LookupTableMissError(Exception):
     def __init__(self, patient_id: str):
         self.patient_id = patient_id
         super().__init__(f"Lookup miss for patient_id={patient_id!r}")
+
+
+class _LookupStampValues:
+    """PHI lookup stamp fields for TCIA @lookup(this,cname|siteid|ddate)."""
+
+    __slots__ = ("collection_name", "site_name", "lookup_site_id", "base_date")
+
+    def __init__(
+        self,
+        *,
+        collection_name: str | None,
+        site_name: str | None,
+        lookup_site_id: str | None,
+        base_date: str | None,
+    ) -> None:
+        self.collection_name = collection_name
+        self.site_name = site_name
+        self.lookup_site_id = lookup_site_id
+        self.base_date = base_date
 
 
 class AnonymizerController:
@@ -381,6 +406,175 @@ class AnonymizerController:
                     exc_info=True,
                 )
 
+    def _insert_lookup_missing_elements(
+        self,
+        ds: Dataset,
+        *,
+        phi_ptid: str,
+        anon_ptid: str,
+        stamps: _LookupStampValues,
+    ) -> None:
+        """
+        Create absent elements whose script uses @lookup(this,cname|siteid|ddate).
+
+        Args:
+            ds: Dataset after the script walk (mutated in place).
+            phi_ptid: PHI PatientID (for miss errors).
+            anon_ptid: Anonymized PatientID (unused for stamp keys).
+            stamps: Lookup stamp values from PHI.
+
+        Returns:
+            None.
+
+        Raises:
+            LookupTableMissError: When a required stamp value is missing.
+        """
+        del anon_ptid  # stamp keys do not write anon patient id
+        for tag_hex, operation in self.model._tag_keep.items():
+            key = lookup_key_from_operation(operation)
+            if key is None or key in {"ptid", "dateoffset"}:
+                continue
+            try:
+                tag = Tag(int(tag_hex, 16))
+            except ValueError:
+                logger.warning("Invalid tag in script for @lookup: %s", tag_hex)
+                continue
+            if tag in ds:
+                continue
+            value = self._lookup_stamp_value(key, stamps=stamps, phi_ptid=phi_ptid)
+            try:
+                vr = dictionary_VR(tag)
+            except Exception:
+                vr = "LO"
+            if str(vr).upper() == "SQ":
+                continue
+            try:
+                ds.add_new(tag, vr, value)
+            except Exception:
+                logger.warning(
+                    "Unable to create %s via @lookup(this,%s)",
+                    tag_hex,
+                    key,
+                    exc_info=True,
+                )
+
+    def _dateinterval_study_ddate_days(
+        self,
+        study_date: str | None,
+        base_date: str | None,
+        *,
+        phi_ptid: str,
+    ) -> str:
+        """
+        Whole days from lookup base/ddate to StudyDate.
+
+        Args:
+            study_date: DICOM StudyDate.
+            base_date: Lookup basedate/ddate YYYYMMDD.
+            phi_ptid: PHI PatientID for miss errors.
+
+        Returns:
+            Signed day count as text.
+
+        Raises:
+            LookupTableMissError: When basedate is missing or dates are invalid.
+        """
+        if not base_date or not valid_date(str(base_date).strip()[:8]):
+            raise LookupTableMissError(phi_ptid)
+        study = str(study_date or "").strip()[:8]
+        if not valid_date(study):
+            return "0"
+        base = str(base_date).strip()[:8]
+        delta = datetime.strptime(study, "%Y%m%d") - datetime.strptime(base, "%Y%m%d")
+        return str(int(delta.days))
+
+    def _insert_dateinterval_missing_elements(
+        self,
+        ds: Dataset,
+        *,
+        stamps: _LookupStampValues,
+        phi_ptid: str,
+    ) -> None:
+        """
+        Create absent Longitudinal Temporal Offset tags from StudyDate/ddate.
+
+        Args:
+            ds: Dataset after the script walk (mutated in place).
+            stamps: Lookup stamp values (needs base_date).
+            phi_ptid: PHI PatientID for miss errors.
+
+        Returns:
+            None.
+        """
+        for tag_hex, operation in self.model._tag_keep.items():
+            op = str(operation or "").strip()
+            if "@dateinterval" not in op.lower() or "StudyDate" not in op:
+                continue
+            try:
+                tag = Tag(int(tag_hex, 16))
+            except ValueError:
+                continue
+            if tag in ds:
+                continue
+            value = self._dateinterval_study_ddate_days(
+                getattr(ds, "StudyDate", None),
+                stamps.base_date,
+                phi_ptid=phi_ptid,
+            )
+            try:
+                vr = dictionary_VR(tag)
+            except Exception:
+                vr = "FD"
+            if str(vr).upper() == "SQ":
+                continue
+            try:
+                ds.add_new(tag, vr, value)
+            except Exception:
+                logger.warning(
+                    "Unable to create %s via @dateinterval(StudyDate,ddate,PatientID)",
+                    tag_hex,
+                    exc_info=True,
+                )
+
+    def _lookup_stamp_value(
+        self,
+        key: str,
+        *,
+        stamps: _LookupStampValues,
+        phi_ptid: str,
+        anon_ptid: str | None = None,
+    ) -> str:
+        """
+        Resolve one @lookup(this,key) replacement.
+
+        Args:
+            key: Lookup key (ptid, cname, siteid, ddate).
+            stamps: PHI stamp fields.
+            phi_ptid: PHI PatientID for miss errors.
+            anon_ptid: Anonymized PatientID when key is ptid.
+
+        Returns:
+            Replacement text.
+
+        Raises:
+            LookupTableMissError: When the required stamp is absent.
+        """
+        if key == "ptid":
+            return str(anon_ptid or "")
+        if key == "cname":
+            if stamps.collection_name is None:
+                raise LookupTableMissError(phi_ptid)
+            return stamps.collection_name
+        if key == "siteid":
+            if stamps.lookup_site_id is None:
+                raise LookupTableMissError(phi_ptid)
+            return stamps.lookup_site_id
+        if key == "ddate":
+            if stamps.base_date is None:
+                raise LookupTableMissError(phi_ptid)
+            return stamps.base_date
+        raise LookupTableMissError(phi_ptid)
+
     def _anonymize_element(
         self,
         dataset: Dataset,
@@ -389,6 +583,7 @@ class AnonymizerController:
         anon_ptid: str,
         anon_acc_no: str | None,
         date_delta: int | None,
+        stamps: _LookupStampValues | None = None,
     ) -> None:
         """
         Apply script keep/remove/transform rules to one data element.
@@ -401,10 +596,18 @@ class AnonymizerController:
             anon_acc_no: Anonymized accession number, or None.
             date_delta: The file's single resolved day delta for date
                 operations, or None when no delta could be resolved.
+            stamps: PHI lookup stamp fields for TCIA lookup keys; empty when omitted.
 
         Returns:
             None.
         """
+        if stamps is None:
+            stamps = _LookupStampValues(
+                collection_name=None,
+                site_name=None,
+                lookup_site_id=None,
+                base_date=None,
+            )
         tag = str(data_element.tag).translate(self._clean_tag_translate_table).upper()
 
         if data_element.tag.is_private:
@@ -457,7 +660,30 @@ class AnonymizerController:
             else:
                 dataset[tag].value = apply_day_delta(raw, date_delta)
         elif "@lookup" in operation:
-            dataset[tag].value = anon_ptid
+            key = lookup_key_from_operation(operation) or "ptid"
+            dataset[tag].value = self._lookup_stamp_value(
+                key,
+                stamps=stamps,
+                phi_ptid=phi_ptid,
+                anon_ptid=anon_ptid,
+            )
+        elif "@modifydate" in operation.lower():
+            dataset[tag].value = study_year_text(getattr(dataset, "StudyDate", None))
+        elif "@dateinterval" in operation.lower() and "StudyDate" in operation:
+            dataset[tag].value = self._dateinterval_study_ddate_days(
+                getattr(dataset, "StudyDate", None),
+                stamps.base_date,
+                phi_ptid=phi_ptid,
+            )
+        elif parse_hashname_operation(operation) is not None:
+            prefix, width = parse_hashname_operation(operation) or ("", 0)
+            dataset[tag].value = f"{prefix}{hashname_text(raw, width)}"
+        elif "@truncate" in operation.lower():
+            width = self.extract_first_digit(operation.replace("@truncate", ""))
+            if width is None:
+                logger.error(f"Invalid truncate operation: {operation}, leaving value unchanged")
+                return
+            dataset[tag].value = truncate_text(raw, int(width))
         elif "@round" in operation:
             # TODO: operand is named round but it is age format specific, should be renamed round_age
             if value is None:
@@ -533,6 +759,14 @@ class AnonymizerController:
         except Exception as e:
             return self._write_dataset_to_quarantine(e, ds, QuarantineDirectories.CAPTURE_PHI_ERROR)
 
+        phi_after = self.model.get_phi_by_phi_patient_id(phi_ptid)
+        stamps = _LookupStampValues(
+            collection_name=phi_after.collection_name if phi_after is not None else None,
+            site_name=phi_after.site_name if phi_after is not None else None,
+            lookup_site_id=phi_after.lookup_site_id if phi_after is not None else None,
+            base_date=phi_after.base_date if phi_after is not None else base_date,
+        )
+
         phi_instance_uid = ds.SOPInstanceUID  # if exception, remove this instance from uid_lookup
         try:
             # To minimize memory/computation overhead DO NOT MAKE COPY of source dataset
@@ -553,12 +787,20 @@ class AnonymizerController:
                     anon_ptid,
                     None if anon_acc_no is None else str(anon_acc_no),
                     date_delta,
+                    stamps,
                 )
 
             ds.walk(pydicom_callback)  # recursive by default, recurses into embedded dataset sequences
 
             # Create missing non-SQ elements whose script uses @always()… (CTP create-if-missing).
             self._insert_always_missing_elements(ds)
+            self._insert_lookup_missing_elements(
+                ds,
+                phi_ptid=phi_ptid,
+                anon_ptid=anon_ptid,
+                stamps=stamps,
+            )
+            self._insert_dateinterval_missing_elements(ds, stamps=stamps, phi_ptid=phi_ptid)
 
             if self.model.date_operands_present:
                 stamp_dates_modified(ds)
@@ -582,6 +824,9 @@ class AnonymizerController:
 
             return None
 
+        except LookupTableMissError as e:
+            self.model.remove_uid(phi_instance_uid)
+            return self._write_dataset_to_quarantine(e, ds, QuarantineDirectories.LOOKUP_MISS)
         except Exception as e:
             # Remove this phi instance UID from lookup if anonymization or storage fails
             # Leave other PHI intact for this patient

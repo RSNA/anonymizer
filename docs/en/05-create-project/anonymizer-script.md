@@ -123,9 +123,13 @@ basedate/<PHI-PatientID>=YYYYMMDD
 | `@incrementdate(this,@DATEINC)` | `@incrementdate(this,n)` from `<p t="DATEINC">` or a prompt |
 | `@always()@param(@NAME)` | `@always(){value}` from `<p t="NAME">` or a prompt |
 | `@always()@append(){text}` | `@always()text` |
+| `@always()@lookup(PatientID,cname|siteid|ddate)` | `@lookup(this,…)` |
+| `@always()@modifydate(StudyDate,*,1,1)` | `@modifydate(StudyDate,*,1,1)` (StudyYear) |
+| `@always()@dateinterval(StudyDate,ddate,PatientID)` | `@dateinterval(StudyDate,ddate,PatientID)` |
+| `REV-@hashname(this,n)` | catalog `@hashname` (optional literal prefix) |
 | `@round(Element,n)` | `@round(this,n)` (product rounds age down, not CTP group center) |
 
-Duplicate `<e>` tags keep the **last** rule (with a warning). Bare literals must not embed `@…` (for example `REV-@hashname(this,4)` is rejected until a real `@hashname` operand exists). `@remove` / `@remove()` are exact forms only — nested `@remove()` inside `@if` is not treated as Remove.
+Duplicate `<e>` tags keep the **last** rule (with a warning). Bare literals must not embed unknown `@…` forms. `@remove` / `@remove()` are exact forms only — nested `@remove()` inside `@if` is not treated as Remove. Patient lookup tables may include TCIA `cname` / `sname` / `siteid` / `ddate` (ddate stored as basedate YYYYMMDD).
 
 Script `<p>` parameters such as `DATEINC`, `UIDROOT`, and `SITEID` are retained for that resolution. Remaining unknown operands are rejected (errors grouped by operand). Date rules must match the StudyDate operation (one-click fix available). On **Accept**, confirm which de-identification options to record for that script (prefilled from its rules).
 
