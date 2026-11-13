@@ -119,8 +119,13 @@ basedate/<PHI-PatientID>=YYYYMMDD
 | `@hashdate(this,PatientID)` | `@hashdate` (PatientID seed only; other seeds stay unsupported) |
 | `@hashuid(…)` | `@uid` (project UID map, not CTP hash+root) |
 | `@hashptid(…)` | `@ptid` |
+| `@lookup(PatientID,ptid)` | `@lookup(this,ptid)` |
 | `@incrementdate(this,@DATEINC)` | `@incrementdate(this,n)` from `<p t="DATEINC">` or a prompt |
+| `@always()@param(@NAME)` | `@always(){value}` from `<p t="NAME">` or a prompt |
+| `@always()@append(){text}` | `@always()text` |
 | `@round(Element,n)` | `@round(this,n)` (product rounds age down, not CTP group center) |
+
+Duplicate `<e>` tags keep the **last** rule (with a warning). Bare literals must not embed `@…` (for example `REV-@hashname(this,4)` is rejected until a real `@hashname` operand exists). `@remove` / `@remove()` are exact forms only — nested `@remove()` inside `@if` is not treated as Remove.
 
 Script `<p>` parameters such as `DATEINC`, `UIDROOT`, and `SITEID` are retained for that resolution. Remaining unknown operands are rejected (errors grouped by operand). Date rules must match the StudyDate operation (one-click fix available). On **Accept**, confirm which de-identification options to record for that script (prefilled from its rules).
 

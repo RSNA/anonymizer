@@ -19,6 +19,7 @@ from anonymizer.controller.script.ctp_normalize import (
     format_validation_errors,
     normalize_ctp_document,
     unresolved_dateinc_tags,
+    unresolved_param_names,
 )
 from anonymizer.controller.script.date_rules import (
     apply_study_date_operation_to_rules,
@@ -1248,6 +1249,26 @@ class AnonymizerScriptDialog(AppToplevel):
                 return
             document.params["DATEINC"] = str(int(days))
             warnings = normalize_ctp_document(document, dateinc=int(days))
+        for param_name in unresolved_param_names(document):
+            value = OperandParamDialog(
+                self,
+                title=_("Import CTP Script"),
+                message=_("Enter value for script parameter {name}:").format(name=param_name),
+                initial="",
+                kind="str",
+            ).result
+            if value is None:
+                return
+            text = str(value).strip()
+            if not text:
+                messagebox.showerror(
+                    _("Import CTP Script"),
+                    _("Script parameter {name} cannot be empty.").format(name=param_name),
+                    parent=self,
+                )
+                return
+            document.params[param_name] = text
+            warnings = normalize_ctp_document(document)
         errors = validate_document(document)
         if errors:
             messagebox.showerror(

@@ -46,7 +46,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
-_REMOVE_MARKER = "@remove"
+_REMOVE_RE = re.compile(r"^@remove(\(\s*\))?$", re.IGNORECASE)
 _ROUND_RE = re.compile(r"^@round\(\s*this\s*,\s*(\d+)\s*\)$", re.IGNORECASE)
 _INCREMENTDATE_RE = re.compile(r"^@incrementdate\(\s*this\s*,\s*(-?\d+)\s*\)$", re.IGNORECASE)
 _REBASEDATE_RE = re.compile(r"^@rebasedate\(\s*this\s*,\s*(\d{8})\s*\)$", re.IGNORECASE)
@@ -312,8 +312,12 @@ def always_literal_text(operation: str | None) -> str | None:
         remainder = str(match.group(1) or "")
         if not remainder or remainder.startswith("@"):
             return None
+        if "@" in remainder:
+            return None
         return remainder
     if text.startswith("@"):
+        return None
+    if "@" in text:
         return None
     return text
 
@@ -326,9 +330,9 @@ def is_remove_operation(operation: str | None) -> bool:
         operation: Script operation text.
 
     Returns:
-        True when @remove appears in the text.
+        True for exact @remove or @remove() only (not substring matches).
     """
-    return _REMOVE_MARKER in str(operation or "")
+    return bool(_REMOVE_RE.match(str(operation or "").strip()))
 
 
 def is_retain_value_operation(operation: str | None) -> bool:
@@ -469,6 +473,11 @@ def validate_operation(operation: str | None) -> str | None:
         text = "@keep"
     if text.lower() == "@always()":
         return "Unsupported operand: @always() requires a fixed value (e.g. @always()YES)"
+    if not text.startswith("@") and "@" in text:
+        return (
+            f"Unsupported operand: {text!r} "
+            "(bare literals must not embed @ operands; use a catalog form)"
+        )
     if operand_id_for_operation(text) is not None:
         return None
     return f"Unsupported operand: {text!r}"
