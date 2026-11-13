@@ -1,5 +1,9 @@
 """Anonymizer script document types and XML load/write.
 
+Purpose
+    Load and write CTP-compatible anonymizer .script XML for the editor and
+    runtime keep table. Blank operation text becomes @keep.
+
 Public API
 ----------
 ScriptRule
@@ -9,10 +13,10 @@ ScriptRRule
     Preserved <r> element (not edited by the UI).
 
 ScriptDocument
-    Rules list plus optional source path.
+    Rules list, optional <p> parameters, optional source path.
 
 load_script_rules(path) -> ScriptDocument
-    Load a .script file; blank operation text becomes @keep.
+    Load a .script file; blank operation text becomes @keep; <p> params retained.
 
 write_script_rules(path, document) -> None
     Write CTP-compatible script XML.
@@ -58,6 +62,7 @@ class ScriptDocument:
 
     rules: list[ScriptRule] = field(default_factory=list)
     r_rules: list[ScriptRRule] = field(default_factory=list)
+    params: dict[str, str] = field(default_factory=dict)
     source_path: Path | None = None
 
     def rule_index(self, tag: str) -> int | None:
@@ -100,7 +105,8 @@ def load_script_rules(path: Path) -> ScriptDocument:
     """
     Load a .script file into a document.
 
-    Blank operation text is stored as @keep.
+    Blank operation text is stored as @keep. Script <p> parameters (for
+    example DATEINC, UIDROOT, SITEID) are retained for import resolution.
 
     Args:
         path: Path to the script file.
@@ -115,6 +121,12 @@ def load_script_rules(path: Path) -> ScriptDocument:
     if not path.is_file():
         raise FileNotFoundError(f"Script file not found: {path}")
     root = ET.parse(path).getroot()
+    params: dict[str, str] = {}
+    for element in root.findall("p"):
+        key = str(element.attrib.get("t", "") or "").strip()
+        if not key:
+            continue
+        params[key] = str(element.text or "").strip()
     rules: list[ScriptRule] = []
     for element in root.findall("e"):
         tag = str(element.attrib.get("t", "") or "").upper()
@@ -137,7 +149,12 @@ def load_script_rules(path: Path) -> ScriptDocument:
                 text=str(element.text or ""),
             )
         )
-    return ScriptDocument(rules=rules, r_rules=r_rules, source_path=path)
+    return ScriptDocument(
+        rules=rules,
+        r_rules=r_rules,
+        params=params,
+        source_path=path,
+    )
 
 
 def write_script_rules(path: Path, document: ScriptDocument) -> None:
@@ -157,6 +174,8 @@ def write_script_rules(path: Path, document: ScriptDocument) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = ['<?xml version="1.0" encoding="UTF-8"?>', "<script>"]
+    for key, value in document.params.items():
+        lines.append(f' <p t="{_xml_attr(key)}">{_xml_text(value)}</p>')
     for rule in document.rules:
         op = str(rule.operation or "").strip() or "@keep"
         err = validate_operation(op)
@@ -223,6 +242,15 @@ def _xml_attr(value: str) -> str:
         str(value)
         .replace("&", "&amp;")
         .replace('"', "&quot;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
+def _xml_text(value: str) -> str:
+    return (
+        str(value)
+        .replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
     )

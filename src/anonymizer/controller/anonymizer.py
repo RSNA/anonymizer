@@ -36,9 +36,11 @@ from anonymizer.controller.dates import (
     valid_date,
 )
 from anonymizer.controller.private_tags import private_tag_operation
+from anonymizer.controller.script.ctp_normalize import format_validation_errors
 from anonymizer.controller.script.document import (
     load_script_rules,
     tag_keep_from_document,
+    validate_document,
 )
 from anonymizer.controller.script.operands import (
     always_literal_text,
@@ -135,6 +137,9 @@ class AnonymizerController:
         """
         Load a script file into the runtime keep table.
 
+        Validates with the same validate_document gate as Import CTP Script /
+        Accept. On errors the keep table is not replaced.
+
         Args:
             script_path: Path to the anonymizer .script file.
 
@@ -143,9 +148,15 @@ class AnonymizerController:
 
         Raises:
             FileNotFoundError: When the script file is missing.
+            ValueError: When the script has unsupported operands or other
+                validation errors.
         """
         path = Path(script_path)
         document = load_script_rules(path)
+        errors = validate_document(document)
+        if errors:
+            detail = format_validation_errors(errors)
+            raise ValueError(f"Unsupported script:\n{detail}")
         self.model.replace_tag_keep(
             tag_keep_from_document(document),
             script_path=path,

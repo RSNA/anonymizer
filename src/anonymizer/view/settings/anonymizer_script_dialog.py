@@ -15,6 +15,11 @@ import customtkinter as ctk
 from anonymizer.controller.ctp_lookup import CtpLookupPreview, lookup_table_context
 from anonymizer.controller.dates import incrementdate_days, rebasedate_origin
 from anonymizer.controller.project import ProjectController
+from anonymizer.controller.script.ctp_normalize import (
+    format_validation_errors,
+    normalize_ctp_document,
+    unresolved_dateinc_tags,
+)
 from anonymizer.controller.script.date_rules import (
     apply_study_date_operation_to_rules,
     mismatched_date_rules,
@@ -1220,10 +1225,35 @@ class AnonymizerScriptDialog(AppToplevel):
         except Exception as exc:
             messagebox.showerror(_("Import CTP Script"), str(exc), parent=self)
             return
+        warnings = normalize_ctp_document(document)
+        if unresolved_dateinc_tags(document):
+            spec = operand_spec_by_id(OperandId.INCREMENTDATE)
+            if spec is None:
+                messagebox.showerror(
+                    _("Import CTP Script"),
+                    _("Unsupported script:") + "\n" + "@incrementdate(this,@DATEINC)",
+                    parent=self,
+                )
+                return
+            days = self._prompt_operand_param(
+                spec,
+                initial=-730,
+                kind="int_signed",
+                message=_(
+                    "This script uses @DATEINC without a numeric <p DATEINC> value. "
+                    "Enter the trial-wide day offset to apply."
+                ),
+            )
+            if days is None:
+                return
+            document.params["DATEINC"] = str(int(days))
+            warnings = normalize_ctp_document(document, dateinc=int(days))
         errors = validate_document(document)
         if errors:
             messagebox.showerror(
-                _("Import CTP Script"), _("Unsupported script:") + "\n" + "\n".join(errors[:20]), parent=self
+                _("Import CTP Script"),
+                _("Unsupported script:") + "\n" + format_validation_errors(errors),
+                parent=self,
             )
             return
         mismatched = mismatched_date_rules(document)
@@ -1244,6 +1274,14 @@ class AnonymizerScriptDialog(AppToplevel):
         self._refresh_add_dictionary_visibility()
         self._refresh_lookup_context()
         self._refresh_list()
+        if warnings:
+            messagebox.showinfo(
+                _("Import CTP Script"),
+                _("Some CTP operations were rewritten to product forms:")
+                + "\n"
+                + "\n".join(warnings[:10]),
+                parent=self,
+            )
 
     def _on_revert(self) -> None:
         if not messagebox.askyesno(
@@ -1278,7 +1316,7 @@ class AnonymizerScriptDialog(AppToplevel):
         try:
             errors = validate_document(self._document)
             if errors:
-                raise ValueError("\n".join(errors[:20]))
+                raise ValueError(format_validation_errors(errors))
             self.project_model.anonymizer_script_path = (
                 Path(self.project_model.storage_dir) / f"{self.project_model.site_id}-anonymizer.script"
             )

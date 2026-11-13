@@ -4,7 +4,12 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from anonymizer.controller.script.document import load_script_rules, tag_keep_from_document
+from anonymizer.controller.script.ctp_normalize import format_validation_errors
+from anonymizer.controller.script.document import (
+    load_script_rules,
+    tag_keep_from_document,
+    validate_document,
+)
 from anonymizer.controller.script.paths import packaged_default_script_path
 from anonymizer.model.anonymizer import AnonymizerModel
 from tests.controller.dicom.support.test_nodes import TEST_SITEID, TEST_UIDROOT
@@ -13,8 +18,13 @@ from tests.controller.dicom.support.test_nodes import TEST_SITEID, TEST_UIDROOT
 def load_model_script(model: AnonymizerModel, script_path: Path) -> None:
     """Fill the keep-table from a script file (mirrors AnonymizerController.reload_script)."""
     path = Path(script_path)
+    document = load_script_rules(path)
+    errors = validate_document(document)
+    if errors:
+        detail = format_validation_errors(errors)
+        raise ValueError(f"Unsupported script:\n{detail}")
     model.replace_tag_keep(
-        tag_keep_from_document(load_script_rules(path)),
+        tag_keep_from_document(document),
         script_path=path,
     )
 

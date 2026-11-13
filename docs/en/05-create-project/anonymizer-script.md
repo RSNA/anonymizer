@@ -111,11 +111,24 @@ basedate/<PHI-PatientID>=YYYYMMDD
 
 ## Import a CTP script
 
-**Import…** loads a custom `.script` file (not a lookup `.properties`). Unknown operands are rejected. Date rules must match the StudyDate operation (one-click fix available). On **Accept**, confirm which de-identification options to record for that script (prefilled from its rules).
+**Import…** loads a custom `.script` file (not a lookup `.properties`). Common CTP spellings are rewritten to product forms before validation:
+
+| CTP form | Product form |
+| --- | --- |
+| `@keep()` | `@keep` |
+| `@hashdate(this,PatientID)` | `@hashdate` (PatientID seed only; other seeds stay unsupported) |
+| `@hashuid(…)` | `@uid` (project UID map, not CTP hash+root) |
+| `@hashptid(…)` | `@ptid` |
+| `@incrementdate(this,@DATEINC)` | `@incrementdate(this,n)` from `<p t="DATEINC">` or a prompt |
+| `@round(Element,n)` | `@round(this,n)` (product rounds age down, not CTP group center) |
+
+Script `<p>` parameters such as `DATEINC`, `UIDROOT`, and `SITEID` are retained for that resolution. Remaining unknown operands are rejected (errors grouped by operand). Date rules must match the StudyDate operation (one-click fix available). On **Accept**, confirm which de-identification options to record for that script (prefilled from its rules).
+
+The project script is validated again whenever it is loaded into the keep table (project open / **Accept** / compile reload), using the same checks as Import. Sequences are always walked recursively; `@process()` is informational. CTP “keep a sequence without processing its items” is not supported.
 
 ## If it fails
 
-- **Accept** rejected → fix unsupported `@…` operands listed in the error. Empty `@always()` is invalid; supply non-empty `text`. Bare non-`@` literals are accepted as fixed values (`ALWAYS`).
+- **Accept** or project open rejected → fix unsupported `@…` operands listed in the error. Empty `@always()` is invalid; supply non-empty `text`. Bare non-`@` literals are accepted as fixed values (`ALWAYS`).
 
 ## See also
 
