@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [19.1.0.dev7]
+- PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)
+- CTP Import adaptation tests match plain-language UID/patient map warnings
+
 ## [19.1.0.dev6]
 - PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)
 - Dataset Set description: PT/NM-only studies (no CT/MR Harmonize path) can double-click series or study descriptions and pick names from the LOINC table (`PET+CT` when the study wording looks like PET-CT); AI Harmonize for CT/MR studies is unchanged
