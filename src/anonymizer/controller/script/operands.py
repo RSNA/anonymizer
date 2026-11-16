@@ -50,6 +50,18 @@ parse_if_isblank_operation(operation) -> tuple[str, str] | None
 parse_hashname_operation(operation) -> tuple[str, int] | None
     Optional literal prefix and width for @hashname(this,n).
 
+parse_truncate_operation(operation) -> int | None
+    Character width for @truncate(this,n).
+
+parse_round_operation(operation) -> int | None
+    Age-band width for @round(this,n).
+
+is_modifydate_year_operation(operation) -> bool
+    True for @modifydate(StudyDate,*,1,1).
+
+is_dateinterval_study_ddate_operation(operation) -> bool
+    True for @dateinterval(StudyDate,ddate,PatientID).
+
 hashname_text(value, width) -> str
     CTP-style truncated MD5 hex of value.
 
@@ -556,19 +568,19 @@ def operand_id_for_operation(operation: str | None) -> OperandId | None:
             continue
         if text == spec.template:
             return spec.id
-    if _ROUND_RE.match(text):
+    if parse_round_operation(text) is not None:
         return OperandId.ROUND
     if _INCREMENTDATE_RE.match(text):
         return OperandId.INCREMENTDATE
     if _REBASEDATE_RE.match(text) or text.lower() == "@rebasedate":
         return OperandId.REBASEDATE
-    if _TRUNCATE_RE.match(text):
+    if parse_truncate_operation(text) is not None:
         return OperandId.TRUNCATE
-    if _MODIFYDATE_YEAR_RE.match(text):
+    if is_modifydate_year_operation(text):
         return OperandId.MODIFYDATE_YEAR
     if parse_hashname_operation(text) is not None:
         return OperandId.HASHNAME
-    if _DATEINTERVAL_STUDY_DDATE_RE.match(text):
+    if is_dateinterval_study_ddate_operation(text):
         return OperandId.DATEINTERVAL_STUDY_DDATE
     if parse_if_isblank_operation(text) is not None:
         return OperandId.IF_ISBLANK
@@ -640,6 +652,70 @@ def parse_hashname_operation(operation: str | None) -> tuple[str, int] | None:
     if width < 1:
         return None
     return str(match.group("prefix") or ""), width
+
+
+def parse_truncate_operation(operation: str | None) -> int | None:
+    """
+    Parse character width from @truncate(this,n).
+
+    Args:
+        operation: Script operation text.
+
+    Returns:
+        Width n, or None when not a truncate form.
+    """
+    match = _TRUNCATE_RE.match(str(operation or "").strip())
+    if match is None:
+        return None
+    width = int(match.group(1))
+    if width < 1:
+        return None
+    return width
+
+
+def parse_round_operation(operation: str | None) -> int | None:
+    """
+    Parse age-band width from @round(this,n).
+
+    Args:
+        operation: Script operation text.
+
+    Returns:
+        Width n, or None when not a round form.
+    """
+    match = _ROUND_RE.match(str(operation or "").strip())
+    if match is None:
+        return None
+    width = int(match.group(1))
+    if width < 1:
+        return None
+    return width
+
+
+def is_modifydate_year_operation(operation: str | None) -> bool:
+    """
+    True when operation is @modifydate(StudyDate,*,1,1).
+
+    Args:
+        operation: Script operation text.
+
+    Returns:
+        True for the StudyDate year form.
+    """
+    return _MODIFYDATE_YEAR_RE.match(str(operation or "").strip()) is not None
+
+
+def is_dateinterval_study_ddate_operation(operation: str | None) -> bool:
+    """
+    True when operation is @dateinterval(StudyDate,ddate,PatientID).
+
+    Args:
+        operation: Script operation text.
+
+    Returns:
+        True for the StudyDate/ddate interval form.
+    """
+    return _DATEINTERVAL_STUDY_DDATE_RE.match(str(operation or "").strip()) is not None
 
 
 def hashname_text(value: str, width: int) -> str:

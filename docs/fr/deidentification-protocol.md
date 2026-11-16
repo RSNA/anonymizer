@@ -24,7 +24,7 @@ Utilisez les scores MIDI-B et ce protocole comme **éléments de preuve pour la 
 
 ## Dates
 
-Les dates sont décalées par patient (offset basé sur un hash) pour que l’**ordre et l’espacement** des études d’un patient restent significatifs, sans que les dates calendaires soient les originales. L’heure de la journée est en général laissée telle quelle.
+Les dates sont décalées pour que l’**ordre et l’espacement** des études d’un patient restent significatifs, sans que les dates calendaires soient les originales. L’heure de la journée est en général laissée telle quelle. Stratégies (script / lookup) : `@hashdate`, `@lookup(this,dateoffset)`, `@incrementdate(this,n)`, `@rebasedate(this,origin)` (basedate ou `ddate/`). Le rebase écrit aussi `(0012,0052)` / `(0012,0053)`. Les scripts TCIA peuvent tamponner collection/site/diagnostic via `@lookup(this,cname|siteid|ddate)` et un `@dateinterval` StudyDate–ddate ; une ligne lookup requise manquante met le fichier en quarantaine **Lookup_Miss**. Voir [Script anonymizer — dates longitudinales](05-create-project/anonymizer-script.md#longitudinal-dates-tcia-style).
 
 ## Ce qui peut être conservé (options partielles)
 

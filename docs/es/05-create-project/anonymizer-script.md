@@ -45,11 +45,23 @@ Las operaciones admitidas coinciden con el catálogo del editor de script y el r
 | `@hashdate` | — | Desplazar fecha/fechahora con un desfase estable por paciente derivado del ID de paciente PHI. Se preservan los intervalos entre estudios de ese paciente. Establece `(0028,0303) LongitudinalTemporalInformationModified = MODIFIED` cuando corre cualquier delta de fecha (código 113107 si Modified Dates está seleccionado). |
 | `@lookup(this,ptid)` | — | Sustituir por el ID de paciente anonimizado de la tabla de búsqueda (`filas ptid/` en `.properties` CTP). Si la tabla no está cargada, **Aplicar** abre **Cargar tabla de búsqueda de pacientes**. |
 | `@lookup(this,dateoffset)` | — | Aplicar el desfase en días por paciente de la tabla (`filas dateoffset/`). Si no están cargadas, **Aplicar** abre **Cargar tabla de búsqueda de pacientes**. |
+| `@lookup(this,cname)` | — | Sustituir por el nombre de colección de filas `cname/` (sellos TCIA ProjectName / TrialName). Valor ausente → **Lookup_Miss**. Crea el elemento si falta. |
+| `@lookup(this,siteid)` | — | Sustituir por el id de sitio de filas `siteid/`. Valor ausente → **Lookup_Miss**. Crea el elemento si falta. |
+| `@lookup(this,ddate)` | — | Sustituir por la fecha de diagnóstico / base de filas `ddate/` o `basedate/` (guardada como YYYYMMDD). Valor ausente → **Lookup_Miss**. Crea el elemento si falta. |
 | `@incrementdate(this,n)` | **`n`**: desfase en días entero con signo (DATEINC del ensayo). Positivo atrasa fechas; negativo las adelanta. Confirmar aplica el mismo `@incrementdate(this,n)` a cada campo de delta de fecha del script (listados en el aviso). | Desplazamiento fijo en días para todos los pacientes. Se preservan los intervalos entre estudios de un paciente. |
-| `@rebasedate(this,origin)` | **`origin`**: inicio de época como `YYYYMMDD` (ocho dígitos; predeterminado `19600101`). | Rebase TCIA/NCTN: fecha anonimizada = `origin + (fecha real − basedate)`. Requiere `basedate/<PatientID>=YYYYMMDD` en la tabla. Escribe `(0012,0052)` / `(0012,0053)=REGISTRATION` desde PHI StudyDate − basedate. Si no hay basedates, **Aplicar** abre primero **Cargar tabla de búsqueda de pacientes**. |
-| `@round(this,n)` | **`n`**: entero ≥ 1, anchura de banda de edad en años enteros. Las edades se redondean **hacia abajo** al múltiplo más cercano de `n` (VR AS). | Engrosar Patient Age. Anchura `5`: `023Y` → `020Y`, `029Y` → `025Y`. |
+| `@rebasedate(this,origin)` | **`origin`**: inicio de época como `YYYYMMDD` (ocho dígitos; predeterminado `19600101`). | Rebase TCIA/NCTN: fecha anonimizada = `origin + (fecha real − basedate)`. Requiere `basedate/<PatientID>=YYYYMMDD` (o `ddate/` si falta basedate) en la tabla. Escribe `(0012,0052)` / `(0012,0053)=REGISTRATION` desde PHI StudyDate − basedate (el tipo de evento puede venir de un `@always()` en `(0012,0053)`). Si no hay basedates, **Aplicar** abre primero **Cargar tabla de búsqueda de pacientes**. |
+| `@round(this,n)` | **`n`**: entero ≥ 1, anchura de banda de edad en años enteros (VR AS). Bandas centradas en cero (CTP `@round`): valor → múltiplo más cercano de `n`. | Engrosar Patient Age. Anchura `5`: `027Y` → `025Y`, `043Y` → `045Y`. |
+| `@modifydate(StudyDate,*,1,1)` | — | Escribir el año de cuatro dígitos de StudyDate en esta etiqueta (TCIA StudyYear). |
+| `@truncate(this,n)` | **`n`**: entero ≥ 1, caracteres a conservar. | Conservar los primeros `n` caracteres del valor actual. |
+| `@hashname(this,n)` | **`n`**: entero ≥ 1, longitud hex. Prefijo literal opcional antes de `@hashname` (p. ej. `REV-@hashname(this,4)`). | Sustituir por los primeros `n` caracteres hex de un MD5 del valor actual. |
+| `@dateinterval(StudyDate,ddate,PatientID)` | — | Escribir días enteros desde basedate/ddate hasta StudyDate (sello de desfase longitudinal TCIA). Crea el elemento si falta. Basedate ausente → **Lookup_Miss**. |
+| `@if(this,isblank){then}{else}` | Ambos brazos deben ser operandos de producto válidos. | Si el valor actual está en blanco, aplicar then; si no, else. Solo se admite la condición `isblank`. |
 | `@always()text` | **`text`**: reemplazo literal no vacío (no debe empezar por `@`). Se guarda como `@always()YES`. Literales sin `@` (`YES`) en scripts antiguos son el mismo operando. | Fijar el elemento a un valor fijo; crear el elemento si falta. |
 | `@process()` | — | Conservar el contenedor de secuencia (`SQ`) y aplicar recursivamente las reglas del script a los ítems internos. |
+
+Tras el recorrido del script, los elementos no secuencia ausentes se crean en una pasada para `@always()…`, sellos `@lookup(this,cname|siteid|ddate)` y `@dateinterval(StudyDate,ddate,PatientID)`.
+
+Importación y recarga rechazan operandos desconocidos. Si una operación no reconocida aún llega al ingest (p. ej. tabla keep editada a mano), el anonimizador **registra un error y elimina el elemento**.
 
 El filtro de barra **Operando** **Todos** muestra cada regla de la vista; un operando concreto filtra la lista y actualiza la ayuda sin asignar hasta **Aplicar**.
 
@@ -77,7 +89,7 @@ El filtro de barra **Operando** **Todos** muestra cada regla de la vista; un ope
 | Hash por paciente | `@hashdate` | Script compilado predeterminado; sin tabla de búsqueda. |
 | Desfase por búsqueda | `@lookup(this,dateoffset)` | Filas `dateoffset/` en el `.properties` de búsqueda. |
 | Desfase del ensayo | `@incrementdate(this,n)` | Parámetro `n` (DATEINC); aplicado a todos los campos de delta de fecha. |
-| Rebase de época | `@rebasedate(this,origin)` | Filas `basedate/`; parámetro `origin` (`YYYYMMDD`). |
+| Rebase de época | `@rebasedate(this,origin)` | Filas `basedate/` o `ddate/`; parámetro `origin` (`YYYYMMDD`). |
 
 Las cuatro preservan intervalos entre estudios de un paciente y establecen Longitudinal Temporal Information Modified como en `@hashdate`. Advertencias sobre UID/fecha/accession deterministas: [Protocolo de desidentificación](../deidentification-protocol.md#deterministic-replacements-uids-dates-accessions).
 
@@ -102,20 +114,26 @@ Claves `.properties`:
 ptid/<PHI-PatientID>=<anonymized-PatientID>
 dateoffset/<PHI-PatientID>=<días-enteros-con-signo>
 basedate/<PHI-PatientID>=YYYYMMDD
+ddate/<PHI-PatientID>=M/D/YYYY   (o YYYYMMDD; se guarda como basedate si falta basedate/)
+cname/<PHI-PatientID>=<nombre-de-colección>
+sname/<PHI-PatientID>=<nombre-de-sitio>
+siteid/<PHI-PatientID>=<id-de-sitio>
 ```
 
-`ptid/` solo es válido. `dateoffset/` habilita `@lookup(this,dateoffset)`. `basedate/` habilita `@rebasedate(this,origin)`.
+`ptid/` solo es válido. `dateoffset/` habilita `@lookup(this,dateoffset)`. `basedate/` o `ddate/` habilitan `@rebasedate(this,origin)` y `@lookup(this,ddate)` / `@dateinterval` StudyDate–ddate. `cname/` y `siteid/` habilitan los lookups de sello correspondientes. `sname/` se guarda en la fila de paciente PHI para exportación/contabilidad; no hay operando runtime `@lookup(this,sname)`. Los prefijos de clave desconocidos se omiten con una advertencia.
 
 !!! note "Lookup tras almacenar archivos"
     Cargar una tabla de búsqueda **no** vuelve a anonimizar las instancias ya presentes en el proyecto. Los pacientes ya en el proyecto siguen sin fila en la tabla. Los archivos **nuevos** cuyo ID de paciente PHI no esté en la tabla se ponen en cuarentena como **Lookup_Miss** y no se almacenan.
 
 ## Importar un script CTP
 
-**Importar…** carga un archivo `.script` personalizado (no un `.properties` de búsqueda). Se rechazan operandos desconocidos. Las reglas de fecha deben coincidir con la operación StudyDate (corrección en un clic disponible). Al **Aceptar**, confirme qué opciones de desidentificación registrar para ese script (prellenadas desde sus reglas).
+**Importar…** carga un archivo `.script` personalizado (no un `.properties` de búsqueda). Las formas CTP/TCIA habituales se reescriben a formas de producto antes de la validación (vea la página en inglés para la tabla detallada). Los operandos desconocidos restantes se rechazan. Las reglas de fecha deben coincidir con la operación StudyDate (corrección en un clic disponible). Los parámetros `<p>` como `DATEINC`, `UIDROOT`, `SITEID`, `SITENAME`, `LTET` y `NORMDATE` se conservan para esa resolución. Al **Aceptar**, confirme qué opciones de desidentificación registrar para ese script (prellenadas desde sus reglas).
 
 ## Si falla
 
-- **Aceptar** rechazado → corrija los operandos `@…` no admitidos indicados en el error. `@always()` vacío no es válido; indique un `text` no vacío. Los literales sin `@` se aceptan como valores fijos (`ALWAYS`).
+- **Aceptar** o apertura de proyecto rechazada → corrija los operandos `@…` no admitidos indicados en el error. `@always()` vacío no es válido; indique un `text` no vacío. Los literales sin `@` se aceptan como valores fijos (`ALWAYS`).
+- Ingest con sello de lookup o basedate requerido ausente → archivo en cuarentena **Lookup_Miss**.
+- Operando no reconocido en ingest (no debería ocurrir tras la validación) → se registra y se elimina el elemento.
 
 ## Véase también
 

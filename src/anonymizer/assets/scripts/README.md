@@ -4,7 +4,7 @@
 | --- | --- |
 | `default-anonymizer.script` | Packaged base script; project scripts are compiled from this plus the selected de-identification options |
 
-Edit the project script via Settings (or import a custom CTP script). Import rewrites common CTP operand aliases (`@keep()`, `@hashuid`, `@DATEINC`, …) to product forms; the keep table is validated with `validate_document` on every reload. Sequences are always walked; CTP “keep SQ without processing items” is not supported. Private tags are not in this script; Retain Safe Private uses the TCIA Private Tag KB under `assets/tcia_kb/`. CTP-style `XX` / `GGGGEEEE` wildcard rows are also omitted (this product has no wildcard matcher).
+Edit the project script via Settings (or import a custom CTP script). Import rewrites common CTP/TCIA operand aliases (`@keep()`, `@hashuid`, `@DATEINC`, lookup stamps, StudyYear `@modifydate`, `dateinterval`→`@rebasedate`, …) to product forms; the keep table is validated with `validate_document` on every reload. Ingest removes any unrecognized operation that still reaches the walk (logged). Sequences are always walked; CTP “keep SQ without processing items” is not supported. Private tags are not in this script; Retain Safe Private uses the TCIA Private Tag KB under `assets/tcia_kb/`. CTP-style `XX` / `GGGGEEEE` wildcard rows are also omitted (this product has no wildcard matcher). Operator catalog for humans: `docs/en/05-create-project/anonymizer-script.md`.
 
 DATEINC for private-tag date ops: `controller/private_tags/dateinc.txt`.
 

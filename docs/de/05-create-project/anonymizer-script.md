@@ -45,11 +45,23 @@ Unterstützte Operationen entsprechen dem Katalog des Skript-Editors und dem Ing
 | `@hashdate` | — | Datum/DatumZeit um einen stabilen patientenbezogenen Tagesversatz aus der PHI-Patienten-ID verschieben. Intervalle zwischen Studien dieses Patienten bleiben erhalten. Setzt `(0028,0303) LongitudinalTemporalInformationModified = MODIFIED`, wenn ein Datums-Delta läuft (Code 113107 bei gewähltem Modified Dates). |
 | `@lookup(this,ptid)` | — | Ersetzen durch die anonymisierte Patienten-ID aus der Patienten-Nachschlagetabelle (`ptid/`-Zeilen in CTP-`.properties`). Ist die Tabelle nicht geladen, öffnet **Anwenden** **Patienten-Nachschlagetabelle laden**. |
 | `@lookup(this,dateoffset)` | — | Patientenbezogenen Tagesversatz aus der Nachschlagetabelle anwenden (`dateoffset/`-Zeilen). Fehlen diese Zeilen, öffnet **Anwenden** **Patienten-Nachschlagetabelle laden**. |
+| `@lookup(this,cname)` | — | Ersetzen durch den Collection-Namen aus `cname/`-Zeilen (TCIA ProjectName-/TrialName-Stempel). Fehlender Wert → **Lookup_Miss**. Legt das Element an, falls fehlend. |
+| `@lookup(this,siteid)` | — | Ersetzen durch die Site-ID aus `siteid/`-Zeilen. Fehlender Wert → **Lookup_Miss**. Legt das Element an, falls fehlend. |
+| `@lookup(this,ddate)` | — | Ersetzen durch Diagnose-/Basisdatum aus `ddate/`- oder `basedate/`-Zeilen (als YYYYMMDD gespeichert). Fehlender Wert → **Lookup_Miss**. Legt das Element an, falls fehlend. |
 | `@incrementdate(this,n)` | **`n`**: vorzeichenbehafteter ganzzahliger Tagesversatz (studienweites DATEINC). Positiv verschiebt später; negativ früher. Die Bestätigung setzt dasselbe `@incrementdate(this,n)` auf jedes Datums-Delta-Feld im Skript (im Dialog aufgelistet). | Fester Tagesversatz für alle Patienten. Intervalle zwischen Studien eines Patienten bleiben erhalten. |
-| `@rebasedate(this,origin)` | **`origin`**: Epochenbeginn als `YYYYMMDD` (acht Ziffern; Standard `19600101`). | TCIA/NCTN-Rebase: anonymisiertes Datum = `origin + (reales Datum − basedate)`. Erfordert `basedate/<PatientID>=YYYYMMDD` in der Nachschlagetabelle. Schreibt `(0012,0052)` / `(0012,0053)=REGISTRATION` aus PHI StudyDate − basedate. Fehlen basedates, öffnet **Anwenden** zuerst **Patienten-Nachschlagetabelle laden**. |
-| `@round(this,n)` | **`n`**: Ganzzahl ≥ 1, Altersbandbreite in ganzen Jahren. Alter wird **abgerundet** auf das nächste Vielfache von `n` (VR AS). | Patient Age vergröbern. Breite `5`: `023Y` → `020Y`, `029Y` → `025Y`. |
+| `@rebasedate(this,origin)` | **`origin`**: Epochenbeginn als `YYYYMMDD` (acht Ziffern; Standard `19600101`). | TCIA/NCTN-Rebase: anonymisiertes Datum = `origin + (reales Datum − basedate)`. Erfordert `basedate/<PatientID>=YYYYMMDD` (oder `ddate/`, wenn basedate fehlt) in der Nachschlagetabelle. Schreibt `(0012,0052)` / `(0012,0053)=REGISTRATION` aus PHI StudyDate − basedate (Event-Typ kann von `@always()` auf `(0012,0053)` kommen). Fehlen basedates, öffnet **Anwenden** zuerst **Patienten-Nachschlagetabelle laden**. |
+| `@round(this,n)` | **`n`**: Ganzzahl ≥ 1, Altersbandbreite in ganzen Jahren (VR AS). Bänder zentriert bei null (CTP `@round`): Wert → nächstes Vielfaches von `n`. | Patient Age vergröbern. Breite `5`: `027Y` → `025Y`, `043Y` → `045Y`. |
+| `@modifydate(StudyDate,*,1,1)` | — | Vierstellige Jahreszahl aus StudyDate in dieses Tag schreiben (TCIA StudyYear). |
+| `@truncate(this,n)` | **`n`**: Ganzzahl ≥ 1, zu behaltende Zeichen. | Die ersten `n` Zeichen des aktuellen Werts behalten. |
+| `@hashname(this,n)` | **`n`**: Ganzzahl ≥ 1, Hex-Länge. Optionaler Literal-Präfix vor `@hashname` (z. B. `REV-@hashname(this,4)`). | Ersetzen durch die ersten `n` Hex-Zeichen eines MD5 des aktuellen Werts. |
+| `@dateinterval(StudyDate,ddate,PatientID)` | — | Ganze Tage von Lookup-basedate/ddate bis StudyDate schreiben (TCIA longitudinaler Offset-Stempel). Legt das Element an, falls fehlend. Fehlendes basedate → **Lookup_Miss**. |
+| `@if(this,isblank){then}{else}` | Beide Zweige müssen gültige Produkt-Operanden sein. | Ist der aktuelle Wert leer, then anwenden; sonst else. Nur die Bedingung `isblank` wird unterstützt. |
 | `@always()text` | **`text`**: nicht leerer Literalersatz (darf nicht mit `@` beginnen). Gespeichert als `@always()YES`. Bloße Literale ohne `@` (`YES`) in älteren Skripten sind derselbe Operand. | Element auf festen Wert setzen; fehlendes Element anlegen. |
 | `@process()` | — | Sequenz-Wrapper (`SQ`) behalten und Skriptregeln rekursiv auf innere Items anwenden. |
+
+Nach dem Skript-Durchlauf werden fehlende Nicht-Sequenz-Elemente in einem Durchgang für `@always()…`, Stempel `@lookup(this,cname|siteid|ddate)` und `@dateinterval(StudyDate,ddate,PatientID)` angelegt.
+
+Import und Neuladen lehnen unbekannte Operanden ab. Erreicht eine unerkannte Operation dennoch den Ingest (z. B. handeditierte Keep-Tabelle), protokolliert der Anonymizer einen **Fehler und entfernt das Element**.
 
 Werkzeugleisten-Filter **Operand** **Alle** zeigt jede Regel der Ansicht; ein konkreter Operand filtert die Liste und aktualisiert die Hilfe, ohne bis **Anwenden** zuzuweisen.
 
@@ -77,7 +89,7 @@ Werkzeugleisten-Filter **Operand** **Alle** zeigt jede Regel der Ansicht; ein ko
 | Hash pro Patient | `@hashdate` | Standard kompiliertes Skript; keine Nachschlagetabelle. |
 | Lookup-Offset pro Patient | `@lookup(this,dateoffset)` | `dateoffset/`-Zeilen in der Lookup-`.properties`. |
 | Studienweiter Offset | `@incrementdate(this,n)` | Parameter `n` (DATEINC); auf alle Datums-Delta-Felder. |
-| Epochen-Rebase | `@rebasedate(this,origin)` | `basedate/`-Zeilen; Parameter `origin` (`YYYYMMDD`). |
+| Epochen-Rebase | `@rebasedate(this,origin)` | `basedate/`- oder `ddate/`-Zeilen; Parameter `origin` (`YYYYMMDD`). |
 
 Alle vier erhalten Intervalle zwischen Studien eines Patienten und setzen Longitudinal Temporal Information Modified wie unter `@hashdate`. Deterministische UID-/Datums-/Accession-Hinweise: [De-Identifikationsprotokoll](../deidentification-protocol.md#deterministic-replacements-uids-dates-accessions).
 
@@ -102,20 +114,26 @@ Alle vier erhalten Intervalle zwischen Studien eines Patienten und setzen Longit
 ptid/<PHI-Patienten-ID>=<anonymisierte-Patienten-ID>
 dateoffset/<PHI-Patienten-ID>=<vorzeichenbehaftete-ganzzahlige-Tage>
 basedate/<PHI-Patienten-ID>=YYYYMMDD
+ddate/<PHI-Patienten-ID>=M/D/YYYY   (oder YYYYMMDD; als basedate gespeichert, wenn basedate/ fehlt)
+cname/<PHI-Patienten-ID>=<Collection-Name>
+sname/<PHI-Patienten-ID>=<Site-Name>
+siteid/<PHI-Patienten-ID>=<Site-ID>
 ```
 
-`ptid/` allein ist gültig. `dateoffset/` ermöglicht `@lookup(this,dateoffset)`. `basedate/` ermöglicht `@rebasedate(this,origin)`.
+`ptid/` allein ist gültig. `dateoffset/` ermöglicht `@lookup(this,dateoffset)`. `basedate/` oder `ddate/` ermöglichen `@rebasedate(this,origin)` und `@lookup(this,ddate)` / StudyDate–ddate-`@dateinterval`. `cname/` und `siteid/` ermöglichen die passenden Stempel-Lookups. `sname/` wird in der PHI-Patientenzeile für Export/Buchhaltung gespeichert; es gibt keinen Runtime-Operanden `@lookup(this,sname)`. Unbekannte Property-Schlüsselpräfixe werden mit Warnung übersprungen.
 
 !!! note "Lookup nach gespeicherten Dateien"
     Das Laden einer Nachschlagetabelle anonymisiert bereits im Projekt gespeicherte Instanzen **nicht** erneut. Patienten, die bereits im Projekt sind, funktionieren weiter ohne Tabellenzeile. **Neue** Dateien, deren PHI-Patienten-ID fehlt, landen in Quarantäne als **Lookup_Miss** und werden nicht gespeichert.
 
 ## CTP-Skript importieren
 
-**Import…** lädt eine benutzerdefinierte `.script`-Datei (keine Lookup-`.properties`). Unbekannte Operanden werden abgelehnt. Datumsregeln müssen zur StudyDate-Operation passen (Ein-Klick-Korrektur verfügbar). Bei **Übernehmen** bestätigen Sie, welche De-Identifikationsoptionen für dieses Skript gespeichert werden (vorausgefüllt aus seinen Regeln).
+**Import…** lädt eine benutzerdefinierte `.script`-Datei (keine Lookup-`.properties`). Gängige CTP/TCIA-Schreibweisen werden vor der Validierung in Produktformen umgeschrieben (detaillierte Tabelle in der englischen Seite). Verbleibende unbekannte Operanden werden abgelehnt. Datumsregeln müssen zur StudyDate-Operation passen (Ein-Klick-Korrektur verfügbar). `<p>`-Parameter wie `DATEINC`, `UIDROOT`, `SITEID`, `SITENAME`, `LTET` und `NORMDATE` bleiben für diese Auflösung erhalten. Bei **Übernehmen** bestätigen Sie, welche De-Identifikationsoptionen für dieses Skript gespeichert werden (vorausgefüllt aus seinen Regeln).
 
 ## Wenn es fehlschlägt
 
-- **Übernehmen** abgelehnt → nicht unterstützte `@…`-Operanden in der Fehlermeldung korrigieren. Leeres `@always()` ist ungültig; nicht leeren `text` angeben. Bloße Literale ohne `@` gelten als feste Werte (`ALWAYS`).
+- **Übernehmen** oder Projektöffnen abgelehnt → nicht unterstützte `@…`-Operanden in der Fehlermeldung korrigieren. Leeres `@always()` ist ungültig; nicht leeren `text` angeben. Bloße Literale ohne `@` gelten als feste Werte (`ALWAYS`).
+- Ingest mit fehlendem erforderlichem Lookup-Stempel oder basedate → Datei in Quarantäne **Lookup_Miss**.
+- Unerkannter Operand beim Ingest (sollte nach Validierung nicht vorkommen) → protokolliert und das Element wird entfernt.
 
 ## Siehe auch
 

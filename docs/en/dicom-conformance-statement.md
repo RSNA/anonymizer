@@ -38,7 +38,7 @@ The **complete** remove/keep/transform list for a given project is the project�
 | **Accession Number** | Deterministic hash of a project mixer (`site_id` / `uid_root`) plus the original accession. |
 | **DICOM UIDs** (Study, Series, SOP Instance, Frame of Reference, and other script rules with `@uid`) | Project prefix (`uid_root` + site id) + truncated MD5 of the original UID — same original → same replacement **within the project**. |
 | **Dates / DateTimes** (script date-delta operands) | Per-patient or trial strategy: default `@hashdate` (day offset from Patient ID); or `@lookup`, `@incrementdate`, `@rebasedate` when configured. Time-of-day is typically left unchanged. See [Dates](deidentification-protocol.md#dates). |
-| **Patient Age** | Rounded to a five-year band (`@round`) even when **Retain Patient Characteristics** is selected. |
+| **Patient Age** | Banded with `@round(this,5)` (CTP-style bins centered on zero) even when **Retain Patient Characteristics** is selected; kept exactly when **Retain TCIA Research** replaces that rule. |
 | **Other Basic blanks** | `@empty()` or fixed literals where the script specifies them. |
 
 Details and security caveats: [Deterministic replacements](deidentification-protocol.md#deterministic-replacements-uids-dates-accessions).
@@ -74,7 +74,7 @@ At successful import protection, the product ensures at least:
 | `(0028,0303) Longitudinal Temporal Information Modified` | `MODIFIED` when a date-delta strategy runs |
 | `(0012,0052)` / `(0012,0053)` (rebase path) | `Longitudinal Temporal Offset From Event` and `Longitudinal Temporal Event Type = REGISTRATION` when `@rebasedate` / registration rebase runs |
 
-Script `@always()…` rules may also **create** missing non-sequence elements with a fixed literal. Custom scripts can insert additional fixed values the same way.
+After the script walk, missing non-sequence elements are created in one pass for `@always()…`, stamp `@lookup(this,cname|siteid|ddate)`, and `@dateinterval(StudyDate,ddate,PatientID)`. Custom scripts can insert additional fixed values the same way.
 
 ### Transfer Syntaxes for Encrypted Attributes Data Set
 
@@ -110,7 +110,7 @@ The DICOM **Clean Graphics** option targets **non-text** burned-in graphics in p
 
 - **No Encrypted Attributes / public-key re-identification path** — no key sizes or cipher suites are claimed.
 - **Clean\* pixel, report, descriptor, and face options** require installed on-device AI features; selecting them without models is blocked or offered as a download in the UI.
-- **Custom CTP scripts** may be imported; unknown operands are rejected; all date rules must match the Study Date operand; recorded option codes are those you confirm after import inference.
+- **Custom CTP scripts** may be imported; common TCIA/CTP forms are rewritten to product operands; remaining unknown operands are rejected; all date rules must match the Study Date operand; recorded option codes are those you confirm after import inference. An unrecognized operation that still reaches ingest is logged and the element is removed.
 - **Re-accepting de-identification options** on an existing project recompiles from the packaged default plus overlays and **discards** prior custom script edits; already-imported instances are not re-anonymized.
 - **MIDI-B** scores are evidence for header review, not a substitute for institutional determination ([protocol](deidentification-protocol.md#hipaa-safe-harbor-and-midi-b); [published scores](midi-b-scores.md)).
 
