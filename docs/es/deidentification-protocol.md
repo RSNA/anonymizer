@@ -24,7 +24,7 @@ Use las puntuaciones MIDI-B y este protocolo como **evidencia para la revisión*
 
 ## Fechas
 
-Las fechas se desplazan por paciente (desplazamiento basado en hash) para que el **orden y el espaciado** de los estudios de un paciente sigan siendo significativos, pero las fechas de calendario no son las originales. La hora del día suele dejarse igual.
+Las fechas se desplazan para que el **orden y el espaciado** de los estudios de un paciente sigan siendo significativos, pero las fechas de calendario no son las originales. La hora del día suele dejarse igual. Estrategias (script / lookup): `@hashdate`, `@lookup(this,dateoffset)`, `@incrementdate(this,n)`, `@rebasedate(this,origin)` (basedate o `ddate/`). El rebase también escribe `(0012,0052)` / `(0012,0053)`. Los scripts TCIA pueden sellar colección/sitio/diagnóstico con `@lookup(this,cname|siteid|ddate)` y un `@dateinterval` StudyDate–ddate; una fila de lookup requerida ausente pone el archivo en cuarentena **Lookup_Miss**. Véase [Script del anonimizador — fechas longitudinales](05-create-project/anonymizer-script.md#longitudinal-dates-tcia-style).
 
 ## Qué puede conservarse (opciones parciales)
 

@@ -38,7 +38,7 @@ Die **vollständige** Entfernen/Behalten/Transformieren-Liste eines Projekts ist
 | **Accession Number** | Deterministischer Hash aus Projekt-Mixer (`site_id` / `uid_root`) plus Original-Accession. |
 | **DICOM-UIDs** (Study, Series, SOP Instance, Frame of Reference und andere Skriptregeln mit `@uid`) | Projektpräfix (`uid_root` + Site-ID) + gekürzte MD5 der Original-UID — gleiches Original → gleicher Ersatz **innerhalb des Projekts**. |
 | **Daten / DateTimes** (Datumsdelta-Operanden) | Pro-Patient- oder Trial-Strategie: Standard `@hashdate`; oder `@lookup`, `@incrementdate`, `@rebasedate` wenn konfiguriert. Tageszeit typischerweise unverändert. Siehe [Daten](deidentification-protocol.md#daten). |
-| **Patient Age** | Auf Fünfjahresband gerundet (`@round`), auch bei **Retain Patient Characteristics**. |
+| **Patient Age** | Mit `@round(this,5)` gebändert (CTP-Bänder um null), auch bei **Retain Patient Characteristics**; exakt behalten, wenn **Retain TCIA Research** diese Regel ersetzt. |
 | **Andere Basic-Leerungen** | `@empty()` oder feste Literale laut Skript. |
 
 Details und Sicherheitshinweise: [Deterministische Ersetzungen](deidentification-protocol.md#deterministic-replacements-uids-dates-accessions).
@@ -74,7 +74,7 @@ Bei erfolgreichem Import-Schutz stellt das Produkt mindestens sicher:
 | `(0028,0303) Longitudinal Temporal Information Modified` | `MODIFIED` bei Datumsdelta-Strategie |
 | `(0012,0052)` / `(0012,0053)` (Rebase-Pfad) | Offset From Event und Event Type `REGISTRATION` bei `@rebasedate` / Registrierungs-Rebase |
 
-Skript-`@always()…` kann fehlende Nicht-Sequenz-Elemente mit festem Literal **anlegen**.
+Nach dem Skript-Durchlauf werden fehlende Nicht-Sequenz-Elemente in einem Durchgang für `@always()…`, Stempel `@lookup(this,cname|siteid|ddate)` und `@dateinterval(StudyDate,ddate,PatientID)` angelegt.
 
 ### Transfer Syntaxes für Encrypted Attributes Data Set
 
@@ -108,7 +108,7 @@ Die DICOM-Option **Clean Graphics** zielt auf **nicht-textuelle** eingebrannte G
 
 - **Kein Encrypted-Attributes- / Public-Key-Re-Identifikationspfad** — keine Schlüsselgrößen oder Cipher Suites.
 - **Clean\*-Optionen** brauchen installierte KI-Funktionen.
-- **Custom-CTP-Skripte** können importiert werden; unbekannte Operanden werden abgelehnt; Datumsregeln müssen Study Date entsprechen.
+- **Custom-CTP-Skripte** können importiert werden; gängige TCIA/CTP-Formen werden in Produkt-Operanden umgeschrieben; verbleibende unbekannte Operanden werden abgelehnt; Datumsregeln müssen Study Date entsprechen. Eine unerkannte Operation, die den Ingest noch erreicht, wird protokolliert und das Element entfernt.
 - **Erneutes Akzeptieren von Optionen** kompiliert neu und **verwirft** Custom-Skriptedits; bereits importierte Instanzen werden nicht neu anonymisiert.
 - **MIDI-B**-Scores sind Nachweis für Header-Prüfung, kein Ersatz für die institutionelle Feststellung ([Protokoll](deidentification-protocol.md#hipaa-safe-harbor-and-midi-b)).
 

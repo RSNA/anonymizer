@@ -24,7 +24,7 @@ Nutzen Sie MIDI-B-Scores und dieses Protokoll als **Nachweis für die Prüfung**
 
 ## Daten
 
-Daten werden pro Patient verschoben (hash-basierter Versatz), sodass **Reihenfolge und Abstände** der Studien eines Patienten aussagekräftig bleiben, Kalenderdaten aber nicht die Originale sind. Tageszeiten bleiben typischerweise unverändert.
+Daten werden so verschoben, dass **Reihenfolge und Abstände** der Studien eines Patienten aussagekräftig bleiben, Kalenderdaten aber nicht die Originale sind. Tageszeiten bleiben typischerweise unverändert. Strategien (Skript / Lookup): `@hashdate`, `@lookup(this,dateoffset)`, `@incrementdate(this,n)`, `@rebasedate(this,origin)` (basedate oder `ddate/`). Rebase schreibt auch `(0012,0052)` / `(0012,0053)`. TCIA-Skripte können Collection/Site/Diagnose über `@lookup(this,cname|siteid|ddate)` und ein StudyDate–ddate-`@dateinterval` stempeln; fehlende erforderliche Lookup-Zeilen setzen die Datei in Quarantäne **Lookup_Miss**. Siehe [Anonymizer-Skript — longitudinale Datumsangaben](05-create-project/anonymizer-script.md#longitudinal-dates-tcia-style).
 
 ## Was behalten werden kann (Teiloptionen)
 

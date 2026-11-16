@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<script>
+<e en="T" t="00131050" n="StudyYear">@truncate(this,4)</e>
+</script>

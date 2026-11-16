@@ -22,7 +22,7 @@ Dans **Paramètres de nouveau projet** :
 
 ## 2. Paramètres du projet
 
-**Paramètres de nouveau projet** est la boîte de dialogue ci-dessous. Configurez-la de haut en bas ; les sections numérotées suivantes suivent cette disposition.
+**Paramètres de nouveau projet** est la boîte de dialogue ci-dessous. Configurez-la de haut en bas ; les sections numérotées suivantes suivent cette disposition. Sur la ligne **Script File**, **Edit Anonymizer Script** et **Import CTP Script…** côte à côte, avec une ligne d’état sous les boutons (nom du script · résumé d’options ou **Custom**).
 
 ![Paramètres du nouveau projet](shots/macos/NewProjectSettings.png)
 
@@ -125,8 +125,12 @@ Les préréglages ne remplissent que les cases. Le projet stocke les **codes d�
 
 Le projet utilise **ce script uniquement** pour l’anonymisation des balises (pas NER/OCR). Langage de règles et balises de tampon : [Protocole de dé-identification](../deidentification-protocol.md). Checklist PS 3.15 § E.1.3 : [Déclaration de conformité DICOM](../dicom-conformance-statement.md).
 
+### Script File
+
+Sur la ligne **Script File** (voir la capture [Paramètres du projet](#2-project-settings) ci-dessus) : **Edit Anonymizer Script**, **Import CTP Script…**, et la ligne d’état. L’import installe un `.script` CTP (même validation qu’au rechargement) ; s’il utilise `@lookup` / `@rebasedate` sans table chargée, Import ouvre **Load Patient Lookup Table** (Annuler abandonne). Puis codes d’option en métadonnées seulement. Détails : [Script d’anonymisation (avancé)](anonymizer-script.md#import-a-ctp-script).
+
 !!! warning "Changer les options après la création"
-    Appliquer d’autres options plus tard demande confirmation. **Accepter** **recompile** à partir du défaut fourni plus les superpositions — **les modifications personnalisées du script sont perdues**. Les fichiers déjà stockés dans le projet ne sont pas retraités.
+    Appliquer d’autres options plus tard demande confirmation. **Accepter** **reconstruit** à partir du défaut fourni plus les options sélectionnées — un script **personnalisé ou importé** est abandonné. Si le script est déjà **Custom**, la confirmation le dit explicitement. Les fichiers déjà stockés dans le projet ne sont pas retraités.
 
 ### Options de nettoyage et modalités
 

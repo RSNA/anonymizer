@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<script>
+ <p t="DATEINC">-1000</p>
+ <p t="SITEID">99999999</p>
+ <p t="SITENAME">SITETCIA</p>
+ <p t="UIDROOT">1.3.6.1.4.1.14519.5.2.1</p>
+ <e en="T" t="00080016" n="SOPClassUID">@keep()</e>
+ <e en="T" t="00080018" n="SOPInstanceUID">@hashuid(@UIDROOT,this)</e>
+ <e en="T" t="00080020" n="StudyDate">@incrementdate(this,@DATEINC)</e>
+ <e en="T" t="00100010" n="PatientName">@lookup(PatientID,ptid)</e>
+ <e en="T" t="00100020" n="PatientID">@lookup(this,ptid)</e>
+ <e en="T" t="00120063" n="DeidentificationMethod">@always()@append(){Per DICOM PS 3.15 AnnexE. Details in 0012,0064}</e>
+ <e en="T" t="00131010" n="ProjectName">@always()@lookup(PatientID,cname)</e>
+ <e en="T" t="00131011" n="TrialName">@always()@lookup(PatientID,cname)</e>
+ <e en="T" t="00131012" n="SiteName">@always()@param(@SITENAME)</e>
+ <e en="T" t="00131013" n="SiteID">@always()@param(@SITEID)</e>
+ <e en="T" t="00131050" n="StudyYear">@always()@modifydate(StudyDate,*,1,1)</e>
+ <e en="T" t="300E0008" n="ReviewerName">REV-@hashname(this,4)</e>
+ <e en="T" t="0008114A" n="DupFirst">@keep()</e>
+ <e en="T" t="0008114A" n="DupLast">@empty()</e>
+</script>

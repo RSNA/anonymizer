@@ -167,7 +167,10 @@ class PHI(Base):
     dob: Mapped[str | None] = mapped_column(String, default=None)
     ethnic_group: Mapped[str | None] = mapped_column(String, default=None)
     date_offset: Mapped[int | None] = mapped_column(Integer, default=None)  # from lookup dateoffset/
-    base_date: Mapped[str | None] = mapped_column(String, default=None)  # from lookup basedate/
+    base_date: Mapped[str | None] = mapped_column(String, default=None)  # from lookup basedate/ or ddate/
+    collection_name: Mapped[str | None] = mapped_column(String, default=None)  # from lookup cname/
+    site_name: Mapped[str | None] = mapped_column(String, default=None)  # from lookup sname/
+    lookup_site_id: Mapped[str | None] = mapped_column(String, default=None)  # from lookup siteid/
 
     studies: Mapped[list[Study] | None] = relationship(
         back_populates="patient", cascade="all, delete-orphan", init=False
@@ -193,6 +196,9 @@ class CtpLookupPhiRow:
     anon_patient_id: str
     date_offset: int | None = None
     base_date: str | None = None
+    collection_name: str | None = None
+    site_name: str | None = None
+    lookup_site_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -484,7 +490,8 @@ class AnonymizerModel:
         """
         Upsert CTP lookup assignments onto PHI (settings-time commit).
 
-        Creates or updates PHI rows with anon_patient_id, date_offset, and base_date.
+        Creates or updates PHI rows with anon_patient_id, date_offset, base_date,
+        and optional TCIA collection/site fields.
         After upsert, deletes study-less PHI not in the new set (keeps the default
         blank PatientID row; never cascade-deletes studies).
 
@@ -504,12 +511,18 @@ class AnonymizerModel:
                         anon_patient_id=row.anon_patient_id,
                         date_offset=row.date_offset,
                         base_date=row.base_date,
+                        collection_name=row.collection_name,
+                        site_name=row.site_name,
+                        lookup_site_id=row.lookup_site_id,
                     )
                 )
             else:
                 phi.anon_patient_id = row.anon_patient_id
                 phi.date_offset = row.date_offset
                 phi.base_date = row.base_date
+                phi.collection_name = row.collection_name
+                phi.site_name = row.site_name
+                phi.lookup_site_id = row.lookup_site_id
 
         candidates = self.session.execute(
             select(PHI).where(PHI.patient_id != self.DEFAULT_PHI_PATIENT_ID_PK_VALUE)

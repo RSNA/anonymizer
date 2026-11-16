@@ -454,12 +454,12 @@ def test_always_operand_sets_literal_and_creates_missing(controller: ProjectCont
     ds3 = Dataset()
     anon.model._tag_keep["00120062"] = "@always()YES"
     assert 0x00120062 not in ds3
-    anon._insert_always_missing_elements(ds3)
+    anon._insert_missing_script_elements(ds3)
     assert ds3.PatientIdentityRemoved == "YES"
 
     ds4 = Dataset()
     anon.model._tag_keep["00120062"] = "YES"
-    anon._insert_always_missing_elements(ds4)
+    anon._insert_missing_script_elements(ds4)
     assert 0x00120062 not in ds4
 
 

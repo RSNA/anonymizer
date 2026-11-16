@@ -38,7 +38,7 @@ La lista **completa** eliminar/conservar/transformar de un proyecto es el script
 | **Accession Number** | Hash determinista de un mezclador del proyecto (`site_id` / `uid_root`) más la accession original. |
 | **UIDs DICOM** (Study, Series, SOP Instance, Frame of Reference y otras reglas `@uid`) | Prefijo del proyecto (`uid_root` + site id) + MD5 truncado del UID original — mismo original → misma sustitución **dentro del proyecto**. |
 | **Fechas / DateTimes** | Estrategia por paciente o ensayo: `@hashdate` por defecto; o `@lookup`, `@incrementdate`, `@rebasedate`. La hora del día suele dejarse igual. Véase [Fechas](deidentification-protocol.md#fechas). |
-| **Patient Age** | Redondeada a banda de cinco años (`@round`) incluso con **Retain Patient Characteristics**. |
+| **Patient Age** | Bandas con `@round(this,5)` (bandas CTP centradas en cero) incluso con **Retain Patient Characteristics**; conservada exactamente si **Retain TCIA Research** sustituye esa regla. |
 | **Otros vaciados Basic** | `@empty()` o literales fijos según el script. |
 
 Detalles: [Sustituciones deterministas](deidentification-protocol.md#deterministic-replacements-uids-dates-accessions).
@@ -72,7 +72,7 @@ Detalles: [Sustituciones deterministas](deidentification-protocol.md#determinist
 | `(0028,0303) Longitudinal Temporal Information Modified` | `MODIFIED` cuando corre una estrategia de delta de fechas |
 | `(0012,0052)` / `(0012,0053)` (ruta rebase) | Offset From Event y Event Type `REGISTRATION` con `@rebasedate` |
 
-Las reglas `@always()…` también pueden **crear** elementos no secuencia ausentes con un literal fijo.
+Tras el recorrido del script, los elementos no secuencia ausentes se crean en una pasada para `@always()…`, sellos `@lookup(this,cname|siteid|ddate)` y `@dateinterval(StudyDate,ddate,PatientID)`.
 
 ### Transfer Syntaxes para Encrypted Attributes Data Set
 
@@ -106,7 +106,7 @@ La opción DICOM **Clean Graphics** apunta a gráficos quemados **no textuales**
 
 - **Sin ruta Encrypted Attributes / clave pública** — no se reivindican tamaños de clave ni suites de cifrado.
 - Las opciones **Clean\*** requieren funciones de IA instaladas.
-- Se pueden importar **scripts CTP personalizados**; operandos desconocidos se rechazan; las reglas de fecha deben coincidir con Study Date.
+- Se pueden importar **scripts CTP personalizados**; formas TCIA/CTP habituales se reescriben a operandos de producto; operandos desconocidos restantes se rechazan; las reglas de fecha deben coincidir con Study Date. Una operación no reconocida que aún llegue al ingest se registra y se elimina el elemento.
 - **Volver a aceptar opciones** recompila y **descarta** ediciones personalizadas; las instancias ya importadas no se re-anonimizan.
 - Las puntuaciones **MIDI-B** son evidencia para revisión de cabeceras, no un sustituto de la determinación institucional ([protocolo](deidentification-protocol.md#hipaa-safe-harbor-and-midi-b)).
 

@@ -38,11 +38,20 @@ apply_day_delta(value: str, days: int) -> str
 rebase_days(basedate: str | None, origin: str | None) -> int | None
     Days to add for TCIA epoch rebase: ORIGIN − basedate.
 
+days_from_basedate_to_study(study_date: str | None, basedate: str | None) -> int | None
+    Whole days StudyDate − basedate when both are valid YYYYMMDD.
+
 stamp_dates_modified(ds: Dataset) -> None
     Set LongitudinalTemporalInformationModified to MODIFIED.
 
-stamp_rebase_registration(ds: Dataset, phi_study_date: str | None, basedate: str | None) -> None
-    Stamp TCIA REGISTRATION provenance from StudyDate and lookup basedate.
+stamp_rebase_registration(ds, phi_study_date, basedate, *, event_type="REGISTRATION") -> None
+    Stamp TCIA longitudinal offset/event-type from StudyDate and lookup basedate.
+
+DEFAULT_LONGITUDINAL_TEMPORAL_EVENT_TYPE
+    Default Longitudinal Temporal Event Type when Import prompts for LTET.
+
+LONGITUDINAL_TEMPORAL_EVENT_TYPES
+    Usual DICOM / TCIA values for Longitudinal Temporal Event Type (0012,0053).
 """
 import hashlib
 import logging
@@ -54,6 +63,15 @@ from pathlib import Path
 from pydicom import Dataset
 
 logger = logging.getLogger(__name__)
+
+# Usual values for (0012,0053) Longitudinal Temporal Event Type (TCIA LTET param).
+DEFAULT_LONGITUDINAL_TEMPORAL_EVENT_TYPE = "DIAGNOSIS"
+LONGITUDINAL_TEMPORAL_EVENT_TYPES: tuple[str, ...] = (
+    "DIAGNOSIS",
+    "BASELINE",
+    "ENROLLMENT",
+    "REGISTRATION",
+)
 
 DEFAULT_ANON_DATE = "20000101"  # if source date is invalid or before 19000101
 _DATEINC_PATH = Path(__file__).resolve().parent / "private_tags" / "dateinc.txt"
@@ -293,6 +311,31 @@ def rebase_days(basedate: str | None, origin: str | None) -> int | None:
     return (origin_dt - base_dt).days
 
 
+def days_from_basedate_to_study(study_date: str | None, basedate: str | None) -> int | None:
+    """
+    Whole days from lookup basedate to StudyDate.
+
+    Args:
+        study_date: DICOM StudyDate (YYYYMMDD…), or None.
+        basedate: Lookup basedate/ddate YYYYMMDD, or None.
+
+    Returns:
+        Signed day count, or None when either date is missing/invalid.
+    """
+    if not basedate or not study_date:
+        return None
+    study = str(study_date).strip()[:8]
+    base = str(basedate).strip()[:8]
+    if not valid_date(study) or not valid_date(base):
+        return None
+    try:
+        study_dt = datetime.strptime(study, "%Y%m%d")
+        base_dt = datetime.strptime(base, "%Y%m%d")
+    except ValueError:
+        return None
+    return (study_dt - base_dt).days
+
+
 def stamp_dates_modified(ds: Dataset) -> None:
     """
     Set LongitudinalTemporalInformationModified to MODIFIED.
@@ -310,33 +353,29 @@ def stamp_rebase_registration(
     ds: Dataset,
     phi_study_date: str | None,
     basedate: str | None,
+    *,
+    event_type: str = "REGISTRATION",
 ) -> None:
     """
-    Stamp TCIA REGISTRATION provenance from StudyDate and lookup basedate.
+    Stamp TCIA longitudinal provenance from StudyDate and lookup basedate.
 
-    Sets LongitudinalTemporalOffsetFromEvent, LongitudinalTemporalEventType
-    REGISTRATION, and LongitudinalTemporalInformationModified MODIFIED when
-    both dates are valid YYYYMMDD.
+    Sets LongitudinalTemporalOffsetFromEvent, LongitudinalTemporalEventType,
+    and LongitudinalTemporalInformationModified MODIFIED when both dates are
+    valid YYYYMMDD.
 
     Args:
         ds: Dataset to mutate.
         phi_study_date: Pre-anonymization StudyDate, or None.
         basedate: Lookup basedate YYYYMMDD, or None.
+        event_type: Event type code (REGISTRATION, DIAGNOSIS, BASELINE, …).
 
     Returns:
         None.
     """
-    if not basedate or not phi_study_date:
+    days = days_from_basedate_to_study(phi_study_date, basedate)
+    if days is None:
         return
-    study = str(phi_study_date).strip()[:8]
-    base = str(basedate).strip()[:8]
-    if len(study) != 8 or not study.isdigit() or len(base) != 8 or not base.isdigit():
-        return
-    try:
-        study_dt = datetime.strptime(study, "%Y%m%d")
-        base_dt = datetime.strptime(base, "%Y%m%d")
-    except ValueError:
-        return
-    ds.LongitudinalTemporalOffsetFromEvent = float((study_dt - base_dt).days)
-    ds.LongitudinalTemporalEventType = "REGISTRATION"
+    ds.LongitudinalTemporalOffsetFromEvent = float(days)
+    label = str(event_type or "").strip() or "REGISTRATION"
+    ds.LongitudinalTemporalEventType = label
     ds.LongitudinalTemporalInformationModified = "MODIFIED"

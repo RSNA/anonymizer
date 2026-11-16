@@ -13,15 +13,21 @@ normalize_ctp_document(document, *, dateinc=None) -> list[str]
 unresolved_dateinc_tags(document) -> list[str]
     Tags still using @incrementdate(this,@DATEINC) after normalize.
 
+unresolved_param_names(document) -> list[str]
+    <p> parameter names still referenced by @always()@param(@NAME).
+
 format_validation_errors(errors, *, limit=20) -> str
     Group Unsupported operand messages for import/reload dialogs.
+
+format_import_adaptation_summary(warnings, *, limit=8) -> str
+    Plain-language Import success body listing CTP adaptations.
 """
 from __future__ import annotations
 
 import re
 from collections import defaultdict
 
-from anonymizer.controller.script.document import ScriptDocument
+from anonymizer.controller.script.document import ScriptDocument, ScriptRule
 
 _KEEP_PARENS_RE = re.compile(r"^@keep\(\s*\)$", re.IGNORECASE)
 _HASHDATE_PATIENT_ID_RE = re.compile(
@@ -38,6 +44,35 @@ _ROUND_ELEMENT_RE = re.compile(
     r"^@round\(\s*([^,]+)\s*,\s*(\d+)\s*\)$",
     re.IGNORECASE,
 )
+_LOOKUP_PATIENTID_PTID_RE = re.compile(
+    r"^@lookup\(\s*PatientID\s*,\s*ptid\s*\)$",
+    re.IGNORECASE,
+)
+_ALWAYS_PARAM_RE = re.compile(
+    r"^@always\(\)\s*@param\(\s*@([A-Za-z0-9_]+)\s*\)\s*$",
+    re.IGNORECASE,
+)
+_ALWAYS_APPEND_RE = re.compile(
+    r"^@always\(\)\s*@append\(\)\s*\{(.*)\}\s*$",
+    re.IGNORECASE | re.DOTALL,
+)
+_ALWAYS_LOOKUP_RE = re.compile(
+    r"^@always\(\)\s*@lookup\(\s*PatientID\s*,\s*(cname|siteid|ddate)\s*\)$",
+    re.IGNORECASE,
+)
+_ALWAYS_MODIFYDATE_YEAR_RE = re.compile(
+    r"^@always\(\)\s*@modifydate\(\s*StudyDate\s*,\s*\*\s*,\s*1\s*,\s*1\s*\)$",
+    re.IGNORECASE,
+)
+_ALWAYS_DATEINTERVAL_STUDY_DDATE_RE = re.compile(
+    r"^@always\(\)\s*@dateinterval\(\s*StudyDate\s*,\s*ddate\s*,\s*PatientID\s*\)$",
+    re.IGNORECASE,
+)
+_DATEINTERVAL_NORM_RE = re.compile(
+    r"@dateinterval\(\s*this\s*,\s*ddate\s*,\s*PatientID\s*,\s*@NORMDATE\s*\)",
+    re.IGNORECASE,
+)
+_MANGLED_HASHUID_RE = re.compile(r'^"?@hashuid\s*\(.*\)\s*$', re.IGNORECASE)
 _UNSUPPORTED_OPERAND_RE = re.compile(
     r"^([0-9A-Fa-f]{8}):\s*Unsupported operand:\s*(.+)$"
 )
@@ -59,10 +94,6 @@ def normalize_ctp_document(
     Returns:
         Warning strings for semantic substitutes (empty when none).
     """
-    resolved_dateinc = dateinc
-    if resolved_dateinc is None:
-        resolved_dateinc = _param_int(document.params.get("DATEINC"))
-
     warnings: list[str] = []
     seen_warning: set[str] = set()
 
@@ -71,9 +102,23 @@ def normalize_ctp_document(
             seen_warning.add(message)
             warnings.append(message)
 
+    for message in _dedupe_rules_last_wins(document):
+        _warn(message)
+
+    resolved_dateinc = dateinc
+    if resolved_dateinc is None:
+        resolved_dateinc = _param_int(document.params.get("DATEINC"))
+
+    normdate = str(document.params.get("NORMDATE", "") or "").strip()
+
     for rule in document.rules:
         op = str(rule.operation or "").strip() or "@keep"
-        new_op, warn = _normalize_operation(op, dateinc=resolved_dateinc)
+        new_op, warn = _normalize_operation(
+            op,
+            dateinc=resolved_dateinc,
+            params=document.params,
+            normdate=normdate,
+        )
         if warn:
             _warn(warn)
         rule.operation = new_op
@@ -96,6 +141,54 @@ def unresolved_dateinc_tags(document: ScriptDocument) -> list[str]:
         if _INCREMENT_DATEINC_RE.match(op):
             out.append(rule.tag.upper())
     return out
+
+
+def unresolved_param_names(document: ScriptDocument) -> list[str]:
+    """
+    Parameter names still referenced by unresolved @always()@param(@NAME).
+
+    Args:
+        document: Script document (before or after a normalize pass).
+
+    Returns:
+        Unique parameter names in first-seen order.
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+    for rule in document.rules:
+        match = _ALWAYS_PARAM_RE.match(str(rule.operation or "").strip())
+        if match is None:
+            continue
+        name = match.group(1)
+        if name in seen:
+            continue
+        value = str(document.params.get(name, "") or "").strip()
+        if value:
+            continue
+        seen.add(name)
+        out.append(name)
+    return out
+
+
+def format_import_adaptation_summary(warnings: list[str], *, limit: int = 8) -> str:
+    """
+    Build the Import success message body from adaptation warnings.
+
+    Args:
+        warnings: Messages from normalize_ctp_document.
+        limit: Maximum bullet lines.
+
+    Returns:
+        Multi-line summary, or empty string when there are no warnings.
+    """
+    if not warnings:
+        return ""
+    lines = ["How CTP operations were adapted for this product:"]
+    for message in warnings[:limit]:
+        lines.append(f"• {message}")
+    if len(warnings) > limit:
+        lines.append(f"• …and {len(warnings) - limit} more adaptations")
+    return "\n".join(lines)
 
 
 def format_validation_errors(errors: list[str], *, limit: int = 20) -> str:
@@ -130,36 +223,101 @@ def format_validation_errors(errors: list[str], *, limit: int = 20) -> str:
     return "\n".join(lines[:limit])
 
 
+def _dedupe_rules_last_wins(document: ScriptDocument) -> list[str]:
+    """Keep the last rule per tag; return warnings for dropped duplicates."""
+    counts: dict[str, int] = defaultdict(int)
+    for rule in document.rules:
+        counts[rule.tag.upper()] += 1
+    dup_tags = {tag for tag, count in counts.items() if count > 1}
+    if not dup_tags:
+        return []
+
+    kept: list[ScriptRule] = []
+    seen: set[str] = set()
+    for rule in reversed(document.rules):
+        key = rule.tag.upper()
+        if key in seen:
+            continue
+        seen.add(key)
+        kept.append(rule)
+    document.rules = list(reversed(kept))
+    preview = ", ".join(sorted(dup_tags)[:8])
+    more = f" (+{len(dup_tags) - 8} more)" if len(dup_tags) > 8 else ""
+    return [f"Duplicate tags kept the last rule only: {preview}{more}"]
+
+
 def _normalize_operation(
     operation: str,
     *,
     dateinc: int | None,
+    params: dict[str, str],
+    normdate: str = "",
 ) -> tuple[str, str | None]:
     """Return (product operation, optional warning)."""
     text = str(operation or "").strip() or "@keep"
+    warning: str | None = None
+
+    # Nested dateinterval+@NORMDATE → rebasedate (also inside @if arms).
+    if normdate and _DATEINTERVAL_NORM_RE.search(text):
+        text = _DATEINTERVAL_NORM_RE.sub(f"@rebasedate(this,{normdate})", text)
+        warning = (
+            f"Date rules that used a diagnosis-date interval were converted to "
+            f"epoch rebase starting at {normdate}."
+        )
 
     if _KEEP_PARENS_RE.match(text):
-        return "@keep", None
+        return "@keep", warning
 
     if _HASHDATE_PATIENT_ID_RE.match(text):
-        return "@hashdate", None
+        return "@hashdate", warning
 
-    if _HASHUID_RE.match(text):
+    if _MANGLED_HASHUID_RE.match(text) or _HASHUID_RE.match(text):
         return (
             "@uid",
-            "@hashuid was rewritten to @uid (project UID map, not CTP hash+root).",
+            warning
+            or "UID tags use this project's UID map (not CTP's hash-and-root scheme).",
         )
 
     if _HASHPTID_RE.match(text):
         return (
             "@ptid",
-            "@hashptid was rewritten to @ptid (project patient-id map).",
+            warning
+            or "Patient ID tags use this project's patient map.",
         )
+
+    if _LOOKUP_PATIENTID_PTID_RE.match(text):
+        return "@lookup(this,ptid)", warning
 
     if _INCREMENT_DATEINC_RE.match(text):
         if dateinc is None:
-            return text, None
-        return f"@incrementdate(this,{int(dateinc)})", None
+            return text, warning
+        return f"@incrementdate(this,{int(dateinc)})", warning
+
+    append_match = _ALWAYS_APPEND_RE.match(text)
+    if append_match is not None:
+        body = str(append_match.group(1) or "").strip()
+        if not body:
+            return text, warning
+        return f"@always(){body}", warning
+
+    param_match = _ALWAYS_PARAM_RE.match(text)
+    if param_match is not None:
+        name = param_match.group(1)
+        value = str(params.get(name, "") or "").strip()
+        if not value:
+            return text, warning
+        return f"@always(){value}", warning
+
+    always_lookup = _ALWAYS_LOOKUP_RE.match(text)
+    if always_lookup is not None:
+        key = always_lookup.group(1).lower()
+        return f"@lookup(this,{key})", warning
+
+    if _ALWAYS_MODIFYDATE_YEAR_RE.match(text):
+        return "@modifydate(StudyDate,*,1,1)", warning
+
+    if _ALWAYS_DATEINTERVAL_STUDY_DDATE_RE.match(text):
+        return "@dateinterval(StudyDate,ddate,PatientID)", warning
 
     round_match = _ROUND_ELEMENT_RE.match(text)
     if round_match is not None:
@@ -168,11 +326,12 @@ def _normalize_operation(
         if element.lower() != "this":
             return (
                 f"@round(this,{width})",
-                "@round uses this element only; product rounds age down (not CTP group center).",
+                warning
+                or "Patient Age banding uses this tag's value with CTP-style year bands.",
             )
-        return f"@round(this,{width})", None
+        return f"@round(this,{width})", warning
 
-    return text, None
+    return text, warning
 
 
 def _param_int(raw: str | None) -> int | None:

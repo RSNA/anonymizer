@@ -5,9 +5,10 @@ import logging
 import re
 import string
 import tkinter as tk
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import messagebox, ttk
 from typing import Callable
 
 import customtkinter as ctk
@@ -15,11 +16,7 @@ import customtkinter as ctk
 from anonymizer.controller.ctp_lookup import CtpLookupPreview, lookup_table_context
 from anonymizer.controller.dates import incrementdate_days, rebasedate_origin
 from anonymizer.controller.project import ProjectController
-from anonymizer.controller.script.ctp_normalize import (
-    format_validation_errors,
-    normalize_ctp_document,
-    unresolved_dateinc_tags,
-)
+from anonymizer.controller.script.ctp_normalize import format_validation_errors
 from anonymizer.controller.script.date_rules import (
     apply_study_date_operation_to_rules,
     mismatched_date_rules,
@@ -45,10 +42,8 @@ from anonymizer.controller.script.operands import (
     validate_operation,
 )
 from anonymizer.controller.script.option_explanations import script_status_line
-from anonymizer.controller.script.options import infer_options_from_script
 from anonymizer.controller.script.paths import packaged_default_script_path
 from anonymizer.model.project import ProjectModel
-from anonymizer.utils.dicom import deid_method_meaning
 from anonymizer.utils.dicom_dictionary import (
     dicom_applicable_standard_text,
     display_tag_vr,
@@ -58,10 +53,22 @@ from anonymizer.utils.dicom_dictionary import (
 )
 from anonymizer.utils.translate import _
 from anonymizer.view.common.app_window import AppToplevel, install_modal_dismiss, place_toplevel_centered_on_parent
+from anonymizer.view.common.busy_status_dialog import BusyStatusDialog
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import default_char_width_px
 from anonymizer.view.common.treeview_chrome import apply_zebra_tags, configure_zebra_row_tags
-from anonymizer.view.common.ux_fields import dicom_date_chars, int_entry, str_entry
+from anonymizer.view.common.ux_fields import (
+    dicom_date_chars,
+    int_entry,
+    option_menu_width_for_labels,
+    str_entry,
+)
+from anonymizer.view.settings.ctp_script_import import (
+    import_success_body,
+    pick_ctp_script_path,
+    prepare_ctp_script_import,
+    record_imported_script_options,
+)
 from anonymizer.view.settings.lookup_table_dialog import LookupTableDialog
 from anonymizer.view.settings.script_editor import (
     ScriptViewMode,
@@ -1212,76 +1219,84 @@ class AnonymizerScriptDialog(AppToplevel):
 
     def _on_import(self) -> None:
         """Load a custom CTP script into the editor (unknown operands reject it)."""
-        path = filedialog.askopenfilename(
-            parent=self,
-            title=_("Import CTP Script"),
-            filetypes=[(_("Script Files"), "*.script"), (_("All Files"), "*.*")],
+        source = pick_ctp_script_path(self)
+        if source is None:
+            return
+
+        def on_pending(preview: CtpLookupPreview) -> None:
+            self._pending_lookup_preview = preview
+            if self._on_pending_lookup_preview is not None:
+                self._on_pending_lookup_preview(preview)
+
+        prepared = prepare_ctp_script_import(
+            self,
+            source,
+            project_model=self.project_model,
+            project_controller=self.project_controller,
+            pending_lookup_preview=self._pending_lookup_preview,
+            on_pending_lookup_preview=on_pending if self.project_controller is None else None,
+            on_script_path_changed=self._on_script_path_changed,
         )
-        if not path:
+        self._restore_modal_grab()
+        if prepared is None:
             return
-        source = Path(path)
+
+        title = _("Import CTP Script")
+        busy = BusyStatusDialog(self, title=title, status=_("Updating script editor…"))
         try:
-            document = load_script_rules(source)
-        except Exception as exc:
-            messagebox.showerror(_("Import CTP Script"), str(exc), parent=self)
-            return
-        warnings = normalize_ctp_document(document)
-        if unresolved_dateinc_tags(document):
-            spec = operand_spec_by_id(OperandId.INCREMENTDATE)
-            if spec is None:
-                messagebox.showerror(
-                    _("Import CTP Script"),
-                    _("Unsupported script:") + "\n" + "@incrementdate(this,@DATEINC)",
-                    parent=self,
+            self._document = prepared.document
+            self._imported_source = prepared.source
+            self._clear_selection()
+            self._refresh_add_dictionary_visibility()
+            self._refresh_lookup_context()
+            self._refresh_list_with_busy(busy)
+        finally:
+            busy.close()
+            self._restore_modal_grab()
+
+        messagebox.showinfo(
+            title,
+            import_success_body(
+                self.project_model,
+                prepared,
+                installed_path=None,
+                editor_pending_accept=True,
+            ),
+            parent=self,
+        )
+
+    def _restore_modal_grab(self) -> None:
+        """Re-assert this dialog's modal grab after a child busy/prompt closes."""
+        with contextlib.suppress(tk.TclError):
+            if self.winfo_exists():
+                self.grab_set()
+                self.lift()
+
+    def _refresh_list_with_busy(self, busy: BusyStatusDialog) -> None:
+        """Refresh the rule tree while updating busy status for large scripts."""
+        self._filtered = filter_rules(
+            self._document,
+            view=self._view_mode,
+            query=self._search_var.get(),
+            operand_id=self._operand_filter_id(),
+        )
+        for item in self._tree.get_children():
+            self._tree.delete(item)
+        total = len(self._filtered)
+        for index, rule in enumerate(self._filtered, start=1):
+            self._tree.insert("", "end", iid=rule.tag, values=self._rule_row_values(rule))
+            if total >= 80 and (index % 40 == 0 or index == total):
+                busy.set_status(
+                    _("Updating script editor… {done} of {total} rules").format(
+                        done=index, total=total
+                    )
                 )
-                return
-            days = self._prompt_operand_param(
-                spec,
-                initial=-730,
-                kind="int_signed",
-                message=_(
-                    "This script uses @DATEINC without a numeric <p DATEINC> value. "
-                    "Enter the trial-wide day offset to apply."
-                ),
-            )
-            if days is None:
-                return
-            document.params["DATEINC"] = str(int(days))
-            warnings = normalize_ctp_document(document, dateinc=int(days))
-        errors = validate_document(document)
-        if errors:
-            messagebox.showerror(
-                _("Import CTP Script"),
-                _("Unsupported script:") + "\n" + format_validation_errors(errors),
-                parent=self,
-            )
-            return
-        mismatched = mismatched_date_rules(document)
-        if mismatched:
-            tags = ", ".join(rule.tag.upper() for rule in mismatched[:20])
-            if not messagebox.askyesno(
-                _("Import CTP Script"),
-                _("Date rules must match the StudyDate operation.")
-                + f"\n{tags}\n\n"
-                + _("Apply the StudyDate operation to all date fields?"),
-                parent=self,
-            ):
-                return
-            apply_study_date_operation_to_rules(document)
-        self._document = document
-        self._imported_source = source
-        self._clear_selection()
-        self._refresh_add_dictionary_visibility()
-        self._refresh_lookup_context()
-        self._refresh_list()
-        if warnings:
-            messagebox.showinfo(
-                _("Import CTP Script"),
-                _("Some CTP operations were rewritten to product forms:")
-                + "\n"
-                + "\n".join(warnings[:10]),
-                parent=self,
-            )
+                busy.update()
+        apply_zebra_tags(self._tree, self._tree.get_children(""))
+        self._autosize_name_column()
+        self._search_entry.configure(width=self._search_entry_width_px())
+        if self._selected_tag and not self._tree.exists(self._selected_tag):
+            self._clear_selection()
 
     def _on_revert(self) -> None:
         if not messagebox.askyesno(
@@ -1347,26 +1362,15 @@ class AnonymizerScriptDialog(AppToplevel):
         teardown_ctk_toplevel(self, parent=self.master)
 
     def _confirm_imported_options(self) -> None:
-        """Ask to record inferred options for an imported script.
-
-        User confirmation is sufficient for recording the option codes; no
-        script-content verification is performed.
-        """
+        """Record de-identification option codes for an imported script (metadata only)."""
         if self._imported_source is None:
             return
-        options = infer_options_from_script(self._document)
-        labels = "\n".join(f"• {_(deid_method_meaning(code))}" for code in sorted(options, key=int))
-        confirmed = messagebox.askyesno(
-            _("Import CTP Script"),
-            _("Record these de-identification options for the imported script?") + f"\n{labels}",
-            parent=self,
+        record_imported_script_options(
+            self,
+            self.project_model,
+            self.project_controller,
+            self._document,
         )
-        if not confirmed:
-            return
-        self.project_model.confidentiality_options = options
-        if self.project_controller is not None:
-            self.project_controller.model.confidentiality_options = options
-            self.project_controller.save_model()
 
     def _on_cancel(self, _event=None) -> None:
         self._close_dictionary_dialog()
@@ -1403,13 +1407,17 @@ class OperandParamDialog(AppToplevel):
         kind: str = "int",
         detail: str | None = None,
         detail_title: str | None = None,
+        choices: Sequence[str] | None = None,
     ):
         super().__init__(master=parent)
         # Build while withdrawn so the first paint is already centered (no +0+0 flash).
         self.withdraw()
         self.result: int | str | None = None
         self._title = title
-        self._kind = kind if kind in ("int", "int_signed", "str", "da") else "int"
+        allowed_kinds = ("int", "int_signed", "str", "da", "choice")
+        self._kind = kind if kind in allowed_kinds else "int"
+        if self._kind == "choice" and not choices:
+            self._kind = "str"
         self.title(title)
         self._detail = (detail or "").strip() or None
         self._detail_title = (detail_title or "").strip() or None
@@ -1484,6 +1492,23 @@ class OperandParamDialog(AppToplevel):
                 width_chars=dicom_date_chars,
                 focus_set=True,
             )
+        elif self._kind == "choice":
+            choice_values = [str(v) for v in (choices or ()) if str(v).strip()]
+            initial_text = str(initial).strip()
+            if initial_text not in choice_values:
+                initial_text = choice_values[0]
+            self._str_var = ctk.StringVar(value=initial_text)
+            ctk.CTkLabel(frame, text=_("Event type") + ":", anchor="w").grid(
+                row=row, column=0, sticky="nw", padx=pad, pady=(pad, 0)
+            )
+            menu = ctk.CTkOptionMenu(
+                frame,
+                variable=self._str_var,
+                values=choice_values,
+                width=option_menu_width_for_labels(choice_values),
+            )
+            menu.grid(row=row, column=1, sticky="nw", padx=pad, pady=(pad, 0))
+            menu.focus_set()
         else:
             self._str_var = str_entry(
                 view=frame,
@@ -1588,6 +1613,14 @@ class OperandParamDialog(AppToplevel):
                 datetime.strptime(raw, "%Y%m%d")
             except ValueError:
                 messagebox.showerror(self._title, _("Enter a valid calendar date as YYYYMMDD."), parent=self)
+                return
+            self.result = raw
+            teardown_ctk_toplevel(self, parent=self.master)
+            return
+
+        if self._kind == "choice":
+            if not raw:
+                messagebox.showerror(self._title, _("Choose an event type."), parent=self)
                 return
             self.result = raw
             teardown_ctk_toplevel(self, parent=self.master)

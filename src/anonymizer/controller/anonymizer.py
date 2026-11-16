@@ -13,9 +13,9 @@ AnonymizerController
 """
 import logging
 import os
-import re
 import threading
 import time
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from queue import Queue
@@ -29,7 +29,7 @@ from pydicom.tag import Tag
 from anonymizer.controller.dates import (
     DEFAULT_ANON_DATE,
     apply_day_delta,
-    is_date_delta_operation,
+    days_from_basedate_to_study,
     resolve_date_delta,
     stamp_dates_modified,
     stamp_rebase_registration,
@@ -43,8 +43,20 @@ from anonymizer.controller.script.document import (
     validate_document,
 )
 from anonymizer.controller.script.operands import (
+    OperandId,
     always_literal_text,
+    hashname_text,
+    is_dateinterval_study_ddate_operation,
     is_remove_operation,
+    is_retain_value_operation,
+    lookup_key_from_operation,
+    operand_id_for_operation,
+    parse_hashname_operation,
+    parse_if_isblank_operation,
+    parse_round_operation,
+    parse_truncate_operation,
+    study_year_text,
+    truncate_text,
 )
 from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.model.project import DICOMNode, ProjectModel
@@ -71,6 +83,25 @@ class LookupTableMissError(Exception):
     def __init__(self, patient_id: str):
         self.patient_id = patient_id
         super().__init__(f"Lookup miss for patient_id={patient_id!r}")
+
+
+@dataclass(frozen=True, slots=True)
+class _LookupStampValues:
+    """PHI lookup stamp fields for TCIA @lookup(this,cname|siteid|ddate)."""
+
+    collection_name: str | None = None
+    lookup_site_id: str | None = None
+    base_date: str | None = None
+
+
+_EMPTY_LOOKUP_STAMPS = _LookupStampValues()
+
+_LOOKUP_STAMP_KEY = {
+    OperandId.LOOKUP_PTID: "ptid",
+    OperandId.LOOKUP_CNAME: "cname",
+    OperandId.LOOKUP_SITEID: "siteid",
+    OperandId.LOOKUP_DDATE: "ddate",
+}
 
 
 class AnonymizerController:
@@ -297,19 +328,6 @@ class AnonymizerController:
 
         return error_msg
 
-    def extract_first_digit(self, s: str) -> str | None:
-        """
-        Extracts the first digit from a given string.
-
-        Args:
-            s (str): The input string.
-
-        Returns:
-            str: The first digit found in the string, or None if no digit is found.
-        """
-        match = re.search(r"\d", s)
-        return match.group(0) if match else None
-
     def _round_age(self, age_string: str, width: int) -> str | None:
         if age_string is None:
             return ""
@@ -332,36 +350,51 @@ class AnonymizerController:
 
         return result
 
-    def _insert_always_missing_elements(self, ds: Dataset) -> None:
+    def _insert_missing_script_elements(
+        self,
+        ds: Dataset,
+        *,
+        phi_ptid: str = "",
+        stamps: _LookupStampValues = _EMPTY_LOOKUP_STAMPS,
+    ) -> None:
         """
-        Create absent DICOM elements that the script marks with @always()….
+        Create absent non-SQ elements the walk cannot see.
 
-        ds.walk only visits existing tags. CTP @always()LITERAL also
-        requires creating the element when the source dataset omits it (for
-        example fixed de-identification stamps). For each _tag_keep entry
-        whose operation is @always()…, if the tag is missing, add it with
-        the dictionary VR (or LO) and the literal text.
-
-        Sequences (VR SQ) are skipped; nested creation is not supported here.
+        ds.walk only visits existing tags. One pass over _tag_keep creates
+        missing tags for @always()…, stamp @lookup(this,cname|siteid|ddate),
+        and @dateinterval(StudyDate,ddate,PatientID).
 
         Args:
             ds: Anonymized dataset after the script walk (mutated in place).
+            phi_ptid: PHI PatientID for lookup-miss errors.
+            stamps: Lookup stamp values from the pre-capture PHI row.
 
         Returns:
             None.
-        """
 
+        Raises:
+            LookupTableMissError: When a required stamp or basedate is missing.
+        """
         for tag_hex, operation in self.model._tag_keep.items():
             op = str(operation or "").strip()
-            if not op.lower().startswith("@always()"):
+            if not op:
                 continue
-            literal = always_literal_text(op)
-            if literal is None:
+
+            is_always = op.lower().startswith("@always()")
+            lookup_key = None if is_always else lookup_key_from_operation(op)
+            is_stamp_lookup = lookup_key is not None and lookup_key not in {"ptid", "dateoffset"}
+            is_dateinterval = (
+                not is_always
+                and not is_stamp_lookup
+                and is_dateinterval_study_ddate_operation(op)
+            )
+            if not is_always and not is_stamp_lookup and not is_dateinterval:
                 continue
+
             try:
                 tag = Tag(int(tag_hex, 16))
             except ValueError:
-                logger.warning("Invalid tag in script for @always(): %s", tag_hex)
+                logger.warning("Invalid tag in script for create-missing: %s", tag_hex)
                 continue
             if tag in ds:
                 continue
@@ -371,15 +404,171 @@ class AnonymizerController:
                 vr = "LO"
             if str(vr).upper() == "SQ":
                 continue
+
+            if is_always:
+                value = always_literal_text(op)
+            elif lookup_key is not None and is_stamp_lookup:
+                value = self._lookup_stamp_value(lookup_key, stamps=stamps, phi_ptid=phi_ptid)
+            else:
+                value = self._dateinterval_study_ddate_days(
+                    getattr(ds, "StudyDate", None),
+                    stamps.base_date,
+                    phi_ptid=phi_ptid,
+                )
+            if value is None:
+                continue
             try:
-                ds.add_new(tag, vr, literal)
+                ds.add_new(tag, vr, value)
             except Exception:
                 logger.warning(
-                    "Unable to create %s via @always(): %s",
+                    "Unable to create %s via script operation: %s",
                     tag_hex,
                     op,
                     exc_info=True,
                 )
+
+    def _dateinterval_study_ddate_days(
+        self,
+        study_date: str | None,
+        base_date: str | None,
+        *,
+        phi_ptid: str,
+    ) -> str:
+        """
+        Whole days from lookup base/ddate to StudyDate.
+
+        Args:
+            study_date: DICOM StudyDate.
+            base_date: Lookup basedate/ddate YYYYMMDD.
+            phi_ptid: PHI PatientID for miss errors.
+
+        Returns:
+            Signed day count as text; "0" when StudyDate is invalid.
+
+        Raises:
+            LookupTableMissError: When basedate is missing or invalid.
+        """
+        if not base_date or not valid_date(str(base_date).strip()[:8]):
+            raise LookupTableMissError(phi_ptid)
+        days = days_from_basedate_to_study(study_date, base_date)
+        return "0" if days is None else str(days)
+
+    def _lookup_stamp_value(
+        self,
+        key: str,
+        *,
+        stamps: _LookupStampValues,
+        phi_ptid: str,
+        anon_ptid: str | None = None,
+    ) -> str:
+        """
+        Resolve one @lookup(this,key) replacement.
+
+        Args:
+            key: Lookup key (ptid, cname, siteid, ddate).
+            stamps: PHI stamp fields.
+            phi_ptid: PHI PatientID for miss errors.
+            anon_ptid: Anonymized PatientID when key is ptid.
+
+        Returns:
+            Replacement text.
+
+        Raises:
+            LookupTableMissError: When the required stamp is absent.
+        """
+        if key == "ptid":
+            return str(anon_ptid or "")
+        if key == "cname":
+            if stamps.collection_name is None:
+                raise LookupTableMissError(phi_ptid)
+            return stamps.collection_name
+        if key == "siteid":
+            if stamps.lookup_site_id is None:
+                raise LookupTableMissError(phi_ptid)
+            return stamps.lookup_site_id
+        if key == "ddate":
+            if stamps.base_date is None:
+                raise LookupTableMissError(phi_ptid)
+            return stamps.base_date
+        raise LookupTableMissError(phi_ptid)
+
+    def _apply_date_delta_element(
+        self,
+        dataset: Dataset,
+        data_element: DataElement,
+        tag: str,
+        *,
+        raw: str,
+        operation: str,
+        phi_ptid: str,
+        date_delta: int | None,
+    ) -> None:
+        """
+        Apply a day-delta operand to one DA/DT element.
+
+        Args:
+            dataset: Dataset containing the element (mutated).
+            data_element: Element being anonymized.
+            tag: Clean uppercase tag hex used as dataset key.
+            raw: Current element value as text.
+            operation: Script operation text (for logging / hashdate sentinel).
+            phi_ptid: PHI PatientID.
+            date_delta: Resolved day delta for this file, or None.
+
+        Returns:
+            None.
+        """
+        # Date ops only write DA/DT calendar text. Numeric private VRs (e.g. SL
+        # unix-time) cannot hold YYYYMMDD; remove those tags.
+        vr = (getattr(data_element, "VR", None) or "").upper()
+        if vr not in {"DA", "DT"}:
+            del dataset[tag]
+            return
+        if date_delta is None:
+            logger.error(
+                f"No date delta resolved for patient {phi_ptid}; leaving {tag} unchanged ({operation})"
+            )
+            return
+        # @hashdate: invalid/empty date or missing PatientID → fixed sentinel (not a shifted value).
+        if "@hashdate" in operation and (not phi_ptid or not valid_date(raw.strip()[:8])):
+            dataset[tag].value = DEFAULT_ANON_DATE
+        else:
+            dataset[tag].value = apply_day_delta(raw, date_delta)
+
+    def _apply_round_age_element(
+        self,
+        dataset: Dataset,
+        tag: str,
+        *,
+        value: object,
+        operation: str,
+    ) -> None:
+        """
+        Apply @round(this,n) age banding to one element.
+
+        TODO: operand is named round but it is age format specific; should be renamed round_age.
+
+        Args:
+            dataset: Dataset containing the element (mutated).
+            tag: Clean uppercase tag hex used as dataset key.
+            value: Current element value.
+            operation: Script operation text.
+
+        Returns:
+            None.
+        """
+        if value is None:
+            return
+        width = parse_round_operation(operation)
+        if width is None:
+            logger.error(
+                f"Invalid round operation: {operation}, ignoring operation, return unmodified value"
+            )
+            dataset[tag].value = value
+            return
+        logger.debug(f"round_age: Age:{value} Width:{width}")
+        dataset[tag].value = self._round_age(str(value), width)
+        logger.debug(f"round_age: Result:{dataset[tag].value}")
 
     def _anonymize_element(
         self,
@@ -389,6 +578,7 @@ class AnonymizerController:
         anon_ptid: str,
         anon_acc_no: str | None,
         date_delta: int | None,
+        stamps: _LookupStampValues = _EMPTY_LOOKUP_STAMPS,
     ) -> None:
         """
         Apply script keep/remove/transform rules to one data element.
@@ -401,12 +591,13 @@ class AnonymizerController:
             anon_acc_no: Anonymized accession number, or None.
             date_delta: The file's single resolved day delta for date
                 operations, or None when no delta could be resolved.
+            stamps: PHI lookup stamp fields for TCIA lookup keys; empty when omitted.
 
         Returns:
             None.
         """
+        # 1. Resolve script operation for this tag
         tag = str(data_element.tag).translate(self._clean_tag_translate_table).upper()
-
         if data_element.tag.is_private:
             operation = private_tag_operation(
                 dataset,
@@ -420,61 +611,110 @@ class AnonymizerController:
         else:
             operation = "@remove()"
 
+        # 2. Expand @if(this,isblank) to the then/else arm
+        if_arms = parse_if_isblank_operation(operation)
+        if if_arms is not None:
+            raw_if = "" if data_element.value is None else str(data_element.value)
+            then_op, else_op = if_arms
+            operation = then_op if raw_if.strip() == "" else else_op
+
+        # 3. Fast path: remove / keep / safe / process (majority of tags; no classify)
         if is_remove_operation(operation):
             del dataset[tag]
             return
-
-        if "@keep" in operation or "@safe" in operation:
+        if is_retain_value_operation(operation):
+            return
+        if str(operation).strip() == "@process()":
             return
 
+        # 4. Classify remaining transforming operands
         value = data_element.value
-        raw = str(value) if value is not None else ""
+        raw = "" if value is None else str(value)
+        operand_id = operand_id_for_operation(operation)
 
-        if "@empty" in operation:
-            dataset[tag].value = ""
-        elif "@uid" in operation:
-            dataset[tag].value = self.model.get_or_create_anon_uid(value)
-        elif "@ptid" in operation:
-            dataset[tag].value = anon_ptid
-        elif "@acc" in operation:
-            if value == "":
+        # 5. Apply by category
+        match operand_id:
+
+            case OperandId.EMPTY:
                 dataset[tag].value = ""
-            elif anon_acc_no:
-                dataset[tag].value = anon_acc_no
-        elif is_date_delta_operation(operation):
-            # Date ops only write DA/DT calendar text. Numeric private VRs (e.g. SL
-            # unix-time) cannot hold YYYYMMDD; remove those tags instead.
-            vr = (getattr(data_element, "VR", None) or "").upper()
-            if vr not in {"DA", "DT"}:
+
+            case OperandId.UID:
+                dataset[tag].value = self.model.get_or_create_anon_uid(value)
+
+            case OperandId.PTID:
+                dataset[tag].value = anon_ptid
+
+            case OperandId.ACC:
+                if value == "":
+                    dataset[tag].value = ""
+                elif anon_acc_no:
+                    dataset[tag].value = anon_acc_no
+
+            case (
+                OperandId.HASHDATE
+                | OperandId.INCREMENTDATE
+                | OperandId.REBASEDATE
+                | OperandId.LOOKUP_DATEOFFSET
+            ):
+                self._apply_date_delta_element(
+                    dataset,
+                    data_element,
+                    tag,
+                    raw=raw,
+                    operation=operation,
+                    phi_ptid=phi_ptid,
+                    date_delta=date_delta,
+                )
+
+            case (
+                OperandId.LOOKUP_PTID
+                | OperandId.LOOKUP_CNAME
+                | OperandId.LOOKUP_SITEID
+                | OperandId.LOOKUP_DDATE
+            ):
+                dataset[tag].value = self._lookup_stamp_value(
+                    _LOOKUP_STAMP_KEY[operand_id],
+                    stamps=stamps,
+                    phi_ptid=phi_ptid,
+                    anon_ptid=anon_ptid,
+                )
+
+            case OperandId.MODIFYDATE_YEAR:
+                dataset[tag].value = study_year_text(getattr(dataset, "StudyDate", None))
+
+            case OperandId.DATEINTERVAL_STUDY_DDATE:
+                dataset[tag].value = self._dateinterval_study_ddate_days(
+                    getattr(dataset, "StudyDate", None),
+                    stamps.base_date,
+                    phi_ptid=phi_ptid,
+                )
+
+            case OperandId.HASHNAME:
+                parsed = parse_hashname_operation(operation)
+                if parsed is not None:
+                    prefix, width = parsed
+                    dataset[tag].value = f"{prefix}{hashname_text(raw, width)}"
+
+            case OperandId.TRUNCATE:
+                width = parse_truncate_operation(operation)
+                if width is not None:
+                    dataset[tag].value = truncate_text(raw, width)
+
+            case OperandId.ROUND:
+                self._apply_round_age_element(
+                    dataset, tag, value=value, operation=operation
+                )
+
+            case OperandId.ALWAYS:
+                literal = always_literal_text(operation)
+                if literal is not None:
+                    dataset[tag].value = literal
+
+            case _:
+                logger.error(
+                    f"Unknown script operand for {tag}: {operation!r}; removing element"
+                )
                 del dataset[tag]
-                return
-            if date_delta is None:
-                logger.error(f"No date delta resolved for patient {phi_ptid}; leaving {tag} unchanged ({operation})")
-                return
-            # @hashdate: invalid/empty date or missing PatientID → fixed sentinel (not a shifted value).
-            if "@hashdate" in operation and (not phi_ptid or not valid_date(raw.strip()[:8])):
-                dataset[tag].value = DEFAULT_ANON_DATE
-            else:
-                dataset[tag].value = apply_day_delta(raw, date_delta)
-        elif "@lookup" in operation:
-            dataset[tag].value = anon_ptid
-        elif "@round" in operation:
-            # TODO: operand is named round but it is age format specific, should be renamed round_age
-            if value is None:
-                return
-            parameter = self.extract_first_digit(operation.replace("@round", ""))
-            if parameter is None:
-                logger.error(f"Invalid round operation: {operation}, ignoring operation, return unmodified value")
-                dataset[tag].value = value
-                return
-            width = int(parameter)
-            logger.debug(f"round_age: Age:{value} Width:{width}")
-            dataset[tag].value = self._round_age(value, width)
-            logger.debug(f"round_age: Result:{dataset[tag].value}")
-        else:
-            literal = always_literal_text(operation)
-            if literal is not None:
-                dataset[tag].value = literal
 
     def anonymize(self, source: DICOMNode | str, ds: Dataset) -> str | None:
         """
@@ -512,6 +752,15 @@ class AnonymizerController:
         phi_record = self.model.get_phi_by_phi_patient_id(phi_patient_id)
         phi_study_date = str(getattr(ds, "StudyDate", "") or "").strip() or None
         base_date = phi_record.base_date if phi_record is not None else None
+        stamps = (
+            _LookupStampValues(
+                collection_name=phi_record.collection_name,
+                lookup_site_id=phi_record.lookup_site_id,
+                base_date=base_date,
+            )
+            if phi_record is not None
+            else _EMPTY_LOOKUP_STAMPS
+        )
         date_delta = resolve_date_delta(
             self.model._tag_keep.get("00080020") or None,
             patient_id=phi_patient_id,
@@ -520,7 +769,7 @@ class AnonymizerController:
                 if phi_record is not None and phi_record.date_offset is not None
                 else 0
             ),
-            base_date=phi_record.base_date if phi_record is not None else None,
+            base_date=base_date,
         )
         try:
             phi_ptid, anon_ptid, anon_acc_no, _date_offset = self.model.capture_phi(
@@ -553,17 +802,27 @@ class AnonymizerController:
                     anon_ptid,
                     None if anon_acc_no is None else str(anon_acc_no),
                     date_delta,
+                    stamps,
                 )
 
             ds.walk(pydicom_callback)  # recursive by default, recurses into embedded dataset sequences
 
-            # Create missing non-SQ elements whose script uses @always()… (CTP create-if-missing).
-            self._insert_always_missing_elements(ds)
+            # Create missing non-SQ elements (@always / stamp @lookup / StudyDate dateinterval).
+            self._insert_missing_script_elements(ds, phi_ptid=phi_ptid, stamps=stamps)
 
             if self.model.date_operands_present:
                 stamp_dates_modified(ds)
             if base_date:
-                stamp_rebase_registration(ds, phi_study_date, base_date)
+                event_type = (
+                    always_literal_text(self.model._tag_keep.get("00120053"))
+                    or "REGISTRATION"
+                )
+                stamp_rebase_registration(
+                    ds,
+                    phi_study_date,
+                    base_date,
+                    event_type=event_type,
+                )
 
             # All elements now anonymized according to script, now handle Anonymization specific Tags:
             ds.PatientIdentityRemoved = "YES"  # CS: (0012, 0062)
@@ -582,6 +841,9 @@ class AnonymizerController:
 
             return None
 
+        except LookupTableMissError as e:
+            self.model.remove_uid(phi_instance_uid)
+            return self._write_dataset_to_quarantine(e, ds, QuarantineDirectories.LOOKUP_MISS)
         except Exception as e:
             # Remove this phi instance UID from lookup if anonymization or storage fails
             # Leave other PHI intact for this patient

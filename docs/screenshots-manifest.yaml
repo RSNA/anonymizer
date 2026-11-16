@@ -87,9 +87,11 @@ workflows:
           - AWS Cognito
           - Network Timeouts
           - Modalities / Storage Classes / Transfer Syntaxes
-          - Script File / Edit Anonymizer Script
+          - De-identification Options
+          - Script File / Edit Anonymizer Script / Import CTP Script…
+          - Script status line (name · Basic / Retain / Custom / …)
           - Logging Levels
-        caption: "New Project Settings — identity, storage, and network before create."
+        caption: "New Project Settings — identity, storage, options, and Script File (Edit / Import CTP Script…)."
       - id: LocalServer
         file: LocalServer.png
         window: DICOMNodeDialog
