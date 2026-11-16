@@ -55,12 +55,15 @@ class DeidentificationOptionsDialog(AppToplevel):
     Args:
         parent: Parent window.
         selected: Currently selected option codes.
+        intro: Optional banner above the DICOM heading (e.g. import metadata-only).
     """
 
     def __init__(
         self,
         parent,
         selected: frozenset[DeidMethodCode],
+        *,
+        intro: str | None = None,
     ) -> None:
         super().__init__(master=parent)
         self.title(_("De-identification Options"))
@@ -70,6 +73,7 @@ class DeidentificationOptionsDialog(AppToplevel):
         self._focused: DeidMethodCode = DeidMethodCode.BASIC
         self._option_vars: dict[DeidMethodCode, tk.BooleanVar] = {}
         self._row_frames: dict[DeidMethodCode, ctk.CTkFrame] = {}
+        self._intro = (intro or "").strip() or None
 
         initial = frozenset(selected) | {DeidMethodCode.BASIC}
         for code in DeidMethodCode:
@@ -140,10 +144,21 @@ class DeidentificationOptionsDialog(AppToplevel):
         pad = _PAD
         self._frame = ctk.CTkFrame(self)
         self._frame.grid(row=0, column=0, padx=pad, pady=pad, sticky="nsew")
-        self._frame.grid_rowconfigure(1, weight=1)
         self._frame.grid_columnconfigure(0, weight=1)
 
         title_font = ctk.CTkFont(weight="bold")
+        row = 0
+        if self._intro:
+            intro_label = ctk.CTkLabel(
+                self._frame,
+                text=self._intro,
+                justify="left",
+                wraplength=_LIST_WIDTH + _HELP_WRAP,
+                anchor="w",
+            )
+            intro_label.grid(row=row, column=0, sticky="ew", padx=pad, pady=(pad, 0))
+            row += 1
+
         dicom_ref = _("DICOM Confidentiality Profile Options (PS 3.15 Appendix E, Table E.1-1)")
         dicom_link = self._link_button(
             self._frame,
@@ -152,14 +167,19 @@ class DeidentificationOptionsDialog(AppToplevel):
             width=button_width_for_label(dicom_ref, minimum=100, font=title_font),
             font=title_font,
         )
-        dicom_link.grid(row=0, column=0, sticky="w", padx=pad, pady=(pad, 0))
+        dicom_top = pad if row == 0 else pad // 2
+        dicom_link.grid(row=row, column=0, sticky="w", padx=pad, pady=(dicom_top, 0))
         bind_hover_tooltip(dicom_link, _("View on dicom.nema.org"))
+        row += 1
 
+        body_row = row
+        self._frame.grid_rowconfigure(body_row, weight=1)
         body = ctk.CTkFrame(self._frame, fg_color="transparent")
-        body.grid(row=1, column=0, sticky="nsew", padx=pad, pady=pad)
+        body.grid(row=body_row, column=0, sticky="nsew", padx=pad, pady=pad)
         body.grid_columnconfigure(0, weight=3)
         body.grid_columnconfigure(2, weight=2)
         body.grid_rowconfigure(0, weight=1)
+        row += 1
 
         list_frame = ctk.CTkFrame(body, fg_color="transparent")
         list_frame.grid(row=0, column=0, sticky="nsew", padx=(0, pad))
@@ -256,7 +276,7 @@ class DeidentificationOptionsDialog(AppToplevel):
         self._help_when.grid(row=5, column=0, sticky="ew", pady=(4, 0))
 
         footer = ctk.CTkFrame(self._frame, fg_color="transparent")
-        footer.grid(row=2, column=0, sticky="ew", padx=pad, pady=(0, pad))
+        footer.grid(row=row, column=0, sticky="ew", padx=pad, pady=(0, pad))
         footer.grid_columnconfigure(1, weight=1)
 
         presets = ctk.CTkFrame(footer, fg_color="transparent")

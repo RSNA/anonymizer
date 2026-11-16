@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from anonymizer.controller.script.ctp_normalize import (
+    format_import_adaptation_summary,
     normalize_ctp_document,
     unresolved_param_names,
 )
@@ -89,6 +90,18 @@ def test_unresolved_param_names_when_p_missing() -> None:
     normalize_ctp_document(document)
     assert unresolved_param_names(document) == ["LTET"]
     assert document.get_rule("00120053").operation == "@always()@param(@LTET)"
+
+
+def test_hashuid_adaptation_message_is_plain_language() -> None:
+    """Import adaptation warnings explain the product UID map in plain English."""
+    document = ScriptDocument(rules=[_rule("00080018", "@hashuid(@UIDROOT,this)")])
+    warnings = normalize_ctp_document(document)
+    assert document.get_rule("00080018").operation == "@uid"
+    assert any("UID map" in w for w in warnings)
+    assert not any("@hashuid" in w for w in warnings)
+    summary = format_import_adaptation_summary(warnings)
+    assert summary.startswith("How CTP operations were adapted")
+    assert "• " in summary
 
 
 def test_dedupe_rules_last_wins() -> None:

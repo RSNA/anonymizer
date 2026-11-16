@@ -22,7 +22,7 @@ In **New Project Settings**:
 
 ## 2. Project Settings
 
-**New Project Settings** is the dialog below. Configure it top to bottom; the numbered sections that follow match this layout.
+**New Project Settings** is the dialog below. Configure it top to bottom; the numbered sections that follow match this layout. On the **Script File** row, **Edit Anonymizer Script** and **Import CTP Script…** sit side by side, with a status line under the buttons (script name · options summary or **Custom**).
 
 ![New Project Settings](shots/macos/NewProjectSettings.png)
 
@@ -120,13 +120,25 @@ The buttons do not change **Retain TCIA Research Attributes**. The project store
 When you Accept options, the app **compiles** the project anonymizer script:
 
 - Start from the packaged `default-anonymizer.script`.
-- Apply **option overlays** for every selected confidentiality option (which tags to keep, remove, or transform).
+- Apply each selected de-identification option (which tags to keep, remove, or transform; later options in compile order win when they rewrite the same tag).
 - Write `{site_id}-anonymizer.script` next to `ProjectModel.json`.
 
 The project uses that **script only** for tag anonymization (not NER/OCR). Rule language and stamp tags: [De-identification protocol](../deidentification-protocol.md). PS 3.15 § E.1.3 checklist: [DICOM Conformance Statement](../dicom-conformance-statement.md).
 
+### Script File
+
+On the **Script File** row (see the [Project Settings](#2-project-settings) screenshot above):
+
+| Control | Role |
+| --- | --- |
+| **Edit Anonymizer Script** | Open the tag-rule editor for the project script. |
+| **Import CTP Script…** | Install a CTP `.script` as the project script (same validation as reload). If the script uses `@lookup` / `@rebasedate` and no patient lookup table is loaded, Import opens **Load Patient Lookup Table**; Cancel aborts. Then record option codes as metadata only (no rebuild). |
+| Status line | Project script name · options summary (**Basic**, **Retain**, …) or **Custom** when the live file diverges from a fresh compile of the stored options. |
+
+Full import stages and CTP adaptations: [Anonymizer script (advanced)](anonymizer-script.md#import-a-ctp-script).
+
 !!! warning "Changing options after create"
-    Applying different options later asks you to confirm. Accepting **recompiles** from the packaged default plus overlays — **custom script edits are lost**. Files already stored in the project are not re-processed.
+    Applying different options later asks you to confirm. Accepting **rebuilds** from the packaged default plus the selected options — a **custom or imported** script is discarded. When the script is already **Custom**, the confirm states that replacement explicitly. Files already stored in the project are not re-processed.
 
 ### Cleaning options and modalities
 

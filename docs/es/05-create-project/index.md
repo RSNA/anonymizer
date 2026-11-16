@@ -22,7 +22,7 @@ En **Configuración de Nuevo Proyecto**:
 
 ## 2. Ajustes del proyecto
 
-**Configuración de Nuevo Proyecto** es el diálogo de abajo. Configúrelo de arriba abajo; las secciones numeradas siguientes siguen este diseño.
+**Configuración de Nuevo Proyecto** es el diálogo de abajo. Configúrelo de arriba abajo; las secciones numeradas siguientes siguen este diseño. En la fila **Script File**, **Edit Anonymizer Script** e **Import CTP Script…** juntos, con una línea de estado bajo los botones (nombre del script · resumen de opciones o **Custom**).
 
 ![Configuración de Nuevo Proyecto](shots/macos/NewProjectSettings.png)
 
@@ -125,8 +125,12 @@ Al crear (y siempre que **Acepte** nuevas opciones en un proyecto existente), la
 
 El proyecto usa **solo ese script** para la anonimización de etiquetas (no NER/OCR). El lenguaje completo de reglas y las etiquetas de sello están en [Protocolo de desidentificación](../deidentification-protocol.md). Los revisores que busquen la lista PS 3.15 § E.1.3 deben usar la [Declaración de conformidad DICOM](../dicom-conformance-statement.md).
 
+### Script File
+
+En la fila **Script File** (vea la captura de [Ajustes del Proyecto](#2-project-settings) arriba): **Edit Anonymizer Script**, **Import CTP Script…** y la línea de estado. La importación instala un `.script` CTP (misma validación que al recargar); si usa `@lookup` / `@rebasedate` sin tabla cargada, Import abre **Load Patient Lookup Table** (Cancelar aborta). Luego códigos de opción solo como metadatos. Detalles: [Script del anonimizador (avanzado)](anonymizer-script.md#import-a-ctp-script).
+
 !!! warning "Cambiar opciones más tarde"
-    En un proyecto **existente**, aplicar opciones distintas pide confirmación. **Aceptar** **recompila** desde el predeterminado empaquetado más superposiciones — **se pierden las ediciones personalizadas del script**. Los archivos ya almacenados en el proyecto no se vuelven a procesar.
+    En un proyecto **existente**, aplicar opciones distintas pide confirmación. **Aceptar** **reconstruye** desde el predeterminado empaquetado más las opciones seleccionadas — se descarta un script **personalizado o importado**. Si el script ya es **Custom**, la confirmación lo dice explícitamente. Los archivos ya almacenados en el proyecto no se vuelven a procesar.
 
 ### Opciones de limpieza y modalidades
 

@@ -4,11 +4,11 @@
 
 ## Editor öffnen
 
-Nach dem Anlegen des Projekts: **Ablage → Projekteinstellungen → Anonymizer-Skript bearbeiten**.
+Nach dem Anlegen des Projekts: **Ablage → Projekteinstellungen**. In der Zeile **Script File** **Edit Anonymizer Script**, oder **Import CTP Script…**, um ein CTP-`.script` zu installieren, ohne zuerst den Editor zu öffnen.
 
 Der Editor lädt `{site_id}-anonymizer.script` neben `ProjectModel.json` im Projektspeicherordner (der Ordner oben im **Dashboard**). Die Dialogzeile **Skript** ist der Pfad dieser Skriptdatei. Das mitgelieferte `default-anonymizer.script` wird nie überschrieben.
 
-Kopfzeilenstatus: Options-Zusammenfassung (**Basic**, **Retain** oder abgekürzt gewählte Optionen). **Custom** bedeutet, dass das live Skript nicht mehr einer frischen Kompilierung der gespeicherten Optionen entspricht.
+Projekteinstellungen und Editor-Kopfzeile teilen denselben Status: Skriptname plus Options-Zusammenfassung (**Basic**, **Retain** oder abgekürzt). **Custom** bedeutet, dass das live Skript nicht mehr einer frischen Kompilierung der gespeicherten Optionen entspricht (importiert oder handeditiert).
 
 ![Anonymizer-Skript-Editor](shots/macos/AnonymizerScriptEditor.png)
 
@@ -78,7 +78,7 @@ Werkzeugleisten-Filter **Operand** **Alle** zeigt jede Regel der Ansicht; ein ko
 | **Abbrechen** | Schließen ohne Speichern. |
 
 !!! note "Optionen vs. benutzerdefinierte Bearbeitung"
-    Das Übernehmen neuer [De-Identifikationsoptionen](index.md#2-de-identification-options) kompiliert aus dem mitgelieferten Standard plus Overlays neu und **verwirft** benutzerdefinierte Skriptbearbeitungen. Bereits gespeicherte Instanzen werden nicht erneut anonymisiert.
+    Das Übernehmen neuer [De-Identifikationsoptionen](index.md#2-de-identification-options) baut das Skript aus dem mitgelieferten Standard plus den gewählten Optionen neu und **verwirft** ein benutzerdefiniertes oder importiertes Skript. Bereits gespeicherte Instanzen werden nicht erneut anonymisiert. Ist das Skript **Custom**, warnen die Projekteinstellungen, dass Import / Custom ersetzt wird.
 
 ## Patienten-Nachschlagetabelle und Datumsangaben {#5-patient-lookup-table-and-dates}
 
@@ -127,7 +127,7 @@ siteid/<PHI-Patienten-ID>=<Site-ID>
 
 ## CTP-Skript importieren
 
-**Import…** lädt eine benutzerdefinierte `.script`-Datei (keine Lookup-`.properties`). Gängige CTP/TCIA-Schreibweisen werden vor der Validierung in Produktformen umgeschrieben (detaillierte Tabelle in der englischen Seite). Verbleibende unbekannte Operanden werden abgelehnt. Datumsregeln müssen zur StudyDate-Operation passen (Ein-Klick-Korrektur verfügbar). `<p>`-Parameter wie `DATEINC`, `UIDROOT`, `SITEID`, `SITENAME`, `LTET` und `NORMDATE` bleiben für diese Auflösung erhalten. Bei **Übernehmen** bestätigen Sie, welche De-Identifikationsoptionen für dieses Skript gespeichert werden (vorausgefüllt aus seinen Regeln).
+Nutzen Sie **Import CTP Script…** unter **Ablage → Projekteinstellungen** (Zeile Script File) oder **Import…** im Editor — dieselbe Pipeline. Der Fortschrittsdialog benennt jede Stufe, darunter **Checking script rules…** (gleiche Prüfung wie beim Neuladen). Wenn das verarbeitete Skript `@lookup` / `@rebasedate` nutzt und noch keine Nachschlagetabelle geladen ist, öffnet Import **Load Patient Lookup Table**; Abbrechen bricht den Import ab. Bei Fehler bleibt das bisherige Skript. Bei Erfolg: Validierung bestanden; Projekteinstellungen speichern `{site_id}-anonymizer.script` sofort; der Editor braucht noch **Übernehmen**. Danach speichert **De-identification Options** nur Metadaten (kein Neuaufbau). Spätere Optionsänderung baut aus dem Standard neu und verwirft den Import. CTP/TCIA-Formen: siehe englische Seite. `<p>`-Parameter / **LTET** wie zuvor.
 
 ## Wenn es fehlschlägt
 

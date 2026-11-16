@@ -46,6 +46,12 @@ stamp_dates_modified(ds: Dataset) -> None
 
 stamp_rebase_registration(ds, phi_study_date, basedate, *, event_type="REGISTRATION") -> None
     Stamp TCIA longitudinal offset/event-type from StudyDate and lookup basedate.
+
+DEFAULT_LONGITUDINAL_TEMPORAL_EVENT_TYPE
+    Default Longitudinal Temporal Event Type when Import prompts for LTET.
+
+LONGITUDINAL_TEMPORAL_EVENT_TYPES
+    Usual DICOM / TCIA values for Longitudinal Temporal Event Type (0012,0053).
 """
 import hashlib
 import logging
@@ -57,6 +63,15 @@ from pathlib import Path
 from pydicom import Dataset
 
 logger = logging.getLogger(__name__)
+
+# Usual values for (0012,0053) Longitudinal Temporal Event Type (TCIA LTET param).
+DEFAULT_LONGITUDINAL_TEMPORAL_EVENT_TYPE = "DIAGNOSIS"
+LONGITUDINAL_TEMPORAL_EVENT_TYPES: tuple[str, ...] = (
+    "DIAGNOSIS",
+    "BASELINE",
+    "ENROLLMENT",
+    "REGISTRATION",
+)
 
 DEFAULT_ANON_DATE = "20000101"  # if source date is invalid or before 19000101
 _DATEINC_PATH = Path(__file__).resolve().parent / "private_tags" / "dateinc.txt"

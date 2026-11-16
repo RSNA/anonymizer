@@ -4,11 +4,11 @@ Las [opciones de desidentificación](index.md#2-de-identification-options) compi
 
 ## Abrir el editor
 
-Con el proyecto ya creado: **Archivo → Ajustes del Proyecto → Editar script del anonimizador**.
+Con el proyecto ya creado: **Archivo → Ajustes del Proyecto**. En la fila **Script File** use **Edit Anonymizer Script**, o **Import CTP Script…** para instalar un `.script` CTP sin abrir primero el editor.
 
 El editor carga `{site_id}-anonymizer.script` junto a `ProjectModel.json` en la carpeta de almacenamiento del proyecto (la carpeta que se muestra arriba del **Panel de control**). La línea **Script** del diálogo es la ruta de ese archivo de script. El `default-anonymizer.script` empaquetado nunca se sobrescribe.
 
-Estado de cabecera: resumen de opciones (**Basic**, **Retain** u opciones seleccionadas abreviadas). **Custom** indica que el script en vivo ya no coincide con una compilación nueva de las opciones guardadas.
+Ajustes del Proyecto y la cabecera del editor comparten el mismo estado: nombre del script más resumen de opciones (**Basic**, **Retain** u opciones abreviadas). **Custom** indica que el script en vivo ya no coincide con una compilación nueva de las opciones guardadas (importado o editado a mano).
 
 ![Editor del script del anonimizador](shots/macos/AnonymizerScriptEditor.png)
 
@@ -78,7 +78,7 @@ El filtro de barra **Operando** **Todos** muestra cada regla de la vista; un ope
 | **Cancelar** | Cerrar sin guardar. |
 
 !!! note "Opciones vs. ediciones personalizadas"
-    Aceptar nuevas [opciones de desidentificación](index.md#2-de-identification-options) recompila desde el predeterminado empaquetado más superposiciones y **descarta** ediciones personalizadas del script. Las instancias ya almacenadas no se vuelven a anonimizar.
+    Aceptar nuevas [opciones de desidentificación](index.md#2-de-identification-options) reconstruye el script desde el predeterminado empaquetado más las opciones elegidas y **descarta** un script personalizado o importado. Las instancias ya almacenadas no se vuelven a anonimizar. Si el script es **Custom**, Ajustes del Proyecto advierte que se reemplazará el importado / personalizado.
 
 ## Tabla de búsqueda de pacientes y fechas {#5-patient-lookup-table-and-dates}
 
@@ -127,7 +127,7 @@ siteid/<PHI-PatientID>=<id-de-sitio>
 
 ## Importar un script CTP
 
-**Importar…** carga un archivo `.script` personalizado (no un `.properties` de búsqueda). Las formas CTP/TCIA habituales se reescriben a formas de producto antes de la validación (vea la página en inglés para la tabla detallada). Los operandos desconocidos restantes se rechazan. Las reglas de fecha deben coincidir con la operación StudyDate (corrección en un clic disponible). Los parámetros `<p>` como `DATEINC`, `UIDROOT`, `SITEID`, `SITENAME`, `LTET` y `NORMDATE` se conservan para esa resolución. Al **Aceptar**, confirme qué opciones de desidentificación registrar para ese script (prellenadas desde sus reglas).
+Use **Import CTP Script…** en **Archivo → Ajustes del Proyecto** (fila Script File), o **Importar…** en el editor — mismo flujo. El diálogo de progreso nombra cada etapa, incluida **Checking script rules…** (misma comprobación que al recargar). Si el script procesado usa `@lookup` / `@rebasedate` y aún no hay tabla de búsqueda, Import abre **Load Patient Lookup Table**; Cancelar aborta el import. Si falla, el script anterior no cambia. Si tiene éxito: pasó la validación; Ajustes guarda `{site_id}-anonymizer.script` de inmediato; el editor aún necesita **Aceptar**. Luego **De-identification Options** solo guarda metadatos (sin reconstruir). Cambiar opciones después reconstruye desde el predeterminado y descarta el import. Formas CTP/TCIA: vea la página en inglés. Parámetros `<p>` / **LTET** como antes.
 
 ## Si falla
 

@@ -22,7 +22,7 @@ def test_normalize_dateinterval_normdate_to_rebasedate() -> None:
     document = load_script_rules(_NORMALIZED_MINI)
     warnings = normalize_ctp_document(document)
     assert document.get_rule("00080020").operation == "@rebasedate(this,19750101)"
-    assert any("rebasedate" in w for w in warnings)
+    assert any("epoch rebase" in w for w in warnings)
     assert document.get_rule("00181002").operation == "@uid"
     assert validate_document(document) == []
 

@@ -4,11 +4,11 @@
 
 ## Open the editor
 
-After the project exists: **File → Project Settings → Edit Anonymizer Script**.
+After the project exists: **File → Project Settings**. On the **Script File** row use **Edit Anonymizer Script**, or **Import CTP Script…** to install a CTP `.script` without opening the editor first.
 
 The editor loads `{site_id}-anonymizer.script` next to `ProjectModel.json` in the project storage folder (the folder shown at the top of the **Dashboard**). The dialog **Script** line is that script file path. The packaged `default-anonymizer.script` is never overwritten.
 
-Header status: option summary (**Basic**, **Retain**, or abbreviated selected options). **Custom** means the live script no longer matches a fresh compile of the stored options.
+Project Settings and the editor header show the same status: project script name plus an options summary (**Basic**, **Retain**, or abbreviated selected options). **Custom** means the live script no longer matches a fresh compile of the stored options (imported or hand-edited).
 
 ![Anonymizer Script Editor](shots/macos/AnonymizerScriptEditor.png)
 
@@ -78,7 +78,7 @@ Toolbar **Operand** filter **All** shows every rule in the view; choosing a spec
 | **Cancel** | Close without saving. |
 
 !!! note "Options vs custom edits"
-    Accepting new [de-identification options](index.md#2-de-identification-options) recompiles from the packaged default plus overlays and **discards** custom script edits. Already-stored instances are not re-anonymized.
+    Accepting new [de-identification options](index.md#2-de-identification-options) rebuilds the project script from the packaged default plus the selected options and **discards** a custom or imported script. Already-stored instances are not re-anonymized. When the live script is **Custom**, Project Settings warns that the imported / custom script will be replaced.
 
 ## Patient lookup table and dates {#5-patient-lookup-table-and-dates}
 
@@ -127,7 +127,13 @@ siteid/<PHI-PatientID>=<site-id>
 
 ## Import a CTP script
 
-**Import…** loads a custom `.script` file (not a lookup `.properties`). Common CTP spellings are rewritten to product forms before validation:
+Use **Import CTP Script…** on **File → Project Settings** (Script File row), or **Import…** in the script editor. Both paths share the same checks. On macOS the file dialog opens with **All Files** so TCIA `.script` / `.script.txt` names are selectable (Tk’s custom extension filter can grey matching files out).
+
+A progress dialog names each stage (reading and adapting, applying date offset / parameters when prompted, **Checking script rules…**, then installing or updating the editor list). If the processed script uses `@lookup` / `@rebasedate` and no patient lookup table is loaded yet, Import opens **Load Patient Lookup Table**; Cancel aborts the import. Import refuses unsupported operands before the project script changes. On success: the script **passed validation**; Project Settings saves it as `{site_id}-anonymizer.script` immediately; the editor still needs **Accept** to write. Success text lists CTP adaptations when any ran, or says none were needed.
+
+Then the **De-identification Options** dialog opens as **project metadata** only (ingest option codes), prefilled from the imported rules. **OK** saves the checkboxes; it does **not** rebuild or replace the imported script. **Cancel** keeps previous option codes; the imported script stays. Changing options later under Project Settings rebuilds from the packaged default and discards the import.
+
+Common CTP spellings are rewritten to product forms before validation:
 
 | CTP form | Product form |
 | --- | --- |
@@ -149,9 +155,9 @@ siteid/<PHI-PatientID>=<site-id>
 
 Duplicate `<e>` tags keep the **last** rule (with a warning). Bare literals must not embed unknown `@…` forms. `@remove` / `@remove()` are exact forms only — nested `@remove()` inside `@if` is not treated as Remove. Patient lookup tables may include TCIA `cname` / `sname` / `siteid` / `ddate` (ddate stored as basedate YYYYMMDD).
 
-Script `<p>` parameters such as `DATEINC`, `UIDROOT`, `SITEID`, `SITENAME`, `LTET`, and `NORMDATE` are retained for that resolution (Import may prompt when a referenced parameter is missing). Remaining unknown operands are rejected (errors grouped by operand). Date rules must match the StudyDate operation (one-click fix available). On **Accept**, confirm which de-identification options to record for that script (prefilled from its rules).
+Script `<p>` parameters such as `DATEINC`, `UIDROOT`, `SITEID`, `SITENAME`, `LTET`, and `NORMDATE` are retained for that resolution (Import may prompt when a referenced parameter is missing). Missing **LTET** opens a menu of Longitudinal Temporal Event Type values (default **DIAGNOSIS**: also BASELINE, ENROLLMENT, REGISTRATION). Remaining unknown operands are rejected (errors grouped by operand; title **Import CTP Script**, lead **Script did not pass validation**). Date rules must match the StudyDate operation (one-click fix available). From the editor, record option codes on **Accept** after import (same metadata-only dialog).
 
-The project script is validated again whenever it is loaded into the keep table (project open / **Accept** / compile reload), using the same checks as Import. Sequences are always walked recursively; `@process()` is informational. CTP “keep a sequence without processing its items” is not supported.
+The project script is validated with the same rule checks whenever it is loaded into the keep table (project open / **Accept** / compile reload / Settings import install). Sequences are always walked recursively; `@process()` is informational. CTP “keep a sequence without processing its items” is not supported.
 
 ## If it fails
 

@@ -82,20 +82,35 @@ class ScriptViewMode(str, Enum):
     ALL = "all"
 
 
-def options_switch_confirm_message() -> str:
+def options_switch_confirm_message(*, custom_script: bool = False) -> str:
     """
     English confirmation body when applying new de-identification options.
 
     Caller wraps with _ for translation.
 
+    Args:
+        custom_script: True when the live project script diverges from a fresh
+            compile of the current options (imported or hand-edited).
+
     Returns:
         Confirmation message covering script replacement and consequences.
     """
+    if custom_script:
+        lead = (
+            "Apply these de-identification options?\n\n"
+            "Your project currently uses a custom or imported anonymizer script. "
+            "OK replaces that script with one compiled from the packaged default "
+            "plus the selected options. The imported / custom script will be discarded.\n\n"
+        )
+    else:
+        lead = (
+            "Apply these de-identification options? This replaces your project "
+            "anonymizer script with a script compiled from the selected options. "
+            "Custom script edits will be lost.\n\n"
+        )
     return (
-        "Apply these de-identification options? This replaces your project "
-        "anonymizer script with a script compiled from the selected options. "
-        "Custom script edits will be lost.\n\n"
-        "What does not change:\n"
+        lead
+        + "What does not change:\n"
         "• Already anonymized data is not re-processed.\n\n"
         "Selecting Clean Structured Content or Clean Descriptors enables SR "
         "and PDF modalities if they are not already selected. Enabling SR or "

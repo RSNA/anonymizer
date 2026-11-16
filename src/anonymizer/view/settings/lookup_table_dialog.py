@@ -21,6 +21,7 @@ from anonymizer.controller.script.document import ScriptDocument
 from anonymizer.utils.translate import _
 from anonymizer.view.common.app_window import AppToplevel, install_modal_dismiss, place_toplevel_centered_on_parent
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
+from anonymizer.view.common.file_dialogs import open_filetypes
 
 logger = logging.getLogger(__name__)
 
@@ -168,10 +169,10 @@ class LookupTableDialog(AppToplevel):
         path = filedialog.askopenfilename(
             parent=self,
             title=_("Select CTP Lookup Properties"),
-            filetypes=[
+            filetypes=open_filetypes(
                 (_("Properties Files"), "*.properties"),
-                (_("All Files"), "*.*"),
-            ],
+                (_("Properties Files"), "*.properties.txt"),
+            ),
         )
         if not path:
             return

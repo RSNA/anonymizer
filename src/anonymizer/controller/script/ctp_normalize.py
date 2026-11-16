@@ -18,6 +18,9 @@ unresolved_param_names(document) -> list[str]
 
 format_validation_errors(errors, *, limit=20) -> str
     Group Unsupported operand messages for import/reload dialogs.
+
+format_import_adaptation_summary(warnings, *, limit=8) -> str
+    Plain-language Import success body listing CTP adaptations.
 """
 from __future__ import annotations
 
@@ -167,6 +170,27 @@ def unresolved_param_names(document: ScriptDocument) -> list[str]:
     return out
 
 
+def format_import_adaptation_summary(warnings: list[str], *, limit: int = 8) -> str:
+    """
+    Build the Import success message body from adaptation warnings.
+
+    Args:
+        warnings: Messages from normalize_ctp_document.
+        limit: Maximum bullet lines.
+
+    Returns:
+        Multi-line summary, or empty string when there are no warnings.
+    """
+    if not warnings:
+        return ""
+    lines = ["How CTP operations were adapted for this product:"]
+    for message in warnings[:limit]:
+        lines.append(f"• {message}")
+    if len(warnings) > limit:
+        lines.append(f"• …and {len(warnings) - limit} more adaptations")
+    return "\n".join(lines)
+
+
 def format_validation_errors(errors: list[str], *, limit: int = 20) -> str:
     """
     Format validation errors, grouping identical Unsupported operand texts.
@@ -219,7 +243,7 @@ def _dedupe_rules_last_wins(document: ScriptDocument) -> list[str]:
     document.rules = list(reversed(kept))
     preview = ", ".join(sorted(dup_tags)[:8])
     more = f" (+{len(dup_tags) - 8} more)" if len(dup_tags) > 8 else ""
-    return [f"Duplicate tags kept last rule only: {preview}{more}"]
+    return [f"Duplicate tags kept the last rule only: {preview}{more}"]
 
 
 def _normalize_operation(
@@ -237,8 +261,8 @@ def _normalize_operation(
     if normdate and _DATEINTERVAL_NORM_RE.search(text):
         text = _DATEINTERVAL_NORM_RE.sub(f"@rebasedate(this,{normdate})", text)
         warning = (
-            "@dateinterval(this,ddate,PatientID,@NORMDATE) was rewritten to "
-            f"@rebasedate(this,{normdate})."
+            f"Date rules that used a diagnosis-date interval were converted to "
+            f"epoch rebase starting at {normdate}."
         )
 
     if _KEEP_PARENS_RE.match(text):
@@ -251,14 +275,14 @@ def _normalize_operation(
         return (
             "@uid",
             warning
-            or "@hashuid was rewritten to @uid (project UID map, not CTP hash+root).",
+            or "UID tags use this project's UID map (not CTP's hash-and-root scheme).",
         )
 
     if _HASHPTID_RE.match(text):
         return (
             "@ptid",
             warning
-            or "@hashptid was rewritten to @ptid (project patient-id map).",
+            or "Patient ID tags use this project's patient map.",
         )
 
     if _LOOKUP_PATIENTID_PTID_RE.match(text):
@@ -303,10 +327,7 @@ def _normalize_operation(
             return (
                 f"@round(this,{width})",
                 warning
-                or (
-                    "@round uses this element only; product rounds age down "
-                    "(not CTP group center)."
-                ),
+                or "Patient Age banding uses this tag's value with CTP-style year bands.",
             )
         return f"@round(this,{width})", warning
 

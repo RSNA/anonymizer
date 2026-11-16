@@ -22,7 +22,7 @@ In den **Neuen Projekteinstellungen**:
 
 ## 2. Projekteinstellungen
 
-**Neue Projekteinstellungen** ist der Dialog unten. Konfigurieren Sie ihn von oben nach unten; die nummerierten Abschnitte danach folgen diesem Layout.
+**Neue Projekteinstellungen** ist der Dialog unten. Konfigurieren Sie ihn von oben nach unten; die nummerierten Abschnitte danach folgen diesem Layout. In der Zeile **Script File** stehen **Edit Anonymizer Script** und **Import CTP Script…** nebeneinander, darunter eine Statuszeile (Skriptname · Options-Zusammenfassung oder **Custom**).
 
 ![Neue Projekteinstellungen](shots/macos/NewProjectSettings.png)
 
@@ -125,8 +125,12 @@ Beim Anlegen (und immer wenn Sie bei einem bestehenden Projekt neue Optionen **�
 
 Das Projekt verwendet **nur dieses Skript** für die Tag-Anonymisierung (nicht NER/OCR). Vollständige Regelsprache und Stempel-Tags stehen im [De-Identifikationsprotokoll](../deidentification-protocol.md). Prüfer mit der Checkliste PS 3.15 § E.1.3 nutzen die [DICOM-Konformitätserklärung](../dicom-conformance-statement.md).
 
+### Script File
+
+In der Zeile **Script File** (siehe Aufnahme [Projekteinstellungen](#2-project-settings) oben): **Edit Anonymizer Script**, **Import CTP Script…** und die Statuszeile. Der Import installiert ein CTP-`.script` (gleiche Prüfung wie beim Neuladen); bei `@lookup` / `@rebasedate` ohne geladene Tabelle öffnet Import **Load Patient Lookup Table** (Abbrechen bricht ab). Danach Optionscodes nur als Metadaten. Details: [Anonymizer-Skript (erweitert)](anonymizer-script.md#import-a-ctp-script).
+
 !!! warning "Optionen nach dem Anlegen ändern"
-    Beim Anwenden anderer Optionen fragt die App zur Bestätigung. **Übernehmen** **kompiliert** neu aus dem mitgelieferten Standard plus Overlays — **benutzerdefinierte Skriptbearbeitungen gehen verloren**. Bereits im Projekt gespeicherte Dateien werden nicht erneut verarbeitet.
+    Beim Anwenden anderer Optionen fragt die App zur Bestätigung. **Übernehmen** **baut neu** aus dem mitgelieferten Standard plus den gewählten Optionen — ein **benutzerdefiniertes oder importiertes** Skript wird verworfen. Ist das Skript bereits **Custom**, sagt die Bestätigung das ausdrücklich. Bereits im Projekt gespeicherte Dateien werden nicht erneut verarbeitet.
 
 ### Bereinigungsoptionen und Modalitäten
 

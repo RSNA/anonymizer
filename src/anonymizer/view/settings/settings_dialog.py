@@ -13,6 +13,11 @@ import customtkinter as ctk
 
 from anonymizer.controller.ctp_lookup import CtpLookupPreview
 from anonymizer.controller.project import ProjectController
+from anonymizer.controller.script.document import load_script_rules
+from anonymizer.controller.script.option_explanations import (
+    script_is_custom,
+    script_status_line,
+)
 from anonymizer.controller.script.options import (
     clean_structured_auto_enable_message,
     confidentiality_options_changed,
@@ -30,9 +35,10 @@ from anonymizer.utils.translate import _, get_current_language_code
 from anonymizer.view.common.app_window import AppToplevel, install_modal_dismiss
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import default_char_width_px
-from anonymizer.view.common.ux_fields import str_entry
+from anonymizer.view.common.ux_fields import button_width_for_label, str_entry
 from anonymizer.view.settings.anonymizer_script_dialog import AnonymizerScriptDialog
 from anonymizer.view.settings.aws_cognito_dialog import AWSCognitoDialog
+from anonymizer.view.settings.ctp_script_import import run_ctp_script_import_from_settings
 from anonymizer.view.settings.deidentification_options_dialog import DeidentificationOptionsDialog
 from anonymizer.view.settings.dicom_node_dialog import DICOMNodeDialog
 from anonymizer.view.settings.logging_levels_dialog import LoggingLevelsDialog
@@ -312,12 +318,34 @@ class SettingsDialog(AppToplevel):
 
         self._script_file_label = ctk.CTkLabel(self._frame, text=_("Script File") + ":")
         self._script_file_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
+        script_btns = ctk.CTkFrame(self._frame, fg_color="transparent")
+        script_btns.grid(row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw")
+        edit_label = _("Edit Anonymizer Script")
+        import_label = _("Import CTP Script…")
         self._edit_script_button = ctk.CTkButton(
-            self._frame,
-            text=_("Edit Anonymizer Script"),
+            script_btns,
+            text=edit_label,
+            width=button_width_for_label(edit_label, minimum=160),
             command=self._open_anonymizer_script_dialog,
         )
-        self._edit_script_button.grid(row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw")
+        self._edit_script_button.pack(side="left")
+        self._import_script_button = ctk.CTkButton(
+            script_btns,
+            text=import_label,
+            width=button_width_for_label(import_label, minimum=160),
+            command=self._import_ctp_script,
+        )
+        self._import_script_button.pack(side="left", padx=(PAD, 0))
+
+        row += 1
+        self._script_status_label = ctk.CTkLabel(
+            self._frame,
+            text=self._script_status_text(),
+            anchor="w",
+            justify="left",
+            wraplength=420,
+        )
+        self._script_status_label.grid(row=row, column=1, padx=PAD, pady=(4, 0), sticky="nw")
 
         row += 1
 
@@ -471,6 +499,66 @@ class SettingsDialog(AppToplevel):
     def _on_script_path_changed(self, script_path: Path) -> None:
         self.model.anonymizer_script_path = script_path
         logger.info(f"Anonymizer Script File updated: {self.model.anonymizer_script_path}")
+        self._refresh_script_status()
+
+    def _script_status_text(self) -> str:
+        """Project script filename plus Custom or options summary."""
+        path = Path(self.model.anonymizer_script_path)
+        name = path.name if path.name else _("(no script)")
+        try:
+            if path.is_file():
+                status = script_status_line(
+                    load_script_rules(path),
+                    self.model.confidentiality_options,
+                )
+            elif self.new_model:
+                status = _("Not installed yet")
+            else:
+                status = _("Script file missing")
+        except Exception:
+            logger.exception("Script status line failed for %s", path)
+            status = _("Unavailable")
+        return _("Script:") + f" {name} · {status}"
+
+    def _refresh_script_status(self) -> None:
+        """Update the Script File status line under the buttons."""
+        if getattr(self, "_script_status_label", None) is None:
+            return
+        self._script_status_label.configure(text=self._script_status_text())
+
+    def _project_script_is_custom(self) -> bool:
+        """True when the live project script diverges from compiled options."""
+        path = Path(self.model.anonymizer_script_path)
+        if not path.is_file():
+            return False
+        try:
+            return script_is_custom(
+                load_script_rules(path),
+                self.model.confidentiality_options,
+            )
+        except Exception:
+            logger.exception("script_is_custom check failed for %s", path)
+            return False
+
+    def _import_ctp_script(self) -> None:
+        """Import a CTP script from Project Settings (install + options metadata)."""
+
+        def on_pending_lookup_preview(preview: CtpLookupPreview) -> None:
+            self._ctp_lookup_preview = preview
+
+        if run_ctp_script_import_from_settings(
+            self,
+            self.model,
+            self.project_controller,
+            pending_lookup_preview=self._ctp_lookup_preview,
+            on_pending_lookup_preview=(
+                on_pending_lookup_preview if self.project_controller is None else None
+            ),
+            on_script_path_changed=self._on_script_path_changed,
+        ):
+            if self.project_controller is not None:
+                self._sync_model_from_controller_options()
+            self._refresh_script_status()
 
     def _sync_model_from_controller_options(self) -> None:
         """Copy options/script/modalities/storage classes from the controller after install.
@@ -485,6 +573,7 @@ class SettingsDialog(AppToplevel):
         self.model.anonymizer_script_path = Path(ctrl.anonymizer_script_path)
         self.model.modalities = list(ctrl.modalities)
         self.model.storage_classes = list(ctrl.storage_classes)
+        self._refresh_script_status()
 
     def _open_deidentification_options_dialog(self) -> None:
         """Open the list + explanation dialog; apply selection on OK."""
@@ -504,11 +593,13 @@ class SettingsDialog(AppToplevel):
                 "Confidentiality options set for new project: %s",
                 sorted(int(c) for c in selected),
             )
+            self._refresh_script_status()
             return
 
+        custom_script = self._project_script_is_custom()
         confirmed = messagebox.askyesno(
             _("De-identification Options"),
-            _(options_switch_confirm_message()),
+            _(options_switch_confirm_message(custom_script=custom_script)),
             parent=self,
         )
         if not confirmed:
@@ -519,7 +610,7 @@ class SettingsDialog(AppToplevel):
             logger.exception("apply_confidentiality_options failed: %s", exc)
             messagebox.showerror(
                 _("De-identification Options"),
-                _("Failed to apply de-identification options") + f":\n{exc}",
+                _("Script failed validation or could not be applied.") + f"\n\n{exc}",
                 parent=self,
             )
             return
@@ -555,6 +646,10 @@ class SettingsDialog(AppToplevel):
             on_pending_lookup_preview=on_pending_lookup_preview if self.project_controller is None else None,
             pending_lookup_preview=self._ctp_lookup_preview,
         )
+        if self.project_controller is not None:
+            self._sync_model_from_controller_options()
+        else:
+            self._refresh_script_status()
 
     def _set_logging_levels_dialog(self):
         dlg = LoggingLevelsDialog(self, self.model.logging_levels)
