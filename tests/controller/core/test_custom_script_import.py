@@ -127,8 +127,10 @@ def test_normalize_ctp_aliases_and_validate(tmp_path: Path) -> None:
     assert doc.get_rule("00100030").operation == "@hashdate"
     assert doc.get_rule("00101010").operation == "@round(this,10)"
     assert unresolved_dateinc_tags(doc) == []
-    assert any("hashuid" in w for w in warnings)
-    assert any("hashptid" in w for w in warnings)
+    assert any("UID map" in w for w in warnings)
+    assert any("patient map" in w for w in warnings)
+    assert not any("@hashuid" in w for w in warnings)
+    assert not any("@hashptid" in w for w in warnings)
     assert validate_document(doc) == []
 
 
