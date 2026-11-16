@@ -14,6 +14,7 @@ def test_import_paths_counts_success_skip_failure() -> None:
     already_stored = _("Instance already stored")
     controller = MagicMock(spec=ProjectController)
     controller.anonymizer = MagicMock()
+    controller.check_storage_disk.return_value = "ok"
     success_ds = MagicMock()
     success_ds.PatientID = "ANON1"
     controller.anonymizer.anonymize_file.side_effect = [
@@ -40,6 +41,7 @@ def test_import_paths_progress_callback() -> None:
     """Progress reports completed and total as ints."""
     controller = MagicMock(spec=ProjectController)
     controller.anonymizer = MagicMock()
+    controller.check_storage_disk.return_value = "ok"
     controller.anonymizer.anonymize_file.return_value = (None, None)
     events: list[tuple[int, int, str]] = []
 

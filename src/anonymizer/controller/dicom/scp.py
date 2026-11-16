@@ -3,7 +3,8 @@
 Public API
 ----------
 ScpMixin
-    ScpMixin type.
+    C-ECHO / C-STORE SCP mixin. C-STORE refuses with out-of-resources when
+    ProjectController.check_storage_disk reports abort (low free space).
 """
 import logging
 import time
@@ -16,7 +17,12 @@ from pydicom.uid import UID
 from pynetdicom.events import EVT_C_ECHO, EVT_C_STORE, Event, EventHandlerType
 
 from anonymizer.model.project import DICOMNode, DICOMRuntimeError
-from anonymizer.utils.dicom import C_STORE_DATASET_ERROR, C_STORE_DECODE_ERROR, C_SUCCESS
+from anonymizer.utils.dicom import (
+    C_STORE_DATASET_ERROR,
+    C_STORE_DECODE_ERROR,
+    C_STORE_OUT_OF_RESOURCES,
+    C_SUCCESS,
+)
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
@@ -59,6 +65,10 @@ class ScpMixin:
         # Back-off if AnonymizerQueue grows to a limit determined by available memory:
         if virtual_memory().available < self._memory_available_backoff_threshold:
             time.sleep(1)
+
+        # Refuse store when the storage volume is critically low on free space.
+        if self.check_storage_disk() == "abort":
+            return C_STORE_OUT_OF_RESOURCES
 
         logger.debug("_handle_store")
         remote = event.assoc.remote

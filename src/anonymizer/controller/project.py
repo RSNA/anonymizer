@@ -10,6 +10,8 @@ ImportPathsResult
 
 ProjectController
     DICOM Application Entity (pynetdicom.ae sub-class) for the Anonymizer.
+    check_storage_disk() -> DiskPressure refuses transfers when free space is critical.
+    storage_disk_abort_message() -> str user-facing low-disk explanation.
 """
 import logging
 import os
@@ -75,6 +77,7 @@ from anonymizer.controller.script.options import assign_confidentiality_options
 from anonymizer.model.anonymizer import PHI, SeriesProcessingStatus
 from anonymizer.model.project import AuthenticationError, DICOMRuntimeError, ProjectModel
 from anonymizer.utils.dicom import DeidMethodCode
+from anonymizer.utils.disk import DiskGuard, DiskPressure, format_free_bytes
 from anonymizer.utils.logging import set_logging_levels
 from anonymizer.utils.storage.java_index import JavaAnonymizerExportedStudy
 from anonymizer.utils.translate import _
@@ -134,6 +137,9 @@ class ProjectController(
     _patient_export_thread_pool_size = 4
     _study_move_thread_pool_size = 2
     _memory_available_backoff_threshold = 1 << 30
+    # Free space on the storage volume; warn then refuse transfers.
+    _disk_free_warn_bytes = 5 << 30
+    _disk_free_abort_bytes = 1 << 30
 
     _required_attributes_study_query = [
         "StudyInstanceUID",
@@ -200,7 +206,42 @@ class ProjectController(
         self._aws_expiration_datetime: datetime | None = None
         self._aws_user_directory: str | None = None
         self._aws_last_error: str | None = None
+        self._disk_guard = DiskGuard(
+            warn_free_bytes=self._disk_free_warn_bytes,
+            abort_free_bytes=self._disk_free_abort_bytes,
+        )
         self.anonymizer = AnonymizerController(project_model = model)
+
+    def check_storage_disk(self) -> DiskPressure:
+        """
+        Classify free space on the project storage volume.
+
+        Logs a one-shot warning when free space first enters the warn band.
+        Logs an error when free space is below the abort threshold.
+
+        Returns:
+            "ok", "warn", or "abort".
+        """
+        pressure = self._disk_guard.check(self.model.storage_dir)
+        free = self._disk_guard.last_free_bytes()
+        free_text = format_free_bytes(free) if free is not None else _("unknown")
+        if pressure == "abort":
+            logger.error(
+                "Storage disk critically low (%s free) under %s; refusing transfers",
+                free_text,
+                self.model.storage_dir,
+            )
+        elif pressure == "warn" and self._disk_guard.should_log_warn():
+            logger.warning(
+                "Storage disk space low (%s free) under %s",
+                free_text,
+                self.model.storage_dir,
+            )
+        return pressure
+
+    def storage_disk_abort_message(self) -> str:
+        """User-facing message when storage free space is below the abort threshold."""
+        return self._disk_guard.abort_message(self.model.storage_dir)
 
     def build_dataset_analytics(self, *, should_abort=None):
 
@@ -479,6 +520,13 @@ class ProjectController(
         export_association: Association | None = None
         files_sent = 0
         try:
+            if self.check_storage_disk() == "abort":
+                msg = self.storage_disk_abort_message()
+                self._abort_export = True
+                ux_Q.put(ExportPatientsResponse(patient_id, 0, msg, True))
+                logger.error(f"_export_patient patient_id: {patient_id} refused: {msg}")
+                return
+
             # Load DICOM files to send from active local storage directory for this patient:
             patient_dir = Path(self.model.images_dir(), patient_id)
 
@@ -686,6 +734,14 @@ class ProjectController(
             None
         """
         self._export_futures = []
+
+        if self.check_storage_disk() == "abort":
+            msg = self.storage_disk_abort_message()
+            self._abort_export = True
+            for patient_id in req.patient_ids:
+                req.ux_Q.put(ExportPatientsResponse(patient_id, 0, msg, True))
+            logger.error("_manage_export refused: %s", msg)
+            return
 
         self._export_executor = ThreadPoolExecutor(
             max_workers=self._patient_export_thread_pool_size,
@@ -1009,25 +1065,33 @@ class ProjectController(
         already_stored = _("Instance already stored")
         path_list = [str(path) for path in paths]
         total_files = len(path_list)
+        disk_abort_msg: str | None = None
 
         for index, path in enumerate(path_list, start=1):
-            error_msg, dataset = self.anonymizer.anonymize_file(Path(path))
-            anon_patient_id = (
-                str(dataset.PatientID)
-                if dataset is not None and hasattr(dataset, "PatientID")
-                else None
-            )
-            if error_msg is None:
-                succeeded += 1
-                if anon_patient_id and anon_patient_id not in seen_patient_ids:
-                    seen_patient_ids.add(anon_patient_id)
-                    anon_patient_ids.append(anon_patient_id)
-            elif error_msg == already_stored or already_stored in str(error_msg):
-                skipped += 1
-            else:
+            if disk_abort_msg is None and self.check_storage_disk() == "abort":
+                disk_abort_msg = self.storage_disk_abort_message()
+            if disk_abort_msg is not None:
                 failed += 1
                 if len(failures) < max_failure_details:
-                    failures.append({"path": path, "error": str(error_msg)})
+                    failures.append({"path": path, "error": disk_abort_msg})
+            else:
+                error_msg, dataset = self.anonymizer.anonymize_file(Path(path))
+                anon_patient_id = (
+                    str(dataset.PatientID)
+                    if dataset is not None and hasattr(dataset, "PatientID")
+                    else None
+                )
+                if error_msg is None:
+                    succeeded += 1
+                    if anon_patient_id and anon_patient_id not in seen_patient_ids:
+                        seen_patient_ids.add(anon_patient_id)
+                        anon_patient_ids.append(anon_patient_id)
+                elif error_msg == already_stored or already_stored in str(error_msg):
+                    skipped += 1
+                else:
+                    failed += 1
+                    if len(failures) < max_failure_details:
+                        failures.append({"path": path, "error": str(error_msg)})
             if progress is not None and (index == total_files or index % 10 == 0):
                 try:
                     progress(index, total_files, f"Imported file {index} of {total_files}")
