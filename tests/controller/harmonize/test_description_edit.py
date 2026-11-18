@@ -292,6 +292,7 @@ def test_report_only_study_skips_study_loinc_path() -> None:
     """Orphan SR/DOC/PDF studies are anomalies — no study-LOINC offer/ready path."""
     from anonymizer.controller.ai.harmonize.pipeline import (
         maybe_offer_study_description_harmonize,
+        study_description_edit_blocked_message,
         study_loinc_prefix_for_edit,
         study_ready_for_description_edit,
     )
@@ -305,6 +306,21 @@ def test_report_only_study_skips_study_loinc_path() -> None:
     assert study_ready_for_description_edit(model, "study-sr") is False
     assert study_loinc_prefix_for_edit(model, "study-sr") is None
     assert maybe_offer_study_description_harmonize(model, "study-sr") is None
+    blocked = study_description_edit_blocked_message(model, ["study-sr"])
+    assert "LOINC" in blocked
+    assert "Harmonize all series" not in blocked
+
+
+def test_imaging_study_blocked_message_asks_to_harmonize() -> None:
+    """CT/MR/planar studies that are not fully Harmonized keep the Harmonize prompt."""
+    from anonymizer.controller.ai.harmonize.pipeline import (
+        study_description_edit_blocked_message,
+    )
+
+    model = MagicMock()
+    model.study_harmonize_composition.return_value = StudyImagingComposition.D2
+    message = study_description_edit_blocked_message(model, ["study-xr"])
+    assert "Harmonize all series" in message
 
 
 def test_pt_only_study_manual_loinc_description_edit() -> None:

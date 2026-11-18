@@ -5,6 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- Harmonize / Set description no longer write DICOM Original Attributes Sequence for Study/Series Description priors (possible PHI). Intake and cleaned text stay in the project PHI DB and Patient Lookup CSV; OAS helpers remain behind an internal opt-in flag for possible future use
 
 ## [19.1.0.dev7]
 - PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)
@@ -38,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pixel Embedded PHI: one upright OCR read; match-strictness floors (Standard NER 0.30, Lenient 0.20); a whitelist score above 0.8 wins over NER, and a weaker hit wins with a 0.1 margin; clock times are normalized, including digit-8 separators; a date or time that matches a known pattern is kept when the model mislabels it. The mammography whitelist keeps common view symbols
 - AI Batch Process: two-column options for Embedded PHI, Harmonize, and Face De-identify. Embedded PHI lists modalities that have whitelist terms beside Whitelist / Whitelists, and labels Pixel PHI Remove Scope, Pixel PHI removal, and Metadata & Report PHI entity removal
 - Per-project description mapping memory under ``controller/ai/harmonize/``; Dataset Description Mappings viewer; Prefer description mappings in AI batch
-- Study/Series ``description`` stays the intake original. Harmonize and Set description write ``harmonized_description``. DICOM Original Attributes Sequence is written when Study or Series Description is rewritten
+- Study/Series ``description`` stays the intake original. Harmonize and Set description write ``harmonized_description``. (Original Attributes Sequence for description priors was later turned off by default; see Unreleased.)
 - Gendered synthetic first-name pools for Replace PHI; Report Text Review opens at a sensible window size
 - Export can write DICOM-SEG from TotalSegmentator masks and ROI annotations before send
 - Welcome window links for de-identification, Embedded PHI, and face blur

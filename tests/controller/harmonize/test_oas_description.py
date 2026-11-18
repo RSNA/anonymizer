@@ -1,4 +1,4 @@
-"""Tests for DICOM Original Attributes Sequence on description apply."""
+"""Tests for description apply OAS policy (off by default; helpers retained)."""
 
 from pathlib import Path
 
@@ -8,6 +8,7 @@ from pydicom import Dataset, dcmread
 from pydicom.dataset import FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian, generate_uid
 
+import anonymizer.controller.series.series_io as series_io
 from anonymizer.controller.series.series_io import apply_series_description
 from anonymizer.utils.version import get_version
 
@@ -53,6 +54,16 @@ def _write_minimal_series(
     return path
 
 
+def test_apply_series_description_does_not_write_oas_by_default(tmp_path: Path) -> None:
+    """Priors stay in PHI DB / Lookup — exported files must not get OAS description history."""
+    series_dir = tmp_path / "series"
+    path = _write_minimal_series(series_dir, series_description="SCOUT WITH PATIENT NAME")
+    assert apply_series_description(series_dir, "CT Chest Ax PortVen") is True
+    ds = dcmread(str(path))
+    assert str(ds.SeriesDescription) == "CT Chest Ax PortVen"
+    assert not hasattr(ds, "OriginalAttributesSequence") or not ds.OriginalAttributesSequence
+
+
 def _oas_item_after_series_apply(path: Path, series_dir: Path) -> Dataset:
     assert apply_series_description(series_dir, "CT Chest Ax PortVen") is True
     ds = dcmread(str(path))
@@ -62,7 +73,9 @@ def _oas_item_after_series_apply(path: Path, series_dir: Path) -> Dataset:
     return oas[0]
 
 
-def test_apply_series_description_appends_oas(tmp_path: Path) -> None:
+def test_apply_series_description_oas_helpers_still_work(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Retained OAS path stays callable when the opt-in flag is enabled."""
+    monkeypatch.setattr(series_io, "_WRITE_DESCRIPTION_ORIGINAL_ATTRIBUTES", True)
     series_dir = tmp_path / "series"
     path = _write_minimal_series(series_dir, series_description="SCOUT")
     item = _oas_item_after_series_apply(path, series_dir)
@@ -98,9 +111,11 @@ def test_apply_series_description_appends_oas(tmp_path: Path) -> None:
 )
 def test_source_of_previous_values_priority(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     kwargs: dict[str, str],
     expected_source: str,
 ) -> None:
+    monkeypatch.setattr(series_io, "_WRITE_DESCRIPTION_ORIGINAL_ATTRIBUTES", True)
     series_dir = tmp_path / "series"
     path = _write_minimal_series(series_dir, series_description="SCOUT", **kwargs)
     item = _oas_item_after_series_apply(path, series_dir)

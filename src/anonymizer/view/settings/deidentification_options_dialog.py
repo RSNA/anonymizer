@@ -38,8 +38,8 @@ _HELP_WRAP = 380
 _LIST_WIDTH = 440
 _DIALOG_MIN_HEIGHT = 620
 _TCIA_HEADING_HOVER = (
-    "Not a DICOM PS 3.15 option. Keeps research attributes for TCIA archive "
-    "submission and the MIDI-B answer key. Manufacturer, model name, and "
+    "Not a DICOM PS 3.15 option. Keeps The Cancer Imaging Archive research "
+    "attributes needed for archive submission: manufacturer, model name, and "
     "software versions stay. Device serial number and station name stay "
     "removed unless Retain Device Identity is also selected."
 )

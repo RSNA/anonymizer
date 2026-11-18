@@ -6,7 +6,7 @@ import csv
 from pathlib import Path
 
 from anonymizer.controller.headless_io import write_patid_mapping, write_uid_mapping
-from anonymizer.model.anonymizer import PHI
+from anonymizer.model.anonymizer import PHI, AnonymizerModel
 from tests.opened_anonymizer_model import opened_anonymizer_model
 
 
@@ -36,3 +36,21 @@ def test_write_uid_and_patid_mapping(tmp_path: Path) -> None:
     with pat_csv.open(newline="", encoding="utf-8") as fh:
         prows = list(csv.DictReader(fh))
     assert any(r["id_old"] == "SMOKE_PAT" for r in prows)
+
+
+def test_write_patid_skips_default_phi_pk(tmp_path: Path) -> None:
+    db_url = f"sqlite:///{tmp_path / 'anonymizer.db'}"
+    with opened_anonymizer_model(db_url) as model:
+        # Default PHI PK row is created by the model; ensure it is skipped.
+        default = model.session.get(PHI, AnonymizerModel.DEFAULT_PHI_PATIENT_ID_PK_VALUE)
+        assert default is not None
+        assert default.anon_patient_id
+        n = write_patid_mapping(model, tmp_path / "patid.csv")
+    assert n == 0
+
+
+def test_write_mappings_empty_tables(tmp_path: Path) -> None:
+    db_url = f"sqlite:///{tmp_path / 'anonymizer.db'}"
+    with opened_anonymizer_model(db_url) as model:
+        assert write_uid_mapping(model, tmp_path / "uid.csv") == 0
+        assert write_patid_mapping(model, tmp_path / "pat.csv") == 0

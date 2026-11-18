@@ -143,6 +143,9 @@ series_description_cohort_key(modality: object | None) -> str | None
 study_ready_for_description_edit(anon_model: AnonymizerModel, anon_study_uid: str) -> bool
     True when Dataset may open Set description for a study (AI Harmonize done, or PT/NM-only).
 
+study_description_edit_blocked_message(anon_model: AnonymizerModel, anon_study_uids: Sequence[str]) -> str
+    User-facing reason when Set study description is blocked (imaging Harmonize vs no LOINC path).
+
 classify_description_edit_selection(*, series_cohort_keys: Sequence[str | None] | None=None, study_loinc_prefixes: Sequence[str | None] | None=None) -> DescriptionEditSelection
     Validate a Dataset multi-select for Set description….
 
@@ -2148,6 +2151,34 @@ def study_ready_for_description_edit(anon_model: AnonymizerModel, anon_study_uid
     if composition is not StudyImagingComposition.NONE:
         return anon_model.study_all_series_harmonized(anon_study_uid)
     return study_loinc_prefix_for_edit(anon_model, anon_study_uid) is not None
+
+
+def study_description_edit_blocked_message(
+    anon_model: AnonymizerModel,
+    anon_study_uids: Sequence[str],
+) -> str:
+    """
+    User-facing reason when Dataset blocks Set study description.
+
+    Imaging studies (CT/MR/planar) that are not fully Harmonized get the Harmonize
+    prompt. Studies with no imaging Harmonize series and no PT/NM LOINC path
+    (for example report-only SR/DOC/PDF) cannot be linked to a LOINC study name.
+
+    Args:
+        anon_model: Anonymizer model for composition / readiness lookups.
+        anon_study_uids: Study UIDs that failed study_ready_for_description_edit.
+
+    Returns:
+        Localized message for the info dialog.
+    """
+    for uid in anon_study_uids:
+        if _study_harmonize_composition(anon_model, uid) is not StudyImagingComposition.NONE:
+            return _("Harmonize all series in this study before setting the study description.")
+    return _(
+        "This study has no imaging series that can be linked to a LOINC study name "
+        "(for example CT, MR, or XR). Report-only studies cannot set a study description here; "
+        "edit each report series description instead."
+    )
 
 
 def classify_description_edit_selection(

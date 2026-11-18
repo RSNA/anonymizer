@@ -10,6 +10,7 @@ from anonymizer.controller.dicom.requests import ExportPatientsRequest, ExportPa
 from anonymizer.controller.dicom.scp import ScpMixin
 from anonymizer.controller.project import ProjectController
 from anonymizer.utils.dicom import C_STORE_DECODE_ERROR, C_STORE_OUT_OF_RESOURCES
+from anonymizer.utils.disk import DiskGuard
 
 
 def test_handle_store_refuses_when_disk_abort() -> None:
@@ -85,3 +86,86 @@ def test_manage_export_refuses_when_disk_abort() -> None:
     assert isinstance(first, ExportPatientsResponse)
     assert first.error == "disk full"
     assert first.complete is True
+
+
+def test_check_storage_disk_via_disk_guard() -> None:
+    controller = MagicMock(spec=ProjectController)
+    controller.model = MagicMock()
+    controller.model.storage_dir = Path("/tmp/storage")
+    controller._disk_guard = DiskGuard(warn_free_bytes=1000, abort_free_bytes=100, ttl_seconds=0.0)
+    with patch("anonymizer.utils.disk.free_bytes", return_value=50):
+        assert ProjectController.check_storage_disk(controller) == "abort"
+        msg = ProjectController.storage_disk_abort_message(controller)
+    assert "critically low" in msg.lower() or "Storage disk" in msg
+    assert "/tmp/storage" in msg
+
+
+def test_check_storage_disk_warn_band() -> None:
+    controller = MagicMock(spec=ProjectController)
+    controller.model = MagicMock()
+    controller.model.storage_dir = Path("/tmp/storage")
+    controller._disk_guard = DiskGuard(warn_free_bytes=1000, abort_free_bytes=100, ttl_seconds=0.0)
+    with patch("anonymizer.utils.disk.free_bytes", return_value=500):
+        assert ProjectController.check_storage_disk(controller) == "warn"
+
+
+def test_export_patient_refuses_when_disk_abort() -> None:
+    controller = MagicMock(spec=ProjectController)
+    controller.check_storage_disk.return_value = "abort"
+    controller.storage_disk_abort_message.return_value = "disk full"
+    controller._abort_export = False
+    ux_q: Queue = Queue()
+
+    ProjectController._export_patient(controller, "PACS", "p1", ux_q)
+
+    assert controller._abort_export is True
+    resp = ux_q.get()
+    assert isinstance(resp, ExportPatientsResponse)
+    assert resp.patient_id == "p1"
+    assert resp.files_sent == 0
+    assert resp.error == "disk full"
+    assert resp.complete is True
+
+
+def test_import_paths_aborts_on_first_file() -> None:
+    controller = MagicMock(spec=ProjectController)
+    controller.anonymizer = MagicMock()
+    controller.check_storage_disk.return_value = "abort"
+    controller.storage_disk_abort_message.return_value = "disk full"
+
+    result = ProjectController.import_paths(
+        controller,
+        [Path("a.dcm"), Path("b.dcm")],
+    )
+
+    assert result.succeeded == 0
+    assert result.failed == 2
+    assert result.failures[0]["error"] == "disk full"
+    controller.anonymizer.anonymize_file.assert_not_called()
+
+
+def test_import_paths_failure_detail_cap() -> None:
+    controller = MagicMock(spec=ProjectController)
+    controller.anonymizer = MagicMock()
+    controller.check_storage_disk.return_value = "abort"
+    controller.storage_disk_abort_message.return_value = "disk full"
+    paths = [Path(f"{i}.dcm") for i in range(5)]
+
+    result = ProjectController.import_paths(controller, paths, max_failure_details=2)
+
+    assert result.failed == 5
+    assert len(result.failures) == 2
+
+
+def test_import_paths_warn_does_not_block() -> None:
+    controller = MagicMock(spec=ProjectController)
+    controller.anonymizer = MagicMock()
+    controller.check_storage_disk.return_value = "warn"
+    ds = MagicMock(PatientID="A1")
+    controller.anonymizer.anonymize_file.return_value = (None, ds)
+
+    result = ProjectController.import_paths(controller, [Path("a.dcm")])
+
+    assert result.succeeded == 1
+    assert result.failed == 0
+    controller.anonymizer.anonymize_file.assert_called_once()

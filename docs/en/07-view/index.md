@@ -52,6 +52,16 @@ Analytics is for **review inside this project**. It does not change pixels or wh
 
 To **create or edit** segment labels on a series (latch TotalSegmentator chips, **New Segment**, Brush / Erase — **2D** on planar frames or **3D** on CT/MR), use Series View [Annotation](#annotation). Those labels are for review and export (NIfTI / DICOM-SEG), not for filling Analytics volume charts.
 
+### One value per patient (mean volume) {#analytics-patient-mean}
+
+Each organ chart plots **patients**, not series. The vertical axis and the **n=** in the title are patient counts.
+
+For each patient and organ, Analytics uses a **single millilitre value**: the **mean** of that organ’s volume across the patient’s Harmonized CT/MR series that contribute a mask for it (after the modality filter on the board). Example: two CT series both segment the liver → that patient contributes one average liver volume to the histogram, not two bars.
+
+- If a patient has only one contributing series, the plotted value is that series volume.
+- Hover tips’ **n=** is how many **patients** fall in that bin (same unit as the axis).
+- Clicking a bar therefore selects those **patients’ studies** in Dataset — not one series per bar.
+
 ### Normative ranges on volume histograms {#analytics-normative-ranges}
 
 Each organ volume chart is built against a **healthy-adult normative range** (millilitres) for that TotalSegmentator latch group — for example lungs, liver, or frontal lobe — not against the min–max of whatever is in your project.
@@ -74,11 +84,11 @@ Use near outliers to spot subtle cohort skew; use extreme bars to find rare or s
 
 ### Click a bar to open the outlier studies {#analytics-click-to-dataset}
 
-1. Hover a histogram bar — the tip shows count / ml (and for extreme bins, the true volumes). When the bar is clickable it also says **Click to select these patients in View Dataset**.
-2. **Click the bar.** Dashboard opens **View** (Dataset) if needed and selects the studies for every patient in that bin.
+1. Hover a histogram bar — the tip shows the bin’s ml range and **n=** patient count (and for extreme bins, the true volumes). When the bar is clickable it also says **Click to select these patients in View Dataset**.
+2. **Click the bar.** Dashboard opens **View** (Dataset) if needed and selects **all studies** for every patient whose **mean** organ volume falls in that bin (see [One value per patient](#analytics-patient-mean)).
 3. From Dataset, open [View Projections](#view-projections-full-dataset) or Series View on the highlighted rows to inspect anatomy, Harmonize status, or re-run Process tools.
 
-This is the intended QA loop: spot an outlier band → jump to those studies → decide whether the volume is real, a FOV/mask issue, or needs Harmonize / Annotation review.
+This is the intended QA loop: spot an outlier band → jump to those patients’ studies → decide whether the volume is real, a FOV/mask issue, or needs Harmonize / Annotation review.
 
 ## Right-click in Dataset (most important)
 
@@ -197,7 +207,7 @@ The dialog is a modal window (not an inline menu). It always has a short hint at
 2. For a **harmonized** series you get a **closest-matches** list for that modality (for example XR views). Use the filter box if the list is long.
 3. If the closest list is wrong, click **Compose RadLex…** to build the name field-by-field. Use **Show all codes** / **Closest codes** when the dialog offers that toggle.
 4. An **unharmonized** or blank series opens Compose directly so you pick each RadLex field instead of inventing free text.
-5. **Apply** writes Series Description, marks the row harmonized, and saves a project mapping when there was an original.
+5. **Apply** writes Series Description, marks the row harmonized, and saves a project mapping when there was an original. Prior description text is **not** written into the DICOM Original Attributes Sequence (it stays in the project PHI store and [Patient Lookup CSV](#create-patient-lookup-csv)).
 
 ![Set series description — Compose RadLex](shots/macos/Dataset_EditDescription.png)
 
@@ -207,7 +217,7 @@ The dialog is a modal window (not an inline menu). It always has a short hint at
 2. **Double-click** the **study** Harmonized Description in the first column (the parent row).
 3. The dialog lists **closest LOINC** Long Common Names for that modality prefix (XR / US / MG / CT / MR). Each option is shown as `Long Common Name  (LoincNumber)`.
 4. If the category is wrong, click **Show full LOINC catalog…** to load the full modality catalog (still filterable).
-5. **Apply** updates Study Description (and Procedure Code Sequence), marks the study harmonized, and saves an original→harmonized mapping (with LOINC) for this project.
+5. **Apply** updates Study Description (and Procedure Code Sequence), marks the study harmonized, and saves an original→harmonized mapping (with LOINC) for this project. As with series Apply, prior study description text is not written into Original Attributes Sequence on the instances.
 
 ![Set study description — LOINC closest matches](shots/macos/Dataset_EditStudyDescription.png)
 
@@ -440,7 +450,7 @@ Use Dataset to export a spreadsheet that maps PHI identifiers to anonymized IDs 
 - After Harmonize on CT/MR, **View** multi-latches overlays and **Annotate** paints one selected segment (Brush / Erase, wheel for size). On CR/DX/US/MG, **Annotate** is available without Harmonize (pixel-space ROIs).
 - AI columns update after Process tools.
 - **Create Patient Lookup** writes a CSV under `private/phi_export/` that opens with the expected columns.
-- Dashboard **Analytics** expands when the project has studies (organ volumes after Harmonize — see [Analytics](#analytics)). Volume charts show a normative band; near outliers sit on the main axis and extreme outliers in underflow/overflow bins; clicking a bar selects those patients in Dataset.
+- Dashboard **Analytics** expands when the project has studies (organ volumes after Harmonize — see [Analytics](#analytics)). Volume charts use **one mean ml per patient** per organ, show a normative band, place near outliers on the main axis and extreme outliers in underflow/overflow bins; clicking a bar selects those patients’ studies in Dataset.
 
 ## If it fails
 

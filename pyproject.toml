@@ -169,6 +169,12 @@ ignore = [
 [tool.ruff.lint.mccabe]
 max-complexity = 15
 
+[tool.coverage.run]
+omit = [
+    "*/controller/private_tags/convert_tcia_private_kb.py",
+    "*/controller/ai/harmonize/_playbook_gettext.py",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests/controller", "tests/model", "tests/mcp"]
 addopts = "--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model --cov=src/anonymizer/mcp -m \"not ocr_integration and not view_dev and not pseudo_phi_integration and not midi_b_integration and not deid_option_iod and not mcp_e2e and not dicom_integration\""

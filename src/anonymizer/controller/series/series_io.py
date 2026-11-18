@@ -30,10 +30,10 @@ series_buffer_monochrome_to_stored(viewer_frame: np.ndarray, ds: Dataset, *, mon
     Convert Series View grayscale pixels back to stored DICOM pixels.
 
 apply_series_description(series_path: Path, description: str) -> bool
-    Set SeriesDescription on every DICOM file in a series directory.
+    Set SeriesDescription on every DICOM file in a series directory (no OAS by default).
 
 apply_study_description(study_root: Path, description: str, *, loinc_number: str | None=None) -> bool
-    Set StudyDescription (0008,1030) on every DICOM instance under a study directory.
+    Set StudyDescription (0008,1030) under a study directory (no OAS by default).
 
 save_series_frames(original_series_path: Path, processed_frames: np.ndarray, reference_ds: Dataset) -> bool
     Saves processed frames back by OVERWRITING original DICOM files.
@@ -867,9 +867,18 @@ def _source_of_previous_values(ds: Dataset) -> str:
     return ""
 
 
+# Prior Study/Series Description stays in the project PHI DB / Patient Lookup CSV.
+# Writing those priors into Original Attributes Sequence would embed possible PHI
+# in every exported instance. Keep the OAS helpers for a possible future opt-in.
+_WRITE_DESCRIPTION_ORIGINAL_ATTRIBUTES = False
+
+
 def _append_original_attributes(ds: Dataset, modified_attrs: Dataset) -> None:
     """
     Append one Original Attributes Sequence item capturing modified_attrs.
+
+    Retained for a possible future opt-in via _WRITE_DESCRIPTION_ORIGINAL_ATTRIBUTES.
+    Not called from description apply while that flag is False.
 
     DICOM SOP Common C.12.1.1.9 / Table C.12.1.1.9-1:
     - Modified Attributes Sequence (0400,0550) Type 1 (prior values)
@@ -896,12 +905,30 @@ def _append_original_attributes(ds: Dataset, modified_attrs: Dataset) -> None:
         existing.append(item)
 
 
+def _maybe_append_description_original_attributes(
+    ds: Dataset,
+    *,
+    tag_name: str,
+    prior: str,
+) -> None:
+    """Append OAS for a description prior only when the retained opt-in flag is on."""
+    if not _WRITE_DESCRIPTION_ORIGINAL_ATTRIBUTES:
+        return
+    if not prior:
+        return
+    modified = Dataset()
+    setattr(modified, tag_name, prior)
+    _append_original_attributes(ds, modified)
+
+
 def apply_series_description(series_path: Path, description: str) -> bool:
     """
     Set SeriesDescription on every DICOM file in a series directory.
 
-    When the prior SeriesDescription differs, append Original Attributes Sequence
-    with the previous value before overwriting the public tag.
+    Does not write Original Attributes Sequence by default: intake / cleaned /
+    Harmonized descriptions are kept in the project PHI DB and Patient Lookup CSV
+    so exported instances do not carry prior description text (possible PHI).
+    OAS helpers remain behind _WRITE_DESCRIPTION_ORIGINAL_ATTRIBUTES for future use.
 
     Args:
         series_path: Directory containing series instance .dcm files.
@@ -938,9 +965,9 @@ def apply_series_description(series_path: Path, description: str) -> bool:
                 continue
             prior = str(ds.get("SeriesDescription", "") or "").strip()
             if prior and prior != description:
-                modified = Dataset()
-                modified.SeriesDescription = prior
-                _append_original_attributes(ds, modified)
+                _maybe_append_description_original_attributes(
+                    ds, tag_name="SeriesDescription", prior=prior
+                )
             ds.SeriesDescription = description
             ds.save_as(dcm_path)
 
@@ -963,8 +990,7 @@ def apply_study_description(
     When loinc_number is provided, also set Procedure Code Sequence (0008,1032)
     with Coding Scheme Designator LN (DICOM CID 102 / LOINC-RSNA Playbook).
 
-    When the prior StudyDescription differs, append Original Attributes Sequence
-    with the previous value before overwriting the public tag.
+    Does not write Original Attributes Sequence by default (see apply_series_description).
 
     study_root is the anonymized study folder (images/<patient>/<study>/) whose
     immediate children are series directories.
@@ -1009,9 +1035,9 @@ def apply_study_description(
                     continue
                 prior = str(ds.get("StudyDescription", "") or "").strip()
                 if prior and prior != description:
-                    modified = Dataset()
-                    modified.StudyDescription = prior
-                    _append_original_attributes(ds, modified)
+                    _maybe_append_description_original_attributes(
+                        ds, tag_name="StudyDescription", prior=prior
+                    )
                 ds.StudyDescription = description
                 if loinc_code is not None:
                     item = Dataset()

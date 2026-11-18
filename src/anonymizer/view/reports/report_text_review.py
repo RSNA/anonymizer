@@ -36,7 +36,7 @@ from anonymizer.view.ai.harmonize_results import HarmonizeBatchOutcome
 from anonymizer.view.common.app_window import AppCTkToplevel, refresh_app_window_menu
 from anonymizer.view.common.ctk_safe import mark_ctk_window_destroyed
 from anonymizer.view.common.fonts import AppFonts
-from anonymizer.view.common.navigation import find_dataset_view_parent, return_to_dataset_view
+from anonymizer.view.common.navigation import find_dataset_view_parent, return_after_workspace
 from anonymizer.view.common.phi_action_labels import (
     detect_phi_button_label,
     remove_phi_button_label,
@@ -613,7 +613,7 @@ class ReportTextReview(AppCTkToplevel):
             return
         with contextlib.suppress(tk.TclError):
             self.grab_release()
-        return_to_dataset_view(self)
+        return_after_workspace(self, self.master)
         self.destroy()
 
 

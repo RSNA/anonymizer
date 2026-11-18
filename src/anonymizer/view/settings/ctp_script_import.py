@@ -56,7 +56,12 @@ from anonymizer.controller.script.document import (
     validate_document,
     write_script_rules,
 )
-from anonymizer.controller.script.operands import OperandId, operand_id_for_operation, operand_spec_by_id
+from anonymizer.controller.script.operands import (
+    LOOKUP_TABLE_OPERANDS,
+    OperandId,
+    operand_id_for_operation,
+    operand_spec_by_id,
+)
 from anonymizer.controller.script.options import infer_options_from_script
 from anonymizer.model.project import ProjectModel
 from anonymizer.utils.dicom import DeidMethodCode
@@ -65,11 +70,6 @@ from anonymizer.view.common.busy_status_dialog import run_with_busy
 from anonymizer.view.common.file_dialogs import open_filetypes
 
 logger = logging.getLogger(__name__)
-
-# Same set as AnonymizerScriptDialog: operands that need Load Patient Lookup Table.
-_LOOKUP_TABLE_OPERANDS = frozenset(
-    {OperandId.LOOKUP_PTID, OperandId.LOOKUP_DATEOFFSET, OperandId.REBASEDATE}
-)
 
 
 @dataclass(frozen=True)
@@ -459,7 +459,7 @@ def run_ctp_script_import_from_settings(
 def _document_uses_lookup_table(document: ScriptDocument) -> bool:
     """True when any rule uses a lookup-table operand (same set as the script editor)."""
     return any(
-        operand_id_for_operation(rule.operation) in _LOOKUP_TABLE_OPERANDS
+        operand_id_for_operation(rule.operation) in LOOKUP_TABLE_OPERANDS
         for rule in document.rules
     )
 

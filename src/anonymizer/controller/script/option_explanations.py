@@ -339,19 +339,19 @@ _COPY: dict[DeidMethodCode, tuple[str, str, str]] = {
     ),
     DeidMethodCode.TCIA_RESEARCH: (
         "Not a DICOM PS 3.15 option. "
-        "At import, keep research attributes listed for TCIA-style archive "
-        "submission when Basic would still remove, empty, or age-band them — "
-        "for example nuclear medicine acquisition coding, Patient Age kept "
-        "exactly instead of a five-year band, plus manufacturer, model name, "
-        "software versions, and clinical trial sponsor name marked safe so "
-        "Embedded PHI does not blank them — excluding tags the MIDI answer "
-        "key marks for whole-value text removal or date shifting. Other "
-        "selected retain options are left unchanged. PHI inside kept text is "
-        "removed later by Embedded PHI.",
+        "At import, keep The Cancer Imaging Archive research attributes that "
+        "Basic would still remove, empty, or age-band: nuclear medicine "
+        "acquisition coding, exact Patient Age instead of a five-year band, "
+        "manufacturer, model name, software versions, and clinical trial "
+        "sponsor name marked safe so Embedded PHI does not blank them. "
+        "Does not keep device serial number or station name. Does not keep "
+        "attributes that must be emptied or date-shifted for archive "
+        "submission. Other selected retain options stay as chosen. PHI inside "
+        "kept free text is removed later by Embedded PHI.",
         "During import.",
-        "For MIDI-B / current TCIA scoring leave Retain Device Identity off; "
-        "this option keeps manufacturer/model/software without keeping serial "
-        "or station name.",
+        "Prefer this instead of Retain Device Identity when you need "
+        "manufacturer, model, and software for archive submission but must "
+        "still remove serial number and station name.",
     ),
 }
 

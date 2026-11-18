@@ -11,6 +11,9 @@ OperandSpec
 OPERANDS
     Full operand catalog for the editor and validators.
 
+LOOKUP_TABLE_OPERANDS
+    Operand ids that require a CTP patient lookup table in the script editor / CTP import.
+
 operand_syntax(spec) -> str
     Script-style token shown in the editor.
 
@@ -146,6 +149,19 @@ class OperandSpec:
     param_title_key: str = ""  # gettext msgid: dialog title when prompting for a parameter
     param_help_key: str = ""  # gettext msgid: units/meaning when prompting for a parameter
 
+
+# Operands that need Load / Replace Patient Lookup Table in the script editor.
+LOOKUP_TABLE_OPERANDS: frozenset[OperandId] = frozenset(
+    {
+        OperandId.LOOKUP_PTID,
+        OperandId.LOOKUP_DATEOFFSET,
+        OperandId.LOOKUP_CNAME,
+        OperandId.LOOKUP_SITEID,
+        OperandId.LOOKUP_DDATE,
+        OperandId.REBASEDATE,
+        OperandId.DATEINTERVAL_STUDY_DDATE,
+    }
+)
 
 # Catalog aligned with AnonymizerController._anonymize_element.
 OPERANDS: tuple[OperandSpec, ...] = (

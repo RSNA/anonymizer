@@ -82,7 +82,7 @@ from anonymizer.view.common.app_window import AppCTkToplevel, refresh_app_window
 from anonymizer.view.common.ctk_safe import mark_ctk_window_destroyed
 from anonymizer.view.common.fonts import AppFonts
 from anonymizer.view.common.job_poller import start_background_job
-from anonymizer.view.common.navigation import find_dataset_view_parent, return_to_dataset_view
+from anonymizer.view.common.navigation import find_dataset_view_parent, return_after_workspace
 from anonymizer.view.common.tooltip import bind_hover_tooltip
 from anonymizer.view.common.ux_fields import (
     button_width_for_label,
@@ -3502,11 +3502,13 @@ class SeriesView(AppCTkToplevel):
             self._ocr_work_state.request_cancel()
         mark_ctk_window_destroyed(self)
         self._stop_rebuild_ui()
+        parent = self._parent
         if self._loading:
             self._loading = False
             self._stop_load_progress_pulse()
             with contextlib.suppress(tk.TclError):
                 self.grab_release()
+            return_after_workspace(self, parent)
             self.destroy()
             return
 
@@ -3520,7 +3522,6 @@ class SeriesView(AppCTkToplevel):
         with contextlib.suppress(tk.TclError):
             self.grab_release()
 
-        parent = self._parent
-        return_to_dataset_view(self)
+        return_after_workspace(self, parent)
         self.destroy()
         self._schedule_post_close_gc(parent, rss_before)

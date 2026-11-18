@@ -30,6 +30,7 @@ from anonymizer.controller.ai.harmonize import (
     series_playbook_component_field_order,
     series_playbook_component_initial,
     series_playbook_component_options,
+    study_description_edit_blocked_message,
     study_description_edit_choices,
     study_description_group_choices,
     study_loinc_prefix_for_edit,
@@ -1473,7 +1474,7 @@ class DatasetView(AppToplevel):
         if not_ready:
             messagebox.showinfo(
                 title=_("Study description"),
-                message=_("Harmonize all series in this study before setting the study description."),
+                message=study_description_edit_blocked_message(anon_model, not_ready),
                 parent=self,
             )
             return

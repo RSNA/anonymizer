@@ -15,6 +15,7 @@ from anonymizer.controller.ctp_lookup import CtpLookupPreview
 from anonymizer.controller.project import ProjectController
 from anonymizer.controller.script.document import load_script_rules
 from anonymizer.controller.script.option_explanations import (
+    options_status_line,
     script_is_custom,
     script_status_line,
 )
@@ -501,18 +502,26 @@ class SettingsDialog(AppToplevel):
         logger.info(f"Anonymizer Script File updated: {self.model.anonymizer_script_path}")
         self._refresh_script_status()
 
+    def _uses_packaged_default_script(self, path: Path) -> bool:
+        """True when path is the shipped default script (not yet a project install)."""
+        default = packaged_default_script_path()
+        try:
+            return path.resolve() == default.resolve()
+        except OSError:
+            return path == default or path.name == default.name
+
     def _script_status_text(self) -> str:
-        """Project script filename plus Custom or options summary."""
+        """Project script filename plus options summary (or Custom when the script diverges)."""
         path = Path(self.model.anonymizer_script_path)
         name = path.name if path.name else _("(no script)")
+        options = frozenset(self.model.confidentiality_options)
         try:
-            if path.is_file():
-                status = script_status_line(
-                    load_script_rules(path),
-                    self.model.confidentiality_options,
-                )
-            elif self.new_model:
-                status = _("Not installed yet")
+            # New project: packaged default is not compiled for the selected options yet.
+            # Show the same options_status_line edit mode uses when the installed script matches.
+            if self.new_model and (not path.is_file() or self._uses_packaged_default_script(path)):
+                status = options_status_line(options)
+            elif path.is_file():
+                status = script_status_line(load_script_rules(path), options)
             else:
                 status = _("Script file missing")
         except Exception:

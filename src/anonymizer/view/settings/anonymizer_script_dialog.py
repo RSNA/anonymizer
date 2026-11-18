@@ -30,6 +30,7 @@ from anonymizer.controller.script.document import (
     write_script_rules,
 )
 from anonymizer.controller.script.operands import (
+    LOOKUP_TABLE_OPERANDS,
     OperandId,
     OperandSpec,
     always_literal_text,
@@ -90,9 +91,6 @@ _ROUND_WIDTH_RE = re.compile(r"^@round\(\s*this\s*,\s*(\d+)\s*\)$", re.IGNORECAS
 _HELP_WRAP = 320
 _HELP_BODY_INDENT = 12
 _NAME_COL_SLACK_CHARS = 2 - 18  # fit longest name, then shrink by 18 characters
-# Operands that need a CTP patient lookup table (load/replace via LookupTableDialog).
-_LOOKUP_TABLE_OPERANDS = frozenset({OperandId.LOOKUP_PTID, OperandId.LOOKUP_DATEOFFSET, OperandId.REBASEDATE})
-_OPERAND_DROPDOWN_PAD_CHARS = 3  # wider than longest catalog syntax
 # Shared by AnonymizerScriptDialog child dialogs (OperandParam, AddFromDictionary, etc.).
 _CHILD_DIALOG_PAD = 10
 
@@ -429,11 +427,30 @@ class AnonymizerScriptDialog(AppToplevel):
         return max(12, max_chars + 2) * self._char_width_px
 
     def _operand_dropdown_width_px(self) -> int:
-        """Width for toolbar + detail Operand combos: longest catalog syntax + 3 chars."""
-        max_chars = len(_("All"))
-        for spec in self._available_operands():
-            max_chars = max(max_chars, len(operand_syntax(spec)))
-        return max(12, max_chars + _OPERAND_DROPDOWN_PAD_CHARS) * self._char_width_px
+        """
+        Pixel width for toolbar + detail Operand combos.
+
+        Font-measures the longest catalog syntax (and All) so the control fits
+        the max operand without the coarse char-width overestimate.
+        """
+        values = [_("All"), *self._operand_syntax_values()]
+        return option_menu_width_for_labels(values)
+
+    def _help_column_inner_width_px(self) -> int:
+        """
+        Right-panel content width.
+
+        At least the help wrap length, and wide enough for the Operand label
+        plus the font-measured combo so the dialog can auto-adjust.
+        """
+        pad = _CHILD_DIALOG_PAD
+        label = _("Operand") + ":"
+        try:
+            label_w = int(ctk.CTkFont().measure(label))
+        except tk.TclError:
+            label_w = max(1, len(label)) * self._char_width_px
+        operand_row_w = label_w + pad + self._operand_dropdown_width_px()
+        return max(_HELP_WRAP, operand_row_w)
 
     def _set_operand_combo_values(self, values: list[str], *, combo: ctk.CTkComboBox | None = None) -> None:
         target = combo if combo is not None else self._operand_combo
@@ -447,12 +464,26 @@ class AnonymizerScriptDialog(AppToplevel):
         scrollbar_w = 18
         return tag_w + vr_w + name_w + operand_w + scrollbar_w
 
-    def _apply_dialog_geometry(self) -> None:
-        """Size dialog to the Name column and expand vertically to fit help text."""
+    def _preferred_dialog_width_px(self) -> int:
+        """Outer dialog width from tree + help column (operand combo aware)."""
         pad = _CHILD_DIALOG_PAD
         tree_w = self._tree_preferred_width_px()
-        help_w = _HELP_WRAP + pad * 2
-        width = pad * 2 + pad * 2 + tree_w + pad + help_w + pad
+        help_w = self._help_column_inner_width_px() + pad * 2
+        return pad * 2 + pad * 2 + tree_w + pad + help_w + pad
+
+    def _apply_help_wraplengths(self) -> None:
+        """Keep right-panel labels wrapping to the help column inner width."""
+        wrap = self._help_column_inner_width_px()
+        self._selection_label.configure(wraplength=wrap)
+        self._tag_description_label.configure(wraplength=wrap)
+        self._help_label.configure(wraplength=max(40, wrap - _HELP_BODY_INDENT))
+        self._error_label.configure(wraplength=wrap)
+
+    def _apply_dialog_geometry(self) -> None:
+        """Size dialog to the tree + Operand combo column; expand vertically for help."""
+        pad = _CHILD_DIALOG_PAD
+        self._apply_help_wraplengths()
+        width = self._preferred_dialog_width_px()
         self.update_idletasks()
         help_h = int(self._help_panel.winfo_reqheight() or 0)
         # Reserve room for "How this operand works" so the first rule select
@@ -501,18 +532,22 @@ class AnonymizerScriptDialog(AppToplevel):
             self._schedule_fit_dialog_height()
 
     def _fit_dialog_height_to_help(self) -> None:
-        """Grow the dialog if the right-panel text needs more vertical room."""
+        """Grow the dialog if the right-panel text needs more vertical or horizontal room."""
         self._help_fit_after_id = None
         with contextlib.suppress(tk.TclError):
+            self._apply_help_wraplengths()
             self.update_idletasks()
             help_h = int(self._help_panel.winfo_reqheight() or 0)
             index_h = max(320, help_h + 20)
-            needed = 10 + 120 + index_h + 70 + 10
+            needed_h = 10 + 120 + index_h + 70 + 10
+            needed_w = self._preferred_dialog_width_px()
             cur_w = max(self.winfo_width(), 1)
             cur_h = max(self.winfo_height(), 1)
-            if needed > cur_h + 8:
-                self.geometry(f"{cur_w}x{needed}")
-                self.minsize(self.winfo_reqwidth() or cur_w, min(560, needed))
+            new_w = max(cur_w, needed_w)
+            new_h = max(cur_h, needed_h) if needed_h > cur_h + 8 else cur_h
+            if new_w > cur_w + 8 or new_h > cur_h + 8:
+                self.geometry(f"{new_w}x{new_h}")
+                self.minsize(min(new_w, self.winfo_reqwidth() or new_w), min(560, new_h))
 
     def _update_help_for_operand(self, operand_id: str | None) -> None:
         spec = operand_spec_by_id(operand_id) if operand_id else None
@@ -556,7 +591,7 @@ class AnonymizerScriptDialog(AppToplevel):
         pending = self._pending_operand_id() or OperandId.KEEP
         spec = operand_spec_by_id(pending)
         show_param = not show_apply and spec is not None and spec.needs_param and self._custom_operation is None
-        show_lookup = not show_apply and pending in _LOOKUP_TABLE_OPERANDS
+        show_lookup = not show_apply and pending in LOOKUP_TABLE_OPERANDS
 
         if not (show_apply or show_param or show_lookup):
             self._action_row.grid_remove()
@@ -987,7 +1022,7 @@ class AnonymizerScriptDialog(AppToplevel):
             self._refresh_operand_action_buttons()
             self._error_label.configure(text="")
             return
-        if op_id in _LOOKUP_TABLE_OPERANDS:
+        if op_id in LOOKUP_TABLE_OPERANDS:
             if not self._ensure_lookup_for_operand(op_id):
                 self._sync_operand_combo_from_rule()
                 self._refresh_operand_action_buttons()
@@ -1134,26 +1169,38 @@ class AnonymizerScriptDialog(AppToplevel):
     def _lookup_ctx_ready(self, op_id: str) -> bool:
         """True when the loaded (or pending) lookup table satisfies op_id."""
         ctx = self._lookup_ctx
-        if op_id == "lookup_ptid":
+        if op_id in {
+            OperandId.LOOKUP_PTID,
+            OperandId.LOOKUP_CNAME,
+            OperandId.LOOKUP_SITEID,
+        }:
             return ctx.present
-        if op_id == "lookup_dateoffset":
+        if op_id == OperandId.LOOKUP_DATEOFFSET:
             return ctx.present and ctx.has_dateoffset
-        if op_id == "rebasedate":
+        if op_id in {
+            OperandId.REBASEDATE,
+            OperandId.LOOKUP_DDATE,
+            OperandId.DATEINTERVAL_STUDY_DDATE,
+        }:
             return ctx.present and ctx.has_basedate
         return True
 
     def _lookup_unmet_message(self, op_id: str) -> str:
-        if op_id == "lookup_dateoffset":
+        if op_id == OperandId.LOOKUP_DATEOFFSET:
             return _(
                 "The lookup table has no dateoffset entries. "
                 "Load a .properties file that includes dateoffset/<PatientID>=N lines, "
                 "or choose a different operand."
             )
-        if op_id == "rebasedate":
+        if op_id in {
+            OperandId.REBASEDATE,
+            OperandId.LOOKUP_DDATE,
+            OperandId.DATEINTERVAL_STUDY_DDATE,
+        }:
             return _(
-                "The lookup table has no basedate entries. "
-                "Load a .properties file that includes basedate/<PatientID>=YYYYMMDD lines, "
-                "or choose a different operand."
+                "The lookup table has no basedate or ddate entries. "
+                "Load a .properties file that includes basedate/<PatientID>=YYYYMMDD "
+                "or ddate/<PatientID>=… lines, or choose a different operand."
             )
         return _(
             "No patient lookup table is loaded. "
@@ -1179,7 +1226,7 @@ class AnonymizerScriptDialog(AppToplevel):
         op_id = self._pending_operand_id() or self._rule_operand_id() or OperandId.KEEP
         if not self._run_lookup_table_dialog():
             return
-        if op_id in _LOOKUP_TABLE_OPERANDS and not self._lookup_ctx_ready(op_id):
+        if op_id in LOOKUP_TABLE_OPERANDS and not self._lookup_ctx_ready(op_id):
             messagebox.showerror(_("Patient Lookup Table"), self._lookup_unmet_message(op_id), parent=self)
         if self._selected_tag is not None:
             self._load_selection(self._selected_tag)

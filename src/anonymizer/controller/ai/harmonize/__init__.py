@@ -181,6 +181,9 @@ from anonymizer.controller.ai.harmonize.pipeline import (
     series_description_is_harmonized as series_description_is_harmonized,
 )
 from anonymizer.controller.ai.harmonize.pipeline import (
+    study_description_edit_blocked_message as study_description_edit_blocked_message,
+)
+from anonymizer.controller.ai.harmonize.pipeline import (
     study_description_edit_choices as study_description_edit_choices,
 )
 from anonymizer.controller.ai.harmonize.pipeline import (
