@@ -95,7 +95,10 @@ class AiFeaturesSetupDialog(AppToplevel):
         if self._closing:
             return
         self._download_busy = busy
-        self._close_button.configure(state="disabled" if busy else "normal")
+        # Panel sync_from_runtime runs during AiFeaturesPanel.__init__, before Close exists.
+        close_button = getattr(self, "_close_button", None)
+        if close_button is not None:
+            close_button.configure(state="disabled" if busy else "normal")
 
     def _on_close(self) -> None:
         if self._closing:
