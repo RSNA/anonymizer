@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [19.1.0.dev9]
+- PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)
 - Docs: MCP server documented as **experimental / opt-in** for forthcoming **19.1.0** (start with `--mcp`; GUI and headless `-c` remain the supported default path). Headless help (en/de/es/fr), clinician MCP instructions, readmes, `--mcp` CLI help, and MCP server instructions asset updated.
 - Packaging: FastMCP is a **core** dependency so a plain `rsna-anonymizer` install can launch (fixes `ModuleNotFoundError: uvicorn` on GUI start). Optional `[mcp]` extra kept as an install alias only.
 
