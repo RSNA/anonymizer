@@ -4,13 +4,13 @@ Maintainer gate for merging `dev` into `master` as **stable 19.1.0** (not anothe
 
 Audience: maintainers. Not part of the clinician MkDocs site. Related backlog: [backlog.md](backlog.md).
 
-Current pre-release line (as of this checklist): `19.1.0.dev9` on `dev`. Stable on `master` remains **19.0.10** until this cut.
+Current pre-release line (as of this checklist): `19.1.0.dev10` on `dev`. Stable on `master` remains **19.0.10** until this cut.
 
 ---
 
 ## 1. Scope freeze
 
-Confirm each 19.1 theme from CHANGELOG (`dev1`–`dev9`) is either **in** the release or **explicitly deferred** with a note:
+Confirm each 19.1 theme from CHANGELOG (`dev1`–`dev10`) is either **in** the release or **explicitly deferred** with a note:
 
 - [x] De-identification Options (Basic / Retain) and DICOM PS 3.15 § E.1.3 / HIPAA wording
 - [x] Embedded PHI: pixel OCR path, metadata Clean Descriptors, report text / Clean Structured Content
@@ -36,7 +36,7 @@ Blocking bugs:
 
 ## 2. Soak / field validation
 
-- [ ] Fresh install via `uv pip install --pre rsna-anonymizer` reports `19.1.0.dev9` or a later `19.1.0.devN` if more land before the cut
+- [ ] Fresh install via `uv pip install --pre rsna-anonymizer` reports `19.1.0.dev10` or a later `19.1.0.devN` if more land before the cut
 - [ ] Upgrade soak: open an existing **19.0.10** project on the pre-release build; confirm model load / version upgrade path and basic Dataset browse
 - [ ] Fresh project soak: create a new project on the pre-release build
 

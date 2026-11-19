@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [19.1.0.dev10]
+- PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)
+- AI Features Setup: Close disabled while a model download is active; download workers clear progress on finish so reopen no longer sticks on TotalSegmentator “Extracting…” after a mid-download close
+
 ## [19.1.0.dev9]
 - PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)
 - Docs: MCP server documented as **experimental / opt-in** for forthcoming **19.1.0** (start with `--mcp`; GUI and headless `-c` remain the supported default path). Headless help (en/de/es/fr), clinician MCP instructions, readmes, `--mcp` CLI help, and MCP server instructions asset updated.
