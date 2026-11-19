@@ -1750,7 +1750,7 @@ def run_HEADLESS(project_model_path: Path):
     flag_value="",
     default=None,
     help=_(
-        "Headless MCP server (mutually exclusive with -c). "
+        "Experimental / opt-in headless MCP server for 19.1 (mutually exclusive with -c). "
         "Bare --mcp uses stdio; --mcp HOST:PORT serves http://HOST:PORT/mcp. "
         "Open or create projects with MCP tools."
     ),

@@ -6,7 +6,7 @@ Nutzen Sie den Headless-Modus auf einem **Labor- oder Server**, wenn Sie das Des
 
 - Weiterhin DICOM in ein bestehendes Projekt empfangen und/oder
 - KI-Stapel einmal auf diesem Projekt ausführen, dann beenden, und/oder
-- Die **MCP**-Werkzeugschnittstelle bereitstellen, damit ein LLM-Client Projekte, Import, Inventar und Bildgebung steuern kann.
+- Optional die **MCP**-Werkzeugschnittstelle bereitstellen (experimentell / opt-in für 19.1.0), damit ein LLM-Client Projekte, Import, Inventar und Bildgebung steuern kann.
 
 ## Empfang und KI-Stapel
 
@@ -51,16 +51,11 @@ Beispiel KI-Stapel-Konfiguration (herunterladbar: [`AiBatchConfig.example.json`]
 
 OCR-Whitelists bleiben unter dem Projektverzeichnis `whitelists/` (wie in der GUI).
 
-## MCP-Server
+## MCP-Server (experimentell / opt-in)
+
+Für **19.1.0** ist der MCP-Server **experimentell** und **opt-in**: starten Sie ihn nur mit `--mcp`, wenn Sie einen LLM-Client anbinden wollen. FastMCP ist in der normalen Paketinstallation enthalten. Der unterstützte Produktweg für die meisten Standorte bleibt die GUI sowie Headless mit `-c` (Empfang / Import / KI-Stapel). APIs und Werkzeugnamen können sich in späteren Versionen ändern.
 
 `-c` und `--mcp` sind **gegenseitig ausschließend**. Projekte nach dem Verbinden mit MCP-Werkzeugen öffnen/anlegen.
-
-Optionalen MCP-Extra einmal installieren (FastMCP-Server):
-
-```bash
-uv sync --extra mcp
-# oder: pip install 'rsna-anonymizer[mcp]'
-```
 
 ### HTTP-MCP
 
@@ -94,11 +89,11 @@ Beispiel: [`mcp.example.json`](mcp.example.json) / [`mcp.stdio.example.json`](mc
 
 ```bash
 # Terminal 1
-uv sync --extra mcp
+uv sync
 uv run rsna-anonymizer --mcp 127.0.0.1:8000
 
 # Terminal 2
-uv sync --extra mcp --group medgemma-chat
+uv sync --group medgemma-chat
 uv run python -m prototyping.medgemma_chat \
   --model /path/to/medgemma_hf_weights \
   --mcp-url http://127.0.0.1:8000/mcp
@@ -126,7 +121,7 @@ Details: `src/prototyping/medgemma_chat/README.md`.
 | Feature-Gate-Fehler | Modelle / Lizenz auf diesem Arbeitsplatz herunterladen |
 | Leere Studienliste | Zuerst Daten importieren oder `studies` in AiBatchConfig korrigieren |
 | Wenig Speicher | Gleichzeitige Last reduzieren; siehe [Fehlerbehebung](../troubleshooting.md) |
-| Client verbindet nicht | `--mcp HOST:PORT` vs. `mcp.json` (`http://HOST:PORT/mcp`); MCP-Extra installiert |
+| Client verbindet nicht | `--mcp HOST:PORT` vs. `mcp.json` (`http://HOST:PORT/mcp`); Paket installiert und mit `--mcp` gestartet |
 | Veraltete Werkzeuge | MCP neu starten; neuen Chat im Client öffnen |
 
 ## Für Kliniker

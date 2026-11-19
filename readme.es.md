@@ -83,9 +83,11 @@ En el primer inicio, use el botón **AI Features** de la pantalla Welcome para d
 rsna-anonymizer
 rsna-anonymizer -c path/to/ProjectModel.json   # headless DICOM receive
 rsna-anonymizer -c path/to/ProjectModel.json --ai-batch path/to/AiBatchConfig.json --ai-batch-run
+# MCP (experimental / opt-in para 19.1.0):
+# rsna-anonymizer --mcp   # o --mcp HOST:PORT
 ```
 
-El lote de IA sin interfaz usa un archivo acompañante [`AiBatchConfig.json`](docs/en/10-headless/AiBatchConfig.example.json) (algoritmos, modos, selección de estudios, resolución CT/MR). Las listas blancas OCR siguen en el directorio del proyecto `whitelists/`.
+El lote de IA sin interfaz usa un archivo acompañante [`AiBatchConfig.json`](docs/en/10-headless/AiBatchConfig.example.json) (algoritmos, modos, selección de estudios, resolución CT/MR). Las listas blancas OCR siguen en el directorio del proyecto `whitelists/`. El servidor MCP es experimental / opt-in para 19.1.0 (iniciar con `--mcp`) — véase [Ejecutar sin interfaz](docs/es/10-headless/index.md#servidor-mcp-experimental--opt-in).
 
 ## Actualizar
 

@@ -23,7 +23,7 @@ Use las pestañas superiores: **Configuración** (capítulos 1–5), **Uso** (6�
 
 **Sin interfaz**
 
-10. [Ejecutar sin interfaz](10-headless/index.md) — modos laboratorio/servidor
+10. [Ejecutar sin interfaz](10-headless/index.md) — modos laboratorio/servidor (MCP experimental / opt-in para 19.1.0)
 
 ## Tareas frecuentes
 

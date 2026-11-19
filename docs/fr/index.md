@@ -23,7 +23,7 @@ Utilisez les onglets du haut : **Configuration** (chapitres 1–5), **Utilisatio
 
 **Sans interface**
 
-10. [Exécution sans interface](10-headless/index.md) — modes laboratoire/serveur
+10. [Exécution sans interface](10-headless/index.md) — modes laboratoire/serveur (MCP expérimental / opt-in pour 19.1.0)
 
 ## Tâches fréquentes
 

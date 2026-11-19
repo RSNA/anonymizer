@@ -4612,6 +4612,7 @@ dependencies = [
     { name = "dicom-validator" },
     { name = "dicom2nifti" },
     { name = "easyocr" },
+    { name = "fastmcp" },
     { name = "huggingface-hub" },
     { name = "ifaddr" },
     { name = "matplotlib" },
@@ -4655,7 +4656,6 @@ mcp = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "fastmcp" },
     { name = "ffmpeg-python" },
     { name = "pre-commit" },
     { name = "pytest" },
@@ -4700,6 +4700,7 @@ requires-dist = [
     { name = "dicom-validator", specifier = ">=0.9.0" },
     { name = "dicom2nifti", specifier = ">=2.6" },
     { name = "easyocr" },
+    { name = "fastmcp", specifier = ">=4.0" },
     { name = "fastmcp", marker = "extra == 'mcp'", specifier = ">=4.0" },
     { name = "huggingface-hub" },
     { name = "ifaddr" },
@@ -4738,7 +4739,6 @@ provides-extras = ["mcp"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "fastmcp", specifier = ">=4.0" },
     { name = "ffmpeg-python", specifier = ">=0.2.0" },
     { name = "pre-commit" },
     { name = "pytest" },

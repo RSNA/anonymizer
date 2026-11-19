@@ -23,7 +23,7 @@ Nutzen Sie die oberen Registerkarten: **Einrichtung** (Kapitel 1–5), **Nutzung
 
 **Ohne Oberfläche**
 
-10. [Ohne Oberfläche ausführen](10-headless/index.md) — Labor-/Server-Modi
+10. [Ohne Oberfläche ausführen](10-headless/index.md) — Labor-/Server-Modi (MCP experimentell / opt-in für 19.1.0)
 
 ## Häufige Aufgaben
 

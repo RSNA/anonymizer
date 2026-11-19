@@ -7,7 +7,7 @@ Use headless mode on a **lab or server** when you do not need the desktop window
 - Keep receiving DICOM into an existing project, and/or
 - Import a DICOM folder once, then exit, and/or
 - Run AI batch once on that project, then exit, and/or
-- Expose the **MCP** tool interface so an LLM client can drive projects, import, inventory, and imaging tools.
+- Optionally expose the **MCP** tool interface (experimental / opt-in for 19.1.0) so an LLM client can drive projects, import, inventory, and imaging tools.
 
 ## Receive, folder import, and AI batch
 
@@ -94,16 +94,11 @@ Example AI batch config (downloadable: [`AiBatchConfig.example.json`](AiBatchCon
 
 Pixel **Remove Scope** is `pixel.remove_scope` (`non_whitelisted` / `phi_only` / `all_text`). OCR whitelists and exclude areas remain under the project `whitelists/` directory (same as the GUI). Set `pixel.use_exclude_areas` to true to apply saved `whitelists/{modality}.exclude.json` rectangles. Harmonize `prefer_description_mappings` skips re-running anatomy AI when a saved description mapping already covers the original text.
 
-## MCP server
+## MCP server (experimental / opt-in)
+
+For **19.1.0**, the MCP server is **experimental** and **opt-in**: start it only with `--mcp` when you intend to connect an LLM client. FastMCP is included in the normal package install. The supported product path for most sites remains the GUI plus headless `-c` receive / import / AI batch. APIs and tool names may change in later releases.
 
 `-c` and `--mcp` are **mutually exclusive**. Use `-c` for DICOM receive (or AI batch); use `--mcp` for the MCP tool server. Open or create projects with MCP tools after connect.
-
-Install the optional MCP extra once (FastMCP-based server):
-
-```bash
-uv sync --extra mcp
-# or: pip install 'rsna-anonymizer[mcp]'
-```
 
 ### HTTP MCP
 
@@ -262,7 +257,7 @@ Local MedGemma MCP client (REPL or Gradio) under `src/prototyping/medgemma_chat/
 
 ```bash
 cd /path/to/anonymizer
-uv sync --extra mcp
+uv sync
 uv run rsna-anonymizer --mcp 127.0.0.1:8000
 ```
 
@@ -270,7 +265,7 @@ uv run rsna-anonymizer --mcp 127.0.0.1:8000
 
 ```bash
 cd /path/to/anonymizer
-uv sync --extra mcp --group medgemma-chat
+uv sync --group medgemma-chat
 uv run python -m prototyping.medgemma_chat \
   --model /path/to/medgemma_hf_weights \
   --mcp-url http://127.0.0.1:8000/mcp
@@ -279,7 +274,7 @@ uv run python -m prototyping.medgemma_chat \
 Gradio UI (`gradio` is in the `medgemma-chat` group):
 
 ```bash
-uv sync --extra mcp --group medgemma-chat
+uv sync --group medgemma-chat
 uv run python -m prototyping.medgemma_chat \
   --model /path/to/medgemma_hf_weights \
   --mcp-url http://127.0.0.1:8000/mcp \
@@ -294,7 +289,7 @@ Full flags: [`src/prototyping/medgemma_chat/README.md`](https://github.com/RSNA/
 - For MCP-only: create/open projects with tools after connect (interactive setup wizard in server instructions).
 - Models and face license already set up on **this machine** ([AI Features setup](../03-ai-features-setup/index.md)).
 - Enough free memory for the selected algorithms.
-- For MCP: the `[mcp]` optional dependency installed.
+- For MCP: a normal `rsna-anonymizer` install (FastMCP is included); start with `--mcp`.
 
 ## What good looks like
 
@@ -311,7 +306,7 @@ Full flags: [`src/prototyping/medgemma_chat/README.md`](https://github.com/RSNA/
 | Feature gate errors | Download models / license on that workstation |
 | Empty study list | Import data first, or fix `studies` in AiBatchConfig |
 | Low memory | Reduce concurrent load; see [Troubleshooting](../troubleshooting.md) |
-| Client cannot connect | `--mcp HOST:PORT` vs `mcp.json` URL (`http://HOST:PORT/mcp`); MCP extra installed; firewall |
+| Client cannot connect | `--mcp HOST:PORT` vs `mcp.json` URL (`http://HOST:PORT/mcp`); package installed and started with `--mcp`; firewall |
 | Stale tools/instructions | Restart MCP; start a new chat in the client |
 
 ## For clinicians

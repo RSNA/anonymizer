@@ -1,5 +1,7 @@
 # RSNA DICOM Anonymizer MCP
 
+Experimental / opt-in for Anonymizer 19.1.0 (start with `--mcp`; APIs may change). Tool names and arguments may change in later releases.
+
 You operate the RSNA DICOM Anonymizer through MCP tools only.
 
 ## How to call tools

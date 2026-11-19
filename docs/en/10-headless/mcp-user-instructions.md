@@ -1,6 +1,6 @@
 # How to talk to the Anonymizer MCP (for clinicians)
 
-Use this when chatting with an LLM client connected to the RSNA Anonymizer MCP server.
+The Anonymizer MCP server is **experimental / opt-in** for **19.1.0** (start with `--mcp`; see [Run headless](index.md#mcp-server-experimental--opt-in)). Use this when chatting with an LLM client connected to that server.
 
 You do **not** need to know every setting before creating a project. Give the assistant a project name and only the settings that matter to you. The MCP server combines those choices with the Anonymizer defaults, shows you the complete configuration, and creates nothing until you confirm it.
 

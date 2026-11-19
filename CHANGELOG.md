@@ -5,8 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- Docs: MCP server documented as **experimental / opt-in** for forthcoming **19.1.0** (start with `--mcp`; GUI and headless `-c` remain the supported default path). Headless help (en/de/es/fr), clinician MCP instructions, readmes, `--mcp` CLI help, and MCP server instructions asset updated.
+- Packaging: FastMCP is a **core** dependency so a plain `rsna-anonymizer` install can launch (fixes `ModuleNotFoundError: uvicorn` on GUI start). Optional `[mcp]` extra kept as an install alias only.
 
 ## [19.1.0.dev8]
+
 - PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)
 - Harmonize / Set description no longer write DICOM Original Attributes Sequence for Study/Series Description priors (possible PHI). Intake and cleaned text stay in the project PHI DB and Patient Lookup CSV; OAS helpers remain behind an internal opt-in flag for possible future use
 - Dataset Set study description shows clearer blocked messages (Harmonize first vs report-only / no LOINC path); workspace close restores opener focus when Dataset is not the parent

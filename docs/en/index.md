@@ -23,7 +23,7 @@ Use the top tabs: **Setup** (chapters 1–5), **Use** (6–9), **Headless** (10)
 
 **Headless**
 
-10. [Run headless](10-headless/index.md) — lab/server modes
+10. [Run headless](10-headless/index.md) — lab/server modes (MCP experimental / opt-in for 19.1.0)
 
 ## Popular tasks
 

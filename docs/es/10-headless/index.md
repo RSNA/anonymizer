@@ -6,7 +6,7 @@ Use el modo headless en un **laboratorio o servidor** cuando no necesite la vent
 
 - Seguir recibiendo DICOM en un proyecto existente, y/o
 - Ejecutar un lote de IA una vez en ese proyecto y salir, y/o
-- Exponer la interfaz de herramientas **MCP** para que un cliente LLM gestione proyectos, importación, inventario e imagen.
+- Exponer opcionalmente la interfaz de herramientas **MCP** (experimental / opt-in para 19.1.0) para que un cliente LLM gestione proyectos, importación, inventario e imagen.
 
 ## Recepción y lote de IA
 
@@ -51,16 +51,11 @@ Ejemplo de configuración de lote de IA (descargable: [`AiBatchConfig.example.js
 
 Las listas blancas OCR permanecen bajo el directorio `whitelists/` del proyecto (igual que en la GUI).
 
-## Servidor MCP
+## Servidor MCP (experimental / opt-in)
+
+Para **19.1.0**, el servidor MCP es **experimental** y **opt-in**: inícielo solo con `--mcp` cuando vaya a conectar un cliente LLM. FastMCP viene en la instalación normal del paquete. El camino de producto admitido para la mayoría de centros sigue siendo la GUI más recepción / importación / lote de IA headless con `-c`. Las API y los nombres de herramientas pueden cambiar en versiones posteriores.
 
 `-c` y `--mcp` son **mutuamente excluyentes**. Abra o cree proyectos con las herramientas MCP tras conectar.
-
-Instale el extra MCP opcional una vez (servidor FastMCP):
-
-```bash
-uv sync --extra mcp
-# o: pip install 'rsna-anonymizer[mcp]'
-```
 
 ### MCP HTTP
 
@@ -94,11 +89,11 @@ Ejemplo: [`mcp.example.json`](mcp.example.json) / [`mcp.stdio.example.json`](mcp
 
 ```bash
 # Terminal 1
-uv sync --extra mcp
+uv sync
 uv run rsna-anonymizer --mcp 127.0.0.1:8000
 
 # Terminal 2
-uv sync --extra mcp --group medgemma-chat
+uv sync --group medgemma-chat
 uv run python -m prototyping.medgemma_chat \
   --model /path/to/medgemma_hf_weights \
   --mcp-url http://127.0.0.1:8000/mcp
@@ -126,7 +121,7 @@ Detalle: `src/prototyping/medgemma_chat/README.md`.
 | Errores de puerta de funciones | Descargue modelos / licencia en esa estación |
 | Lista de estudios vacía | Importe datos primero, o corrija `studies` en AiBatchConfig |
 | Poca memoria | Reduzca la carga concurrente; véase [Solución de problemas](../troubleshooting.md) |
-| El cliente no conecta | `--mcp HOST:PORT` vs `mcp.json` (`http://HOST:PORT/mcp`); extra MCP instalado |
+| El cliente no conecta | `--mcp HOST:PORT` vs `mcp.json` (`http://HOST:PORT/mcp`); paquete instalado e iniciado con `--mcp` |
 | Herramientas obsoletas | Reinicie MCP; abra un chat nuevo en el cliente |
 
 ## Para clínicos

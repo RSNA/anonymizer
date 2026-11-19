@@ -1,8 +1,9 @@
 # MCP developer verification
 
-Developer-only verification for `src/anonymizer/mcp`. This directory is the
-test submodule for MCP work; natural-language model runs described here are
-manual developer checks, **not CI**.
+The MCP product surface is **experimental / opt-in** for **19.1.0** (start with
+`--mcp`; FastMCP ships with the core package; see `docs/en/10-headless/`). This
+directory is developer-only verification for `src/anonymizer/mcp`;
+natural-language model runs described here are manual developer checks, **not CI**.
 
 ## Test layers
 

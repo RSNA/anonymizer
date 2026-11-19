@@ -4,6 +4,8 @@ Maintainer staging for GitHub Issues. Sourced from former root `TODO.md` and `# 
 
 Do not treat this file as CI scope or a substitute for Issues once items are filed.
 
+Stable cut gate for merging `dev` into `master` as 19.1.0: [release-19.1-checklist.md](release-19.1-checklist.md).
+
 ## Ready to file
 
 ### Project private-creator allowlist for Retain Safe Private

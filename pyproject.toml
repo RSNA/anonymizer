@@ -51,6 +51,7 @@ dependencies = [
     "tkinterdnd2>=0.6.3",
     "pypdfium2>=5.14.0",
     "pypdf>=6.19.0",
+    "fastmcp>=4.0",
 ]
 
 [project.scripts]
@@ -59,6 +60,8 @@ rsna-anonymizer = "anonymizer.anonymizer:main"
 [project.urls]
 Homepage = "https://github.com/RSNA/anonymizer"
 
+# Alias only: FastMCP is a core dependency. Kept so older `pip install 'rsna-anonymizer[mcp]'`
+# / `uv sync --extra mcp` commands still resolve.
 [project.optional-dependencies]
 mcp = [
     "fastmcp>=4.0",
@@ -101,8 +104,6 @@ dev = [
     "pytest-mock>=3.14.1",
     "watchfiles>=1.0.0",
     "setuptools>=70,<82",
-    # Default suite includes tests/mcp (optional product extra [mcp]).
-    "fastmcp>=4.0",
 ]
 docs = [
     "mkdocs-material>=9.5.0",
