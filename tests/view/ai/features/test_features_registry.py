@@ -103,12 +103,27 @@ def test_download_manager_single_flight() -> None:
         assert thread is not None
         thread.join(timeout=5)
         assert not thread.is_alive(), "worker thread did not finish"
-        manager.clear_pending("harmonize_ct_models")
+        # Worker finally clears pending/progress even without a UI clear_pending call.
         assert not manager.busy()
         assert completed and completed[0].result == "ok"
     finally:
         release.set()
         _clear_model_download_progress()
+
+
+def test_download_manager_reconcile_stale_clears_orphaned_progress() -> None:
+    from anonymizer.controller.ai.model_download import begin_model_download, is_model_download_active
+
+    _clear_model_download_progress()
+    manager = AiFeatureDownloadManager()
+    begin_model_download("harmonize_ct_models", message="Download finished. Extracting...")
+    manager._pending_download_id = "harmonize_ct_models"  # noqa: SLF001 — simulate orphan after closed UI
+    manager._thread = None  # noqa: SLF001
+    assert is_model_download_active("harmonize_ct_models")
+    assert manager.reconcile_stale() is True
+    assert not is_model_download_active("harmonize_ct_models")
+    assert not manager.busy()
+    assert manager.reconcile_stale() is False
 
 
 def test_allowed_gates_are_readiness_only() -> None:

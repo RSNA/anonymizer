@@ -1,6 +1,7 @@
 """AI Features Setup dialog (Welcome view)."""
 
 from collections.abc import Callable
+from tkinter import messagebox
 
 import customtkinter as ctk
 
@@ -24,6 +25,7 @@ class AiFeaturesSetupDialog(AppToplevel):
         self.withdraw()
         self._closing = False
         self._on_changed = on_changed
+        self._download_busy = False
 
         self.title(_("AI Features Setup"))
         self.resizable(False, False)
@@ -46,6 +48,7 @@ class AiFeaturesSetupDialog(AppToplevel):
             frame,
             on_layout_changed=self._schedule_fit_to_content,
             on_flags_changed=self._notify_changed,
+            on_download_busy_changed=self._on_download_busy_changed,
         )
         self._panel.grid(row=1, column=0, padx=pad, pady=(0, 4), sticky="nw")
 
@@ -53,6 +56,7 @@ class AiFeaturesSetupDialog(AppToplevel):
             frame, text=_("Close"), width=FEATURE_ACTION_BUTTON_WIDTH, command=self._on_close
         )
         self._close_button.grid(row=2, column=0, padx=pad, pady=(0, pad), sticky="e")
+        self._on_download_busy_changed(self._panel.download_busy())
 
         self._fit_to_content()
         self.deiconify()
@@ -86,8 +90,22 @@ class AiFeaturesSetupDialog(AppToplevel):
         if self._on_changed is not None:
             self._on_changed()
 
+    def _on_download_busy_changed(self, busy: bool) -> None:
+        """Disable Close while a model download is active."""
+        if self._closing:
+            return
+        self._download_busy = busy
+        self._close_button.configure(state="disabled" if busy else "normal")
+
     def _on_close(self) -> None:
         if self._closing:
+            return
+        if self._download_busy or self._panel.download_busy():
+            messagebox.showinfo(
+                _("AI Features Setup"),
+                _("Wait for the current model download to finish before closing."),
+                parent=self,
+            )
             return
         self._closing = True
         self._panel.apply_session()

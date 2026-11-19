@@ -20,6 +20,7 @@ from anonymizer.controller.ai.feature_ids import (
     DOWNLOAD_ID_HARMONIZE_XR_BODYPART,
     AiFeatureId,
     AiModelGroupId,
+    all_download_ids,
 )
 from anonymizer.controller.ai.model_download import (
     any_model_download_active,
@@ -418,6 +419,11 @@ class AiFeatureDownloadManager:
                 except BaseException as exc:
                     logger.exception("AI Features: download worker failed for %s", download_id)
                     error = exc
+                finally:
+                    # Always clear progress here. If the dialog was closed, the UI never
+                    # drains on_complete — without this, reopen sticks on the last stdout
+                    # line (e.g. TotalSegmentator "Download finished. Extracting...").
+                    self.clear_pending(download_id)
                 on_complete(DownloadCompleteEvent(download_id=download_id, result=result, error=error))
 
             self._thread = threading.Thread(target=run, name=f"AiFeatureDownload-{download_id}", daemon=True)
@@ -425,12 +431,38 @@ class AiFeatureDownloadManager:
             return True
 
     def clear_pending(self, download_id: str) -> None:
-        """Clear pending state and storage progress after the UI drains completion."""
+        """Clear pending state and progress for download_id (idempotent)."""
         with self._lock:
             if self._pending_download_id == download_id:
                 self._pending_download_id = None
-            self._thread = None
+                self._thread = None
+            elif self._thread is not None and not self._thread.is_alive():
+                self._thread = None
         end_model_download(download_id)
+
+    def reconcile_stale(self) -> bool:
+        """
+        Drop progress left when a worker finished without UI drain (or died).
+
+        Returns:
+            True when any stale pending/progress state was cleared.
+        """
+        with self._lock:
+            thread = self._thread
+            if thread is not None and thread.is_alive():
+                return False
+            pending = self._pending_download_id
+            self._thread = None
+            self._pending_download_id = None
+        cleared = False
+        if pending is not None:
+            end_model_download(pending)
+            cleared = True
+        for download_id in all_download_ids():
+            if is_model_download_active(download_id):
+                end_model_download(download_id)
+                cleared = True
+        return cleared
 
 
 _manager: AiFeatureDownloadManager | None = None

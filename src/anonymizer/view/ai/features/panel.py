@@ -66,17 +66,20 @@ class AiFeaturesPanel(ctk.CTkFrame):
         *,
         on_flags_changed: Callable[[], None] | None = None,
         on_layout_changed: Callable[[], None] | None = None,
+        on_download_busy_changed: Callable[[bool], None] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(master, fg_color="transparent", **kwargs)
         self._on_flags_changed = on_flags_changed
         self._on_layout_changed = on_layout_changed
+        self._on_download_busy_changed = on_download_busy_changed
         self._worker_queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self._download_manager = get_download_manager()
         self._license_thread: threading.Thread | None = None
         self._license_validating = False
         self._poll_after_id: str | None = None
         self._destroyed = False
+        self._last_download_busy: bool | None = None
         self._license_var = tk.StringVar(value=get_stored_face_license())
         self._summary_labels: dict[str, ctk.CTkLabel] = {}
         self._status_labels: dict[str, ctk.CTkLabel] = {}
@@ -105,7 +108,10 @@ class AiFeaturesPanel(ctk.CTkFrame):
             self._ct_mode_var.set(get_ct_segmentation_mode())
         if self._mr_mode_var is not None:
             self._mr_mode_var.set(get_mr_segmentation_mode())
+        # Heal "Extracting…" (and similar) left when the dialog was closed mid-download.
+        self._download_manager.reconcile_stale()
         self._refresh_status()
+        self._emit_download_busy_changed()
 
     def apply_session(self) -> None:
         """Apply and persist workstation Harmonize resolution selections."""
@@ -267,8 +273,21 @@ class AiFeaturesPanel(ctk.CTkFrame):
         if self._on_layout_changed is not None:
             self._on_layout_changed()
 
-    def _download_busy(self) -> bool:
+    def download_busy(self) -> bool:
+        """True while a model download thread or progress entry is active."""
         return self._download_manager.busy()
+
+    def _download_busy(self) -> bool:
+        return self.download_busy()
+
+    def _emit_download_busy_changed(self) -> None:
+        if self._destroyed or self._on_download_busy_changed is None:
+            return
+        busy = self.download_busy()
+        if busy == self._last_download_busy:
+            return
+        self._last_download_busy = busy
+        self._on_download_busy_changed(busy)
 
     def _warn_download_busy(self, title: str) -> None:
         messagebox.showwarning(
@@ -540,6 +559,7 @@ class AiFeaturesPanel(ctk.CTkFrame):
             self._warn_download_busy(group.title())
             return
         self._refresh_status()
+        self._emit_download_busy_changed()
 
     def _drain_worker_queue(self) -> None:
         while True:
@@ -677,4 +697,5 @@ class AiFeaturesPanel(ctk.CTkFrame):
             return
         self._drain_worker_queue()
         self._update_download_progress()
+        self._emit_download_busy_changed()
         self._poll_after_id = self.after(self.POLL_MS, self._schedule_poll)
