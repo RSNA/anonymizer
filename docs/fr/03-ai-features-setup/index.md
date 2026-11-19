@@ -30,7 +30,7 @@ Chaque ligne est un **téléchargement pour ce poste**. Il n’y a **aucune case
 | **Harmoniser** région anatomique XR | Aide pixel supplémentaire pour CR/DX quand les tags manquent ou sont faux | Oui, si vous Harmonisez la radiographie générale |
 | **Harmoniser** vue thorax XR | AP/PA/Lat pixel (+ contrôle de rotation) pour CR/DX thoraciques | Oui, si vous Harmonisez la radiographie générale (thorax) |
 | **Dé-identification faciale** | Flou facial sur CT/MR tête éligibles | Oui, si vous curatez des CT/MR tête |
-| **Structures cérébrales** | Masques supplémentaires de structures cérébrales sur CT/MR tête (avec Harmonize) — revoir l’anatomie et les distributions de volume des structures d’intérêt dans [Analytics du Tableau de bord](../07-view/index.md#analytics) | Oui, si vous curatez des CT/MR tête et utilisez Analytics de volumes d’organes — licence |
+| **Structures cérébrales CT** | Masques supplémentaires de structures cérébrales sur CT tête (avec Harmonize) — revoir l’anatomie et les distributions de volume des structures d’intérêt dans [Analytics du Tableau de bord](../07-view/index.md#analytics) | Oui, si vous curatez des CT tête et utilisez Analytics de volumes d’organes — licence |
 
 Harmonize XR fonctionne sans les packs région anatomique XR ou vue thorax (tags DICOM / mots-clés uniquement). Une fois installés, les séries CR/DX peuvent utiliser :
 
@@ -45,7 +45,7 @@ La mammographie et l’échographie n’utilisent pas ces modèles.
 2. Téléchargez **Supprimer le texte incrusté**, **Harmoniser** (CT) et **Dé-identification faciale**.
 3. Saisissez ou validez la licence académique lorsque demandé (visage / structures cérébrales).
 4. Choisissez la résolution Harmonize CT ; téléchargez si le pack manque.
-5. Optionnellement, téléchargez **Structures cérébrales** et/ou **région anatomique XR** / **vue thorax XR** si vous avez besoin de ces extras.
+5. Optionnellement, téléchargez **Structures cérébrales CT** et/ou **région anatomique XR** / **vue thorax XR** si vous avez besoin de ces extras.
 6. Fermez la boîte de dialogue. Les préférences restent sur ce poste de travail.
 
 !!! tip "Internet uniquement pour le téléchargement"

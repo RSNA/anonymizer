@@ -1,12 +1,13 @@
 """Pointer and wheel helpers that stay stable across Tk versions.
 
-View-layer helpers for Series View / Dataset chart bindings.
+View-layer helpers for Series View / Dataset bindings.
 
 On macOS Aqua with Tk 8.x, physical middle and right clicks are reported as
 Tk buttons 3 and 2 (swapped vs X11). Tk 9 Aqua and all X11/Win32 builds use
 the X11 numbering (middle=2, right=3). Series View binds pan to middle and
-window/level to right — without this mapping those roles swap when the
-interpreter ships Tk 8.6 (e.g. uv Python 3.13/3.14) vs Tk 9 (e.g. 3.12).
+window/level to right; Dataset tree right-click opens projections / series —
+without this mapping those roles swap when the interpreter ships Tk 8.6
+(e.g. uv Python 3.13/3.14) vs Tk 9 (e.g. 3.12).
 
 MouseWheel event.delta also differs: Win32 uses multiples of 120; classic
 Aqua Tk 8 usually reports ±1 per notch; Aqua Tk 9 / high-res trackpads can

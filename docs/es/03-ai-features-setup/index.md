@@ -30,7 +30,7 @@ Cada fila es una **descarga de esta estación**. **No hay casillas de activar/de
 | **Harmonize** parte del cuerpo XR | Ayuda extra de anatomía por píxeles para CR/DX cuando faltan o fallan las etiquetas | Sí, si Armoniza radiografía general |
 | **Harmonize** proyección de tórax XR | AP/PA/Lat por píxeles (+ rotación) para CR/DX de tórax | Sí, si Armoniza radiografía general (tórax) |
 | **Desidentificación facial** | Desenfoque facial en CT/MR de cabeza elegibles | Sí, si está curando CT/MR de cabeza |
-| **Estructuras cerebrales** | Máscaras extra de estructuras cerebrales en CT/MR de cabeza (con Harmonize) — revisar anatomía y distribuciones de volumen de estructuras de interés en [Analytics del Panel](../07-view/index.md#analytics) | Sí, si cura CT/MR de cabeza y usa Analytics de volúmenes de órganos — licencia |
+| **Estructuras cerebrales CT** | Máscaras extra de estructuras cerebrales en CT de cabeza (con Harmonize) — revisar anatomía y distribuciones de volumen de estructuras de interés en [Analytics del Panel](../07-view/index.md#analytics) | Sí, si cura CT de cabeza y usa Analytics de volúmenes de órganos — licencia |
 
 Harmonize XR funciona sin los paquetes de parte del cuerpo XR o proyección de tórax (solo etiquetas / palabras clave DICOM). Cuando están instalados, las series CR/DX pueden usar:
 
@@ -45,7 +45,7 @@ Mamografía y ecografía no usan estos modelos.
 2. Descargue **Quitar texto quemado**, **Harmonize** (CT) y **Desidentificación facial**.
 3. Introduzca o valide la licencia académica cuando se le pida (cara / estructuras cerebrales).
 4. Elija la resolución CT de Harmonize; descargue si falta el paquete.
-5. Opcionalmente descargue **Estructuras cerebrales** y/o **parte del cuerpo XR** / **proyección de tórax XR** si necesita esos extras.
+5. Opcionalmente descargue **Estructuras cerebrales CT** y/o **parte del cuerpo XR** / **proyección de tórax XR** si necesita esos extras.
 6. Cierre el diálogo. Las preferencias permanecen en esta estación de trabajo.
 
 !!! tip "Internet solo para la descarga"

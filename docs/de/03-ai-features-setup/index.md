@@ -30,7 +30,7 @@ Jede Zeile ist ein **Download für diesen Arbeitsplatz**. Es gibt **keine projek
 | **Harmonisieren** XR body part | Zusätzliche Pixel-Körperteil-Hilfe für CR/DX bei fehlenden/falschen Tags | Ja, wenn Sie allgemeines Röntgen harmonisieren |
 | **Harmonisieren** XR chest view | Zusätzliches Pixel-AP/PA/Lat (+ Rotationsprüfung) für Thorax-CR/DX | Ja, wenn Sie allgemeines Röntgen harmonisieren (Thorax) |
 | **Gesichts-De-Identifikation** | Gesichtsunschärfe auf geeigneten Kopf-CT/MR | Ja, wenn Sie Kopf-CT/MR kuratieren |
-| **Hirnstrukturen** | Zusätzliche Hirnstruktur-Masken für Kopf-CT/MR (mit Harmonisieren) — Anatomie und Organvolumen-Verteilungen interessierender Strukturen in [Dashboard Analytics](../07-view/index.md#analytics) prüfen | Ja, wenn Sie Kopf-CT/MR kuratieren und Organvolumen-Analytics nutzen — Lizenz nötig |
+| **CT-Hirnstrukturen** | Zusätzliche Hirnstruktur-Masken für Kopf-CT (mit Harmonisieren) — Anatomie und Organvolumen-Verteilungen interessierender Strukturen in [Dashboard Analytics](../07-view/index.md#analytics) prüfen | Ja, wenn Sie Kopf-CT kuratieren und Organvolumen-Analytics nutzen — Lizenz nötig |
 
 XR-Harmonisieren funktioniert ohne die Pakete XR body part oder XR chest view (nur DICOM-Tags / Schlüsselwörter). Mit Installation können CR/DX-Serien nutzen:
 
@@ -45,7 +45,7 @@ Mammographie und Ultraschall nutzen diese Modelle nicht.
 2. **Eingebrannten Text entfernen**, **Harmonisieren** (CT) und **Gesichts-De-Identifikation** herunterladen.
 3. Bei Aufforderung die akademische Lizenz eingeben oder prüfen (Gesicht / Hirnstrukturen).
 4. Harmonize-CT-Auflösung wählen; fehlendes Paket herunterladen.
-5. Optional **Hirnstrukturen** und/oder **XR body part** / **XR chest view** herunterladen, wenn Sie diese Extras brauchen.
+5. Optional **CT-Hirnstrukturen** und/oder **XR body part** / **XR chest view** herunterladen, wenn Sie diese Extras brauchen.
 6. Dialog schließen. Die Einstellungen bleiben auf diesem Arbeitsplatz.
 
 !!! tip "Internet nur für den Download"

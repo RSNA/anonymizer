@@ -30,7 +30,7 @@ Each row is a **workstation download**. There are **no project on/off checkboxes
 | **Harmonize** XR body part | Extra pixel body-part help for CR/DX when tags are missing or wrong | Yes, if you Harmonize general X-ray |
 | **Harmonize** XR chest view | Extra pixel AP/PA/Lat (+ rotation check) for chest CR/DX | Yes, if you Harmonize general X-ray (chest) |
 | **Face de-identify** | Face blur on eligible head CT/MR | Yes, if you are curating head CT/MR |
-| **Brain structures** | Extra brain-structure masks on head CT/MR (with Harmonize) — review anatomy and organ-volume distributions for structures of interest in [Dashboard Analytics](../07-view/index.md#analytics) | Yes, if you curate head CT/MR and use organ-volume Analytics — needs license |
+| **CT Brain structures** | Extra brain-structure masks on head CT (with Harmonize) — review anatomy and organ-volume distributions for structures of interest in [Dashboard Analytics](../07-view/index.md#analytics) | Yes, if you curate head CT and use organ-volume Analytics — needs license |
 
 XR Harmonize works without the XR body-part or chest-view packs (DICOM tags / keywords only). When installed, CR/DX series can use:
 
@@ -45,7 +45,7 @@ Mammography and ultrasound do not use these models.
 2. Download **Embedded PHI**, **Harmonize** (CT), and **Face de-identify**.
 3. Enter or validate the academic license when prompted (face / brain structures).
 4. Choose Harmonize CT resolution; download if the pack is missing.
-5. Optionally download **Brain structures** and/or **XR body part** / **XR chest view** if you need those extras.
+5. Optionally download **CT Brain structures** and/or **XR body part** / **XR chest view** if you need those extras.
 6. Close the dialog. Preferences stay on this workstation.
 
 !!! tip "Internet only for download"

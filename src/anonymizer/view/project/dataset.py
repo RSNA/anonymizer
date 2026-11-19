@@ -56,6 +56,7 @@ from anonymizer.view.common.app_window import AppToplevel, focus_app_window
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.filesystem_drop import enable_filesystem_drops
 from anonymizer.view.common.fonts import AppFonts, char_width_px
+from anonymizer.view.common.tk_mouse import pointer_buttons
 from anonymizer.view.common.tooltip import MotionTooltipController, bind_hover_tooltip
 from anonymizer.view.project.delete_studies_dialog import DeleteStudiesDialog
 from anonymizer.view.project.description_mappings import show_description_mappings_dialog
@@ -256,7 +257,8 @@ class DatasetView(AppToplevel):
         # Do not bind ButtonRelease-1: Double-1 also fires release and would re-enter the editor.
         self._tree.bind("<ButtonPress-1>", self._on_tree_button_press, add="+")
         self._tree.bind("<Double-1>", self._on_tree_description_activate)
-        self._tree.bind("<ButtonPress-3>", self._on_tree_right_click)
+        # Physical right-click (Tk 8 Aqua swaps 2/3 vs Tk 9 — same helper as Series View).
+        self._tree.bind(pointer_buttons(self).right_press, self._on_tree_right_click)
         self._tree.bind("<<TreeviewOpen>>", self._on_tree_open)
         self._tree.bind("<<TreeviewClose>>", self._on_tree_close)
         self._tree.bind("<<TreeviewSelect>>", self._on_tree_select)

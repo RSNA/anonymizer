@@ -51,7 +51,7 @@ def feature_title(key: str) -> str:
     return {
         AiFeatureId.EMBEDDED_PHI.value: _("Embedded PHI"),
         AiFeatureId.HARMONIZE.value: _("Harmonize"),
-        AiFeatureId.BRAIN_STRUCTURES.value: _("Brain structures"),
+        AiFeatureId.BRAIN_STRUCTURES.value: _("CT Brain structures"),
         AiFeatureId.FACE_BLUR.value: _("Face De-identify"),
         AiModelGroupId.HARMONIZE_CT.value: _("CT models"),
         AiModelGroupId.HARMONIZE_MR.value: _("MR models"),

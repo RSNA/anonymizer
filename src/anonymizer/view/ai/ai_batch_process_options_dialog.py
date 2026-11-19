@@ -468,12 +468,15 @@ class AiBatchProcessOptionsDialog(AppToplevel):
         parent.grid_columnconfigure(1, weight=1)
         offer_brain = brain_structures_allowed()
         self._include_brain_structures_var = tk.IntVar(value=1 if offer_brain else 0)
+        brain_title = feature_title(AiFeatureId.BRAIN_STRUCTURES.value)
         brain_text = (
             _("CT Head detail when a head series is present. Academic license.")
             if offer_brain
-            else _("Download Brain structures models in AI Features to use this option.")
+            else _("Download {feature} models in AI Features to use this option.").format(
+                feature=brain_title
+            )
         )
-        row = self._option_label(parent, 0, _("Brain structures") + ":")
+        row = self._option_label(parent, 0, brain_title + ":")
         self._include_brain_structures_checkbox = ctk.CTkCheckBox(
             parent,
             text=brain_text,
