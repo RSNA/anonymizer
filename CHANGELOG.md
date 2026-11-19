@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [19.1.0.dev12]
+- PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)
+- Dataset: map tree right-click through Tk pointer buttons so projections open on macOS Aqua Tk 8 (Python 3.13/3.14) as well as Tk 9
+- AI Features: title **CT Brain structures** (CT-only TotalSegmentator pack)
+
 ## [19.1.0.dev11]
 - PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)
 - AI Features Setup: fix AttributeError on open when download-busy sync ran before the Close button existed
