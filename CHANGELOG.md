@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [19.1.0.dev11]
+- PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)
+- AI Features Setup: fix AttributeError on open when download-busy sync ran before the Close button existed
+
 ## [19.1.0.dev10]
 - PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)
 - AI Features Setup: Close disabled while a model download is active; download workers clear progress on finish so reopen no longer sticks on TotalSegmentator “Extracting…” after a mid-download close
