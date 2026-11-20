@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [19.1.0.dev13]
+- PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)
 - Modalities: opt-in **OPT** (Ophthalmic Tomography / OCT — storage classes …77.1.5.4 / …5.7 / …5.8) and **OP** (Ophthalmic Photography — …77.1.5.1 / …5.2 / …5.5 / …5.6). Selecting **OP** or **OPT** auto-adds JPEG 2000 transfer syntaxes for network receive. Same Series View / Projection browse class as SC (no Harmonize naming; not in default project modalities). Create-project help documents both.
 - Import: when a reject already has a quarantine copy keyed by SOP Instance UID, re-import reports **Already quarantined** (skipped for import_paths) instead of creating another copy.
 
