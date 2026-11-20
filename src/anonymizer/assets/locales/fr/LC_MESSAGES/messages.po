@@ -313,6 +313,12 @@ msgstr "Résonance Magnétique"
 msgid "Ultrasound"
 msgstr "Échographie"
 
+msgid "Ophthalmic Photography"
+msgstr "Photographie ophtalmique"
+
+msgid "Ophthalmic Tomography (OCT)"
+msgstr "Tomographie ophtalmique (OCT)"
+
 msgid "Positron Emission Tomography"
 msgstr "Tomographie par Émission de Positrons"
 
@@ -399,6 +405,9 @@ msgstr "Ensemble de données manquant d'attributs requis"
 
 msgid "Quarantined"
 msgstr "Quarantaine"
+
+msgid "Already quarantined"
+msgstr "Déjà en quarantaine"
 
 msgid "Missing Attributes"
 msgstr "Attributs Manquants"

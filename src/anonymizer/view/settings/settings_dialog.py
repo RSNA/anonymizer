@@ -459,6 +459,11 @@ class SettingsDialog(AppToplevel):
             return
         self.model.modalities = edited_modalities
         self.model.set_storage_classes_from_modalities()
+        if self.model.ensure_jpeg2000_for_ophthalmic_modalities():
+            logger.info(
+                "Auto-enabled JPEG 2000 transfer syntaxes for OP/OPT: %s",
+                self.model.transfer_syntaxes,
+            )
         logger.info(f"Modalities updated: {self.model.modalities}")
         logger.info(f"Storage Classes set according to Modalities selected: {self.model.storage_classes}")
         new_options = enable_clean_structured_for_report_modalities(

@@ -1063,6 +1063,7 @@ class ProjectController(
         seen_patient_ids: set[str] = set()
         failures: list[dict[str, str]] = []
         already_stored = _("Instance already stored")
+        already_quarantined = _("Already quarantined")
         path_list = [str(path) for path in paths]
         total_files = len(path_list)
         disk_abort_msg: str | None = None
@@ -1086,7 +1087,7 @@ class ProjectController(
                     if anon_patient_id and anon_patient_id not in seen_patient_ids:
                         seen_patient_ids.add(anon_patient_id)
                         anon_patient_ids.append(anon_patient_id)
-                elif error_msg == already_stored or already_stored in str(error_msg):
+                elif already_stored in str(error_msg) or already_quarantined in str(error_msg):
                     skipped += 1
                 else:
                     failed += 1

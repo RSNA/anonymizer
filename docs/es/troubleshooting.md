@@ -14,8 +14,9 @@
 
 | Síntoma | Qué intentar |
 | --- | --- |
-| Archivos ignorados | Ya importados (misma SOP Instance) |
+| Archivos ignorados | Ya importados (misma SOP Instance), o **Ya en cuarentena** al reimportar el mismo rechazo |
 | Carpetas de cuarentena llenándose | Lea el nombre de la carpeta (Invalid_DICOM, Missing_Attributes, Lookup_Miss, …) |
+| `Invalid_Storage_Class` en OCT / fondo de ojo | Active **OPT** (OCT) y/o **OP** (fotografía oftálmica) en [Modalidades](05-create-project/index.md#3-network-and-modalities); JPEG 2000 se añade automáticamente al seleccionarlas |
 | Lookup_Miss | Corrija la [tabla de búsqueda](05-create-project/index.md) o el ID del paciente |
 
 ## Lotes y memoria

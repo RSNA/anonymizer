@@ -180,7 +180,7 @@ Double-click or right-click a series and the Dataset routes it by type:
 
 | Series | Opens |
 | --- | --- |
-| CT, MR, US, CR, SC and other pixel data | **Series View** (with Embedded PHI tools for burned-in text) |
+| CT, MR, US, CR, SC, OP, OPT and other pixel data | **Series View** (with Embedded PHI tools for burned-in text) |
 | Structured Report (SR) | **Report Text Review** |
 | Encapsulated PDF | **Report Text Review** (Save rewrites PDF as plain de-identified text) |
 

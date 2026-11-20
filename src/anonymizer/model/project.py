@@ -18,6 +18,16 @@ from anonymizer.utils.modalities import DEFAULT_PROJECT_MODALITIES, Modality, ge
 from anonymizer.utils.translate import _
 from anonymizer.utils.version import get_version
 
+# JPEG 2000 family offered in Transfer Syntaxes (same UIDs as TransferSyntaxesDialog).
+JPEG2000_TRANSFER_SYNTAXES: tuple[str, ...] = (
+    "1.2.840.10008.1.2.4.90",  # JPEG 2000 Lossless
+    "1.2.840.10008.1.2.4.91",  # JPEG 2000
+    "1.2.840.10008.1.2.4.92",  # JPEG 2000 Multi-Component Lossless
+    "1.2.840.10008.1.2.4.93",  # JPEG 2000 Multi-Component
+)
+
+_OPHTHALMIC_MODALITIES: frozenset[Modality] = frozenset({Modality.OP, Modality.OPT})
+
 
 # Controller Custom Error classes:
 class DICOMRuntimeError(Exception):
@@ -349,3 +359,27 @@ class ProjectModel:
     def remove_transfer_syntax(self, transfer_syntax: str):
         if transfer_syntax in self.transfer_syntaxes:
             self.transfer_syntaxes.remove(transfer_syntax)
+
+    def ensure_jpeg2000_for_ophthalmic_modalities(self) -> bool:
+        """
+        Append JPEG 2000 transfer syntaxes when OP or OPT is selected.
+
+        Does not remove JPEG 2000 UIDs when those modalities are cleared.
+
+        Returns:
+            True when one or more JPEG 2000 UIDs were added.
+        """
+        if self.transfer_syntaxes is None:
+            self.transfer_syntaxes = []
+        has_ophthalmic = any(
+            (parsed := Modality.from_code(code)) is not None and parsed in _OPHTHALMIC_MODALITIES
+            for code in self.modalities
+        )
+        if not has_ophthalmic:
+            return False
+        changed = False
+        for uid in JPEG2000_TRANSFER_SYNTAXES:
+            if uid not in self.transfer_syntaxes:
+                self.transfer_syntaxes.append(uid)
+                changed = True
+        return changed

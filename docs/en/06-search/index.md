@@ -97,7 +97,7 @@ Failed files land under the project’s private quarantine folders (names may ap
 | `Lookup_Miss`                      | Patient ID not in the lookup table        |
 
 
-Review quarantine counts on the Dashboard. Fix settings or source files, then import again.
+Review quarantine counts on the Dashboard. Fix settings or source files, then import again. When the instance UID is known, a re-import of the same rejected file does not create another quarantine copy — the Import log shows **Already quarantined**.
 
 ---
 

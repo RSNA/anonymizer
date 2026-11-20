@@ -85,6 +85,8 @@ Ces trois réglages décident quelles études ce projet acceptera lors d’une r
 
 **Modalités** — types d’examen tels que CT, MR ou US. Modifier les modalités remplit d’abord les **classes de stockage** correspondantes.
 
+**OP** (Photographie ophtalmique) et **OPT** (Ophthalmic Tomography / OCT) sont en **option** — ni l’une ni l’autre n’est dans le jeu par défaut. Activez **OPT** pour les séries de tomographie OCT et **OP** pour les séries de photographie / fond d’œil associées (de nombreux examens OCT incluent les deux). Harmonize des noms n’est pas disponible pour OP ni OPT dans cette version.
+
 ![Modalités](shots/macos/Modalities.png)
 
 **Classes de stockage** — les types d’objets DICOM que l’anonymiseur **acceptera** (par exemple CT Image Storage). La liste est **initialement définie à partir des modalités sélectionnées**, mais vous pouvez l’éditer ensuite (ajouter ou retirer des classes). Les fichiers dont la classe de stockage n’est pas dans cette liste ne sont pas anonymisés dans le projet — ils vont en quarantaine.
@@ -95,6 +97,8 @@ Ces trois réglages décident quelles études ce projet acceptera lors d’une r
 
 - Les encodages **non compressés** gardent chaque échantillon tel quel. Les fichiers sont plus volumineux sur le disque.
 - Les encodages **compressés** (JPEG, JPEG 2000 et similaires) réduisent la taille ; la même étude occupe moins d’espace.
+
+La sélection de **OP** ou **OPT** ajoute automatiquement les transfer syntaxes **JPEG 2000**. Vous pouvez toujours modifier Transfer Syntaxes ensuite. L’import disque ne filtre pas sur la transfer syntax une fois la classe de stockage autorisée.
 
 Le projet conserve chaque fichier dans la transfer syntax qu’il a déjà. Le **transcodage** d’une transfer syntax vers une autre n’est **pas activé** aujourd’hui — choisissez les syntaxes que vos sources utilisent déjà (et que vous voulez garder sur le disque).
 

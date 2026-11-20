@@ -24,6 +24,8 @@ from anonymizer.controller.dates import (
 )
 from anonymizer.controller.project import ProjectController
 from anonymizer.utils.dicom import DeidMethodCode
+from anonymizer.utils.storage.dicom_tree import DICOM_FILE_SUFFIX
+from anonymizer.utils.translate import _
 from tests.controller.dicom.support.test_files import (
     cr1_filename,
     ct_small_filename,
@@ -430,6 +432,54 @@ def test_anonymize_storage_error(controller: ProjectController):
     assert qpath.exists()
     filename: Path = anonymizer.local_storage_path(qpath, cr1)
     assert filename.exists()
+
+
+def test_storage_class_mismatch_quarantine_idempotent(temp_dir: str, controller: ProjectController) -> None:
+    """Re-import of the same rejected instance reports Already quarantined and does not duplicate."""
+    anonymizer: AnonymizerController = controller.anonymizer
+    cr1 = get_testdata_file(cr1_filename, read=True)
+    assert isinstance(cr1, Dataset)
+    test_path = Path(temp_dir, "storage_class_mismatch.dcm")
+    cr1.save_as(test_path)
+
+    controller.model.storage_classes = []
+    first_msg, first_ds = anonymizer.anonymize_file(test_path)
+    assert first_ds is not None
+    assert first_msg is not None
+    assert "Storage Class mismatch" in first_msg
+    assert _("Quarantined") in first_msg
+    assert _("Already quarantined") not in first_msg
+
+    qdir = Path(anonymizer.get_quarantine_path(), QuarantineDirectories.INVALID_STORAGE_CLASS.value)
+    expected = qdir / (str(cr1.SOPInstanceUID) + DICOM_FILE_SUFFIX)
+    assert expected.is_file()
+    assert list(qdir.iterdir()) == [expected]
+
+    second_msg, _second_ds = anonymizer.anonymize_file(test_path)
+    assert second_msg is not None
+    assert "Storage Class mismatch" in second_msg
+    assert _("Already quarantined") in second_msg
+    assert list(qdir.iterdir()) == [expected]
+
+
+def test_write_dataset_to_quarantine_idempotent(controller: ProjectController) -> None:
+    """Second dataset quarantine for the same UID returns Already quarantined without rewriting."""
+    anonymizer: AnonymizerController = controller.anonymizer
+    cr1 = get_testdata_file(cr1_filename, read=True)
+    assert isinstance(cr1, Dataset)
+    del cr1.file_meta
+
+    first = anonymizer.anonymize("Unit Testing", cr1)
+    assert first
+    assert "Storage Error" in first
+    qpath = Path(anonymizer.get_quarantine_path(), QuarantineDirectories.STORAGE_ERROR.value)
+    filename = anonymizer.local_storage_path(qpath, cr1)
+    assert filename.is_file()
+    mtime = filename.stat().st_mtime_ns
+
+    second = anonymizer._write_dataset_to_quarantine(RuntimeError("again"), cr1, QuarantineDirectories.STORAGE_ERROR)
+    assert second == _("Already quarantined")
+    assert filename.stat().st_mtime_ns == mtime
 
 
 # TODO: Transcoding tests here

@@ -39,6 +39,8 @@ def test_get_modality_catalog():
         Modality.CT,
         Modality.MR,
         Modality.US,
+        Modality.OP,
+        Modality.OPT,
         Modality.PT,
         Modality.NM,
         Modality.SC,
@@ -61,11 +63,24 @@ def test_get_modality_catalog():
     assert data[Modality.PT].content_class is ContentClass.D3
     assert data[Modality.CR].content_class is ContentClass.D2
     assert data[Modality.SC].content_class is ContentClass.D2
+    assert data[Modality.OP].content_class is ContentClass.D2
+    assert data[Modality.OPT].content_class is ContentClass.D2
     assert data[Modality.SR].content_class is ContentClass.TEXT
+    op_uids = data[Modality.OP].sop_class_uids
+    assert "1.2.840.10008.5.1.4.1.1.77.1.5.1" in op_uids
+    assert "1.2.840.10008.5.1.4.1.1.77.1.5.2" in op_uids
+    assert "1.2.840.10008.5.1.4.1.1.77.1.5.5" in op_uids
+    assert "1.2.840.10008.5.1.4.1.1.77.1.5.6" in op_uids
+    opt_uids = data[Modality.OPT].sop_class_uids
+    assert "1.2.840.10008.5.1.4.1.1.77.1.5.4" in opt_uids
+    assert "1.2.840.10008.5.1.4.1.1.77.1.5.7" in opt_uids
+    assert "1.2.840.10008.5.1.4.1.1.77.1.5.8" in opt_uids
     assert get_modality_catalog()[Modality.CT].harmonize is True
     assert get_modality_catalog()[Modality.US].harmonize is True
     assert get_modality_catalog()[Modality.SR].harmonize is True
     assert get_modality_catalog()[Modality.SC].harmonize is False
+    assert get_modality_catalog()[Modality.OP].harmonize is False
+    assert get_modality_catalog()[Modality.OPT].harmonize is False
     assert get_modality_catalog()[Modality.PT].harmonize is False
 
 
@@ -79,11 +94,20 @@ def test_from_code_and_catalog_content_class() -> None:
     assert catalog[Modality.CT].content_class is ContentClass.D3
     assert catalog[Modality.MR].content_class is ContentClass.D3
     assert catalog[Modality.CR].content_class is ContentClass.D2
+    assert catalog[Modality.OP].content_class is ContentClass.D2
+    assert catalog[Modality.OPT].content_class is ContentClass.D2
     assert catalog[Modality.SR].content_class is ContentClass.TEXT
+    assert Modality.from_code("OP") is Modality.OP
+    assert Modality.from_code("OPT") is Modality.OPT
+    assert Modality.from_code("OCT") is None  # DICOM code is OPT; OCT is not a modality enum
     assert Modality.CR in XR_MODALITIES
     assert Modality.DX in XR_MODALITIES
     assert Modality.MG not in XR_MODALITIES
+    assert Modality.OP not in XR_MODALITIES
+    assert Modality.OPT not in XR_MODALITIES
     assert DEFAULT_PROJECT_MODALITIES == (Modality.CR, Modality.DX, Modality.CT, Modality.MR)
+    assert Modality.OP not in DEFAULT_PROJECT_MODALITIES
+    assert Modality.OPT not in DEFAULT_PROJECT_MODALITIES
 
 
 def test_xr_modalities_set() -> None:

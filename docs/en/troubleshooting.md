@@ -14,8 +14,9 @@
 
 | Symptom | What to try |
 | --- | --- |
-| Files ignored | Already imported (same SOP Instance) |
+| Files ignored | Already imported (same SOP Instance), or **Already quarantined** on re-import of the same reject |
 | Quarantine folders filling | Read folder name (Invalid_DICOM, Missing_Attributes, Lookup_Miss, …) |
+| `Invalid_Storage_Class` on OCT / fundus | Enable **OPT** (OCT) and/or **OP** (ophthalmic photography) under [Modalities](05-create-project/index.md#3-network-and-modalities); JPEG 2000 is auto-added when either is selected |
 | Lookup_Miss | Fix [lookup table](05-create-project/index.md) or patient ID |
 
 ## Batch and memory

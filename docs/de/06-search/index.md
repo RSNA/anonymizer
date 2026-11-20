@@ -86,7 +86,7 @@ Fehlgeschlagene Dateien landen in den privaten Quarantäneordnern des Projekts (
 | `Lookup_Miss` | Patienten-ID nicht in der Nachschlagetabelle |
 
 
-Prüfen Sie die Quarantäne-Zähler im Dashboard. Einstellungen oder Quelldateien korrigieren, dann erneut importieren.
+Prüfen Sie die Quarantäne-Zähler im Dashboard. Einstellungen oder Quelldateien korrigieren, dann erneut importieren. Wenn die Instanz-UID bekannt ist, erzeugt ein erneuter Import derselben abgelehnten Datei keine weitere Quarantäne-Kopie — das Importprotokoll zeigt **Bereits in Quarantäne**.
 
 ---
 

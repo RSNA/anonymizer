@@ -85,6 +85,8 @@ Diese drei Einstellungen bestimmen, welche Studien dieses Projekt bei der Suche 
 
 **Modalitäten** — Untersuchungsarten wie CT, MR oder US. Eine Änderung der Modalitäten füllt die **Speicherklassen** zunächst passend.
 
+**OP** (Ophthalmische Fotografie) und **OPT** (Ophthalmic Tomography / OCT) sind optional — nicht in der Standardauswahl. **OPT** für OCT-Tomographie-Serien und **OP** für Fundus-/Fotografie-Begleiter aktivieren (viele OCT-Studien enthalten beides). Harmonize-Benennung ist für OP/OPT in diesem Release nicht verfügbar.
+
 ![Modalitäten](shots/macos/Modalities.png)
 
 **Speicherklassen** — die DICOM-Objektarten, die der Anonymizer **annimmt** (z. B. CT Image Storage). Die Liste wird **zunächst aus den gewählten Modalitäten** gesetzt, kann danach aber bearbeitet werden (Klassen hinzufügen oder entfernen). Dateien, deren Speicherklasse nicht auf dieser Liste steht, werden nicht in das Projekt anonymisiert — sie landen in Quarantäne.
@@ -95,6 +97,8 @@ Diese drei Einstellungen bestimmen, welche Studien dieses Projekt bei der Suche 
 
 - **Unkomprimierte** Kodierungen behalten jeden Abtastwert. Dateien sind größer auf dem Datenträger.
 - **Komprimierte** Kodierungen (JPEG, JPEG 2000 und ähnliche) verkleinern Dateien; dieselbe Studie braucht weniger Speicherplatz.
+
+Die Auswahl von **OP** oder **OPT** fügt automatisch **JPEG 2000**-Transfersyntaxen hinzu. Transfersyntaxen können danach weiterhin bearbeitet werden. Der Dateiimport prüft die Transfersyntax nicht, sobald die Speicherklasse erlaubt ist.
 
 Das Projekt behält jede Datei in der Transfersyntax, die sie bereits hat. **Umkodierung** von einer Transfersyntax in eine andere ist derzeit **nicht aktiviert** — wählen Sie die Syntaxen, die Ihre Quellen bereits nutzen (und die Sie auf dem Datenträger behalten wollen).
 

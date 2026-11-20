@@ -8,6 +8,16 @@ Stable cut gate for merging `dev` into `master` as 19.1.0: [release-19.1-checkli
 
 ## Ready to file
 
+### OPT / OP follow-ups (parked)
+
+Catalogued: **OPT** (OCT tomography …77.1.5.4/7/8) and **OP** (photography …77.1.5.1/2/5/6), both `ContentClass.D2`, no Harmonize; JPEG 2000 transfer syntaxes auto-added when either modality is selected. Parked:
+
+- Harmonize / LOINC study–series naming for OP/OPT (curated radiology CSV has no OCT study rows)
+- MCP friendly alias `oct` → `OPT` (DICOM code remains OPT; bare `OCT` is not a modality enum)
+- RLE / MPEG transfer-syntax UI enablement if a sample requires decode paths the UI still hides
+- Vendor private-tag KB rows for common OCT / fundus systems under Retain Safe Private
+- Stereometric Relationship Storage (`…77.1.5.3`) if companion relationship objects appear in the wild
+
 ### Project private-creator allowlist for Retain Safe Private
 
 Optional restriction on top of the full TCIA private-tag knowledge base: the user picks private creators relevant to their project; elements whose creator is not allowlisted fall through as unknown and are removed.

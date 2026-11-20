@@ -14,8 +14,9 @@
 
 | Symptôme | Que tenter |
 | --- | --- |
-| Fichiers ignorés | Déjà importés (même SOP Instance) |
+| Fichiers ignorés | Déjà importés (même SOP Instance), ou **Déjà en quarantaine** à la réimportation du même rejet |
 | Dossiers de quarantaine qui se remplissent | Lisez le nom du dossier (Invalid_DICOM, Missing_Attributes, Lookup_Miss, …) |
+| `Invalid_Storage_Class` sur OCT / fond d’œil | Activez **OPT** (OCT) et/ou **OP** (photographie ophtalmique) sous [Modalités](05-create-project/index.md#3-network-and-modalities) ; JPEG 2000 est ajouté automatiquement à la sélection |
 | Lookup_Miss | Corrigez la [table de correspondance](05-create-project/index.md) ou l’identifiant patient |
 
 ## Lots et mémoire

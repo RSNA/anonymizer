@@ -239,6 +239,7 @@ def _set_model_modalities(
         return
     model.modalities = list(resolved)
     model.set_storage_classes_from_modalities()
+    model.ensure_jpeg2000_for_ophthalmic_modalities()
 
 
 def _apply_options_to_model(
@@ -839,6 +840,11 @@ def apply_project_modalities(
     previous = list(controller.model.modalities)
     controller.model.modalities = list(resolved)
     controller.model.set_storage_classes_from_modalities()
+    if controller.model.ensure_jpeg2000_for_ophthalmic_modalities():
+        logger.info(
+            "Auto-enabled JPEG 2000 transfer syntaxes for OP/OPT: %s",
+            controller.model.transfer_syntaxes,
+        )
     new_options = enable_clean_structured_for_report_modalities(
         controller.model.confidentiality_options,
         previous_modalities=previous,

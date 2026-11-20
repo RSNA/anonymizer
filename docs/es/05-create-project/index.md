@@ -85,6 +85,8 @@ Estos tres ajustes deciden qué estudios aceptará este proyecto al buscar en un
 
 **Modalidades** — tipos de estudio como CT, MR o US. Al cambiar las modalidades se rellenan inicialmente las **Clases de Almacenamiento** correspondientes.
 
+**OP** (Fotografía oftálmica) y **OPT** (Ophthalmic Tomography / OCT) son **opcionales** — no forman parte del conjunto por defecto. Active **OPT** para series de tomografía OCT y **OP** para acompañantes de fotografía / fondo de ojo (muchos estudios OCT incluyen ambos). Harmonize de nombres no está disponible para OP ni OPT en esta versión.
+
 ![Modalidades](shots/macos/Modalities.png)
 
 **Clases de Almacenamiento** — los tipos de objeto DICOM que el anonimizador **aceptará** (por ejemplo CT Image Storage). La lista se **establece inicialmente a partir de las modalidades seleccionadas**, pero puede editarla después (añadir o quitar clases). Los archivos cuya clase de almacenamiento no esté en esta lista no se anonimizan en el proyecto — van a cuarentena.
@@ -95,6 +97,8 @@ Estos tres ajustes deciden qué estudios aceptará este proyecto al buscar en un
 
 - Las codificaciones **sin comprimir** conservan cada muestra tal cual. Los archivos ocupan más disco.
 - Las codificaciones **comprimidas** (JPEG, JPEG 2000 y similares) reducen el tamaño; el mismo estudio ocupa menos espacio.
+
+Al seleccionar **OP** u **OPT** se añaden automáticamente las sintaxis **JPEG 2000**. Puede seguir editando Sintaxis de Transferencia después. La importación desde disco no filtra por sintaxis de transferencia una vez permitida la clase de almacenamiento.
 
 El proyecto conserva cada archivo en la sintaxis de transferencia que ya tiene. La **transcodificación** de una sintaxis a otra **no está habilitada** hoy — elija las sintaxis que ya usan sus fuentes (y que quiere conservar en disco).
 

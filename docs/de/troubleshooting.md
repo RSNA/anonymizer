@@ -14,8 +14,9 @@
 
 | Symptom | Was versuchen |
 | --- | --- |
-| Dateien ignoriert | Bereits importiert (gleiche SOP Instance) |
+| Dateien ignoriert | Bereits importiert (gleiche SOP Instance), oder **Bereits in Quarantäne** beim erneuten Import derselben Ablehnung |
 | Quarantäneordner füllen sich | Ordnernamen lesen (Invalid_DICOM, Missing_Attributes, Lookup_Miss, …) |
+| `Invalid_Storage_Class` bei OCT / Fundus | **OPT** (OCT) und/oder **OP** (ophthalmische Fotografie) unter [Modalitäten](05-create-project/index.md#3-network-and-modalities) aktivieren; JPEG 2000 wird bei Auswahl automatisch ergänzt |
 | Lookup_Miss | [Nachschlagetabelle](05-create-project/index.md) oder Patienten-ID korrigieren |
 
 ## Stapel und Speicher

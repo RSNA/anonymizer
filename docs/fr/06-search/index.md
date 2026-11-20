@@ -86,7 +86,7 @@ Les fichiers en échec aboutissent dans les dossiers de quarantaine privés du p
 | `Lookup_Miss` | Identifiant patient absent de la table de correspondance |
 
 
-Consultez les compteurs de quarantaine sur le Tableau de bord. Corrigez les paramètres ou les fichiers sources, puis importez à nouveau.
+Consultez les compteurs de quarantaine sur le Tableau de bord. Corrigez les paramètres ou les fichiers sources, puis importez à nouveau. Lorsque l’UID d’instance est connu, une réimportation du même fichier rejeté ne crée pas une autre copie en quarantaine — le journal d’Import affiche **Déjà en quarantaine**.
 
 ---
 

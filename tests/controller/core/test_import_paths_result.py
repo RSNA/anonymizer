@@ -37,6 +37,24 @@ def test_import_paths_counts_success_skip_failure() -> None:
     assert result.failures == [{"path": "c.dcm", "error": "bad file"}]
 
 
+def test_import_paths_counts_already_quarantined_as_skip() -> None:
+    """Re-quarantine of the same instance is skipped, not failed."""
+    already_quarantined = _("Storage Class mismatch") + ": 1.2.3 -> " + _("Already quarantined")
+    controller = MagicMock(spec=ProjectController)
+    controller.anonymizer = MagicMock()
+    controller.check_storage_disk.return_value = "ok"
+    controller.anonymizer.anonymize_file.side_effect = [
+        (already_quarantined, None),
+        (_("Already quarantined"), None),
+    ]
+    result = ProjectController.import_paths(controller, [Path("a.dcm"), Path("b.dcm")])
+    assert result.files_seen == 2
+    assert result.succeeded == 0
+    assert result.skipped == 2
+    assert result.failed == 0
+    assert result.failures == []
+
+
 def test_import_paths_progress_callback() -> None:
     """Progress reports completed and total as ints."""
     controller = MagicMock(spec=ProjectController)

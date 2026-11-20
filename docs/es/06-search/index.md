@@ -86,7 +86,7 @@ Los archivos fallidos van a las carpetas de cuarentena privadas del proyecto (lo
 | `Lookup_Miss` | ID de Paciente no está en la tabla de búsqueda |
 
 
-Revise los conteos de cuarentena en el Panel de control. Corrija ajustes o archivos de origen, luego importe de nuevo.
+Revise los conteos de cuarentena en el Panel de control. Corrija ajustes o archivos de origen, luego importe de nuevo. Cuando se conoce el UID de instancia, reimportar el mismo archivo rechazado no crea otra copia en cuarentena — el registro de Importación muestra **Ya en cuarentena**.
 
 ---
 

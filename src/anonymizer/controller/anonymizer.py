@@ -20,6 +20,7 @@ from enum import Enum
 from pathlib import Path
 from queue import Queue
 from shutil import copyfile
+from typing import Literal
 
 from pydicom import DataElement, Dataset, dcmread
 from pydicom.datadict import dictionary_VR
@@ -279,28 +280,48 @@ class AnonymizerController:
             self.project_model.QUARANTINE_DIR,
         )
 
-    def _move_file_to_quarantine(self, file: Path, quarantine: QuarantineDirectories) -> bool:
-        """Writes the file to the specified quarantine sub-directory.
+    def _move_file_to_quarantine(
+        self,
+        file: Path,
+        quarantine: QuarantineDirectories,
+        *,
+        sop_instance_uid: str | None = None,
+    ) -> Literal["copied", "already", "failed"]:
+        """
+        Copy a source file into a quarantine reason folder.
+
+        When sop_instance_uid is set, the destination is keyed by that UID so a
+        re-import of the same instance is idempotent. Without a UID, a
+        time-of-day suffix avoids basename collisions.
 
         Args:
-            file (Path): The file to be quarantined.
-            sub_dir (str): The quarantine sub-directory.
+            file: Source file to copy into quarantine.
+            quarantine: Quarantine reason subdirectory.
+            sop_instance_uid: DICOM SOP Instance UID when known; None for
+                unreadable or invalid DICOM.
 
         Returns:
-            bool: True on successful move, False otherwise.
+            "copied" when a new quarantine file was written, "already" when the
+            destination already exists, "failed" on I/O error.
         """
         try:
-            qpath = self.get_quarantine_path().joinpath(quarantine.value, f"{file.name}.{time.strftime('%H%M%S')}")
-            logger.error(f"QUARANTINE {file} to {qpath}")
+            uid = str(sop_instance_uid or "").strip()
+            if uid:
+                qpath = self.get_quarantine_path().joinpath(quarantine.value, uid + DICOM_FILE_SUFFIX)
+            else:
+                qpath = self.get_quarantine_path().joinpath(
+                    quarantine.value, f"{file.name}.{time.strftime('%H%M%S')}"
+                )
             if qpath.exists():
-                logger.error(f"File {file} already exists")
-                return False
+                logger.info(f"Already quarantined {uid or file} under {quarantine.value}: {qpath}")
+                return "already"
+            logger.error(f"QUARANTINE {file} to {qpath}")
             os.makedirs(qpath.parent, exist_ok=True)
             copyfile(file, qpath)
-            return True
+            return "copied"
         except Exception as e:
             logger.error(f"Error Copying to QUARANTINE: {e}")
-            return False
+            return "failed"
 
     def _write_dataset_to_quarantine(self, e: Exception, ds: Dataset, quarantine_error: QuarantineDirectories) -> str:
         """
@@ -312,11 +333,15 @@ class AnonymizerController:
             quarantine_error (str): The quarantine error directory name.
 
         Returns:
-            str: The error message indicating the storage error and the path to the saved dataset.
+            str: The error message indicating the storage error and the path to the saved dataset,
+                or Already quarantined when the UID-keyed destination already exists.
         """
         qpath: Path = self.get_quarantine_path().joinpath(quarantine_error.value)
         os.makedirs(qpath, exist_ok=True)
         filename: Path = self.local_storage_path(qpath, ds)
+        if filename.exists():
+            logger.info(f"Already quarantined {ds.SOPInstanceUID} under {quarantine_error.value}: {filename}")
+            return _("Already quarantined")
         try:
             estr = repr(e)
             error_msg: str = f"Storage Error = {estr}, QUARANTINE {ds.SOPInstanceUID} to {filename}"
@@ -886,8 +911,14 @@ class AnonymizerController:
         # DICOM Dataset integrity checking:
         missing_attributes: list[str] = self.missing_attributes(ds)
         if missing_attributes != []:
-            self._move_file_to_quarantine(file, QuarantineDirectories.MISSING_ATTRIBUTES)
-            return _("Missing Attributes") + f": {missing_attributes}" + " -> " + _("Quarantined"), ds
+            uid = str(getattr(ds, "SOPInstanceUID", "") or "").strip() or None
+            status = self._move_file_to_quarantine(
+                file,
+                QuarantineDirectories.MISSING_ATTRIBUTES,
+                sop_instance_uid=uid,
+            )
+            tail = _("Already quarantined") if status == "already" else _("Quarantined")
+            return _("Missing Attributes") + f": {missing_attributes}" + " -> " + tail, ds
 
         # Skip instance if already stored:
         if self.model.instance_received(ds.SOPInstanceUID):
@@ -898,8 +929,13 @@ class AnonymizerController:
 
         # Ensure Storage Class (SOPClassUID which is a required attribute) is present in project storage classes
         if ds.SOPClassUID not in self.project_model.storage_classes:
-            self._move_file_to_quarantine(file, QuarantineDirectories.INVALID_STORAGE_CLASS)
-            return _("Storage Class mismatch") + f": {ds.SOPClassUID}" + " -> " + _("Quarantined"), ds
+            status = self._move_file_to_quarantine(
+                file,
+                QuarantineDirectories.INVALID_STORAGE_CLASS,
+                sop_instance_uid=ds.SOPInstanceUID,
+            )
+            tail = _("Already quarantined") if status == "already" else _("Quarantined")
+            return _("Storage Class mismatch") + f": {ds.SOPClassUID}" + " -> " + tail, ds
 
         return self.anonymize(str(file), ds), ds
 

@@ -85,6 +85,8 @@ These settings decide which studies this project will accept when you search a r
 
 **Modalities** — exam types such as CT, MR, or US. Changing modalities initially fills **Storage Classes** to match.
 
+**OP** (Ophthalmic Photography) and **OPT** (Ophthalmic Tomography / OCT) are **opt-in** — neither is in the default project set. Enable **OPT** for OCT tomography series and **OP** for fundus / ophthalmic photography companions (many OCT studies include both). Harmonize study/series naming is not available for OP or OPT in this release.
+
 ![Modalities](shots/macos/Modalities.png)
 
 **Storage Classes** — the DICOM object kinds the anonymizer will **accept** (for example CT Image Storage). The list is **initially set from the selected modalities**, but you can edit it afterward (add or remove classes). Files whose storage class is not on this list are not anonymized into the project — they go to quarantine.
@@ -95,6 +97,8 @@ These settings decide which studies this project will accept when you search a r
 
 - **Uncompressed** encodings keep every sample as-is. Files are larger on disk.
 - **Compressed** encodings (JPEG, JPEG 2000, and similar) shrink files; the same study uses less disk space.
+
+Selecting **OP** or **OPT** automatically adds **JPEG 2000** transfer syntaxes (common for these studies). You can still edit Transfer Syntaxes afterward. Disk import does not gate on transfer syntax once the storage class is allowed.
 
 The project keeps each file in the transfer syntax it already has. **Transcoding** from one transfer syntax to another is **not enabled** today — choose the syntaxes your sources already use (and that you want to keep on disk).
 

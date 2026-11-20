@@ -42,6 +42,8 @@ class Modality(StrEnum):
     CT = "CT"
     MR = "MR"
     US = "US"
+    OP = "OP"
+    OPT = "OPT"
     PT = "PT"
     NM = "NM"
     SC = "SC"
@@ -176,6 +178,27 @@ def get_modality_catalog() -> dict[Modality, ModalityCatalogEntry]:
             ),
             ContentClass.D2,
             True,
+        ),
+        Modality.OP: ModalityCatalogEntry(
+            _("Ophthalmic Photography"),
+            (
+                "1.2.840.10008.5.1.4.1.1.77.1.5.1",  # Ophthalmic Photography 8-Bit Image Storage
+                "1.2.840.10008.5.1.4.1.1.77.1.5.2",  # Ophthalmic Photography 16-Bit Image Storage
+                "1.2.840.10008.5.1.4.1.1.77.1.5.5",  # Wide Field OP Stereographic Projection
+                "1.2.840.10008.5.1.4.1.1.77.1.5.6",  # Wide Field OP 3D Coordinates
+            ),
+            ContentClass.D2,
+            False,
+        ),
+        Modality.OPT: ModalityCatalogEntry(
+            _("Ophthalmic Tomography (OCT)"),
+            (
+                "1.2.840.10008.5.1.4.1.1.77.1.5.4",  # Ophthalmic Tomography Image Storage
+                "1.2.840.10008.5.1.4.1.1.77.1.5.7",  # OCT En Face Image Storage
+                "1.2.840.10008.5.1.4.1.1.77.1.5.8",  # OCT B-scan Volume Analysis Storage
+            ),
+            ContentClass.D2,
+            False,
         ),
         Modality.PT: ModalityCatalogEntry(
             _("Positron Emission Tomography"),

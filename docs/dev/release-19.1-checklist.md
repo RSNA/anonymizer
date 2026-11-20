@@ -19,6 +19,7 @@ Confirm each 19.1 theme from CHANGELOG (`dev1`–`dev12`) is either **in** the r
 - [x] DICOMweb (QIDO / WADO / STOW) when enabled on a remote
 - [x] Storage free-space gates (refuse C-STORE / import / export when critically low)
 - [x] MCP: documented as **experimental / opt-in** for 19.1.0 (start with `--mcp`; FastMCP is a core dep so default install launches; see `docs/*/10-headless/`) — not the recommended default workflow vs GUI / `-c`
+- [x] Modalities **OP** / **OPT** (ophthalmic photography / OCT tomography); JPEG 2000 auto-add; no Harmonize for OP/OPT (deferred items remain in [backlog.md](backlog.md))
 
 Blocking bugs:
 
@@ -42,7 +43,7 @@ Blocking bugs:
 
 Smoke (on real or fixture data):
 
-- [ ] Import Files / Import Directory
+- [ ] Import Files / Import Directory (optional: OCT sample with **OP**+**OPT** enabled)
 - [ ] Find / Retrieve **or** DICOMweb query + retrieve (whichever you claim for sites)
 - [ ] Series View: OCR detect + remove (or document pixel PHI as optional AI feature)
 - [ ] Harmonize at least one CT/MR **or** planar study; Set description from Dataset
