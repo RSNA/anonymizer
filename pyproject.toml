@@ -177,7 +177,7 @@ omit = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests/controller", "tests/model", "tests/mcp"]
+testpaths = ["tests/controller", "tests/model", "tests/mcp", "tests/utils"]
 addopts = "--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model --cov=src/anonymizer/mcp -m \"not ocr_integration and not view_dev and not pseudo_phi_integration and not midi_b_integration and not deid_option_iod and not mcp_e2e and not dicom_integration\""
 pythonpath = ["src", "."]
 filterwarnings = [

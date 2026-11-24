@@ -137,7 +137,7 @@ Layout mirrors source: `tests/controller/` → `src/anonymizer/controller/`. Pro
 
 ```bash
 uv run pytest tests/controller/tseg -q
-uv run pytest -q                                # same suite as CI (controller + model + mcp + Orthanc)
+uv run pytest -q                                # same suite as CI (controller + model + mcp + utils + Orthanc)
 uv run pytest src/prototyping -q
 uv run pytest tests/view -m 'not view_dev' -q   # local GUI suite
 ```

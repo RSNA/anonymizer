@@ -71,7 +71,7 @@ def test_disk_guard_abort_message_includes_free_space() -> None:
     with patch("anonymizer.utils.disk.free_bytes", return_value=1 << 30):
         msg = guard.abort_message(Path("/storage"))
     assert "1.0 GiB" in msg
-    assert "/storage" in msg
+    assert str(Path("/storage")) in msg
 
 
 def test_disk_guard_against_real_free_space_via_threshold() -> None:

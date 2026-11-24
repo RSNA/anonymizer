@@ -37,7 +37,7 @@ from tests.controller.dicom.support.helpers import send_file_to_scp
 
 ## Running subsets
 
-Bare `uv run pytest` (and the main CI job) collects controller + model + mcp **without** managed Orthanc.
+Bare `uv run pytest` (and the main CI job) collects controller + model + mcp + utils **without** managed Orthanc.
 
 ```bash
 pytest tests/controller/tseg -q
