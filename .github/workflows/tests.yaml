@@ -9,6 +9,9 @@ on:
     tags-ignore:
       - "**"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-24.04
@@ -55,6 +58,10 @@ jobs:
 
   changes:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      # dorny/paths-filter lists pull request files through the GitHub API.
+      pull-requests: read
     outputs:
       dicom: ${{ steps.filter.outputs.dicom }}
       force: ${{ steps.force.outputs.run }}
