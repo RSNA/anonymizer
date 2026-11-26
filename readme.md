@@ -168,6 +168,7 @@ uv run mkdocs build --strict
 
 ## Community
 
+- [Contributing](CONTRIBUTING.md)
 - [Code of Conduct](CODE_OF_CONDUCT.md)
 - [Security policy](SECURITY.md)
 - [License](LICENSE) (Apache-2.0)

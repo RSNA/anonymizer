@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/RSNA/anonymizer/security/advisories/new
+    about: Please report vulnerabilities privately. See SECURITY.md.
+  - name: User manual
+    url: https://rsna.github.io/anonymizer/
+    about: Install, setup and how-to guides.
