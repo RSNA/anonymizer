@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 - Script editor / XML export: XML-escape `<e>` operation text and `<r>` rule text in `write_script_rules` so fixed values containing `&`, `<`, or `>` round-trip cleanly.
+- Import: `@uid` remaps each value of a multi-valued UI element (e.g. Irradiation Event UID, VM 1-n) instead of quarantining the file as Storage Error.
 
 ## [19.1.0.dev13]
 - PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)
