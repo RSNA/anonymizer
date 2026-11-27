@@ -25,6 +25,7 @@ from typing import Literal
 from pydicom import DataElement, Dataset, dcmread
 from pydicom.datadict import dictionary_VR
 from pydicom.errors import InvalidDicomError
+from pydicom.multival import MultiValue
 from pydicom.tag import Tag
 
 from anonymizer.controller.dates import (
@@ -664,7 +665,10 @@ class AnonymizerController:
                 dataset[tag].value = ""
 
             case OperandId.UID:
-                dataset[tag].value = self.model.get_or_create_anon_uid(value)
+                if isinstance(value, MultiValue):
+                    dataset[tag].value = [self.model.get_or_create_anon_uid(v) for v in value]
+                else:
+                    dataset[tag].value = self.model.get_or_create_anon_uid(value)
 
             case OperandId.PTID:
                 dataset[tag].value = anon_ptid
