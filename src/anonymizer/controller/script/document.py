@@ -184,11 +184,11 @@ def write_script_rules(path: Path, document: ScriptDocument) -> None:
         name = rule.name or rule.tag
         en = rule.en or "T"
         lines.append(
-            f' <e en="{_xml_attr(en)}" t="{_xml_attr(rule.tag.upper())}" n="{_xml_attr(name)}">{op}</e>'
+            f' <e en="{_xml_attr(en)}" t="{_xml_attr(rule.tag.upper())}" n="{_xml_attr(name)}">{_xml_text(op)}</e>'
         )
     for r_rule in document.r_rules:
         lines.append(
-            f' <r en="{_xml_attr(r_rule.en or "T")}" t="{_xml_attr(r_rule.tag)}">{r_rule.text or ""}</r>'
+            f' <r en="{_xml_attr(r_rule.en or "T")}" t="{_xml_attr(r_rule.tag)}">{_xml_text(r_rule.text or "")}</r>'
         )
     lines.append("</script>")
     lines.append("")
